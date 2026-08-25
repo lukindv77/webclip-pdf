@@ -1,0 +1,119 @@
+name: Build P1-152 diagnostic pre-release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'project_tools/patch_p1_152.py'
+      - '.github/workflows/build-p1-152-diagnostic.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-build-release:
+    runs-on: ubuntu-24.04
+    env:
+      TZ: Asia/Bangkok
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply P1-152 patch
+        run: python3 project_tools/patch_p1_152.py
+
+      - name: JavaScript syntax gate
+        id: syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -type f -name '*.js' -not -path './.git/*' | sort)
+          echo "js_count=${#files[@]}" >> "$GITHUB_OUTPUT"
+          for file in "${files[@]}"; do node --check "$file"; done
+          echo "JavaScript syntax PASS: ${#files[@]}/${#files[@]}"
+
+      - name: Deterministic regression gate
+        id: tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t tests < <(find project_tools -maxdepth 1 -type f -name 'test_*.js' | sort)
+          echo "test_count=${#tests[@]}" >> "$GITHUB_OUTPUT"
+          for test_file in "${tests[@]}"; do
+            echo "==> $test_file"
+            node "$test_file"
+          done
+          echo "Deterministic tests PASS: ${#tests[@]}/${#tests[@]}"
+
+      - name: Verify manifest unchanged
+        run: |
+          node - <<'NODE'
+          const m = require('./manifest.json');
+          if (m.manifest_version !== 3 || m.version !== '0.9.8' || m.minimum_chrome_version !== '118') {
+            throw new Error(`Unexpected manifest gate: ${JSON.stringify({manifest_version:m.manifest_version,version:m.version,minimum_chrome_version:m.minimum_chrome_version})}`);
+          }
+          console.log('Manifest gate PASS: MV3 / 0.9.8 / Chrome 118+');
+          NODE
+
+      - name: Commit final source and remove one-shot CI files
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f project_tools/patch_p1_152.py .github/workflows/build-p1-152-diagnostic.yml
+          git add -A
+          git status --short
+          git commit -m 'fix: mount flattened iframe proxy at top body (P1-152)'
+          git push origin HEAD:main
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build diagnostic artifact
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp_tag=$(date '+%Y%m%d-%H%M')
+          stamp_name=$(date '+%Y-%m-%d_%H%M')
+          tag="v0.9.8-build-${stamp_tag}-p1-152-diag"
+          artifact="WebClip_PDF_Prototype_v0_9_8_build_${stamp_name}_p1_152_diagnostic_github.zip"
+          git archive --format=zip --output="$artifact" HEAD
+          sha=$(sha256sum "$artifact" | awk '{print $1}')
+          printf '%s  %s\n' "$sha" "$artifact" > "$artifact.sha256"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Publish diagnostic pre-release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.txt <<EOF
+          Diagnostic WebClip build for retesting the its.1c.ru pagination issue after P1-152.
+
+          Manifest: MV3 / 0.9.8 / Chrome 118+
+          Source snapshot: ${{ steps.commit.outputs.commit_sha }}
+          Build gate: ${{ steps.syntax.outputs.js_count }}/${{ steps.syntax.outputs.js_count }} JavaScript syntax PASS; ${{ steps.tests.outputs.test_count }}/${{ steps.tests.outputs.test_count }} deterministic tests PASS.
+          Artifact SHA-256: ${{ steps.build.outputs.sha }}
+
+          Included fixes/diagnostics:
+          - P1-147/P1-148: structural OperationLog diagnostics and linked Journal log view/copy.
+          - P1-149/P1-150: iframe flow normalization and height stabilization.
+          - P1-151: same-origin selected-body iframe flattening.
+          - P1-152: flattened proxy mounts directly under top-document body, outside the site's iframe ancestor shell; OperationLog records flattenedFrames.mount.
+
+          Purpose: repeat https://its.1c.ru/db/metod8dev/content/2334/hdoc with the same Include selection and provide the resulting PDF plus linked OperationLog.
+
+          This remains a diagnostic 0.9.8 pre-release and does not claim the 0.9.9 release-QA gate.
+          EOF
+          gh release create '${{ steps.build.outputs.tag }}' \
+            '${{ steps.build.outputs.artifact }}' \
+            '${{ steps.build.outputs.artifact }}.sha256' \
+            --repo 'lukindv77/webclip-pdf' \
+            --target '${{ steps.commit.outputs.commit_sha }}' \
+            --title 'WebClip 0.9.8 diagnostic build P1-152' \
+            --notes-file release-notes.txt \
+            --prerelease
