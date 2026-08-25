@@ -2527,6 +2527,49 @@ function sanitizePageDiagnosticNode(raw, { ancestor = false } = {}) {
   return safe;
 }
 
+function sanitizePageDiagnosticRootLayout(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const style = raw.style && typeof raw.style === 'object' && !Array.isArray(raw.style) ? raw.style : {};
+  const rect = raw.rect && typeof raw.rect === 'object' && !Array.isArray(raw.rect) ? raw.rect : null;
+  return {
+    tag: pageDiagnosticString(raw.tag, 16),
+    style: {
+      display: pageDiagnosticString(style.display, 80),
+      position: pageDiagnosticString(style.position, 80),
+      width: pageDiagnosticString(style.width, 120),
+      minWidth: pageDiagnosticString(style.minWidth, 120),
+      maxWidth: pageDiagnosticString(style.maxWidth, 120),
+      height: pageDiagnosticString(style.height, 120),
+      minHeight: pageDiagnosticString(style.minHeight, 120),
+      maxHeight: pageDiagnosticString(style.maxHeight, 120),
+      overflowX: pageDiagnosticString(style.overflowX, 80),
+      overflowY: pageDiagnosticString(style.overflowY, 80),
+      contain: pageDiagnosticString(style.contain, 160),
+      contentVisibility: pageDiagnosticString(style.contentVisibility, 80),
+      transform: style.transform === 'present' ? 'present' : 'none',
+      top: pageDiagnosticString(style.top, 120),
+      right: pageDiagnosticString(style.right, 120),
+      bottom: pageDiagnosticString(style.bottom, 120),
+      left: pageDiagnosticString(style.left, 120),
+      clipPath: pageDiagnosticString(style.clipPath, 160)
+    },
+    rect: rect ? {
+      width: pageDiagnosticCount(rect.width),
+      height: pageDiagnosticCount(rect.height),
+      top: pageDiagnosticCount(rect.top),
+      right: pageDiagnosticCount(rect.right),
+      bottom: pageDiagnosticCount(rect.bottom),
+      left: pageDiagnosticCount(rect.left)
+    } : null,
+    scrollWidth: pageDiagnosticCount(raw.scrollWidth),
+    scrollHeight: pageDiagnosticCount(raw.scrollHeight),
+    clientWidth: pageDiagnosticCount(raw.clientWidth),
+    clientHeight: pageDiagnosticCount(raw.clientHeight),
+    offsetWidth: pageDiagnosticCount(raw.offsetWidth),
+    offsetHeight: pageDiagnosticCount(raw.offsetHeight)
+  };
+}
+
 function sanitizePageStructureDiagnostics(rawDiagnostics) {
   if (!rawDiagnostics || typeof rawDiagnostics !== 'object' || Array.isArray(rawDiagnostics) || Number(rawDiagnostics.version || 0) < 1) return null;
   const raw = rawDiagnostics;
@@ -2548,7 +2591,11 @@ function sanitizePageStructureDiagnostics(rawDiagnostics) {
       documentScrollWidth: pageDiagnosticCount(doc.documentScrollWidth),
       documentScrollHeight: pageDiagnosticCount(doc.documentScrollHeight),
       viewportWidth: pageDiagnosticCount(doc.viewportWidth),
-      viewportHeight: pageDiagnosticCount(doc.viewportHeight)
+      viewportHeight: pageDiagnosticCount(doc.viewportHeight),
+      rootLayout: {
+        html: sanitizePageDiagnosticRootLayout(doc?.rootLayout?.html),
+        body: sanitizePageDiagnosticRootLayout(doc?.rootLayout?.body)
+      }
     },
     selection: {
       includeCount: pageDiagnosticCount(selection.includeCount, 1000),

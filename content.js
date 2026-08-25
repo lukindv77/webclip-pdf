@@ -2885,6 +2885,53 @@
     };
   }
 
+  function diagnosticRootLayoutSnapshot(element) {
+    if (!element) return null;
+    let style = null;
+    try { style = (element.ownerDocument?.defaultView || window).getComputedStyle(element); } catch (_) { style = null; }
+    let rect = null;
+    try { rect = element.getBoundingClientRect(); } catch (_) { rect = null; }
+    const boundedNumber = (value) => Math.max(-100_000_000, Math.min(100_000_000, Number(value) || 0));
+    const transform = diagnosticBoundedString(style?.transform || '', 160);
+    return {
+      tag: diagnosticBoundedString(element.localName || '', 16),
+      style: {
+        display: diagnosticBoundedString(style?.display || '', 80),
+        position: diagnosticBoundedString(style?.position || '', 80),
+        width: diagnosticBoundedString(style?.width || '', 120),
+        minWidth: diagnosticBoundedString(style?.minWidth || '', 120),
+        maxWidth: diagnosticBoundedString(style?.maxWidth || '', 120),
+        height: diagnosticBoundedString(style?.height || '', 120),
+        minHeight: diagnosticBoundedString(style?.minHeight || '', 120),
+        maxHeight: diagnosticBoundedString(style?.maxHeight || '', 120),
+        overflowX: diagnosticBoundedString(style?.overflowX || '', 80),
+        overflowY: diagnosticBoundedString(style?.overflowY || '', 80),
+        contain: diagnosticBoundedString(style?.contain || '', 160),
+        contentVisibility: diagnosticBoundedString(style?.contentVisibility || '', 80),
+        transform: !transform || transform === 'none' ? 'none' : 'present',
+        top: diagnosticBoundedString(style?.top || '', 120),
+        right: diagnosticBoundedString(style?.right || '', 120),
+        bottom: diagnosticBoundedString(style?.bottom || '', 120),
+        left: diagnosticBoundedString(style?.left || '', 120),
+        clipPath: diagnosticBoundedString(style?.clipPath || '', 160)
+      },
+      rect: rect ? {
+        width: boundedNumber(rect.width),
+        height: boundedNumber(rect.height),
+        top: boundedNumber(rect.top),
+        right: boundedNumber(rect.right),
+        bottom: boundedNumber(rect.bottom),
+        left: boundedNumber(rect.left)
+      } : null,
+      scrollWidth: boundedNumber(element.scrollWidth),
+      scrollHeight: boundedNumber(element.scrollHeight),
+      clientWidth: boundedNumber(element.clientWidth),
+      clientHeight: boundedNumber(element.clientHeight),
+      offsetWidth: boundedNumber(element.offsetWidth),
+      offsetHeight: boundedNumber(element.offsetHeight)
+    };
+  }
+
   function capturePageStructureDiagnostics(phase = 'page') {
     const body = document.body;
     const docEl = document.documentElement;
@@ -2916,7 +2963,11 @@
         documentScrollWidth: Math.max(0, Math.min(100_000_000, Number(docEl?.scrollWidth) || 0)),
         documentScrollHeight: Math.max(0, Math.min(100_000_000, Number(docEl?.scrollHeight) || 0)),
         viewportWidth: Math.max(0, Math.min(100_000_000, Number(window.innerWidth) || 0)),
-        viewportHeight: Math.max(0, Math.min(100_000_000, Number(window.innerHeight) || 0))
+        viewportHeight: Math.max(0, Math.min(100_000_000, Number(window.innerHeight) || 0)),
+        rootLayout: {
+          html: diagnosticRootLayoutSnapshot(docEl),
+          body: diagnosticRootLayoutSnapshot(body)
+        }
       },
       selection: {
         includeCount: totalIncludeCount(),
@@ -3786,8 +3837,26 @@
       const isTop = ownerDoc === document;
       style.textContent = `
         @page { size: A4; margin: 12mm; }
-        html, body { background: #fff !important; overflow: visible !important; }
-        body { display: block !important; height: auto !important; max-height: none !important; }
+        html, body {
+          background: #fff !important;
+          overflow: visible !important;
+          position: static !important;
+          width: auto !important;
+          min-width: 0 !important;
+          max-width: none !important;
+          height: auto !important;
+          min-height: 0 !important;
+          max-height: none !important;
+          inset: auto !important;
+          float: none !important;
+          contain: none !important;
+          content-visibility: visible !important;
+          transform: none !important;
+          clip: auto !important;
+          clip-path: none !important;
+        }
+        html { display: block !important; }
+        body { display: block !important; }
 
         body *:not(#${PRINT_HEADER_ID}):not(#${PRINT_HEADER_ID} *):not([${INCLUDE_ATTR}]):not([${INCLUDE_ATTR}] *):not(:has([${INCLUDE_ATTR}])):not([${FRAME_INCLUDE_ATTR}]):not(:has([${FRAME_INCLUDE_ATTR}])):not([${FLATTENED_FRAME_ATTR}]) {
           display: none !important;

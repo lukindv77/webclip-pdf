@@ -248,3 +248,7 @@
 | P1-151 | P1 | REGRESSION | Same-origin iframe с выбранным `body` перед PDF разворачивается во временный top-document flattened print proxy: scripts/Exclude удаляются, bounded computed styles/URL state переносятся, оригинальный iframe скрывается только на время print, proxy штатно фрагментируется между A4-страницами и затем удаляется до exact P1-149 rollback. P1-150 остаётся fallback для неflattened frames; OperationLog пишет bounded `print.flattenedFrames`. |
 
 | P1-152 | P1 | REGRESSION | Flattened same-origin selected-body iframe proxy монтируется напрямую в top-document `body`, вне исходной iframe ancestor shell; flex/grid/fixed-height/break rules сайта больше не ограничивают пагинацию proxy. Исходный iframe скрывается только на время PDF и восстанавливается существующим exact rollback; OperationLog фиксирует `flattenedFrames[].mount=top-document-body`. |
+
+
+### P1-153 — REGRESSION — root document print-flow normalization
+Real its.1c.ru diagnostics after P1-152 showed complete top-body flattening but `bodyScrollHeight > viewportHeight` while `documentScrollHeight == viewportHeight`. The print-only root CSS now normalizes `html/body` height/position/overflow/contain/transform/clip constraints so Chromium can paginate ordinary top-level flow. Permanent bounded OperationLog diagnostics record `document.rootLayout.html/body`; rollback remains style-node removal only. See `P1-153_CLOSURE.md`.

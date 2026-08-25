@@ -574,3 +574,9 @@ REGRESSION: selected iframe print height is now remeasured at a conservative A4-
 - REGRESSION: flattened same-origin selected-body proxy mounts under top-document body, outside source iframe ancestor layout constraints.
 - Exact iframe rollback remains P1-149-owned; no scroll-position dependency.
 - Real its.1c.ru PDF remains required browser evidence.
+
+
+## 2026-08-25 — P1-153
+- Root `html/body` print-flow normalization added for legacy viewport-height layouts after confirmed its.1c.ru clipping with a complete P1-152 flattened proxy.
+- Permanent bounded OperationLog root diagnostics added; existing page/iframe diagnostics are retained.
+- Real unmanaged Chrome its.1c.ru PDF pagination retest remains required.

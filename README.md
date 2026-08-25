@@ -477,3 +477,7 @@ Real its.1c.ru retest showed that a correctly sized selected iframe is still cli
 ### Audit WIP — P1-152 — top-document flattened iframe proxy mount
 
 Real its.1c.ru P1-151 evidence preserved the complete cloned body but Chromium still produced one clipped page. Flattened same-origin selected-body proxies now mount directly under the top document body, outside the source iframe layout shell, and record the mount in OperationLog.
+
+
+### Audit WIP — P1-153
+Selected iframe content that has already been flattened to the top document now also receives root `html/body` print-flow normalization. Permanent OperationLog page diagnostics include bounded root computed layout/geometry to diagnose future fixed-height/legacy print failures without a special debug build.
