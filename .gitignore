@@ -1,0 +1,48 @@
+# Secrets / local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
+
+# Generated recovery / handoff artifacts
+project_recovery/*.zip
+project_recovery/*.sha256
+WebClip_Handoff_*.zip
+WebClip_Handoff_*.zip.sha256
+
+# Python / Node caches
+__pycache__/
+*.py[cod]
+node_modules/
+.npm/
+
+# Browser test profiles and generated runtime data
+.chrome-profile*/
+.chromium-profile*/
+chrome-profile*/
+chromium-profile*/
+user-data-dir*/
+Default/Cache/
+Default/Code Cache/
+
+# Test / coverage / temporary output
+coverage/
+.nyc_output/
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*.pid
+
+# OS/editor metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
