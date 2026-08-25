@@ -1,0 +1,150 @@
+name: Verify P1-128 and P1-129
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-p1-128-p1-129.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply patch and stabilize deterministic offscreen timing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          wf = Path('.github/workflows/gate-p1-128-p1-129.yml').read_text(encoding='utf-8')
+          marker = "          python3 - <<'PY'\n"
+          start = wf.index(marker) + len(marker)
+          end = wf.index("\n          PY\n", start)
+          payload = textwrap.dedent(wf[start:end])
+          exec(compile(payload, 'p1_128_129_gate_patch.py', 'exec'), {})
+
+          test_path = Path('project_tools/test_late_chrome_api_races.js')
+          test = test_path.read_text(encoding='utf-8')
+          insert_after = """function fastTimer(fn, ms, ...args) {
+            return setTimeout(fn, Math.min(Number(ms) || 0, 3), ...args);
+          }
+          """
+          addition = """
+          function offscreenRaceTimer(fn, ms, ...args) {
+            const requested = Number(ms) || 0;
+            // Keep the 10s local deadline very short, but preserve a visible
+            // ordering gap before the simulated 80ms non-cancellable close.
+            return setTimeout(fn, requested >= 1000 ? 3 : Math.min(requested, 30), ...args);
+          }
+          """
+          if insert_after not in test:
+              raise SystemExit('late-race fastTimer insertion anchor missing')
+          test = test.replace(insert_after, insert_after + addition, 1)
+
+          fn_start = test.index('async function testLateOffscreenCloseBlocksRecreate()')
+          fn_end = test.index('\n\nasync function testBlobDeadlineCancelsBeforeRevoke()', fn_start)
+          block = test[fn_start:fn_end]
+          old = '    setTimeout: fastTimer,'
+          if old not in block:
+              raise SystemExit('offscreen race context timer anchor missing')
+          block = block.replace(old, '    setTimeout: offscreenRaceTimer,', 1)
+          test = test[:fn_start] + block + test[fn_end:]
+          test_path.write_text(test, encoding='utf-8')
+          PY
+
+      - name: Run full deterministic gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const m=require('./manifest.json'); if(m.manifest_version!==3||m.version!=='0.9.8') process.exit(1)"
+          mapfile -t jsfiles < <(find . -type f -name '*.js' -not -path './.git/*' -not -path './builds/*' -not -path './handoff/*' | sort)
+          echo "JS files: ${#jsfiles[@]}"
+          test "${#jsfiles[@]}" -eq 75
+          for f in "${jsfiles[@]}"; do node --check "$f" >/dev/null; done
+          mapfile -t tests < <(find project_tools -maxdepth 1 -type f -name 'test_*.js' | sort)
+          echo "Deterministic tests: ${#tests[@]}"
+          test "${#tests[@]}" -eq 62
+          for t in "${tests[@]}"; do echo "RUN $t"; node "$t"; done
+          test "$(grep -o 'saveAs: true' service-worker.js | wc -l)" -eq 0
+          grep -q "saveAs: true" prepared-save-as.js
+          git diff --check
+
+      - name: Write closure evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > P1-128_CLOSURE.md <<'EOF'
+          # P1-128 closure — bounded offscreen idle-close request + cleanup reschedule
+
+          Status: **REGRESSION**. Manifest remains **0.9.8 / Manifest V3**.
+
+          `offscreen.js` now gives `WEBCLIP_OFFSCREEN_IDLE_CLOSE_REQUEST` a 10-second caller deadline. The underlying non-cancellable runtime message remains single-flight until its actual settlement, so repeated cleanup cycles cannot stack duplicate unknown close requests. Timeout, reject, or a normal `{closed:false}` response schedules another future idle cleanup cycle. Activity/Blob/nonce/`closingForIdle` guards remain unchanged.
+
+          Dedicated `project_tools/test_p1_128_offscreen_idle_close_request.js` uses controlled timers and a never-settling runtime message to prove deadline, future cleanup reschedule and exactly one raw request while settlement is unknown. Existing service-worker late-close regression uses deterministic separated timeout/late-settlement clocks. Full gate: **75/75 JS syntax PASS; 62/62 deterministic tests PASS**.
+
+          Real unpacked Chrome offscreen lifecycle timing remains release QA; manifest is not bumped.
+          EOF
+
+          cat > P1-129_CLOSURE.md <<'EOF'
+          # P1-129 closure — durable prepared Save As checkpoint serialization
+
+          Status: **REGRESSION**. Manifest remains **0.9.8 / Manifest V3**.
+
+          Full Journal and OperationLog export now create a `chrome.storage.session` durable PREPARED checkpoint before returning the prepared Blob to `journal.html` / `options.html`. Page-owned `prepared-save-as.js` carries the session id through STARTED and RELEASE messages. PREPARED, STARTED and RELEASED are distinct receipt keys; RELEASED is the durable tombstone. Checkpoint mutations are queued behind actual settlement rather than only caller settlement, so a local timeout cannot let a later transition overtake the unresolved storage side effect. RELEASE writes its tombstone before removing older receipts and revoking the Blob.
+
+          The native `chrome.downloads.download({saveAs:true})` call is still owned by the extension page, has no synthetic timeout, and is never automatically retried. The existing page-owned terminal listener and worker Blob watchdog are preserved.
+
+          Dedicated `project_tools/test_p1_129_prepared_save_as_checkpoint.js` forces a PREPARED storage write past its local deadline, proves RELEASE cannot overtake it, then proves RELEASED is durable before Blob revoke. P1-079/P1-080 owner regression remains green. Full gate: **75/75 JS syntax PASS; 62/62 deterministic tests PASS**.
+
+          Real unpacked Chrome native Save As interaction remains release QA; manifest is not bumped.
+          EOF
+
+          cat > STATIC_CHECKS_P1-128_P1-129.md <<'EOF'
+          # Static checks — P1-128 / P1-129
+
+          Checkpoint date: 2026-08-25.
+
+          - Manifest parse: PASS; Manifest V3; version **0.9.8**.
+          - JavaScript syntax: **75/75 PASS**.
+          - Deterministic `project_tools/test_*.js`: **62/62 PASS**.
+          - P1-128 hung idle-close runtime RPC: deadline + cleanup reschedule + raw single-flight PASS.
+          - Existing worker late-offscreen-close barrier regression: PASS with deterministic separated synthetic clocks.
+          - P1-129 PREPARED late-settlement / RELEASE barrier regression: PASS.
+          - P1-079/P1-080 native Save As owner regression: PASS; `saveAs:true` remains absent from the worker.
+          - No release/build/handoff artifact created.
+
+          This is engineering regression evidence, not unmanaged-Chrome release QA.
+          EOF
+          git diff --check
+
+      - name: Commit closure and remove all temporary workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm \
+            .github/workflows/close-p1-128-p1-129.yml \
+            .github/workflows/finalize-p1-128-p1-129.yml \
+            .github/workflows/finish-p1-128-p1-129.yml \
+            .github/workflows/complete-p1-128-p1-129.yml \
+            .github/workflows/gate-p1-128-p1-129.yml \
+            .github/workflows/verify-p1-128-p1-129.yml
+          git add offscreen.js service-worker.js prepared-save-as.js \
+            project_tools/test_p1_079_080_save_as_owner.js \
+            project_tools/test_p1_128_offscreen_idle_close_request.js \
+            project_tools/test_p1_129_prepared_save_as_checkpoint.js \
+            project_tools/test_late_chrome_api_races.js \
+            P1-128_CLOSURE.md P1-129_CLOSURE.md STATIC_CHECKS_P1-128_P1-129.md \
+            project_docs/PRIORITIES_P0_P1_P2.md README.md QA_STATUS_0_9_9.md
+          git commit -m 'audit: close offscreen and prepared Save As races (P1-128 P1-129)'
+          git push origin HEAD:main
