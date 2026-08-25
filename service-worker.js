@@ -144,6 +144,8 @@ const STORAGE_ESTIMATE_TIMEOUT_MS = 5_000;
 const CHROME_STORAGE_OPERATION_TIMEOUT_MS = 10_000;
 const CHROME_ALARM_OPERATION_TIMEOUT_MS = 10_000;
 const MAINTENANCE_IDB_TX_TIMEOUT_MS = 20_000;
+const OPERATION_LOG_CRUD_IDB_TX_TIMEOUT_MS = 20_000;
+const PDF_CACHE_CRUD_IDB_TX_TIMEOUT_MS = 20_000;
 const JOURNAL_CRUD_IDB_TX_TIMEOUT_MS = 20_000;
 const RECOVERY_IDB_TX_TIMEOUT_MS = 20_000;
 const JOURNAL_BACKUP_LEASE_TX_TIMEOUT_MS = 20_000;
@@ -875,40 +877,46 @@ async function flushOperationLogWrites(operationId) {
 async function mutateOperationLogOnce(operationId, mutate) {
   const db = await openOperationLogDb();
   try {
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(OPERATION_LOG_STORE, 'readwrite');
-      const store = tx.objectStore(OPERATION_LOG_STORE);
-      const get = store.get(operationId);
-      let output = null;
-      get.onsuccess = () => {
-        const now = Date.now();
-        const record = get.result || {
-          operationId,
-          type: 'operation',
-          title: 'Операция WebClip',
-          createdAt: now,
-          updatedAt: now,
-          status: 'running',
-          summary: '',
-          meta: {},
-          events: []
+    return await runIndexedDbTransactionBounded(
+      db,
+      OPERATION_LOG_STORE,
+      'readwrite',
+      'Изменение заголовка диагностического лога',
+      ({ store, setResult, fail }) => {
+        const operationStore = store();
+        const get = operationStore.get(operationId);
+        get.onsuccess = () => {
+          try {
+            const now = Date.now();
+            const record = get.result || {
+              operationId,
+              type: 'operation',
+              title: 'Операция WebClip',
+              createdAt: now,
+              updatedAt: now,
+              status: 'running',
+              summary: '',
+              meta: {},
+              events: []
+            };
+            let output = mutate(record, now) || record;
+            if (!Array.isArray(output.events)) output.events = [];
+            output.updatedAt = now;
+            output = boundOperationLogRecord(output);
+            operationStore.put(output);
+            setResult(output);
+          } catch (error) {
+            fail(error);
+          }
         };
-        output = mutate(record, now) || record;
-        if (!Array.isArray(output.events)) output.events = [];
-        output.updatedAt = now;
-        output = boundOperationLogRecord(output);
-        store.put(output);
-      };
-      get.onerror = () => reject(get.error || new Error('Не удалось прочитать диагностический лог.'));
-      tx.oncomplete = () => resolve(output);
-      tx.onerror = () => reject(tx.error || new Error('Не удалось сохранить диагностический лог.'));
-      tx.onabort = () => reject(tx.error || new Error('Сохранение диагностического лога прервано.'));
-    });
+        get.onerror = () => fail(get.error || new Error('Не удалось прочитать диагностический лог.'));
+      },
+      OPERATION_LOG_CRUD_IDB_TX_TIMEOUT_MS
+    );
   } finally {
     db.close();
   }
 }
-
 
 function isStorageQuotaError(error) {
   const name = String(error?.name || '');
@@ -1007,116 +1015,125 @@ async function appendOperationLogEventOnce(operationId, event = {}) {
   const eventChars = Math.min(MAX_OPERATION_LOG_EVENT_JSON_CHARS, jsonSizeChars(normalized));
   const db = await openOperationLogDb();
   try {
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction([OPERATION_LOG_STORE, OPERATION_LOG_EVENT_STORE], 'readwrite');
-      const operations = tx.objectStore(OPERATION_LOG_STORE);
-      const events = tx.objectStore(OPERATION_LOG_EVENT_STORE);
-      const get = operations.get(id);
-      let output = null;
+    return await runIndexedDbTransactionBounded(
+      db,
+      [OPERATION_LOG_STORE, OPERATION_LOG_EVENT_STORE],
+      'readwrite',
+      'Сохранение события диагностического лога',
+      ({ tx, setResult, fail }) => {
+        const operations = tx.objectStore(OPERATION_LOG_STORE);
+        const events = tx.objectStore(OPERATION_LOG_EVENT_STORE);
+        const get = operations.get(id);
+        const abortWith = (error) => fail(error instanceof Error
+          ? error
+          : new Error(String(error || 'Не удалось сохранить событие диагностического лога.')));
 
-      const fail = (error) => {
-        try { tx.abort(); } catch (_) {}
-        reject(error instanceof Error ? error : new Error(String(error || 'Не удалось сохранить событие диагностического лога.')));
-      };
+        get.onsuccess = () => {
+          try {
+            const now = Date.now();
+            const record = get.result || {
+              operationId: id,
+              type: 'operation',
+              title: 'Операция WebClip',
+              createdAt: now,
+              updatedAt: now,
+              status: 'running',
+              summary: '',
+              meta: {},
+              events: []
+            };
 
-      get.onsuccess = () => {
-        const now = Date.now();
-        const record = get.result || {
-          operationId: id,
-          type: 'operation',
-          title: 'Операция WebClip',
-          createdAt: now,
-          updatedAt: now,
-          status: 'running',
-          summary: '',
-          meta: {},
-          events: []
-        };
+            // One-time migration for a legacy v1 record. Keep the start event in
+            // the small operation header and move the remaining timeline to the
+            // append-only event store so future events no longer rewrite history.
+            const legacy = Array.isArray(record.events) ? record.events : [];
+            if (legacy.length) {
+              const startEvent = record.operationStartEvent || legacy.find((item) => item?.category === 'operation-start') || null;
+              if (startEvent) record.operationStartEvent = boundOperationLogEvent(startEvent);
+              const tail = legacy.filter((item) => item !== startEvent && item?.category !== 'operation-start').slice(-(MAX_OPERATION_LOG_EVENTS - 1));
+              let seq = 1;
+              let chars = 0;
+              for (const item of tail) {
+                const bounded = boundOperationLogEvent(item);
+                const size = Math.min(MAX_OPERATION_LOG_EVENT_JSON_CHARS, jsonSizeChars(bounded));
+                events.put({ operationId: id, seq, event: bounded, jsonChars: size });
+                chars += size;
+                seq += 1;
+              }
+              record.events = [];
+              record.eventStoreCount = tail.length;
+              record.eventStoreChars = chars;
+              record.nextEventSeq = seq;
+              if (legacy.length > tail.length + (startEvent ? 1 : 0)) record.eventsTruncated = true;
+            }
 
-        // One-time migration for a legacy v1 record. Keep the start event in
-        // the small operation header and move the remaining timeline to the
-        // append-only event store so future events no longer rewrite history.
-        const legacy = Array.isArray(record.events) ? record.events : [];
-        if (legacy.length) {
-          let startEvent = record.operationStartEvent || legacy.find((item) => item?.category === 'operation-start') || null;
-          if (startEvent) record.operationStartEvent = boundOperationLogEvent(startEvent);
-          const tail = legacy.filter((item) => item !== startEvent && item?.category !== 'operation-start').slice(-(MAX_OPERATION_LOG_EVENTS - 1));
-          let seq = 1;
-          let chars = 0;
-          for (const item of tail) {
-            const bounded = boundOperationLogEvent(item);
-            const size = Math.min(MAX_OPERATION_LOG_EVENT_JSON_CHARS, jsonSizeChars(bounded));
-            events.put({ operationId: id, seq, event: bounded, jsonChars: size });
-            chars += size;
-            seq += 1;
-          }
-          record.events = [];
-          record.eventStoreCount = tail.length;
-          record.eventStoreChars = chars;
-          record.nextEventSeq = seq;
-          if (legacy.length > tail.length + (startEvent ? 1 : 0)) record.eventsTruncated = true;
-        }
+            if (!record.operationStartEvent) {
+              record.operationStartEvent = boundOperationLogEvent({ timestamp: Number(record.createdAt || now), category: 'operation-start', level: 'info', message: 'Операция начата.', data: {} });
+            }
+            let count = Math.max(0, Number(record.eventStoreCount) || 0);
+            let chars = Math.max(0, Number(record.eventStoreChars) || 0);
+            const seq = Math.max(1, Math.floor(Number(record.nextEventSeq) || 1));
+            events.put({ operationId: id, seq, event: normalized, jsonChars: eventChars });
+            count += 1;
+            chars += eventChars;
+            record.nextEventSeq = seq + 1;
 
-        if (!record.operationStartEvent) {
-          record.operationStartEvent = boundOperationLogEvent({ timestamp: Number(record.createdAt || now), category: 'operation-start', level: 'info', message: 'Операция начата.', data: {} });
-        }
-        let count = Math.max(0, Number(record.eventStoreCount) || 0);
-        let chars = Math.max(0, Number(record.eventStoreChars) || 0);
-        const seq = Math.max(1, Math.floor(Number(record.nextEventSeq) || 1));
-        events.put({ operationId: id, seq, event: normalized, jsonChars: eventChars });
-        count += 1;
-        chars += eventChars;
-        record.nextEventSeq = seq + 1;
+            const needsPrune = () => count > (MAX_OPERATION_LOG_EVENTS - 1) || chars > MAX_OPERATION_LOG_EVENT_TOTAL_JSON_CHARS;
+            const finalize = () => {
+              record.eventStoreCount = count;
+              record.eventStoreChars = chars;
+              record.eventCount = 1 + count;
+              if (event.status) record.status = String(event.status);
+              if (event.summary) record.summary = String(sanitizeOperationLogValue(String(event.summary), 'summary'));
+              record.updatedAt = now;
+              const output = boundOperationLogRecord(record);
+              operations.put(output);
+              setResult(output);
+            };
 
-        const needsPrune = () => count > (MAX_OPERATION_LOG_EVENTS - 1) || chars > MAX_OPERATION_LOG_EVENT_TOTAL_JSON_CHARS;
-        const finalize = () => {
-          record.eventStoreCount = count;
-          record.eventStoreChars = chars;
-          record.eventCount = 1 + count;
-          if (event.status) record.status = String(event.status);
-          if (event.summary) record.summary = String(sanitizeOperationLogValue(String(event.summary), 'summary'));
-          record.updatedAt = now;
-          output = boundOperationLogRecord(record);
-          operations.put(output);
-        };
-
-        if (!needsPrune()) {
-          finalize();
-          return;
-        }
-
-        const range = IDBKeyRange.bound([id, 0], [id, Number.MAX_SAFE_INTEGER]);
-        const cursorRequest = events.openCursor(range, 'next');
-        cursorRequest.onsuccess = () => {
-          const cursor = cursorRequest.result;
-          if (!cursor || !needsPrune()) {
-            if (needsPrune()) {
-              fail(new Error('Не удалось ограничить размер timeline диагностического лога.'));
+            if (!needsPrune()) {
+              finalize();
               return;
             }
-            finalize();
-            return;
+
+            const range = IDBKeyRange.bound([id, 0], [id, Number.MAX_SAFE_INTEGER]);
+            const cursorRequest = events.openCursor(range, 'next');
+            cursorRequest.onsuccess = () => {
+              try {
+                const cursor = cursorRequest.result;
+                if (!cursor || !needsPrune()) {
+                  if (needsPrune()) {
+                    abortWith(new Error('Не удалось ограничить размер timeline диагностического лога.'));
+                    return;
+                  }
+                  finalize();
+                  return;
+                }
+                const row = cursor.value || {};
+                // Never delete the event we just appended unless it is individually
+                // too large (boundOperationLogEvent already prevents that case).
+                if (Number(row.seq) === seq && count <= 1) {
+                  finalize();
+                  return;
+                }
+                chars = Math.max(0, chars - Math.max(0, Number(row.jsonChars) || jsonSizeChars(row.event || {})));
+                count = Math.max(0, count - 1);
+                record.eventsTruncated = true;
+                cursor.delete();
+                cursor.continue();
+              } catch (error) {
+                abortWith(error);
+              }
+            };
+            cursorRequest.onerror = () => abortWith(cursorRequest.error || new Error('Не удалось ограничить timeline диагностического лога.'));
+          } catch (error) {
+            abortWith(error);
           }
-          const row = cursor.value || {};
-          // Never delete the event we just appended unless it is individually
-          // too large (boundOperationLogEvent already prevents that case).
-          if (Number(row.seq) === seq && count <= 1) {
-            finalize();
-            return;
-          }
-          chars = Math.max(0, chars - Math.max(0, Number(row.jsonChars) || jsonSizeChars(row.event || {})));
-          count = Math.max(0, count - 1);
-          record.eventsTruncated = true;
-          cursor.delete();
-          cursor.continue();
         };
-        cursorRequest.onerror = () => fail(cursorRequest.error || new Error('Не удалось ограничить timeline диагностического лога.'));
-      };
-      get.onerror = () => reject(get.error || new Error('Не удалось прочитать диагностический лог.'));
-      tx.oncomplete = () => resolve(output);
-      tx.onerror = () => reject(tx.error || new Error('Не удалось сохранить событие диагностического лога.'));
-      tx.onabort = () => reject(tx.error || new Error('Сохранение события диагностического лога прервано.'));
-    });
+        get.onerror = () => abortWith(get.error || new Error('Не удалось прочитать диагностический лог.'));
+      },
+      OPERATION_LOG_CRUD_IDB_TX_TIMEOUT_MS
+    );
   } finally {
     db.close();
   }
@@ -1208,28 +1225,38 @@ async function listOperationLogs(limit = 100) {
   const capped = Math.max(1, Math.min(500, Number(limit) || 100));
   const db = await openOperationLogDb();
   try {
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(OPERATION_LOG_STORE, 'readonly');
-      const index = tx.objectStore(OPERATION_LOG_STORE).index('updatedAt');
-      const result = [];
-      const request = index.openCursor(null, 'prev');
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (!cursor || result.length >= capped) {
-          resolve({ ok: true, operations: result });
-          return;
-        }
-        const record = cursor.value || {};
-        result.push({
-          operationId: record.operationId || '', type: record.type || 'operation', title: record.title || 'Операция WebClip',
-          description: record.description || describeOperation(record.type, record.title, record.meta || {}),
-          createdAt: Number(record.createdAt || 0), updatedAt: Number(record.updatedAt || 0),
-          status: record.status || 'running', summary: record.summary || '', eventCount: Math.max(0, Number(record.eventCount) || (Array.isArray(record.events) ? record.events.length : 0))
-        });
-        cursor.continue();
-      };
-      request.onerror = () => reject(request.error || new Error('Не удалось прочитать список логов.'));
-    });
+    return await runIndexedDbTransactionBounded(
+      db,
+      OPERATION_LOG_STORE,
+      'readonly',
+      'Чтение списка диагностических логов',
+      ({ store, setResult, fail }) => {
+        const index = store().index('updatedAt');
+        const result = [];
+        const request = index.openCursor(null, 'prev');
+        request.onsuccess = () => {
+          try {
+            const cursor = request.result;
+            if (!cursor || result.length >= capped) {
+              setResult({ ok: true, operations: result });
+              return;
+            }
+            const record = cursor.value || {};
+            result.push({
+              operationId: record.operationId || '', type: record.type || 'operation', title: record.title || 'Операция WebClip',
+              description: record.description || describeOperation(record.type, record.title, record.meta || {}),
+              createdAt: Number(record.createdAt || 0), updatedAt: Number(record.updatedAt || 0),
+              status: record.status || 'running', summary: record.summary || '', eventCount: Math.max(0, Number(record.eventCount) || (Array.isArray(record.events) ? record.events.length : 0))
+            });
+            cursor.continue();
+          } catch (error) {
+            fail(error);
+          }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать список логов.'));
+      },
+      OPERATION_LOG_CRUD_IDB_TX_TIMEOUT_MS
+    );
   } finally { db.close(); }
 }
 
@@ -1239,14 +1266,19 @@ async function clearOperationLogs() {
   operationLogWriteChains.clear();
   const db = await openOperationLogDb();
   try {
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction([OPERATION_LOG_STORE, OPERATION_LOG_EVENT_STORE], 'readwrite');
-      const request = tx.objectStore(OPERATION_LOG_STORE).clear();
-      tx.objectStore(OPERATION_LOG_EVENT_STORE).clear();
-      request.onerror = () => reject(request.error || new Error('Не удалось удалить диагностические логи.'));
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error('Ошибка очистки диагностических логов.'));
-    });
+    await runIndexedDbTransactionBounded(
+      db,
+      [OPERATION_LOG_STORE, OPERATION_LOG_EVENT_STORE],
+      'readwrite',
+      'Очистка диагностических логов',
+      ({ tx, fail }) => {
+        const operationRequest = tx.objectStore(OPERATION_LOG_STORE).clear();
+        const eventRequest = tx.objectStore(OPERATION_LOG_EVENT_STORE).clear();
+        operationRequest.onerror = () => fail(operationRequest.error || new Error('Не удалось удалить диагностические логи.'));
+        eventRequest.onerror = () => fail(eventRequest.error || new Error('Не удалось удалить timeline диагностических логов.'));
+      },
+      OPERATION_LOG_CRUD_IDB_TX_TIMEOUT_MS
+    );
   } finally { db.close(); }
   return { ok: true };
 }
@@ -1289,47 +1321,61 @@ async function getOperationLog(operationId) {
   if (pending) await pending.catch(() => {});
   const db = await openOperationLogDb();
   try {
-    const record = await new Promise((resolve, reject) => {
-      const tx = db.transaction([OPERATION_LOG_STORE, OPERATION_LOG_EVENT_STORE], 'readonly');
-      const operations = tx.objectStore(OPERATION_LOG_STORE);
-      const events = tx.objectStore(OPERATION_LOG_EVENT_STORE);
-      const request = operations.get(id);
-      let header = null;
-      const storedEvents = [];
-      request.onsuccess = () => {
-        header = request.result || null;
-        if (!header) return;
-        const range = IDBKeyRange.bound([id, 0], [id, Number.MAX_SAFE_INTEGER]);
-        const cursorRequest = events.openCursor(range, 'next');
-        cursorRequest.onsuccess = () => {
-          const cursor = cursorRequest.result;
-          if (!cursor) return;
-          storedEvents.push(cursor.value?.event || {});
-          cursor.continue();
+    const record = await runIndexedDbTransactionBounded(
+      db,
+      [OPERATION_LOG_STORE, OPERATION_LOG_EVENT_STORE],
+      'readonly',
+      'Чтение диагностического лога',
+      ({ tx, setResult, fail }) => {
+        const operations = tx.objectStore(OPERATION_LOG_STORE);
+        const events = tx.objectStore(OPERATION_LOG_EVENT_STORE);
+        const request = operations.get(id);
+        let header = null;
+        const storedEvents = [];
+        request.onsuccess = () => {
+          try {
+            header = request.result || null;
+            if (!header) {
+              setResult(null);
+              return;
+            }
+            const range = IDBKeyRange.bound([id, 0], [id, Number.MAX_SAFE_INTEGER]);
+            const cursorRequest = events.openCursor(range, 'next');
+            cursorRequest.onsuccess = () => {
+              try {
+                const cursor = cursorRequest.result;
+                if (!cursor) {
+                  const legacy = Array.isArray(header.events) ? header.events : [];
+                  const startEvent = header.operationStartEvent || legacy.find((item) => item?.category === 'operation-start') || null;
+                  const legacyTail = legacy.filter((item) => item !== startEvent && item?.category !== 'operation-start');
+                  const output = { ...header };
+                  output.events = [startEvent, ...legacyTail, ...storedEvents].filter(Boolean).slice(-MAX_OPERATION_LOG_EVENTS);
+                  if (startEvent && output.events[0] !== startEvent) {
+                    output.events = [startEvent, ...output.events.slice(-(MAX_OPERATION_LOG_EVENTS - 1))];
+                  }
+                  delete output.operationStartEvent;
+                  delete output.eventStoreCount;
+                  delete output.eventStoreChars;
+                  delete output.nextEventSeq;
+                  output.eventCount = output.events.length;
+                  setResult(output);
+                  return;
+                }
+                storedEvents.push(cursor.value?.event || {});
+                cursor.continue();
+              } catch (error) {
+                fail(error);
+              }
+            };
+            cursorRequest.onerror = () => fail(cursorRequest.error || new Error('Не удалось прочитать timeline диагностического лога.'));
+          } catch (error) {
+            fail(error);
+          }
         };
-        cursorRequest.onerror = () => reject(cursorRequest.error || new Error('Не удалось прочитать timeline диагностического лога.'));
-      };
-      request.onerror = () => reject(request.error || new Error('Не удалось получить диагностический лог.'));
-      tx.oncomplete = () => {
-        if (!header) { resolve(null); return; }
-        const legacy = Array.isArray(header.events) ? header.events : [];
-        const startEvent = header.operationStartEvent || legacy.find((event) => event?.category === 'operation-start') || null;
-        const legacyTail = legacy.filter((event) => event !== startEvent && event?.category !== 'operation-start');
-        const output = { ...header };
-        output.events = [startEvent, ...legacyTail, ...storedEvents].filter(Boolean).slice(-MAX_OPERATION_LOG_EVENTS);
-        if (startEvent && output.events[0] !== startEvent) {
-          output.events = [startEvent, ...output.events.slice(-(MAX_OPERATION_LOG_EVENTS - 1))];
-        }
-        delete output.operationStartEvent;
-        delete output.eventStoreCount;
-        delete output.eventStoreChars;
-        delete output.nextEventSeq;
-        output.eventCount = output.events.length;
-        resolve(output);
-      };
-      tx.onerror = () => reject(tx.error || new Error('Не удалось получить диагностический лог.'));
-      tx.onabort = () => reject(tx.error || new Error('Чтение диагностического лога было прервано.'));
-    });
+        request.onerror = () => fail(request.error || new Error('Не удалось получить диагностический лог.'));
+      },
+      OPERATION_LOG_CRUD_IDB_TX_TIMEOUT_MS
+    );
     if (!record) throw new Error(`Лог операции ${id} не найден или уже удалён по сроку хранения.`);
     if (!record.description) record.description = describeOperation(record.type, record.title, record.meta || {});
     return { ok: true, log: record };
@@ -7988,14 +8034,19 @@ async function putCachedPdf(record) {
   normalizedRecord.cacheFormat = metadata.cacheFormat;
   const db = await openPdfCacheDb();
   try {
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction([PDF_CACHE_STORE, PDF_CACHE_META_STORE], 'readwrite');
-      tx.objectStore(PDF_CACHE_STORE).put(normalizedRecord);
-      tx.objectStore(PDF_CACHE_META_STORE).put(metadata);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error('Не удалось сохранить PDF для повторной отправки.'));
-      tx.onabort = () => reject(tx.error || new Error('Сохранение PDF для повторной отправки было прерванo.'));
-    });
+    await runIndexedDbTransactionBounded(
+      db,
+      [PDF_CACHE_STORE, PDF_CACHE_META_STORE],
+      'readwrite',
+      'Сохранение PDF retry-cache',
+      ({ tx, fail }) => {
+        const pdfRequest = tx.objectStore(PDF_CACHE_STORE).put(normalizedRecord);
+        const metaRequest = tx.objectStore(PDF_CACHE_META_STORE).put(metadata);
+        pdfRequest.onerror = () => fail(pdfRequest.error || new Error('Не удалось сохранить PDF для повторной отправки.'));
+        metaRequest.onerror = () => fail(metaRequest.error || new Error('Не удалось сохранить metadata PDF для повторной отправки.'));
+      },
+      PDF_CACHE_CRUD_IDB_TX_TIMEOUT_MS
+    );
   } finally { db.close(); }
   return metadata;
 }
@@ -8005,12 +8056,18 @@ async function getCachedPdfByKey(key) {
   if (!cacheKey) return null;
   const db = await openPdfCacheDb();
   try {
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(PDF_CACHE_STORE, 'readonly');
-      const request = tx.objectStore(PDF_CACHE_STORE).get(cacheKey);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error || new Error('Не удалось прочитать локальный кэш PDF.'));
-    });
+    return await runIndexedDbTransactionBounded(
+      db,
+      PDF_CACHE_STORE,
+      'readonly',
+      'Чтение PDF retry-cache',
+      ({ store, setResult, fail }) => {
+        const request = store().get(cacheKey);
+        request.onsuccess = () => setResult(request.result || null);
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать локальный кэш PDF.'));
+      },
+      PDF_CACHE_CRUD_IDB_TX_TIMEOUT_MS
+    );
   } finally { db.close(); }
 }
 
@@ -8019,12 +8076,18 @@ async function getCachedPdfMetadataByKey(key) {
   if (!cacheKey) return null;
   const db = await openPdfCacheDb();
   try {
-    const metadata = await new Promise((resolve, reject) => {
-      const tx = db.transaction(PDF_CACHE_META_STORE, 'readonly');
-      const request = tx.objectStore(PDF_CACHE_META_STORE).get(cacheKey);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error || new Error('Не удалось прочитать metadata PDF cache.'));
-    });
+    const metadata = await runIndexedDbTransactionBounded(
+      db,
+      PDF_CACHE_META_STORE,
+      'readonly',
+      'Чтение metadata PDF retry-cache',
+      ({ store, setResult, fail }) => {
+        const request = store().get(cacheKey);
+        request.onsuccess = () => setResult(request.result || null);
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать metadata PDF cache.'));
+      },
+      PDF_CACHE_CRUD_IDB_TX_TIMEOUT_MS
+    );
     if (metadata) return metadata;
   } finally { db.close(); }
 
@@ -8034,13 +8097,17 @@ async function getCachedPdfMetadataByKey(key) {
   const metadata = pdfCacheMetadataFromRecord(legacy);
   const repairDb = await openPdfCacheDb();
   try {
-    await new Promise((resolve, reject) => {
-      const tx = repairDb.transaction(PDF_CACHE_META_STORE, 'readwrite');
-      tx.objectStore(PDF_CACHE_META_STORE).put(metadata);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error('Не удалось восстановить metadata PDF cache.'));
-      tx.onabort = () => reject(tx.error || new Error('Восстановление metadata PDF cache было прервано.'));
-    });
+    await runIndexedDbTransactionBounded(
+      repairDb,
+      PDF_CACHE_META_STORE,
+      'readwrite',
+      'Восстановление metadata PDF retry-cache',
+      ({ store, fail }) => {
+        const request = store().put(metadata);
+        request.onerror = () => fail(request.error || new Error('Не удалось восстановить metadata PDF cache.'));
+      },
+      PDF_CACHE_CRUD_IDB_TX_TIMEOUT_MS
+    );
   } finally { repairDb.close(); }
   return metadata;
 }
@@ -8106,14 +8173,19 @@ async function deleteCachedPdfByKey(key) {
   if (!cacheKey) return;
   const db = await openPdfCacheDb();
   try {
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction([PDF_CACHE_STORE, PDF_CACHE_META_STORE], 'readwrite');
-      tx.objectStore(PDF_CACHE_STORE).delete(cacheKey);
-      tx.objectStore(PDF_CACHE_META_STORE).delete(cacheKey);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error || new Error('Не удалось очистить локальный кэш PDF.'));
-      tx.onabort = () => reject(tx.error || new Error('Очистка локального кэша PDF была прервана.'));
-    });
+    await runIndexedDbTransactionBounded(
+      db,
+      [PDF_CACHE_STORE, PDF_CACHE_META_STORE],
+      'readwrite',
+      'Удаление PDF retry-cache',
+      ({ tx, fail }) => {
+        const pdfRequest = tx.objectStore(PDF_CACHE_STORE).delete(cacheKey);
+        const metaRequest = tx.objectStore(PDF_CACHE_META_STORE).delete(cacheKey);
+        pdfRequest.onerror = () => fail(pdfRequest.error || new Error('Не удалось очистить локальный кэш PDF.'));
+        metaRequest.onerror = () => fail(metaRequest.error || new Error('Не удалось очистить metadata локального кэша PDF.'));
+      },
+      PDF_CACHE_CRUD_IDB_TX_TIMEOUT_MS
+    );
   } finally { db.close(); }
 }
 

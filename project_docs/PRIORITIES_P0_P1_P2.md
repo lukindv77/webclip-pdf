@@ -224,3 +224,10 @@
 ## Правило
 
 Новые явные требования пользователя автоматически имеют приоритет над этим backlog и должны попадать в runtime, docs и recovery archive одной и той же сборки.
+
+## Физическое закрытие backlog — reconciliation 2026-08-25
+
+| Код | Приоритет | Статус | Пункт |
+|---|---|---|---|
+| P1-081 | P1 | REGRESSION | Обычные OperationLog v2 IndexedDB CRUD должны иметь bounded/abortable transaction deadline; readonly результат публикуется только после `tx.oncomplete`, append-only timeline и v1→v2 migration сохраняются. |
+| P1-084 | P1 | REGRESSION | Обычные PDF retry-cache IndexedDB CRUD должны иметь bounded/abortable transaction deadline; `pdfs`+`meta` остаются атомарными, TTL и URL binding сохраняются. |

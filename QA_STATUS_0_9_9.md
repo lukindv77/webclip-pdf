@@ -509,3 +509,11 @@ Recovery-gap applies: this mounted artifact is not the canonical physical P1-131
 - [x] P1-008 Options, P1-009 Journal and managed P1-007 browser regressions PASS; selected-only PDF 37,604 bytes.
 - [x] Manifest remains MV3 / 0.9.8. Real unpacked Chrome native Save As remains release QA.
 - [x] P1-129 durable prepared-session late-settlement serialization is not claimed here.
+
+## 2026-08-25 — P1-081 / P1-084: bounded ordinary IDB CRUD
+
+- P1-081: обычные OperationLog v2 mutate/append/list/get/clear переведены на общий abortable transaction helper с отдельным deadline 20 с; append-only timeline и v1→v2 migration сохранены.
+- P1-084: обычные PDF retry-cache put/get/meta-repair/delete переведены на тот же completion-aware helper с отдельным deadline 20 с; `pdfs`+`meta` остаются атомарной парой, TTL/URL binding не изменены.
+- Maintenance cleanup сохраняет свой deadline domain; offscreen retry-cache reads уже имели independent bounded deadline и не менялись.
+- Добавлен deterministic regression `project_tools/test_p1_081_084_idb_deadlines.js`, включая hung transaction abort и запрет readonly publication до `tx.oncomplete`.
+- Manifest намеренно остаётся `0.9.8`; это не release QA.

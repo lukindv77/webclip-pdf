@@ -245,15 +245,17 @@ async function main() {
     MAX_OPERATION_LOG_META_JSON_CHARS: 256 * 1024,
     MAX_OPERATION_LOG_RECORD_JSON_CHARS: 4 * 1024 * 1024,
     MAX_OPERATION_LOG_EVENT_TOTAL_JSON_CHARS: 3 * 1024 * 1024,
+    OPERATION_LOG_CRUD_IDB_TX_TIMEOUT_MS: 20_000,
     operationLogWriteChains: new Map(),
     openOperationLogDb: async () => fakeDb,
     describeOperation: (_type, title) => title || 'operation'
   });
 
+  const helperCode = section(swSource, 'function runIndexedDbTransactionBounded', 'function openOperationLogDb');
   const boundsCode = section(swSource, 'function sanitizeOperationLogValue', 'function queueOperationLogWrite');
   const appendCode = section(swSource, 'async function appendOperationLogEventOnce', 'async function appendOperationLogEventDurable');
   const getCode = section(swSource, 'async function getOperationLog(operationId)', 'function deleteOperationLogEventsInTransaction');
-  vm.runInContext(`${boundsCode}\n${appendCode}\n${getCode}\nthis.appendForTest = appendOperationLogEventOnce; this.getForTest = getOperationLog;`, context);
+  vm.runInContext(`${helperCode}\n${boundsCode}\n${appendCode}\n${getCode}\nthis.appendForTest = appendOperationLogEventOnce; this.getForTest = getOperationLog;`, context);
 
   await context.appendForTest('legacy-op', {
     timestamp: 4, category: 'stage', level: 'info', message: 'new-1', data: { pass: 1 }
