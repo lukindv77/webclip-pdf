@@ -156,9 +156,13 @@ const automaticDownloadStartSettlements = new Map();
 let userSettingsImportStorageSettlement = Promise.resolve();
 const FRAME_AGENT_COMMAND_TIMEOUT_MS = 5_000;
 const FRAME_AGENT_MAX_PER_TAB = 64;
+const SCRIPT_EXECUTION_TIMEOUT_MS = 10_000;
+const SCRIPT_EXECUTION_LATE_SUCCESS_TTL_MS = 60_000;
+const TAB_GET_TIMEOUT_MS = 5_000;
 const TAB_CREATE_TIMEOUT_MS = 10_000;
 const TAB_CREATE_LATE_SUCCESS_TTL_MS = 60_000;
 const frameAgentsByTab = new Map();
+const scriptExecutionSettlements = new Map();
 const tabCreateSettlements = new Map();
 
 async function runSerializedLateSettlementOperation(chains, queueKey, start, label, timeoutMs) {
@@ -1737,11 +1741,14 @@ async function enableFrameAgentsForTab(tabId) {
   if (!id) throw new Error('Не указана вкладка для подключения iframe.');
   let results = [];
   try {
-    results = await withOperationTimeout(
-      chrome.scripting.executeScript({ target: { tabId: id, allFrames: true }, files: ['frame-agent.js'] }),
-      10_000,
-      'Инъекция frame-agent в разрешённые iframe'
-    );
+    results = await executeScriptSingletonBounded(
+    { target: { tabId: id, allFrames: true }, files: ['frame-agent.js'] },
+    {
+      requestKey: `frame-agent:${id}:all`,
+      label: 'Инъекция frame-agent в разрешённые iframe',
+      timeoutMs: SCRIPT_EXECUTION_TIMEOUT_MS
+    }
+  );
   } catch (error) {
     // Chrome может отказать allFrames, если ни один дочерний frame сейчас не
     // доступен по optional host permission. Это не должно ломать top-page flow.
@@ -1754,6 +1761,91 @@ async function enableFrameAgentsForTab(tabId) {
   };
 }
 
+function makeScriptExecutionPendingError(label = 'Инъекция скрипта Chrome') {
+  const error = new Error(`${label} ещё выполняется Chrome. WebClip не запускает повторную инъекцию, пока исходный scripting.executeScript() не завершится.`);
+  error.code = 'WEBCLIP_SCRIPT_EXECUTION_PENDING';
+  return error;
+}
+
+function scriptExecutionRequestKey(details = {}, requestKey = '') {
+  const explicit = String(requestKey || '').trim();
+  if (explicit) return `logical:${explicit.slice(0, 512)}`;
+  const target = details?.target && typeof details.target === 'object' ? details.target : {};
+  const tabId = Math.max(0, Math.floor(Number(target.tabId) || 0));
+  const frameIds = (Array.isArray(target.frameIds) ? target.frameIds : []).map((value) => Math.floor(Number(value))).filter((value) => Number.isInteger(value) && value >= 0).sort((a, b) => a - b);
+  const documentIds = (Array.isArray(target.documentIds) ? target.documentIds : []).map((value) => String(value || '').slice(0, 256)).filter(Boolean).sort();
+  const files = (Array.isArray(details?.files) ? details.files : []).map((value) => String(value || '').slice(0, 512)).filter(Boolean);
+  return `tab:${tabId}|all:${target.allFrames === true ? 1 : 0}|frames:${frameIds.join(',')}|documents:${documentIds.join(',')}|files:${files.join(',')}|world:${String(details?.world || 'ISOLATED')}`;
+}
+
+function clearScriptExecutionSettlement(key, entry) {
+  if (entry?.cleanupTimer) clearTimeout(entry.cleanupTimer);
+  if (scriptExecutionSettlements.get(key) === entry) scriptExecutionSettlements.delete(key);
+}
+
+function clearScriptExecutionSettlementsForTab(tabId) {
+  const id = Math.max(0, Math.floor(Number(tabId) || 0));
+  if (!id) return;
+  for (const [key, entry] of [...scriptExecutionSettlements]) {
+    if (key === `logical:content:${id}` || key === `logical:frame-agent:${id}:all` || key.startsWith(`tab:${id}|`)) {
+      clearScriptExecutionSettlement(key, entry);
+    }
+  }
+}
+
+function waitForScriptExecutionSettlement(entry, label, timeoutMs = SCRIPT_EXECUTION_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(value);
+    };
+    const timer = setTimeout(() => {
+      entry.timedOut = true;
+      finish(reject, makeScriptExecutionPendingError(label));
+    }, Math.max(1, Number(timeoutMs) || SCRIPT_EXECUTION_TIMEOUT_MS));
+    entry.raw.then((result) => finish(resolve, result), (error) => finish(reject, error));
+  });
+}
+
+async function executeScriptSingletonBounded(details, { requestKey = '', label = 'Инъекция скрипта Chrome', timeoutMs = SCRIPT_EXECUTION_TIMEOUT_MS } = {}) {
+  const key = scriptExecutionRequestKey(details, requestKey);
+  const existing = scriptExecutionSettlements.get(key);
+  if (existing) {
+    if (existing.hasLateSuccess) {
+      const result = existing.lateSuccess;
+      clearScriptExecutionSettlement(key, existing);
+      return result;
+    }
+    const result = await waitForScriptExecutionSettlement(existing, `${label}: ожидание уже начатого scripting.executeScript()`, timeoutMs);
+    if (existing.timedOut) clearScriptExecutionSettlement(key, existing);
+    return result;
+  }
+
+  let raw;
+  try { raw = Promise.resolve(chrome.scripting.executeScript(details)); }
+  catch (error) { raw = Promise.reject(error); }
+  const entry = { raw, timedOut: false, hasLateSuccess: false, lateSuccess: null, cleanupTimer: 0 };
+  scriptExecutionSettlements.set(key, entry);
+  raw.then(
+    (result) => {
+      if (scriptExecutionSettlements.get(key) !== entry) return;
+      if (entry.timedOut) {
+        entry.hasLateSuccess = true;
+        entry.lateSuccess = result;
+        entry.cleanupTimer = setTimeout(() => clearScriptExecutionSettlement(key, entry), SCRIPT_EXECUTION_LATE_SUCCESS_TTL_MS);
+      } else {
+        clearScriptExecutionSettlement(key, entry);
+      }
+    },
+    () => {
+      if (scriptExecutionSettlements.get(key) === entry) clearScriptExecutionSettlement(key, entry);
+    }
+  );
+  return waitForScriptExecutionSettlement(entry, label, timeoutMs);
+}
 function makeTabCreatePendingError(label = 'Создание вкладки Chrome') {
   const error = new Error(`${label} ещё выполняется Chrome. WebClip не запускает повтор, пока исходный tabs.create() не завершится, чтобы не создать дубликат вкладки.`);
   error.code = 'WEBCLIP_TAB_CREATE_PENDING';
@@ -1840,12 +1932,25 @@ async function createChromeTabBounded(create, { sourceTabId = 0, requestKey = ''
   return waitForTabCreateSettlement(entry, label);
 }
 
+function getChromeTabBounded(tabId, label = 'Чтение вкладки Chrome', timeoutMs = TAB_GET_TIMEOUT_MS) {
+  const id = Math.max(0, Math.floor(Number(tabId) || 0));
+  if (!id) {
+    const error = new Error('Не указан корректный tabId для Chrome tabs.get().');
+    error.code = 'WEBCLIP_INVALID_TAB_ID';
+    return Promise.reject(error);
+  }
+  return withOperationTimeout(
+    Promise.resolve().then(() => chrome.tabs.get(id)),
+    Math.max(1, Number(timeoutMs) || TAB_GET_TIMEOUT_MS),
+    label
+  );
+}
 async function createTabNextTo(sourceTabId, url, active = true, requestKey = '') {
   const create = { url, active };
   const id = Number(sourceTabId || 0);
   if (id > 0) {
     try {
-      const source = await chrome.tabs.get(id);
+      const source = await getChromeTabBounded(id, 'Определение позиции новой вкладки');
       if (Number.isInteger(source?.index)) {
         create.index = source.index + 1;
         if (source.windowId != null) create.windowId = source.windowId;
@@ -2597,12 +2702,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  clearScriptExecutionSettlementsForTab(tabId);
   frameAgentsByTab.delete(Number(tabId || 0));
   deleteCachedPdf(tabId).catch(() => {});
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo?.url) {
+    clearScriptExecutionSettlementsForTab(tabId);
     frameAgentsByTab.delete(Number(tabId || 0));
     deleteCachedPdf(tabId).catch(() => {});
   }
@@ -3031,7 +3138,7 @@ async function openJournalPage({ mode = 'all', sourceTabId = 0, sourceUrl = '', 
   let sourceTab = null;
   if (tabId > 0) {
     try {
-      sourceTab = await withOperationTimeout(chrome.tabs.get(tabId), 5_000, 'Проверка исходной вкладки журнала');
+      sourceTab = await getChromeTabBounded(tabId, 'Проверка исходной вкладки журнала');
     } catch (error) {
       const blocked = new Error(`Не удалось достоверно определить контекст исходной вкладки журнала: ${normalizeError(error)}`);
       blocked.code = 'JOURNAL_SOURCE_CONTEXT_UNKNOWN';
@@ -3047,7 +3154,7 @@ async function openJournalPage({ mode = 'all', sourceTabId = 0, sourceUrl = '', 
   if (placementTabId > 0 && placementTabId !== tabId) {
     let placementTab;
     try {
-      placementTab = await withOperationTimeout(chrome.tabs.get(placementTabId), 5_000, 'Проверка anchor-вкладки журнала');
+      placementTab = await getChromeTabBounded(placementTabId, 'Проверка anchor-вкладки журнала');
     } catch (error) {
       const blocked = new Error(`Не удалось достоверно определить контекст anchor-вкладки журнала: ${normalizeError(error)}`);
       blocked.code = 'JOURNAL_ANCHOR_CONTEXT_UNKNOWN';
@@ -3077,7 +3184,16 @@ async function openJournalPage({ mode = 'all', sourceTabId = 0, sourceUrl = '', 
 
 async function ensureWebClipContentScript(tabId) {
   await ensureStorageAccessInitialized();
-  await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+  const id = Math.max(0, Math.floor(Number(tabId) || 0));
+  if (!id) throw new Error('Не указана вкладка для подключения WebClip content script.');
+  await executeScriptSingletonBounded(
+    { target: { tabId: id }, files: ['content.js'] },
+    {
+      requestKey: `content:${id}`,
+      label: 'Инъекция WebClip content script',
+      timeoutMs: SCRIPT_EXECUTION_TIMEOUT_MS
+    }
+  );
 }
 
 async function sendWebClipPageCommand(tabId, command, extra = {}) {
@@ -8216,7 +8332,7 @@ async function getValidCachedPdfForTab(tabId) {
   }
   let currentUrl = '';
   try {
-    currentUrl = normalizeJournalUrl((await chrome.tabs.get(tabId))?.url || '');
+    currentUrl = normalizeJournalUrl((await getChromeTabBounded(tabId, 'Проверка текущего URL PDF retry cache'))?.url || '');
   } catch (_) {
     await deleteCachedPdfByKey(key).catch(() => {});
     return null;
@@ -9630,7 +9746,7 @@ async function updateActionForTab(tabId, knownUrl = '') {
   let url = knownUrl;
   if (!url) {
     try {
-      const tab = await chrome.tabs.get(tabId);
+      const tab = await getChromeTabBounded(tabId, 'Чтение URL вкладки для Chrome Action');
       url = tab?.url || '';
     } catch (_) {
       return;

@@ -31,6 +31,7 @@ async function testJournalContextFailsClosed() {
     crypto: { randomUUID: () => 'ctx-id' },
     normalizeError: (error) => error?.message || String(error),
     withOperationTimeout: (promise) => Promise.resolve(promise),
+    getChromeTabBounded: (tabId) => Promise.resolve().then(() => chrome.tabs.get(tabId)),
     createTabNextTo: async () => { createCalls += 1; return { id: 99 }; }
   });
   const code = section(swSource, 'async function openJournalPage', 'async function ensureWebClipContentScript');

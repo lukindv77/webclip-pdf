@@ -33,6 +33,10 @@
 
 Direct Journal readonly IndexedDB view reads сохраняют собственный 20-секундный deadline/abort и normal service-worker fallback; defensive early-result края больше не обходят transaction completion. `chrome.tabs.create()` теперь имеет 10-секундный caller deadline, но исходный non-cancellable promise отслеживается до реального settlement: identical retry не создаёт вторую вкладку, а late success временно сохраняется как одноразовый receipt. Manifest остаётся `0.9.8`; это не release QA.
 
+### Audit WIP — P1-125 / P1-126
+
+Service-worker script injection имеет 10-секундный caller deadline с actual-settlement tracking: identical retry не запускает второй `executeScript()`, late success хранится как bounded one-use receipt, а навигация очищает stale settlement state; `content.js`/`frame-agent.js` остаются singleton-safe. Все `tabs.get()` worker-кода проходят через единый 5-секундный bounded helper с прежними fail-safe/fail-closed семантиками. Manifest остаётся `0.9.8`; это не release QA.
+
 ## Изменения 0.9.7
 
 - Контекст исходной вкладки теперь передаётся через `chrome.storage.session` по одноразовому `contextId`; URL и tabId исходного сайта больше не включаются в URL `journal.html`.

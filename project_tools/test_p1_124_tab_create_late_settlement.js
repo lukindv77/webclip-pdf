@@ -38,7 +38,7 @@ assert(!/return\s+chrome\.tabs\.create\(create\)/.test(createBlock), 'raw tabs.c
       }
     }
   };
-  const context = vm.createContext({ console, Promise, Error, Number, Math, String, Map, setTimeout, clearTimeout, chrome });
+  const context = vm.createContext({ console, Promise, Error, Number, Math, String, Map, setTimeout, clearTimeout, chrome, withOperationTimeout: (promise) => Promise.resolve(promise) });
   const code = `const TAB_CREATE_TIMEOUT_MS = 20;\nconst TAB_CREATE_LATE_SUCCESS_TTL_MS = 1000;\nconst tabCreateSettlements = new Map();\n${createBlock}\nthis.createForTest = createTabNextTo; this.pendingForTest = tabCreateSettlements;`;
   vm.runInContext(code, context);
 

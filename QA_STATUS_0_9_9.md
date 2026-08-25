@@ -524,3 +524,10 @@ Recovery-gap applies: this mounted artifact is not the canonical physical P1-131
 - P1-124: `tabs.create()` has a 10 s local deadline with actual-settlement tracking; same request while unresolved reuses the pending promise and late success is retained for one bounded retry receipt instead of creating a duplicate tab.
 - Dedicated deterministic regressions: `test_p1_085_journal_direct_read_deadline.js`, `test_p1_124_tab_create_late_settlement.js`.
 - Manifest remains `0.9.8`; real unpacked Chrome tab-creation timing remains release regression QA.
+
+## 2026-08-25 — P1-125 / P1-126
+
+- P1-125: оба service-worker `scripting.executeScript()` пути используют bounded actual-settlement helper. Unknown local timeout держит request barrier; identical retry не reinject'ит, late success возвращается один раз, navigation очищает stale receipt/pending state. Script singleton guards сохранены.
+- P1-126: все пять service-worker `tabs.get()` мест сведены к `getChromeTabBounded()` (5 с); низкоуровневый `chrome.tabs.get()` остался ровно в одном helper.
+- Dedicated regressions: `test_p1_125_execute_script_settlement.js`, `test_p1_126_tabs_get_deadlines.js`.
+- Manifest остаётся `0.9.8`; реальные Chrome timing/navigation races остаются release regression QA.
