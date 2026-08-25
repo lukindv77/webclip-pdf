@@ -142,6 +142,10 @@ const STORAGE_ACCESS_LEVEL_TIMEOUT_MS = 10_000;
 const DOWNLOADS_SEARCH_TIMEOUT_MS = 5_000;
 const STORAGE_ESTIMATE_TIMEOUT_MS = 5_000;
 const CHROME_STORAGE_OPERATION_TIMEOUT_MS = 10_000;
+const PREPARED_SAVE_AS_CHECKPOINT_TIMEOUT_MS = 10_000;
+const PREPARED_SAVE_AS_INDEX_KEY = 'webclipPreparedSaveAsIndex';
+const PREPARED_SAVE_AS_CHECKPOINT_PREFIX = 'webclipPreparedSaveAs:';
+const MAX_PREPARED_SAVE_AS_CHECKPOINTS = 64;
 const CHROME_ALARM_OPERATION_TIMEOUT_MS = 10_000;
 const MAINTENANCE_IDB_TX_TIMEOUT_MS = 20_000;
 const OPERATION_LOG_CRUD_IDB_TX_TIMEOUT_MS = 20_000;
@@ -151,6 +155,7 @@ const RECOVERY_IDB_TX_TIMEOUT_MS = 20_000;
 const JOURNAL_BACKUP_LEASE_TX_TIMEOUT_MS = 20_000;
 const operationLogWriteChains = new Map();
 const chromeStorageMutationSettlementChains = new Map();
+let preparedSaveAsCheckpointMutationSettlement = Promise.resolve();
 const chromeAlarmMutationSettlementChains = new Map();
 const automaticDownloadStartSettlements = new Map();
 let userSettingsImportStorageSettlement = Promise.resolve();
@@ -200,6 +205,148 @@ function mutateChromeStorageSerialized(queueKey, start, label, timeoutMs = CHROM
   return runSerializedLateSettlementOperation(chromeStorageMutationSettlementChains, queueKey, start, label, timeoutMs);
 }
 
+function normalizePreparedSaveAsSessionId(value) {
+  const id = String(value || '').trim();
+  if (!id || id.length > 180 || !/^[A-Za-z0-9._:-]+$/.test(id)) {
+    const error = new Error('Некорректный идентификатор prepared Save As session.');
+    error.code = 'WEBCLIP_PREPARED_SAVE_AS_SESSION_INVALID';
+    throw error;
+  }
+  return id;
+}
+
+function makePreparedSaveAsSessionId() {
+  const suffix = globalThis.crypto?.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return normalizePreparedSaveAsSessionId(`save-as-${suffix}`);
+}
+
+function preparedSaveAsCheckpointKey(sessionId, stage) {
+  const id = normalizePreparedSaveAsSessionId(sessionId);
+  const normalizedStage = stage === 'started' || stage === 'released' ? stage : 'prepared';
+  return `${PREPARED_SAVE_AS_CHECKPOINT_PREFIX}${id}:${normalizedStage}`;
+}
+
+function sanitizePreparedSaveAsIndex(value) {
+  const source = Array.isArray(value) ? value : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of source) {
+    let id = '';
+    try { id = normalizePreparedSaveAsSessionId(item); } catch (_) { continue; }
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= MAX_PREPARED_SAVE_AS_CHECKPOINTS) break;
+  }
+  return out;
+}
+
+function queuePreparedSaveAsCheckpointMutation(start, label) {
+  // Unlike ordinary storage mutations, later checkpoint transitions
+  // are queued behind the *actual* settlement even when a caller hits
+  // its local deadline. This prevents STARTED/RELEASE from overtaking
+  // a late PREPARED/STARTED write.
+  const previous = preparedSaveAsCheckpointMutationSettlement;
+  const actual = previous.catch(() => {}).then(() => Promise.resolve().then(start));
+  const barrier = actual.then(() => undefined, () => undefined);
+  preparedSaveAsCheckpointMutationSettlement = barrier;
+  void barrier.finally(() => {
+    if (preparedSaveAsCheckpointMutationSettlement === barrier) {
+      preparedSaveAsCheckpointMutationSettlement = Promise.resolve();
+    }
+  }).catch(() => {});
+  return withOperationTimeout(actual, PREPARED_SAVE_AS_CHECKPOINT_TIMEOUT_MS, label);
+}
+
+function preparedSaveAsCheckpointRecord({ sessionId, stage, blobUrl, filename = '', ownerPage = '', operationId = '', downloadId = null, reason = '' }) {
+  const record = {
+    sessionId: normalizePreparedSaveAsSessionId(sessionId),
+    stage,
+    blobUrl: normalizePreparedSaveAsBlobUrl(blobUrl),
+    filename: String(filename || '').slice(0, 240),
+    ownerPage: ownerPage === 'options.html' ? 'options.html' : 'journal.html',
+    operationId: String(operationId || '').slice(0, 180),
+    updatedAt: Date.now()
+  };
+  if (stage === 'prepared') record.createdAt = record.updatedAt;
+  if (stage === 'started') record.downloadId = Math.max(0, Math.floor(Number(downloadId) || 0));
+  if (stage === 'released') record.reason = String(reason || '').slice(0, 160);
+  return record;
+}
+
+function createPreparedSaveAsCheckpoint(details) {
+  const record = preparedSaveAsCheckpointRecord({ ...details, stage: 'prepared' });
+  const sessionId = record.sessionId;
+  const preparedKey = preparedSaveAsCheckpointKey(sessionId, 'prepared');
+  return queuePreparedSaveAsCheckpointMutation(async () => {
+    const stored = await readChromeStorageBounded(
+      () => chrome.storage.session.get(PREPARED_SAVE_AS_INDEX_KEY),
+      'Чтение индекса prepared Save As'
+    );
+    const index = sanitizePreparedSaveAsIndex(stored?.[PREPARED_SAVE_AS_INDEX_KEY]);
+    if (!index.includes(sessionId) && index.length >= MAX_PREPARED_SAVE_AS_CHECKPOINTS) {
+      const error = new Error('Слишком много незавершённых prepared Save As операций в текущей browser session.');
+      error.code = 'WEBCLIP_PREPARED_SAVE_AS_LIMIT';
+      throw error;
+    }
+    const nextIndex = [...index.filter((id) => id !== sessionId), sessionId];
+    await chrome.storage.session.set({
+      [PREPARED_SAVE_AS_INDEX_KEY]: nextIndex,
+      [preparedKey]: record
+    });
+    return record;
+  }, 'Фиксация prepared Save As checkpoint');
+}
+
+function markPreparedSaveAsStarted(details) {
+  const record = preparedSaveAsCheckpointRecord({ ...details, stage: 'started' });
+  const sessionId = record.sessionId;
+  const preparedKey = preparedSaveAsCheckpointKey(sessionId, 'prepared');
+  const startedKey = preparedSaveAsCheckpointKey(sessionId, 'started');
+  const releasedKey = preparedSaveAsCheckpointKey(sessionId, 'released');
+  return queuePreparedSaveAsCheckpointMutation(async () => {
+    const stored = await readChromeStorageBounded(
+      () => chrome.storage.session.get([preparedKey, releasedKey]),
+      'Проверка prepared Save As перед STARTED'
+    );
+    if (stored?.[releasedKey]) return { ...record, skipped: true, released: true };
+    if (!stored?.[preparedKey]) {
+      const error = new Error('Durable prepared Save As checkpoint не найден.');
+      error.code = 'WEBCLIP_PREPARED_SAVE_AS_CHECKPOINT_MISSING';
+      throw error;
+    }
+    await chrome.storage.session.set({ [startedKey]: record });
+    return record;
+  }, 'Фиксация STARTED prepared Save As checkpoint');
+}
+
+function releasePreparedSaveAsCheckpoint(details) {
+  const record = preparedSaveAsCheckpointRecord({ ...details, stage: 'released' });
+  const sessionId = record.sessionId;
+  const preparedKey = preparedSaveAsCheckpointKey(sessionId, 'prepared');
+  const startedKey = preparedSaveAsCheckpointKey(sessionId, 'started');
+  const releasedKey = preparedSaveAsCheckpointKey(sessionId, 'released');
+  return queuePreparedSaveAsCheckpointMutation(async () => {
+    const stored = await readChromeStorageBounded(
+      () => chrome.storage.session.get(PREPARED_SAVE_AS_INDEX_KEY),
+      'Чтение индекса перед RELEASE prepared Save As'
+    );
+    const nextIndex = sanitizePreparedSaveAsIndex(stored?.[PREPARED_SAVE_AS_INDEX_KEY])
+      .filter((id) => id !== sessionId);
+    // RELEASE is a distinct durable tombstone key. It cannot be
+    // overwritten by a late PREPARED/STARTED write from another
+    // worker generation because those transitions use distinct keys.
+    await chrome.storage.session.set({
+      [PREPARED_SAVE_AS_INDEX_KEY]: nextIndex,
+      [releasedKey]: record
+    });
+    await chrome.storage.session.remove([preparedKey, startedKey]);
+    await revokeBlobUrl(record.blobUrl);
+    return record;
+  }, 'Фиксация RELEASED prepared Save As checkpoint');
+}
 function getChromeAlarmBounded(name, label = 'Чтение alarm Chrome') {
   return withOperationTimeout(Promise.resolve().then(() => chrome.alarms.get(name)), CHROME_ALARM_OPERATION_TIMEOUT_MS, label);
 }
@@ -1313,12 +1460,33 @@ async function prepareOperationLogExport(operationId) {
   };
   const text = JSON.stringify(exported, null, 2);
   const blobUrl = await createTextBlobUrl(text, 'application/json;charset=utf-8');
-  return {
-    ok: true,
-    blobUrl,
-    filename: operationLogExportFilename(operationId),
-    operationId: String(operationId || '')
-  };
+  const filename = operationLogExportFilename(operationId);
+  const saveAsSessionId = makePreparedSaveAsSessionId();
+  try {
+    await createPreparedSaveAsCheckpoint({
+      sessionId: saveAsSessionId,
+      blobUrl,
+      filename,
+      ownerPage: 'options.html',
+      operationId: String(operationId || '')
+    });
+    return {
+      ok: true,
+      blobUrl,
+      filename,
+      operationId: String(operationId || ''),
+      saveAsSessionId
+    };
+  } catch (error) {
+    await releasePreparedSaveAsCheckpoint({
+      sessionId: saveAsSessionId,
+      blobUrl,
+      ownerPage: 'options.html',
+      operationId: String(operationId || ''),
+      reason: 'prepare-failed'
+    }).catch(() => {});
+    throw error;
+  }
 }
 
 async function getOperationLog(operationId) {
@@ -2597,10 +2765,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const ownerPage = assertSaveAsOwnerPage(sender);
         if (ownerPage !== 'journal.html' && ownerPage !== 'options.html') throw new Error('Эта страница WebClip не является владельцем Save As.');
         const blobUrl = normalizePreparedSaveAsBlobUrl(message.blobUrl);
+        const saveAsSessionId = normalizePreparedSaveAsSessionId(message.saveAsSessionId);
         const downloadId = Number(message.downloadId);
         if (!Number.isInteger(downloadId) || downloadId < 0) throw new Error('Некорректный downloadId Save As.');
         revokeBlobUrlWhenDownloadFinishes(downloadId, blobUrl);
-        return { ok: true, downloadId };
+        const checkpoint = await markPreparedSaveAsStarted({
+          sessionId: saveAsSessionId,
+          blobUrl,
+          ownerPage,
+          downloadId
+        });
+        return { ok: true, downloadId, saveAsSessionId, checkpointReleased: Boolean(checkpoint?.released) };
       }
 
       case 'WEBCLIP_PREPARED_SAVE_AS_RELEASE': {
@@ -2608,8 +2783,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const ownerPage = assertSaveAsOwnerPage(sender);
         if (ownerPage !== 'journal.html' && ownerPage !== 'options.html') throw new Error('Эта страница WebClip не является владельцем Save As.');
         const blobUrl = normalizePreparedSaveAsBlobUrl(message.blobUrl);
-        await revokeBlobUrl(blobUrl);
-        return { ok: true };
+        const saveAsSessionId = normalizePreparedSaveAsSessionId(message.saveAsSessionId);
+        await releasePreparedSaveAsCheckpoint({
+          sessionId: saveAsSessionId,
+          blobUrl,
+          ownerPage,
+          reason: String(message.reason || 'page-release')
+        });
+        return { ok: true, saveAsSessionId };
       }
 
       case 'WEBCLIP_OPERATION_LOG_CLEANUP':
@@ -6962,6 +7143,7 @@ async function prepareFullJournalExport(operationId = '') {
   operationId = String(operationId || '') || makeOperationLogId('journal-export');
   await startOperationLog(operationId, 'journal-export-file', 'Экспорт полного журнала в файл', {});
   let blobUrl = '';
+  let saveAsSessionId = '';
   try {
     recordOperationStage(operationId, 'read-journal', 'Читаем журнал пакетами и формируем ограниченный chunked JSON…', 20);
     const staged = await stageFullJournalExport();
@@ -6972,10 +7154,28 @@ async function prepareFullJournalExport(operationId = '') {
       await deleteTransferPayloadGroup(staged.stagingKey).catch(() => {});
     }
     const filename = journalExportDownloadFilename();
+    saveAsSessionId = makePreparedSaveAsSessionId();
+    await createPreparedSaveAsCheckpoint({
+      sessionId: saveAsSessionId,
+      blobUrl,
+      filename,
+      ownerPage: 'journal.html',
+      operationId
+    });
     recordOperationStage(operationId, 'save-as-ready', 'Файл подготовлен. Ожидаем выбор места сохранения в стандартном диалоге Chrome.', 80, 'running', { entryCount: staged.entryCount });
-    return { ok: true, blobUrl, filename, entryCount: staged.entryCount, operationId };
+    return { ok: true, blobUrl, filename, entryCount: staged.entryCount, operationId, saveAsSessionId };
   } catch (error) {
-    if (blobUrl) await revokeBlobUrl(blobUrl).catch(() => {});
+    if (blobUrl && saveAsSessionId) {
+      await releasePreparedSaveAsCheckpoint({
+        sessionId: saveAsSessionId,
+        blobUrl,
+        ownerPage: 'journal.html',
+        operationId,
+        reason: 'prepare-failed'
+      }).catch(() => {});
+    } else if (blobUrl) {
+      await revokeBlobUrl(blobUrl).catch(() => {});
+    }
     recordOperationStage(operationId, 'error', `Ошибка экспорта: ${normalizeError(error)}`, 100, 'error');
     await finishOperationLog(operationId, 'error', `Ошибка экспорта полного журнала: ${normalizeError(error)}`).catch(() => {});
     throw error;

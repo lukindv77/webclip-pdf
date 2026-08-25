@@ -17,6 +17,13 @@ function fastTimer(fn, ms, ...args) {
   return setTimeout(fn, Math.min(Number(ms) || 0, 3), ...args);
 }
 
+function offscreenRaceTimer(fn, ms, ...args) {
+  const requested = Number(ms) || 0;
+  // Keep the 10s local deadline very short, but preserve a visible
+  // ordering gap before the simulated 80ms non-cancellable close.
+  return setTimeout(fn, requested >= 1000 ? 3 : Math.min(requested, 30), ...args);
+}
+
 async function delay(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -137,7 +144,7 @@ async function testLateOffscreenCloseBlocksRecreate() {
     Error,
     Number,
     Math,
-    setTimeout: fastTimer,
+    setTimeout: offscreenRaceTimer,
     clearTimeout,
     OFFSCREEN_DOCUMENT_PATH: 'offscreen.html',
     normalizeError: (error) => error?.message || String(error),

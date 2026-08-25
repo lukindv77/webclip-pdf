@@ -48,15 +48,47 @@ function isAllowedSignedYandexUrl(value) {
 const blobUrls = new Map();
 let activeBlobUrlBytes = 0;
 const OFFSCREEN_IDLE_CLOSE_MS = 60 * 1000;
+const OFFSCREEN_IDLE_CLOSE_REQUEST_TIMEOUT_MS = 10 * 1000;
 let activeTransfers = 0;
 let idleCloseTimer = null;
 let idleNonce = 0;
 let closingForIdle = false;
+let idleCloseRequestActual = null;
 
 function cancelIdleClose() {
   if (idleCloseTimer) clearTimeout(idleCloseTimer);
   idleCloseTimer = null;
   idleNonce += 1;
+}
+
+function waitOffscreenIdleCloseRequest(actual, timeoutMs = OFFSCREEN_IDLE_CLOSE_REQUEST_TIMEOUT_MS) {
+  const waitMs = Math.max(1, Number(timeoutMs) || OFFSCREEN_IDLE_CLOSE_REQUEST_TIMEOUT_MS);
+  let timer = 0;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(`Запрос idle-close offscreen не завершился за ${Math.ceil(waitMs / 1000)} с.`);
+      error.code = 'WEBCLIP_OFFSCREEN_IDLE_CLOSE_TIMEOUT';
+      reject(error);
+    }, waitMs);
+  });
+  return Promise.race([actual, deadline]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+function requestOffscreenIdleCloseBounded(nonce) {
+  let actual = idleCloseRequestActual;
+  if (!actual) {
+    actual = Promise.resolve().then(() => chrome.runtime.sendMessage({
+      type: 'WEBCLIP_OFFSCREEN_IDLE_CLOSE_REQUEST',
+      nonce
+    }));
+    idleCloseRequestActual = actual;
+    void actual.finally(() => {
+      if (idleCloseRequestActual === actual) idleCloseRequestActual = null;
+    }).catch(() => {});
+  }
+  return waitOffscreenIdleCloseRequest(actual);
 }
 
 function scheduleIdleClose() {
@@ -66,7 +98,16 @@ function scheduleIdleClose() {
   idleCloseTimer = setTimeout(() => {
     idleCloseTimer = null;
     if (closingForIdle || activeTransfers > 0 || blobUrls.size > 0 || nonce !== idleNonce) return;
-    chrome.runtime.sendMessage({ type: 'WEBCLIP_OFFSCREEN_IDLE_CLOSE_REQUEST', nonce }).catch(() => {});
+    void requestOffscreenIdleCloseBounded(nonce)
+      .then((response) => {
+        if (response?.closed !== true) scheduleIdleClose();
+      })
+      .catch(() => {
+        // The raw runtime message is non-cancellable and remains
+        // single-flight until actual settlement. Keep a future cleanup
+        // cycle instead of stacking another unknown close request.
+        scheduleIdleClose();
+      });
   }, OFFSCREEN_IDLE_CLOSE_MS);
 }
 

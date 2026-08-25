@@ -55,7 +55,8 @@ async function testPendingDialogHasSingleOwnerCall() {
   const env = makeContext(() => pending);
   const startPromise = env.context.WebClipPreparedSaveAs.start({
     blobUrl: 'blob:chrome-extension://test-id/abc',
-    filename: 'Journal.json'
+    filename: 'Journal.json',
+    saveAsSessionId: 'save-as-test-journal'
   });
   await new Promise((resolve) => setImmediate(resolve));
   assert.strictEqual(env.downloads.length, 1, 'native dialog must be invoked exactly once');
@@ -77,7 +78,8 @@ async function testDialogFailureReleasesBlobWithoutRetry() {
   await assert.rejects(
     env.context.WebClipPreparedSaveAs.start({
       blobUrl: 'blob:chrome-extension://test-id/cancel',
-      filename: 'Operation.json'
+      filename: 'Operation.json',
+      saveAsSessionId: 'save-as-test-operation'
     }),
     /User canceled/
   );

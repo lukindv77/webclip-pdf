@@ -531,3 +531,10 @@ Recovery-gap applies: this mounted artifact is not the canonical physical P1-131
 - P1-126: все пять service-worker `tabs.get()` мест сведены к `getChromeTabBounded()` (5 с); низкоуровневый `chrome.tabs.get()` остался ровно в одном helper.
 - Dedicated regressions: `test_p1_125_execute_script_settlement.js`, `test_p1_126_tabs_get_deadlines.js`.
 - Manifest остаётся `0.9.8`; реальные Chrome timing/navigation races остаются release regression QA.
+
+## 2026-08-25 — P1-128 / P1-129
+
+- P1-128: offscreen idle-close request bounded 10 с; raw runtime message single-flight до actual settlement; timeout/reject/`closed:false` reschedule future cleanup.
+- P1-129: Full Journal и OperationLog prepared Save As фиксируют durable session checkpoint до передачи Blob странице; STARTED/RELEASE проходят actual-settlement barrier, RELEASED хранится отдельным tombstone. Native `saveAs:true` по-прежнему page-owned без timeout/retry.
+- Dedicated regressions: `test_p1_128_offscreen_idle_close_request.js`, `test_p1_129_prepared_save_as_checkpoint.js`.
+- Manifest остаётся `0.9.8`; real unpacked Chrome Save As/offscreen lifecycle остаются release regression QA.

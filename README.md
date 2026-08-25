@@ -37,6 +37,10 @@ Direct Journal readonly IndexedDB view reads сохраняют собствен
 
 Service-worker script injection имеет 10-секундный caller deadline с actual-settlement tracking: identical retry не запускает второй `executeScript()`, late success хранится как bounded one-use receipt, а навигация очищает stale settlement state; `content.js`/`frame-agent.js` остаются singleton-safe. Все `tabs.get()` worker-кода проходят через единый 5-секундный bounded helper с прежними fail-safe/fail-closed семантиками. Manifest остаётся `0.9.8`; это не release QA.
 
+### Audit WIP — P1-128 / P1-129
+
+Offscreen idle-close RPC теперь bounded и single-flight: локальный timeout не создаёт второй неизвестный close-запрос, а сохраняет следующий cleanup cycle. Prepared native Save As остаётся extension-page owned без timeout; перед передачей Blob странице service worker фиксирует session-durable PREPARED checkpoint, а STARTED/RELEASE используют actual-settlement serialization и отдельный RELEASED tombstone. Manifest остаётся `0.9.8`; это не release QA.
+
 ## Изменения 0.9.7
 
 - Контекст исходной вкладки теперь передаётся через `chrome.storage.session` по одноразовому `contextId`; URL и tabId исходного сайта больше не включаются в URL `journal.html`.
