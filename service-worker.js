@@ -2579,6 +2579,17 @@ function sanitizePageStructureDiagnostics(rawDiagnostics) {
         measureWidth: pageDiagnosticCount(item?.measureWidth, 200000),
         measuredHeight: pageDiagnosticCount(item?.measuredHeight, 200000),
         appliedHeight: pageDiagnosticCount(item?.appliedHeight, 200000)
+      })),
+      flattenedFrames: (Array.isArray(print.flattenedFrames) ? print.flattenedFrames : []).slice(0, MAX_PAGE_ANALYSIS_ITEMS).map((item) => ({
+        mode: pageDiagnosticString(item?.mode, 48),
+        depth: pageDiagnosticCount(item?.depth, 32),
+        sameOrigin: Boolean(item?.sameOrigin),
+        sourceTextChars: pageDiagnosticCount(item?.sourceTextChars, 100000000),
+        cloneElementCount: pageDiagnosticCount(item?.cloneElementCount, 100000),
+        styledElementCount: pageDiagnosticCount(item?.styledElementCount, 100000),
+        removedScripts: pageDiagnosticCount(item?.removedScripts, 100000),
+        removedExcludes: pageDiagnosticCount(item?.removedExcludes, 100000),
+        styleBudgetTruncated: Boolean(item?.styleBudgetTruncated)
       }))
     }
   };

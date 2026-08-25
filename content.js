@@ -13,6 +13,22 @@
   const IMAGE_LINK_ATTR = 'data-webclip-image-link';
   const FRAME_INCLUDE_ATTR = 'data-webclip-pdf-frame-include';
   const FRAME_CHAIN_ATTR = 'data-webclip-pdf-frame-chain';
+  const FLATTENED_FRAME_ATTR = 'data-webclip-pdf-flattened-frame';
+  const FLATTENED_FRAME_MAX_STYLED_ELEMENTS = 2500;
+  const FLATTENED_FRAME_STYLE_PROPERTIES = Object.freeze([
+    'display', 'float', 'clear', 'box-sizing',
+    'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+    'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+    'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+    'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
+    'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+    'border-radius', 'font-family', 'font-size', 'font-weight', 'font-style', 'line-height',
+    'color', 'text-align', 'text-decoration-line', 'text-decoration-color', 'text-decoration-style',
+    'text-indent', 'text-transform', 'white-space', 'word-break', 'overflow-wrap', 'letter-spacing',
+    'vertical-align', 'list-style-type', 'list-style-position', 'background-color', 'background-image',
+    'background-repeat', 'background-position', 'background-size', 'border-collapse', 'border-spacing',
+    'table-layout', 'caption-side'
+  ]);
   const PDF_RESOURCE_PREFETCH_DEADLINE_MS = 15_000;
   const PDF_RESOURCE_PREFETCH_MAX_RESOURCES = 500;
   const PDF_RESOURCE_PREFETCH_CONCURRENCY = 8;
@@ -81,7 +97,9 @@
     printUiPreviousDisplay: '',
     lastBeforePrintDiagnostics: null,
     lastAfterPrintDiagnostics: null,
-    lastFramePrintMeasurements: []
+    lastFramePrintMeasurements: [],
+    flattenedFramePrintProxies: [],
+    lastFlattenedFrameDiagnostics: []
   };
 
   // Page.printToPDF fires beforeprint/afterprint synchronously around the print
@@ -2927,6 +2945,17 @@
           measureWidth: Math.max(0, Number(item?.measureWidth) || 0),
           measuredHeight: Math.max(0, Number(item?.measuredHeight) || 0),
           appliedHeight: Math.max(0, Number(item?.appliedHeight) || 0)
+        })),
+        flattenedFrames: (state.lastFlattenedFrameDiagnostics || []).slice(0, PAGE_DIAGNOSTICS_MAX_SELECTION_ITEMS).map((item) => ({
+          mode: String(item?.mode || '').slice(0, 48),
+          depth: Math.max(0, Number(item?.depth) || 0),
+          sameOrigin: Boolean(item?.sameOrigin),
+          sourceTextChars: Math.max(0, Number(item?.sourceTextChars) || 0),
+          cloneElementCount: Math.max(0, Number(item?.cloneElementCount) || 0),
+          styledElementCount: Math.max(0, Number(item?.styledElementCount) || 0),
+          removedScripts: Math.max(0, Number(item?.removedScripts) || 0),
+          removedExcludes: Math.max(0, Number(item?.removedExcludes) || 0),
+          styleBudgetTruncated: Boolean(item?.styleBudgetTruncated)
         }))
       }
     };
@@ -2988,6 +3017,7 @@
     absolutizeLinksInIncludedContent();
     wrapUnlinkedImagesForPdf();
     stabilizeSelectedFramePrintHeights('prepared');
+    flattenSelectedSameOriginBodyFramesForPrint();
 
     meta.pageAnalysis = capturePageStructureDiagnostics('prepared');
     state.printHeader = header;
@@ -3508,12 +3538,181 @@
     };
   }
 
+
+  function frameDepthForPrintProxy(frame) {
+    try {
+      const child = frame?.contentDocument;
+      if (!child) return 0;
+      return Math.max(1, getFrameChainForDocument(child).length);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function selectedBodyForSameOriginFrame(frame) {
+    let childDoc = null;
+    try { childDoc = frame?.contentDocument || null; } catch (_) { childDoc = null; }
+    if (!childDoc?.body) return null;
+    for (const include of state.includes.values()) {
+      if (include === childDoc.body) return childDoc.body;
+    }
+    return null;
+  }
+
+  function copyFrameCloneUrlState(source, target) {
+    const tag = String(source?.localName || '').toLowerCase();
+    try {
+      if (tag === 'a' && source.href) target.setAttribute('href', String(source.href).slice(0, PDF_RESOURCE_URL_MAX_CHARS));
+      if (tag === 'img') {
+        const src = source.currentSrc || source.src || '';
+        if (src) target.setAttribute('src', String(src).slice(0, PDF_RESOURCE_URL_MAX_CHARS));
+        target.removeAttribute('srcset');
+        target.removeAttribute('loading');
+        target.style.setProperty('max-width', '100%', 'important');
+        target.style.setProperty('height', 'auto', 'important');
+      }
+      if ((tag === 'video' || tag === 'audio' || tag === 'source') && source.src) {
+        target.setAttribute('src', String(source.src).slice(0, PDF_RESOURCE_URL_MAX_CHARS));
+      }
+      if (tag === 'video' && source.poster) target.setAttribute('poster', String(source.poster).slice(0, PDF_RESOURCE_URL_MAX_CHARS));
+    } catch (_) {}
+  }
+
+  function copyComputedFrameCloneStyle(source, target) {
+    if (!source || !target?.style) return false;
+    let computed = null;
+    try { computed = source.ownerDocument?.defaultView?.getComputedStyle(source) || null; } catch (_) { computed = null; }
+    if (!computed) return false;
+    for (const property of FLATTENED_FRAME_STYLE_PROPERTIES) {
+      try {
+        const value = computed.getPropertyValue(property);
+        if (value) target.style.setProperty(property, value, 'important');
+      } catch (_) {}
+    }
+    // The proxy must participate in normal paginated flow. Do not preserve
+    // clipping/contain/transform/fixed positioning from the embedded viewport.
+    try {
+      const position = String(computed.position || '').toLowerCase();
+      if (position === 'fixed' || position === 'sticky' || position === 'absolute') {
+        target.style.setProperty('position', 'static', 'important');
+        target.style.setProperty('inset', 'auto', 'important');
+      }
+      target.style.setProperty('max-height', 'none', 'important');
+      target.style.setProperty('min-height', '0', 'important');
+      target.style.setProperty('transform', 'none', 'important');
+      target.style.setProperty('contain', 'none', 'important');
+      target.style.setProperty('content-visibility', 'visible', 'important');
+    } catch (_) {}
+    copyFrameCloneUrlState(source, target);
+    return true;
+  }
+
+  function createFlattenedBodyFramePrintProxy(frame, sourceBody) {
+    const ownerDoc = frame?.ownerDocument;
+    if (!ownerDoc?.createElement || !sourceBody?.cloneNode || !frame?.parentNode) return null;
+
+    const proxy = ownerDoc.createElement('section');
+    proxy.setAttribute(FLATTENED_FRAME_ATTR, '1');
+    proxy.setAttribute('data-webclip-frame-depth', String(frameDepthForPrintProxy(frame)));
+    try {
+      if (sourceBody.className) proxy.className = String(sourceBody.className);
+      if (sourceBody.getAttribute?.('dir')) proxy.setAttribute('dir', sourceBody.getAttribute('dir'));
+      if (sourceBody.getAttribute?.('lang')) proxy.setAttribute('lang', sourceBody.getAttribute('lang'));
+    } catch (_) {}
+
+    for (const node of [...sourceBody.childNodes]) {
+      try { proxy.appendChild(node.cloneNode(true)); } catch (_) {}
+    }
+
+    const sourceElements = [sourceBody, ...sourceBody.querySelectorAll('*')];
+    const targetElements = [proxy, ...proxy.querySelectorAll('*')];
+    const cloneElementCount = targetElements.length;
+    const styleLimit = Math.min(sourceElements.length, targetElements.length, FLATTENED_FRAME_MAX_STYLED_ELEMENTS);
+    let styledElementCount = 0;
+    for (let index = 0; index < styleLimit; index += 1) {
+      const target = targetElements[index];
+      try { target.setAttribute(FLATTENED_FRAME_ATTR, '1'); } catch (_) {}
+      if (copyComputedFrameCloneStyle(sourceElements[index], target)) styledElementCount += 1;
+    }
+    // Even beyond the computed-style budget, keep descendants visible to the
+    // top-document selection stylesheet. Browser default styles are safer than
+    // silently dropping the tail of a large document.
+    for (let index = styleLimit; index < targetElements.length; index += 1) {
+      try { targetElements[index].setAttribute(FLATTENED_FRAME_ATTR, '1'); } catch (_) {}
+    }
+
+    let removedScripts = 0;
+    for (const script of [...proxy.querySelectorAll('script')]) {
+      try { script.remove(); removedScripts += 1; } catch (_) {}
+    }
+    let removedExcludes = 0;
+    for (const excluded of [...proxy.querySelectorAll(`[${EXCLUDE_ATTR}]`)]) {
+      try { excluded.remove(); removedExcludes += 1; } catch (_) {}
+    }
+
+    proxy.style.setProperty('display', 'block', 'important');
+    proxy.style.setProperty('position', 'static', 'important');
+    proxy.style.setProperty('width', '100%', 'important');
+    proxy.style.setProperty('max-width', '100%', 'important');
+    proxy.style.setProperty('height', 'auto', 'important');
+    proxy.style.setProperty('max-height', 'none', 'important');
+    proxy.style.setProperty('overflow', 'visible', 'important');
+    proxy.style.setProperty('contain', 'none', 'important');
+    proxy.style.setProperty('transform', 'none', 'important');
+    proxy.style.setProperty('break-inside', 'auto', 'important');
+    proxy.style.setProperty('page-break-inside', 'auto', 'important');
+
+    frame.parentNode.insertBefore(proxy, frame);
+    // P1-149 already snapshotted this frame's original inline style. Hide only
+    // the replaced iframe box; the flattened proxy now carries printable flow.
+    frame.style.setProperty('display', 'none', 'important');
+
+    let sourceTextChars = 0;
+    try { sourceTextChars = String(sourceBody.innerText || sourceBody.textContent || '').length; } catch (_) {}
+    return {
+      frame,
+      proxy,
+      diagnostics: {
+        mode: 'same-origin-body-proxy',
+        depth: frameDepthForPrintProxy(frame),
+        sameOrigin: true,
+        sourceTextChars: Math.max(0, sourceTextChars),
+        cloneElementCount: Math.max(0, cloneElementCount),
+        styledElementCount: Math.max(0, styledElementCount),
+        removedScripts: Math.max(0, removedScripts),
+        removedExcludes: Math.max(0, removedExcludes),
+        styleBudgetTruncated: cloneElementCount > FLATTENED_FRAME_MAX_STYLED_ELEMENTS
+      }
+    };
+  }
+
+  function flattenSelectedSameOriginBodyFramesForPrint() {
+    state.flattenedFramePrintProxies = [];
+    state.lastFlattenedFrameDiagnostics = [];
+    const unique = new Set();
+    for (const item of state.changedFrameStyles || []) {
+      const frame = item?.kind === 'frame' ? item.element : null;
+      if (!frame || frame.isConnected === false || unique.has(frame)) continue;
+      unique.add(frame);
+      const selectedBody = selectedBodyForSameOriginFrame(frame);
+      if (!selectedBody) continue;
+      let created = null;
+      try { created = createFlattenedBodyFramePrintProxy(frame, selectedBody); } catch (_) { created = null; }
+      if (!created) continue;
+      state.flattenedFramePrintProxies.push(created);
+      state.lastFlattenedFrameDiagnostics.push(created.diagnostics);
+    }
+    state.lastFlattenedFrameDiagnostics = state.lastFlattenedFrameDiagnostics.slice(0, PAGE_DIAGNOSTICS_MAX_SELECTION_ITEMS);
+    return state.flattenedFramePrintProxies.length;
+  }
+
   function stabilizeSelectedFramePrintHeights(reason = 'prepared') {
     const unique = new Set();
     const frames = [];
     for (const item of state.changedFrameStyles || []) {
       const frame = item?.kind === 'frame' ? item.element : null;
       if (!frame || frame.isConnected === false || unique.has(frame)) continue;
+      if ((state.flattenedFramePrintProxies || []).some((item) => item?.frame === frame)) continue;
       unique.add(frame);
       let depth = 1;
       try { depth = Math.max(1, getFrameChainForDocument(frame.ownerDocument).length + 1); } catch (_) {}
@@ -3584,7 +3783,7 @@
         html, body { background: #fff !important; overflow: visible !important; }
         body { display: block !important; height: auto !important; max-height: none !important; }
 
-        body *:not(#${PRINT_HEADER_ID}):not(#${PRINT_HEADER_ID} *):not([${INCLUDE_ATTR}]):not([${INCLUDE_ATTR}] *):not(:has([${INCLUDE_ATTR}])):not([${FRAME_INCLUDE_ATTR}]):not(:has([${FRAME_INCLUDE_ATTR}])) {
+        body *:not(#${PRINT_HEADER_ID}):not(#${PRINT_HEADER_ID} *):not([${INCLUDE_ATTR}]):not([${INCLUDE_ATTR}] *):not(:has([${INCLUDE_ATTR}])):not([${FRAME_INCLUDE_ATTR}]):not(:has([${FRAME_INCLUDE_ATTR}])):not([${FLATTENED_FRAME_ATTR}]) {
           display: none !important;
         }
 
@@ -4044,6 +4243,14 @@
     state.printStyles = [];
     state.printHeader = null;
     state.printStyle = null;
+
+    // Flattened same-origin frame proxies are print-only DOM. Remove them
+    // before restoring the exact P1-149 frame/ancestor inline-style snapshots.
+    for (const item of [...(state.flattenedFramePrintProxies || [])].reverse()) {
+      try { item?.proxy?.remove(); } catch (_) {}
+    }
+    state.flattenedFramePrintProxies = [];
+    state.lastFlattenedFrameDiagnostics = [];
 
     // Временную нормализацию выбранных iframe/ancestor chain откатываем
     // строго к исходным inline style/служебным атрибутам.

@@ -469,3 +469,7 @@ PDF operations now record bounded `page-analysis` and `copy-save` structure diag
 ### Audit WIP — P1-150
 
 Real its.1c.ru retest after P1-149 exposed print-time iframe height clipping: the child was measured at wide screen width but reflowed taller on A4. P1-150 adds conservative post-layout iframe height stabilization after selection print styles and on beforeprint, with bounded diagnostics and exact rollback.
+
+### Diagnostic WIP — P1-151
+
+Real its.1c.ru retest showed that a correctly sized selected iframe is still clipped as a replaced print element. Same-origin body selections are now flattened into a temporary paginatable top-document proxy with bounded style transfer and exact rollback.

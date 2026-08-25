@@ -563,3 +563,8 @@ Recovery-gap applies: this mounted artifact is not the canonical physical P1-131
 ## 2026-08-25 — P1-150
 
 REGRESSION: selected iframe print height is now remeasured at a conservative A4-equivalent width after print-flow/style preparation and on beforeprint. Deterministic regression covers the real wide-screen-to-A4 reflow failure model. Real its.1c.ru PDF remains required QA evidence.
+
+## 2026-08-25 — P1-151
+
+- REGRESSION: same-origin selected-body iframe is flattened into ordinary top-document print flow so Chromium can paginate it across pages.
+- Deterministic source contract added; real its.1c.ru output remains required browser QA.
