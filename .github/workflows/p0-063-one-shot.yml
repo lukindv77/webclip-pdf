@@ -1,0 +1,124 @@
+name: P0-063 one-shot guarded patch
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard exact product baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=1b20017a980e6b1543cd2a009186d08318e5d283
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          git diff --quiet "$BASE" -- offscreen.js project_docs/PRIORITIES_P0_P1_P2.md README.md manifest.json
+          node - <<'NODE'
+          const m = require('./manifest.json');
+          if (m.manifest_version !== 3 || m.version !== '0.9.8' || m.minimum_chrome_version !== '118') throw new Error('Manifest baseline mismatch');
+          NODE
+
+      - name: Repair staged patch quoting
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('project_tools/_patch_p0_063.js')
+          s = p.read_text()
+          needle_start = "vm.runInContext(source + `\\n;globalThis.__p0063 = {"
+          needle_end = "};`, context);"
+          start = s.find(needle_start)
+          if start < 0:
+              raise SystemExit('Expected nested-backtick start not found')
+          end = s.find(needle_end, start)
+          if end < 0:
+              raise SystemExit('Expected nested-backtick end not found')
+          end += len(needle_end)
+          replacement = "vm.runInContext(source + '\\\\n;globalThis.__p0063 = { reserveSignedTransferAdmission, resizeSignedTransferReservation, releaseSignedTransferAdmission, getSignedTransferAdmissionBytes, state: () => ({ activeTransfers, activeSignedTransferBytes, reservations: activeSignedTransferReservations.size }) };', context);"
+          s = s[:start] + replacement + s[end:]
+          p.write_text(s)
+          PY
+          node --check project_tools/_patch_p0_063.js
+
+      - name: Apply guarded P0-063 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          node project_tools/_patch_p0_063.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('project_tools/test_p0_063_offscreen_transfer_budget.js')
+          s = p.read_text()
+          s = s.replace('assert.deepStrictEqual(api.state(), {', 'assert.deepStrictEqual(JSON.parse(JSON.stringify(api.state())), {')
+          p.write_text(s)
+          PY
+          node --check offscreen.js
+          node --check project_tools/test_p0_063_offscreen_transfer_budget.js
+
+      - name: Full JavaScript syntax gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' f; do
+            node --check "$f"
+            count=$((count+1))
+          done < <(find . -type f -name '*.js' -not -path './.git/*' -print0 | sort -z)
+          echo "JavaScript syntax: ${count}/${count} PASS"
+
+      - name: Full deterministic test gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          for f in project_tools/test_*.js; do
+            node "$f"
+            count=$((count+1))
+          done
+          echo "Deterministic project_tools/test_*.js: ${count}/${count} PASS"
+
+      - name: Manifest and security invariant gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('fs');
+          const m = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+          if (m.manifest_version !== 3) throw new Error('Manifest must remain MV3');
+          if (m.version !== '0.9.8') throw new Error('Manifest version changed');
+          if (m.minimum_chrome_version !== '118') throw new Error('minimum Chrome changed');
+          if (m.content_security_policy?.extension_pages !== "script-src 'self'; object-src 'self'") throw new Error('Extension CSP changed');
+          const source = fs.readFileSync('offscreen.js', 'utf8');
+          if (!source.includes("redirect: 'error'")) throw new Error('Signed transfer redirect fail-closed invariant missing');
+          if (!source.includes('isTrustedExtensionSender')) throw new Error('Trusted sender invariant missing');
+          if (!source.includes("error.code = 'OFFSCREEN_TRANSFER_BUDGET_EXCEEDED'")) throw new Error('P0-063 budget error missing');
+          NODE
+          echo 'Manifest/security invariant gate: PASS'
+
+      - name: Remove one-shot tooling and commit product changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f project_tools/_patch_p0_063.js .github/workflows/p0-063-one-shot.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          test ! -e project_tools/_patch_p0_063.js
+          test ! -e .github/workflows/p0-063-one-shot.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix: bound offscreen signed-transfer admission (P0-063)'
+          git push origin HEAD:main
