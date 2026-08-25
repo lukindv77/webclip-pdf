@@ -553,3 +553,9 @@ Recovery-gap applies: this mounted artifact is not the canonical physical P1-131
 - Added exact `operationId` linkage from newly saved Journal entries to sanitized OperationLog; Journal can show/copy the linked log.
 - Old Journal entries without `operationId` remain supported and are never fuzzily matched to logs.
 - Manifest remains 0.9.8. Real reproduction on `https://its.1c.ru/db/metod8dev/content/2334/hdoc` is intentionally delegated to the diagnostic pre-release/user repro.
+
+## 2026-08-25 — P1-149
+
+- REGRESSION: selected iframe print-flow normalization implemented after real `its.1c.ru` evidence showed iframe-only Include with a valid-but-header-only PDF.
+- Deterministic regression verifies frame/ancestor normal-flow overrides and exact rollback of inline style + frame markers.
+- Real unmanaged Chrome `its.1c.ru` rerun remains required before release QA can claim closure in-browser.

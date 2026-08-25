@@ -459,3 +459,9 @@ Recovery-архив должен формироваться **после** вс�
 ### Diagnostic WIP — P1-147 / P1-148
 
 PDF operations now record bounded `page-analysis` and `copy-save` structure diagnostics, including before/after-print snapshots, without recording full page text. New Journal entries retain their exact source `operationId`, and Journal cards can show or copy the associated sanitized OperationLog directly. This diagnostic build remains manifest 0.9.8; it is not the 0.9.9 release-QA gate.
+
+### Audit WIP — P1-149
+
+- Real `its.1c.ru` diagnostic evidence localized the empty-PDF regression to an Include inside a same-origin iframe whose frame shell did not participate in top-level print flow.
+- Selected iframe/ancestor chains are now normalized only for the PDF window and fully rolled back afterward.
+- Dedicated deterministic regression: `project_tools/test_p1_149_iframe_print_flow.js`.

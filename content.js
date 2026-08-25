@@ -3324,6 +3324,76 @@
     return docs;
   }
 
+  function rememberFramePrintMutation(element, kind = 'chain') {
+    if (!element || (state.changedFrameStyles || []).some((item) => item.element === element)) return null;
+    const item = {
+      element,
+      kind: kind === 'frame' ? 'frame' : 'chain',
+      oldStyle: element.getAttribute?.('style') ?? null,
+      hadFrameInclude: Boolean(element.hasAttribute?.(FRAME_INCLUDE_ATTR)),
+      oldFrameInclude: element.getAttribute?.(FRAME_INCLUDE_ATTR),
+      hadFrameChain: Boolean(element.hasAttribute?.(FRAME_CHAIN_ATTR)),
+      oldFrameChain: element.getAttribute?.(FRAME_CHAIN_ATTR)
+    };
+    state.changedFrameStyles.push(item);
+    return item;
+  }
+
+  function applySelectedFramePrintFlow(element, kind = 'chain', contentHeight = 0) {
+    if (!element?.style) return;
+    let computed = null;
+    try { computed = (element.ownerDocument?.defaultView || window).getComputedStyle(element); } catch (_) { computed = null; }
+    const isFrame = kind === 'frame';
+    const currentDisplay = String(computed?.display || '').trim();
+    const currentOpacity = String(computed?.opacity || '').trim();
+    element.style.setProperty('display', isFrame ? 'block' : (currentDisplay && currentDisplay !== 'none' ? currentDisplay : 'block'), 'important');
+    element.style.setProperty('visibility', 'visible', 'important');
+    element.style.setProperty('opacity', currentOpacity && currentOpacity !== '0' ? currentOpacity : '1', 'important');
+    // Selected iframe content must participate in the top-level print flow.
+    // Absolute/fixed/sticky frame shells can otherwise keep documentScrollHeight
+    // at the viewport height and Chromium prints only the WebClip header.
+    element.style.setProperty('position', 'static', 'important');
+    element.style.setProperty('float', 'none', 'important');
+    element.style.setProperty('inset', 'auto', 'important');
+    element.style.setProperty('transform', 'none', 'important');
+    element.style.setProperty('clip', 'auto', 'important');
+    element.style.setProperty('clip-path', 'none', 'important');
+    element.style.setProperty('contain', 'none', 'important');
+    element.style.setProperty('content-visibility', 'visible', 'important');
+    element.style.setProperty('overflow', 'visible', 'important');
+    element.style.setProperty('overflow-x', 'visible', 'important');
+    element.style.setProperty('overflow-y', 'visible', 'important');
+    element.style.setProperty('max-height', 'none', 'important');
+    element.style.setProperty('min-height', '0', 'important');
+    element.style.setProperty('min-width', '0', 'important');
+    if (isFrame) {
+      const height = Math.max(0, Math.min(200000, Math.ceil(Number(contentHeight) || 0)));
+      if (height > 0) element.style.setProperty('height', `${height + 4}px`, 'important');
+      element.style.setProperty('width', '100%', 'important');
+      element.style.setProperty('max-width', '100%', 'important');
+      element.style.setProperty('box-sizing', 'border-box', 'important');
+      element.style.setProperty('margin-left', '0', 'important');
+      element.style.setProperty('margin-right', '0', 'important');
+    } else {
+      element.style.setProperty('height', 'auto', 'important');
+    }
+  }
+
+  function restoreFramePrintMutation(item) {
+    const element = item?.element;
+    if (!element?.setAttribute) return;
+    try {
+      if (item.oldStyle == null) element.removeAttribute('style');
+      else element.setAttribute('style', item.oldStyle);
+
+      if (item.hadFrameInclude) element.setAttribute(FRAME_INCLUDE_ATTR, item.oldFrameInclude ?? '');
+      else element.removeAttribute(FRAME_INCLUDE_ATTR);
+
+      if (item.hadFrameChain) element.setAttribute(FRAME_CHAIN_ATTR, item.oldFrameChain ?? '');
+      else element.removeAttribute(FRAME_CHAIN_ATTR);
+    } catch (_) {}
+  }
+
   function markFrameChainsForPrint() {
     state.changedFrameStyles = [];
     const frames = new Set();
@@ -3336,27 +3406,28 @@
       for (const frame of getFrameChainForDocument(remote.element.ownerDocument)) frames.add(frame);
     }
     for (const frame of frames) {
-      const oldStyle = frame.getAttribute('style');
-      state.changedFrameStyles.push({ element: frame, oldStyle, kind: 'frame' });
+      rememberFramePrintMutation(frame, 'frame');
       frame.setAttribute(FRAME_INCLUDE_ATTR, '1');
+      let contentHeight = 0;
       try {
         const childDoc = frame.contentDocument;
         const remote = remoteFrameForElement(frame);
-        const contentHeight = Math.max(
+        contentHeight = Math.max(
           remote?.printHeight || 0,
           childDoc?.documentElement?.scrollHeight || 0,
           childDoc?.body?.scrollHeight || 0,
           frame.getBoundingClientRect().height || 0
         );
-        if (contentHeight > 0) frame.style.setProperty('height', `${Math.ceil(contentHeight + 4)}px`, 'important');
-        frame.style.setProperty('max-height', 'none', 'important');
-        frame.style.setProperty('overflow', 'visible', 'important');
       } catch (_) {}
+      applySelectedFramePrintFlow(frame, 'frame', contentHeight);
 
       let ancestor = frame.parentElement;
       while (ancestor && ancestor !== frame.ownerDocument.documentElement) {
-        if (!ancestor.hasAttribute(FRAME_CHAIN_ATTR)) {
-          state.changedFrameStyles.push({ element: ancestor, oldStyle: null, kind: 'chain-attr-only' });
+        if (!(state.changedFrameStyles || []).some((item) => item.element === ancestor)) {
+          rememberFramePrintMutation(ancestor, 'chain');
+          ancestor.setAttribute(FRAME_CHAIN_ATTR, '1');
+          applySelectedFramePrintFlow(ancestor, 'chain');
+        } else if (!ancestor.hasAttribute(FRAME_CHAIN_ATTR)) {
           ancestor.setAttribute(FRAME_CHAIN_ATTR, '1');
         }
         ancestor = ancestor.parentElement;
@@ -3838,18 +3909,10 @@
     state.printHeader = null;
     state.printStyle = null;
 
-    // Временные изменения размеров iframe и служебные frame-маркеры откатываем.
+    // Временную нормализацию выбранных iframe/ancestor chain откатываем
+    // строго к исходным inline style/служебным атрибутам.
     for (const item of [...(state.changedFrameStyles || [])].reverse()) {
-      const el = item.element;
-      if (!el?.isConnected) continue;
-      try {
-        el.removeAttribute(FRAME_INCLUDE_ATTR);
-        el.removeAttribute(FRAME_CHAIN_ATTR);
-        if (item.kind === 'frame') {
-          if (item.oldStyle == null) el.removeAttribute('style');
-          else el.setAttribute('style', item.oldStyle);
-        }
-      } catch (_) {}
+      restoreFramePrintMutation(item);
     }
     state.changedFrameStyles = [];
 
