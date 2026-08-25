@@ -156,7 +156,10 @@ const automaticDownloadStartSettlements = new Map();
 let userSettingsImportStorageSettlement = Promise.resolve();
 const FRAME_AGENT_COMMAND_TIMEOUT_MS = 5_000;
 const FRAME_AGENT_MAX_PER_TAB = 64;
+const TAB_CREATE_TIMEOUT_MS = 10_000;
+const TAB_CREATE_LATE_SUCCESS_TTL_MS = 60_000;
 const frameAgentsByTab = new Map();
+const tabCreateSettlements = new Map();
 
 async function runSerializedLateSettlementOperation(chains, queueKey, start, label, timeoutMs) {
   const key = String(queueKey || label || 'operation');
@@ -1751,7 +1754,93 @@ async function enableFrameAgentsForTab(tabId) {
   };
 }
 
-async function createTabNextTo(sourceTabId, url, active = true) {
+function makeTabCreatePendingError(label = 'Создание вкладки Chrome') {
+  const error = new Error(`${label} ещё выполняется Chrome. WebClip не запускает повтор, пока исходный tabs.create() не завершится, чтобы не создать дубликат вкладки.`);
+  error.code = 'WEBCLIP_TAB_CREATE_PENDING';
+  return error;
+}
+
+function tabCreateRequestKey(sourceTabId, url, active = true, requestKey = '') {
+  const explicit = String(requestKey || '').trim();
+  if (explicit) return `logical:${explicit.slice(0, 512)}`;
+  const source = Math.max(0, Math.floor(Number(sourceTabId) || 0));
+  return `source:${source}|active:${active !== false ? 1 : 0}|url:${String(url || '').slice(0, 8192)}`;
+}
+
+function clearTabCreateSettlement(key, entry) {
+  if (entry?.cleanupTimer) clearTimeout(entry.cleanupTimer);
+  if (tabCreateSettlements.get(key) === entry) tabCreateSettlements.delete(key);
+}
+
+function waitForTabCreateSettlement(entry, label, timeoutMs = TAB_CREATE_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(value);
+    };
+    const timer = setTimeout(() => {
+      entry.timedOut = true;
+      finish(reject, makeTabCreatePendingError(label));
+    }, Math.max(1, Number(timeoutMs) || TAB_CREATE_TIMEOUT_MS));
+    entry.raw.then(
+      (tab) => finish(resolve, tab),
+      (error) => finish(reject, error)
+    );
+  });
+}
+
+async function createChromeTabBounded(create, { sourceTabId = 0, requestKey = '', label = 'Создание вкладки Chrome' } = {}) {
+  const key = tabCreateRequestKey(sourceTabId, create?.url || '', create?.active !== false, requestKey);
+  const existing = tabCreateSettlements.get(key);
+  if (existing) {
+    // A previous local timeout may already have settled successfully in
+    // Chrome. Consume that late receipt once instead of creating a new
+    // tab for the user's retry.
+    if (existing.lateSuccess) {
+      const tab = existing.lateSuccess;
+      clearTabCreateSettlement(key, existing);
+      return tab;
+    }
+    const tab = await waitForTabCreateSettlement(existing, `${label}: ожидание уже начатого tabs.create()`);
+    // If this caller observed the settlement of an earlier timed-out
+    // attempt, the result is now known and no longer needs a dedupe receipt.
+    if (existing.timedOut) clearTabCreateSettlement(key, existing);
+    return tab;
+  }
+
+  let raw;
+  try { raw = Promise.resolve(chrome.tabs.create(create)); }
+  catch (error) { raw = Promise.reject(error); }
+  const entry = { raw, timedOut: false, settled: false, lateSuccess: null, error: null, cleanupTimer: 0 };
+  tabCreateSettlements.set(key, entry);
+
+  raw.then(
+    (tab) => {
+      entry.settled = true;
+      if (entry.timedOut && tab) {
+        // tabs.create() is non-cancellable. Preserve one late-success
+        // receipt so an immediate identical retry returns the original
+        // tab instead of creating a duplicate. The receipt is bounded.
+        entry.lateSuccess = tab;
+        entry.cleanupTimer = setTimeout(() => clearTabCreateSettlement(key, entry), TAB_CREATE_LATE_SUCCESS_TTL_MS);
+      } else {
+        clearTabCreateSettlement(key, entry);
+      }
+    },
+    (error) => {
+      entry.settled = true;
+      entry.error = error;
+      clearTabCreateSettlement(key, entry);
+    }
+  );
+
+  return waitForTabCreateSettlement(entry, label);
+}
+
+async function createTabNextTo(sourceTabId, url, active = true, requestKey = '') {
   const create = { url, active };
   const id = Number(sourceTabId || 0);
   if (id > 0) {
@@ -1763,7 +1852,11 @@ async function createTabNextTo(sourceTabId, url, active = true) {
       }
     } catch (_) {}
   }
-  return chrome.tabs.create(create);
+  return createChromeTabBounded(create, {
+    sourceTabId: id,
+    requestKey,
+    label: 'Создание вкладки Chrome'
+  });
 }
 
 const CONTENT_SCRIPT_MESSAGE_TYPES = new Set([

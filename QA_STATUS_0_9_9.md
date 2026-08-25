@@ -517,3 +517,10 @@ Recovery-gap applies: this mounted artifact is not the canonical physical P1-131
 - Maintenance cleanup сохраняет свой deadline domain; offscreen retry-cache reads уже имели independent bounded deadline и не менялись.
 - Добавлен deterministic regression `project_tools/test_p1_081_084_idb_deadlines.js`, включая hung transaction abort и запрет readonly publication до `tx.oncomplete`.
 - Manifest намеренно остаётся `0.9.8`; это не release QA.
+
+## 2026-08-25 — P1-085 / P1-124
+
+- P1-085: direct Journal readonly IDB get-many/meta/page/group/group-entry paths keep explicit deadline+abort and `tx.oncomplete` result publication; timeout/error uses the existing bounded SW fallback. Defensive early completion edges were removed.
+- P1-124: `tabs.create()` has a 10 s local deadline with actual-settlement tracking; same request while unresolved reuses the pending promise and late success is retained for one bounded retry receipt instead of creating a duplicate tab.
+- Dedicated deterministic regressions: `test_p1_085_journal_direct_read_deadline.js`, `test_p1_124_tab_create_late_settlement.js`.
+- Manifest remains `0.9.8`; real unpacked Chrome tab-creation timing remains release regression QA.

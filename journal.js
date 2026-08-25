@@ -1200,7 +1200,11 @@ async function readJournalPageDirect({ viewMode = 'all', source = '', reading = 
       const store = tx.objectStore(JOURNAL_STORE);
       let request;
       try { request = openJournalEntryCursor(store, context); } catch (error) { requestError = error; try { tx.abort(); } catch (_) {} return; }
-      if (!request) { resolve({ total: 0, entries: [] }); return; }
+      if (!request) {
+        requestError = new Error('Не удалось открыть cursor страницы журнала.');
+        try { tx.abort(); } catch (_) {}
+        return;
+      }
       const timer = setTimeout(() => { timedOut = true; try { tx.abort(); } catch (_) {} }, JOURNAL_VIEW_QUERY_DEADLINE_MS);
       request.onsuccess = () => {
         const cursor = request.result;
@@ -1334,6 +1338,8 @@ async function readJournalUrlGroupEntriesDirect({ groupKey = '', urlKey = '', vi
     const entries = await readJournalEntriesByIdsForView([id]);
     return { entries: entries.filter((entry) => journalSummaryMatchesView(journalEntryViewSummary(entry), context, { entry })).slice(safeOffset, safeOffset + safeLimit) };
   }
+  const key = String(urlKey || '');
+  if (!key) return { entries: [] };
   const db = await openJournalDbForView();
   try {
     return await new Promise((resolve, reject) => {
@@ -1343,8 +1349,6 @@ async function readJournalUrlGroupEntriesDirect({ groupKey = '', urlKey = '', vi
       let requestError = null;
       const tx = db.transaction(JOURNAL_STORE, 'readonly');
       const store = tx.objectStore(JOURNAL_STORE);
-      const key = String(urlKey || '');
-      if (!key) { resolve({ entries: [] }); return; }
       const request = store.index('urlKeyCreatedAt').openCursor(IDBKeyRange.bound([key, -Number.MAX_SAFE_INTEGER], [key, Number.MAX_SAFE_INTEGER]), 'prev');
       const timer = setTimeout(() => { timedOut = true; try { tx.abort(); } catch (_) {} }, JOURNAL_VIEW_QUERY_DEADLINE_MS);
       request.onsuccess = () => {

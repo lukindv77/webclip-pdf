@@ -231,3 +231,5 @@
 |---|---|---|---|
 | P1-081 | P1 | REGRESSION | Обычные OperationLog v2 IndexedDB CRUD должны иметь bounded/abortable transaction deadline; readonly результат публикуется только после `tx.oncomplete`, append-only timeline и v1→v2 migration сохраняются. |
 | P1-084 | P1 | REGRESSION | Обычные PDF retry-cache IndexedDB CRUD должны иметь bounded/abortable transaction deadline; `pdfs`+`meta` остаются атомарными, TTL и URL binding сохраняются. |
+| P1-085 | P1 | REGRESSION | Direct readonly Journal IndexedDB view reads имеют deadline/abort и completion-aware result; timeout/error штатно переключается на bounded service-worker fallback без ранней публикации незавершённой transaction. |
+| P1-124 | P1 | REGRESSION | `chrome.tabs.create()` bounded локальным deadline и отслеживается до фактического settlement; identical retry не запускает второй create, а late success сохраняется как одноразовый bounded receipt и возвращает исходную вкладку вместо дубликата. |

@@ -29,6 +29,10 @@
 
 Обычные IndexedDB CRUD-пути OperationLog v2 и PDF retry-cache получили отдельные abortable transaction deadlines по 20 секунд. Readonly результаты публикуются только после `tx.oncomplete`; OperationLog сохраняет append-only `events` и v1→v2 migration, а PDF retry-cache сохраняет атомарные пары `pdfs`+`meta`, 24-часовой TTL и URL binding P0-023. Maintenance/offscreen deadline domains остаются отдельными. Manifest остаётся `0.9.8`; это не release QA.
 
+### Audit WIP — P1-085 / P1-124
+
+Direct Journal readonly IndexedDB view reads сохраняют собственный 20-секундный deadline/abort и normal service-worker fallback; defensive early-result края больше не обходят transaction completion. `chrome.tabs.create()` теперь имеет 10-секундный caller deadline, но исходный non-cancellable promise отслеживается до реального settlement: identical retry не создаёт вторую вкладку, а late success временно сохраняется как одноразовый receipt. Manifest остаётся `0.9.8`; это не release QA.
+
 ## Изменения 0.9.7
 
 - Контекст исходной вкладки теперь передаётся через `chrome.storage.session` по одноразовому `contextId`; URL и tabId исходного сайта больше не включаются в URL `journal.html`.
