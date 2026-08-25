@@ -15,6 +15,9 @@ const MAX_JOURNAL_IMPORT_BYTES = 50 * 1024 * 1024;
 const MAX_YANDEX_SIGNED_URL_CHARS = 32 * 1024;
 const MAX_ACTIVE_BLOB_URLS = 12;
 const MAX_ACTIVE_BLOB_BYTES = 256 * 1024 * 1024;
+const MAX_ACTIVE_SIGNED_TRANSFERS = 2;
+const MAX_ACTIVE_SIGNED_TRANSFER_BYTES = 96 * 1024 * 1024;
+const MAX_PDF_TRANSFER_BYTES = Math.floor(MAX_PDF_BASE64_CHARS * 3 / 4);
 // Automatic downloads are reconciled by the service worker; native saveAs:true
 // exports are invoked by journal/options extension pages (P1-079/P1-080).
 // This slightly-later fallback guarantees bounded Blob memory if either page or
@@ -50,6 +53,8 @@ let activeBlobUrlBytes = 0;
 const OFFSCREEN_IDLE_CLOSE_MS = 60 * 1000;
 const OFFSCREEN_IDLE_CLOSE_REQUEST_TIMEOUT_MS = 10 * 1000;
 let activeTransfers = 0;
+let activeSignedTransferBytes = 0;
+const activeSignedTransferReservations = new Set();
 let idleCloseTimer = null;
 let idleNonce = 0;
 let closingForIdle = false;
@@ -115,6 +120,57 @@ function beginOffscreenActivity() {
   cancelIdleClose();
 }
 
+function getSignedTransferAdmissionBytes(message) {
+  const spec = message?.spec && typeof message.spec === 'object' ? message.spec : {};
+  const mode = String(spec.mode || '');
+  if (mode === 'pdf-cache-upload') return MAX_PDF_TRANSFER_BYTES;
+  if (mode === 'text-payload-upload' || mode === 'text-chunks-upload') return MAX_TRANSFER_BYTES;
+  if (mode === 'text-download') {
+    return Math.max(1024, Math.min(MAX_JOURNAL_IMPORT_BYTES, Number(spec.maxChars) || MAX_JOURNAL_IMPORT_BYTES));
+  }
+  return 0;
+}
+
+function makeTransferBudgetError() {
+  const error = new Error('Слишком много крупных операций Яндекс Диска выполняются одновременно. Дождитесь их фактического завершения и повторите.');
+  error.code = 'OFFSCREEN_TRANSFER_BUDGET_EXCEEDED';
+  return error;
+}
+
+function reserveSignedTransferAdmission(message) {
+  const reservedBytes = getSignedTransferAdmissionBytes(message);
+  if (!reservedBytes) return null;
+  if (activeTransfers >= MAX_ACTIVE_SIGNED_TRANSFERS || activeSignedTransferBytes + reservedBytes > MAX_ACTIVE_SIGNED_TRANSFER_BYTES) {
+    throw makeTransferBudgetError();
+  }
+  const reservation = { reservedBytes, released: false };
+  activeTransfers += 1;
+  activeSignedTransferBytes += reservedBytes;
+  activeSignedTransferReservations.add(reservation);
+  return reservation;
+}
+
+function resizeSignedTransferReservation(reservation, actualBytes) {
+  if (!reservation || reservation.released) return;
+  const nextBytes = Math.max(0, Math.floor(Number(actualBytes) || 0));
+  if (nextBytes > reservation.reservedBytes) {
+    const growth = nextBytes - reservation.reservedBytes;
+    if (activeSignedTransferBytes + growth > MAX_ACTIVE_SIGNED_TRANSFER_BYTES) throw makeTransferBudgetError();
+    activeSignedTransferBytes += growth;
+  } else {
+    activeSignedTransferBytes = Math.max(0, activeSignedTransferBytes - (reservation.reservedBytes - nextBytes));
+  }
+  reservation.reservedBytes = nextBytes;
+}
+
+function releaseSignedTransferAdmission(reservation) {
+  if (!reservation || reservation.released) return;
+  reservation.released = true;
+  activeSignedTransferReservations.delete(reservation);
+  activeSignedTransferBytes = Math.max(0, activeSignedTransferBytes - reservation.reservedBytes);
+  activeTransfers = Math.max(0, activeTransfers - 1);
+}
+
 function registerBlobUrl(blob) {
   if (!(blob instanceof Blob)) throw new Error('Некорректный Blob для offscreen URL.');
   const size = Math.max(0, Number(blob.size) || 0);
@@ -159,12 +215,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   beginOffscreenActivity();
 
   if (message.type === 'WEBCLIP_SIGNED_TRANSFER') {
-    activeTransfers += 1;
-    handleSignedTransfer(message)
+    let reservation = null;
+    try {
+      reservation = reserveSignedTransferAdmission(message);
+      if (!reservation) throw new Error('Некорректный режим offscreen transfer.');
+    } catch (error) {
+      sendResponse({ transferCompleted: false, ok: false, code: error?.code || 'OFFSCREEN_TRANSFER_ERROR', error: error?.message || String(error) });
+      scheduleIdleClose();
+      return false;
+    }
+    handleSignedTransfer(message, reservation)
       .then((result) => sendResponse(result))
       .catch((error) => sendResponse({ transferCompleted: false, ok: false, code: error?.code || 'OFFSCREEN_TRANSFER_ERROR', error: error?.message || String(error) }))
       .finally(() => {
-        activeTransfers = Math.max(0, activeTransfers - 1);
+        // The reservation follows the actual offscreen transfer promise, not a
+        // caller-side runtime deadline. A lost/timed-out response therefore
+        // cannot free admission capacity while fetch/IDB side effects still run.
+        releaseSignedTransferAdmission(reservation);
         scheduleIdleClose();
       });
     return true;
@@ -220,7 +287,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-async function handleSignedTransfer(message) {
+async function handleSignedTransfer(message, reservation) {
   const spec = message?.spec && typeof message.spec === 'object' ? message.spec : {};
   const mode = String(spec.mode || '');
   const url = String(spec.url || '');
@@ -255,15 +322,18 @@ async function handleSignedTransfer(message) {
       if (!record) throw new Error('PDF retry-cache для offscreen upload не найден.');
       fetchOptions.headers['Content-Type'] = String(spec.contentType || 'application/pdf').slice(0, 200);
       fetchOptions.body = cachedPdfRecordToBlob(record);
+      resizeSignedTransferReservation(reservation, fetchOptions.body.size);
     } else if (mode === 'text-payload-upload') {
       const record = await getTransferPayload(String(spec.payloadKey || ''), deadlineAt);
       if (!record || typeof record.text !== 'string') throw new Error('Временные данные для offscreen upload не найдены.');
       if (record.text.length > MAX_TRANSFER_TEXT_CHARS) throw new Error('Текстовые данные превышают безопасный предел offscreen transfer.');
       fetchOptions.headers['Content-Type'] = String(spec.contentType || 'application/json; charset=utf-8').slice(0, 200);
       fetchOptions.body = new Blob([record.text], { type: fetchOptions.headers['Content-Type'] });
+      resizeSignedTransferReservation(reservation, fetchOptions.body.size);
     } else if (mode === 'text-chunks-upload') {
       fetchOptions.headers['Content-Type'] = String(spec.contentType || 'application/json; charset=utf-8').slice(0, 200);
       fetchOptions.body = await getTransferChunkedBlob(String(spec.payloadKey || ''), fetchOptions.headers['Content-Type'], deadlineAt);
+      resizeSignedTransferReservation(reservation, fetchOptions.body.size);
     }
 
     const response = await fetch(url, fetchOptions);
@@ -271,6 +341,7 @@ async function handleSignedTransfer(message) {
       const maxBytes = Math.max(1024, Math.min(MAX_JOURNAL_IMPORT_BYTES, Number(spec.maxChars) || MAX_JOURNAL_IMPORT_BYTES));
       const payloadKey = `download-${transferId || Date.now()}`.slice(0, 180);
       const staged = await stageResponseBodyAsJournalImport(response, payloadKey, maxBytes, deadlineAt);
+      resizeSignedTransferReservation(reservation, staged.totalBytes);
       return { transferCompleted: true, ok: true, status: response.status, payloadKey, responseBytes: staged.totalBytes, durationMs: Date.now() - startedAt };
     }
 

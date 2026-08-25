@@ -7,6 +7,10 @@
 - Для новых Yandex-записей сохраняются `accountUid`, `rootPath`, `resourceId`, `publicUrl`, `remotePath`; после manual rename/move identity проверяется fail-closed, а один path не считается доказательством при известном `resourceId`.
 - Локально скачанные PDF не удаляются при удалении journal entry.
 
+### Audit WIP — P0-063
+
+Offscreen signed Yandex transfers теперь имеют общий admission/memory budget: максимум 2 фактически незавершённых transfer и 96 MiB суммарной reservation. До чтения потенциально крупного IDB payload резервируется безопасный upper bound режима, после materialization reservation сужается до фактического byte-size. Локальный timeout/потерянный runtime response не освобождает budget раньше фактического settlement transfer-цепочки. Manifest остаётся `0.9.8`; это deterministic regression, не browser/release QA.
+
 ## WIP 0.9.9 — сохранение контекста при переключении видов журнала
 
 `Весь журнал` остаётся глобальным и не фильтруется по исходной странице. Но если он открыт с обычной HTTP(S)-вкладки, WebClip сохраняет исходный `sourceTabId/sourceUrl` в `chrome.storage.session` через `contextId`. Это позволяет в уже открытом `journal.html` переключаться между `Текущий URL`, `Текущий сайт` и `Весь журнал` без потери исходной web-страницы. Popup, открытый поверх вкладки журнала, также восстанавливает этот контекст. Контекст фильтра и вкладка-якорь для открытия справа разделены.
