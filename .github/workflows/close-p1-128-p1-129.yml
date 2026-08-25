@@ -1,0 +1,808 @@
+name: Close P1-128 and P1-129
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/close-p1-128-p1-129.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch P1-128 and P1-129
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          # ---------------- P1-128: offscreen idle-close request ----------------
+          off_path = root / 'offscreen.js'
+          off = off_path.read_text(encoding='utf-8')
+          old = """const OFFSCREEN_IDLE_CLOSE_MS = 60 * 1000;
+          let activeTransfers = 0;
+          let idleCloseTimer = null;
+          let idleNonce = 0;
+          let closingForIdle = false;"""
+          new = """const OFFSCREEN_IDLE_CLOSE_MS = 60 * 1000;
+          const OFFSCREEN_IDLE_CLOSE_REQUEST_TIMEOUT_MS = 10 * 1000;
+          let activeTransfers = 0;
+          let idleCloseTimer = null;
+          let idleNonce = 0;
+          let closingForIdle = false;
+          let idleCloseRequestActual = null;"""
+          if old not in off:
+              raise SystemExit('P1-128 constants anchor missing')
+          off = off.replace(old, new, 1)
+
+          old = """function scheduleIdleClose() {
+            if (closingForIdle || activeTransfers > 0 || blobUrls.size > 0) return;
+            if (idleCloseTimer) clearTimeout(idleCloseTimer);
+            const nonce = ++idleNonce;
+            idleCloseTimer = setTimeout(() => {
+              idleCloseTimer = null;
+              if (closingForIdle || activeTransfers > 0 || blobUrls.size > 0 || nonce !== idleNonce) return;
+              chrome.runtime.sendMessage({ type: 'WEBCLIP_OFFSCREEN_IDLE_CLOSE_REQUEST', nonce }).catch(() => {});
+            }, OFFSCREEN_IDLE_CLOSE_MS);
+          }"""
+          new = """function waitOffscreenIdleCloseRequest(actual, timeoutMs = OFFSCREEN_IDLE_CLOSE_REQUEST_TIMEOUT_MS) {
+            const waitMs = Math.max(1, Number(timeoutMs) || OFFSCREEN_IDLE_CLOSE_REQUEST_TIMEOUT_MS);
+            let timer = 0;
+            const deadline = new Promise((_, reject) => {
+              timer = setTimeout(() => {
+                const error = new Error(`Запрос idle-close offscreen не завершился за ${Math.ceil(waitMs / 1000)} с.`);
+                error.code = 'WEBCLIP_OFFSCREEN_IDLE_CLOSE_TIMEOUT';
+                reject(error);
+              }, waitMs);
+            });
+            return Promise.race([actual, deadline]).finally(() => {
+              if (timer) clearTimeout(timer);
+            });
+          }
+
+          function requestOffscreenIdleCloseBounded(nonce) {
+            let actual = idleCloseRequestActual;
+            if (!actual) {
+              actual = Promise.resolve().then(() => chrome.runtime.sendMessage({
+                type: 'WEBCLIP_OFFSCREEN_IDLE_CLOSE_REQUEST',
+                nonce
+              }));
+              idleCloseRequestActual = actual;
+              void actual.finally(() => {
+                if (idleCloseRequestActual === actual) idleCloseRequestActual = null;
+              }).catch(() => {});
+            }
+            return waitOffscreenIdleCloseRequest(actual);
+          }
+
+          function scheduleIdleClose() {
+            if (closingForIdle || activeTransfers > 0 || blobUrls.size > 0) return;
+            if (idleCloseTimer) clearTimeout(idleCloseTimer);
+            const nonce = ++idleNonce;
+            idleCloseTimer = setTimeout(() => {
+              idleCloseTimer = null;
+              if (closingForIdle || activeTransfers > 0 || blobUrls.size > 0 || nonce !== idleNonce) return;
+              void requestOffscreenIdleCloseBounded(nonce)
+                .then((response) => {
+                  if (response?.closed !== true) scheduleIdleClose();
+                })
+                .catch(() => {
+                  // The raw runtime message is non-cancellable and remains
+                  // single-flight until actual settlement. Keep a future cleanup
+                  // cycle instead of stacking another unknown close request.
+                  scheduleIdleClose();
+                });
+            }, OFFSCREEN_IDLE_CLOSE_MS);
+          }"""
+          if old not in off:
+              raise SystemExit('P1-128 scheduleIdleClose anchor missing')
+          off = off.replace(old, new, 1)
+          off_path.write_text(off, encoding='utf-8')
+
+          # ---------------- P1-129: durable prepared Save-As checkpoints ----------------
+          sw_path = root / 'service-worker.js'
+          sw = sw_path.read_text(encoding='utf-8')
+
+          old = "const CHROME_STORAGE_OPERATION_TIMEOUT_MS = 10_000;\nconst CHROME_ALARM_OPERATION_TIMEOUT_MS = 10_000;"
+          new = "const CHROME_STORAGE_OPERATION_TIMEOUT_MS = 10_000;\nconst PREPARED_SAVE_AS_CHECKPOINT_TIMEOUT_MS = 10_000;\nconst PREPARED_SAVE_AS_INDEX_KEY = 'webclipPreparedSaveAsIndex';\nconst PREPARED_SAVE_AS_CHECKPOINT_PREFIX = 'webclipPreparedSaveAs:';\nconst MAX_PREPARED_SAVE_AS_CHECKPOINTS = 64;\nconst CHROME_ALARM_OPERATION_TIMEOUT_MS = 10_000;"
+          if old not in sw:
+              raise SystemExit('P1-129 constants anchor missing')
+          sw = sw.replace(old, new, 1)
+
+          old = "const chromeStorageMutationSettlementChains = new Map();\nconst chromeAlarmMutationSettlementChains = new Map();"
+          new = "const chromeStorageMutationSettlementChains = new Map();\nlet preparedSaveAsCheckpointMutationSettlement = Promise.resolve();\nconst chromeAlarmMutationSettlementChains = new Map();"
+          if old not in sw:
+              raise SystemExit('P1-129 mutation state anchor missing')
+          sw = sw.replace(old, new, 1)
+
+          marker = "function getChromeAlarmBounded(name, label = 'Чтение alarm Chrome') {"
+          if marker not in sw:
+              raise SystemExit('P1-129 helper insertion marker missing')
+          helpers = r'''function normalizePreparedSaveAsSessionId(value) {
+            const id = String(value || '').trim();
+            if (!id || id.length > 180 || !/^[A-Za-z0-9._:-]+$/.test(id)) {
+              const error = new Error('Некорректный идентификатор prepared Save As session.');
+              error.code = 'WEBCLIP_PREPARED_SAVE_AS_SESSION_INVALID';
+              throw error;
+            }
+            return id;
+          }
+
+          function makePreparedSaveAsSessionId() {
+            const suffix = globalThis.crypto?.randomUUID
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            return normalizePreparedSaveAsSessionId(`save-as-${suffix}`);
+          }
+
+          function preparedSaveAsCheckpointKey(sessionId, stage) {
+            const id = normalizePreparedSaveAsSessionId(sessionId);
+            const normalizedStage = stage === 'started' || stage === 'released' ? stage : 'prepared';
+            return `${PREPARED_SAVE_AS_CHECKPOINT_PREFIX}${id}:${normalizedStage}`;
+          }
+
+          function sanitizePreparedSaveAsIndex(value) {
+            const source = Array.isArray(value) ? value : [];
+            const out = [];
+            const seen = new Set();
+            for (const item of source) {
+              let id = '';
+              try { id = normalizePreparedSaveAsSessionId(item); } catch (_) { continue; }
+              if (seen.has(id)) continue;
+              seen.add(id);
+              out.push(id);
+              if (out.length >= MAX_PREPARED_SAVE_AS_CHECKPOINTS) break;
+            }
+            return out;
+          }
+
+          function queuePreparedSaveAsCheckpointMutation(start, label) {
+            // Unlike ordinary storage mutations, later checkpoint transitions
+            // are queued behind the *actual* settlement even when a caller hits
+            // its local deadline. This prevents STARTED/RELEASE from overtaking
+            // a late PREPARED/STARTED write.
+            const previous = preparedSaveAsCheckpointMutationSettlement;
+            const actual = previous.catch(() => {}).then(() => Promise.resolve().then(start));
+            const barrier = actual.then(() => undefined, () => undefined);
+            preparedSaveAsCheckpointMutationSettlement = barrier;
+            void barrier.finally(() => {
+              if (preparedSaveAsCheckpointMutationSettlement === barrier) {
+                preparedSaveAsCheckpointMutationSettlement = Promise.resolve();
+              }
+            }).catch(() => {});
+            return withOperationTimeout(actual, PREPARED_SAVE_AS_CHECKPOINT_TIMEOUT_MS, label);
+          }
+
+          function preparedSaveAsCheckpointRecord({ sessionId, stage, blobUrl, filename = '', ownerPage = '', operationId = '', downloadId = null, reason = '' }) {
+            const record = {
+              sessionId: normalizePreparedSaveAsSessionId(sessionId),
+              stage,
+              blobUrl: normalizePreparedSaveAsBlobUrl(blobUrl),
+              filename: String(filename || '').slice(0, 240),
+              ownerPage: ownerPage === 'options.html' ? 'options.html' : 'journal.html',
+              operationId: String(operationId || '').slice(0, 180),
+              updatedAt: Date.now()
+            };
+            if (stage === 'prepared') record.createdAt = record.updatedAt;
+            if (stage === 'started') record.downloadId = Math.max(0, Math.floor(Number(downloadId) || 0));
+            if (stage === 'released') record.reason = String(reason || '').slice(0, 160);
+            return record;
+          }
+
+          function createPreparedSaveAsCheckpoint(details) {
+            const record = preparedSaveAsCheckpointRecord({ ...details, stage: 'prepared' });
+            const sessionId = record.sessionId;
+            const preparedKey = preparedSaveAsCheckpointKey(sessionId, 'prepared');
+            return queuePreparedSaveAsCheckpointMutation(async () => {
+              const stored = await readChromeStorageBounded(
+                () => chrome.storage.session.get(PREPARED_SAVE_AS_INDEX_KEY),
+                'Чтение индекса prepared Save As'
+              );
+              const index = sanitizePreparedSaveAsIndex(stored?.[PREPARED_SAVE_AS_INDEX_KEY]);
+              if (!index.includes(sessionId) && index.length >= MAX_PREPARED_SAVE_AS_CHECKPOINTS) {
+                const error = new Error('Слишком много незавершённых prepared Save As операций в текущей browser session.');
+                error.code = 'WEBCLIP_PREPARED_SAVE_AS_LIMIT';
+                throw error;
+              }
+              const nextIndex = [...index.filter((id) => id !== sessionId), sessionId];
+              await chrome.storage.session.set({
+                [PREPARED_SAVE_AS_INDEX_KEY]: nextIndex,
+                [preparedKey]: record
+              });
+              return record;
+            }, 'Фиксация prepared Save As checkpoint');
+          }
+
+          function markPreparedSaveAsStarted(details) {
+            const record = preparedSaveAsCheckpointRecord({ ...details, stage: 'started' });
+            const sessionId = record.sessionId;
+            const preparedKey = preparedSaveAsCheckpointKey(sessionId, 'prepared');
+            const startedKey = preparedSaveAsCheckpointKey(sessionId, 'started');
+            const releasedKey = preparedSaveAsCheckpointKey(sessionId, 'released');
+            return queuePreparedSaveAsCheckpointMutation(async () => {
+              const stored = await readChromeStorageBounded(
+                () => chrome.storage.session.get([preparedKey, releasedKey]),
+                'Проверка prepared Save As перед STARTED'
+              );
+              if (stored?.[releasedKey]) return { ...record, skipped: true, released: true };
+              if (!stored?.[preparedKey]) {
+                const error = new Error('Durable prepared Save As checkpoint не найден.');
+                error.code = 'WEBCLIP_PREPARED_SAVE_AS_CHECKPOINT_MISSING';
+                throw error;
+              }
+              await chrome.storage.session.set({ [startedKey]: record });
+              return record;
+            }, 'Фиксация STARTED prepared Save As checkpoint');
+          }
+
+          function releasePreparedSaveAsCheckpoint(details) {
+            const record = preparedSaveAsCheckpointRecord({ ...details, stage: 'released' });
+            const sessionId = record.sessionId;
+            const preparedKey = preparedSaveAsCheckpointKey(sessionId, 'prepared');
+            const startedKey = preparedSaveAsCheckpointKey(sessionId, 'started');
+            const releasedKey = preparedSaveAsCheckpointKey(sessionId, 'released');
+            return queuePreparedSaveAsCheckpointMutation(async () => {
+              const stored = await readChromeStorageBounded(
+                () => chrome.storage.session.get(PREPARED_SAVE_AS_INDEX_KEY),
+                'Чтение индекса перед RELEASE prepared Save As'
+              );
+              const nextIndex = sanitizePreparedSaveAsIndex(stored?.[PREPARED_SAVE_AS_INDEX_KEY])
+                .filter((id) => id !== sessionId);
+              // RELEASE is a distinct durable tombstone key. It cannot be
+              // overwritten by a late PREPARED/STARTED write from another
+              // worker generation because those transitions use distinct keys.
+              await chrome.storage.session.set({
+                [PREPARED_SAVE_AS_INDEX_KEY]: nextIndex,
+                [releasedKey]: record
+              });
+              await chrome.storage.session.remove([preparedKey, startedKey]);
+              await revokeBlobUrl(record.blobUrl);
+              return record;
+            }, 'Фиксация RELEASED prepared Save As checkpoint');
+          }
+
+          '''
+          helpers = '\n'.join(line[10:] if line.startswith('          ') else line for line in helpers.splitlines())
+          sw = sw.replace(marker, helpers + marker, 1)
+
+          # Journal export: checkpoint must be durable before the page gets the Blob.
+          old = """  let blobUrl = '';
+            try {
+              recordOperationStage(operationId, 'read-journal'"""
+          new = """  let blobUrl = '';
+            let saveAsSessionId = '';
+            try {
+              recordOperationStage(operationId, 'read-journal'"""
+          if old not in sw:
+              raise SystemExit('P1-129 journal prepare local anchor missing')
+          sw = sw.replace(old, new, 1)
+
+          old = """    const filename = journalExportDownloadFilename();
+              recordOperationStage(operationId, 'save-as-ready', 'Файл подготовлен. Ожидаем выбор места сохранения в стандартном диалоге Chrome.', 80, 'running', { entryCount: staged.entryCount });
+              return { ok: true, blobUrl, filename, entryCount: staged.entryCount, operationId };
+            } catch (error) {
+              if (blobUrl) await revokeBlobUrl(blobUrl).catch(() => {});"""
+          new = """    const filename = journalExportDownloadFilename();
+              saveAsSessionId = makePreparedSaveAsSessionId();
+              await createPreparedSaveAsCheckpoint({
+                sessionId: saveAsSessionId,
+                blobUrl,
+                filename,
+                ownerPage: 'journal.html',
+                operationId
+              });
+              recordOperationStage(operationId, 'save-as-ready', 'Файл подготовлен. Ожидаем выбор места сохранения в стандартном диалоге Chrome.', 80, 'running', { entryCount: staged.entryCount });
+              return { ok: true, blobUrl, filename, entryCount: staged.entryCount, operationId, saveAsSessionId };
+            } catch (error) {
+              if (blobUrl && saveAsSessionId) {
+                await releasePreparedSaveAsCheckpoint({
+                  sessionId: saveAsSessionId,
+                  blobUrl,
+                  ownerPage: 'journal.html',
+                  operationId,
+                  reason: 'prepare-failed'
+                }).catch(() => {});
+              } else if (blobUrl) {
+                await revokeBlobUrl(blobUrl).catch(() => {});
+              }"""
+          if old not in sw:
+              raise SystemExit('P1-129 journal return/catch anchor missing')
+          sw = sw.replace(old, new, 1)
+
+          # OperationLog export receives the same durable prepared checkpoint.
+          old = """  const text = JSON.stringify(exported, null, 2);
+            const blobUrl = await createTextBlobUrl(text, 'application/json;charset=utf-8');
+            return {
+              ok: true,
+              blobUrl,
+              filename: operationLogExportFilename(operationId),
+              operationId: String(operationId || '')
+            };"""
+          new = """  const text = JSON.stringify(exported, null, 2);
+            const blobUrl = await createTextBlobUrl(text, 'application/json;charset=utf-8');
+            const filename = operationLogExportFilename(operationId);
+            const saveAsSessionId = makePreparedSaveAsSessionId();
+            try {
+              await createPreparedSaveAsCheckpoint({
+                sessionId: saveAsSessionId,
+                blobUrl,
+                filename,
+                ownerPage: 'options.html',
+                operationId: String(operationId || '')
+              });
+              return {
+                ok: true,
+                blobUrl,
+                filename,
+                operationId: String(operationId || ''),
+                saveAsSessionId
+              };
+            } catch (error) {
+              await releasePreparedSaveAsCheckpoint({
+                sessionId: saveAsSessionId,
+                blobUrl,
+                ownerPage: 'options.html',
+                operationId: String(operationId || ''),
+                reason: 'prepare-failed'
+              }).catch(() => {});
+              throw error;
+            }"""
+          if old not in sw:
+              raise SystemExit('P1-129 OperationLog prepare anchor missing')
+          sw = sw.replace(old, new, 1)
+
+          # Generic page-owned STARTED/RELEASE messages now mutate the durable session.
+          old = """        const blobUrl = normalizePreparedSaveAsBlobUrl(message.blobUrl);
+                const downloadId = Number(message.downloadId);
+                if (!Number.isInteger(downloadId) || downloadId < 0) throw new Error('Некорректный downloadId Save As.');
+                revokeBlobUrlWhenDownloadFinishes(downloadId, blobUrl);
+                return { ok: true, downloadId };"""
+          new = """        const blobUrl = normalizePreparedSaveAsBlobUrl(message.blobUrl);
+                const saveAsSessionId = normalizePreparedSaveAsSessionId(message.saveAsSessionId);
+                const downloadId = Number(message.downloadId);
+                if (!Number.isInteger(downloadId) || downloadId < 0) throw new Error('Некорректный downloadId Save As.');
+                // Arm cleanup immediately; the durable STARTED mutation remains
+                // serialized even if this message caller times out locally.
+                revokeBlobUrlWhenDownloadFinishes(downloadId, blobUrl);
+                const checkpoint = await markPreparedSaveAsStarted({
+                  sessionId: saveAsSessionId,
+                  blobUrl,
+                  ownerPage,
+                  downloadId
+                });
+                return { ok: true, downloadId, saveAsSessionId, checkpointReleased: Boolean(checkpoint?.released) };"""
+          if old not in sw:
+              raise SystemExit('P1-129 STARTED handler anchor missing')
+          sw = sw.replace(old, new, 1)
+
+          old = """        const blobUrl = normalizePreparedSaveAsBlobUrl(message.blobUrl);
+                await revokeBlobUrl(blobUrl);
+                return { ok: true };"""
+          new = """        const blobUrl = normalizePreparedSaveAsBlobUrl(message.blobUrl);
+                const saveAsSessionId = normalizePreparedSaveAsSessionId(message.saveAsSessionId);
+                await releasePreparedSaveAsCheckpoint({
+                  sessionId: saveAsSessionId,
+                  blobUrl,
+                  ownerPage,
+                  reason: String(message.reason || 'page-release')
+                });
+                return { ok: true, saveAsSessionId };"""
+          if old not in sw:
+              raise SystemExit('P1-129 RELEASE handler anchor missing')
+          sw = sw.replace(old, new, 1)
+
+          sw_path.write_text(sw, encoding='utf-8')
+
+          # Shared page-owned Save As helper carries the durable session id but
+          # still has no timeout around native saveAs:true.
+          helper_path = root / 'prepared-save-as.js'
+          helper = helper_path.read_text(encoding='utf-8')
+          old = """    const blobUrl = String(value.blobUrl || '');
+              const filename = String(value.filename || '');
+              const ownBlobPrefix = `blob:${chrome.runtime.getURL('')}`;"""
+          new = """    const blobUrl = String(value.blobUrl || '');
+              const filename = String(value.filename || '');
+              const saveAsSessionId = String(value.saveAsSessionId || '');
+              const ownBlobPrefix = `blob:${chrome.runtime.getURL('')}`;"""
+          if old not in helper:
+              raise SystemExit('P1-129 prepared helper validation anchor missing')
+          helper = helper.replace(old, new, 1)
+          old = """    if (!filename || filename.length > MAX_FILENAME_CHARS || /[\\/\\0]/.test(filename)) {
+                throw new Error('WebClip получил некорректное имя файла для Save As.');
+              }
+              return { blobUrl, filename };"""
+          new = """    if (!filename || filename.length > MAX_FILENAME_CHARS || /[\\/\\0]/.test(filename)) {
+                throw new Error('WebClip получил некорректное имя файла для Save As.');
+              }
+              if (saveAsSessionId && (saveAsSessionId.length > 180 || !/^[A-Za-z0-9._:-]+$/.test(saveAsSessionId))) {
+                throw new Error('WebClip получил некорректный durable checkpoint Save As.');
+              }
+              return { blobUrl, filename, saveAsSessionId };"""
+          if old not in helper:
+              raise SystemExit('P1-129 prepared helper return anchor missing')
+          helper = helper.replace(old, new, 1)
+          helper = helper.replace(
+              "function releasePreparedBlob(blobUrl) {\n    return chrome.runtime.sendMessage({\n      type: 'WEBCLIP_PREPARED_SAVE_AS_RELEASE',\n      blobUrl: String(blobUrl || '')\n    }).catch(() => {});\n  }",
+              "function releasePreparedBlob(blobUrl, saveAsSessionId, reason = 'page-release') {\n    return chrome.runtime.sendMessage({\n      type: 'WEBCLIP_PREPARED_SAVE_AS_RELEASE',\n      blobUrl: String(blobUrl || ''),\n      saveAsSessionId: String(saveAsSessionId || ''),\n      reason: String(reason || 'page-release')\n    }).catch(() => {});\n  }",
+              1
+          )
+          if "function releasePreparedBlob(blobUrl, saveAsSessionId" not in helper:
+              raise SystemExit('P1-129 releasePreparedBlob replacement failed')
+          helper = helper.replace("function armPageOwnedCleanup(downloadId, blobUrl) {", "function armPageOwnedCleanup(downloadId, blobUrl, saveAsSessionId) {", 1)
+          helper = helper.replace("void releasePreparedBlob(blobUrl);", "void releasePreparedBlob(blobUrl, saveAsSessionId, 'download-terminal');", 1)
+          helper = helper.replace("const { blobUrl, filename } = assertPreparedExport(prepared);", "const { blobUrl, filename, saveAsSessionId } = assertPreparedExport(prepared);", 1)
+          helper = helper.replace("await releasePreparedBlob(blobUrl);", "await releasePreparedBlob(blobUrl, saveAsSessionId, 'save-as-error');", 1)
+          helper = helper.replace("await releasePreparedBlob(blobUrl);", "await releasePreparedBlob(blobUrl, saveAsSessionId, 'invalid-download-id');", 1)
+          helper = helper.replace("armPageOwnedCleanup(id, blobUrl);", "armPageOwnedCleanup(id, blobUrl, saveAsSessionId);", 1)
+          old = """        type: 'WEBCLIP_PREPARED_SAVE_AS_STARTED',
+                  blobUrl,
+                  downloadId: id"""
+          new = """        type: 'WEBCLIP_PREPARED_SAVE_AS_STARTED',
+                  blobUrl,
+                  saveAsSessionId,
+                  downloadId: id"""
+          if old not in helper:
+              raise SystemExit('P1-129 STARTED page message anchor missing')
+          helper = helper.replace(old, new, 1)
+          helper_path.write_text(helper, encoding='utf-8')
+
+          # Existing P1-079/P1-080 deterministic fixture should exercise the
+          # current production checkpoint-bearing shape.
+          p1079_path = root / 'project_tools' / 'test_p1_079_080_save_as_owner.js'
+          p1079 = p1079_path.read_text(encoding='utf-8')
+          p1079 = p1079.replace("filename: 'Journal.json'\n  });", "filename: 'Journal.json',\n    saveAsSessionId: 'save-as-test-journal'\n  });", 1)
+          p1079 = p1079.replace("filename: 'Operation.json'\n    }),", "filename: 'Operation.json',\n      saveAsSessionId: 'save-as-test-operation'\n    }),", 1)
+          p1079_path.write_text(p1079, encoding='utf-8')
+
+          # ---------------- Dedicated P1-128 regression ----------------
+          p1128 = r'''const fs = require('fs');
+          const path = require('path');
+          const vm = require('vm');
+          const assert = require('assert');
+
+          const root = path.resolve(__dirname, '..');
+          const source = fs.readFileSync(path.join(root, 'offscreen.js'), 'utf8');
+          function section(source, startMarker, endMarker) {
+            const start = source.indexOf(startMarker);
+            const end = source.indexOf(endMarker, start + startMarker.length);
+            if (start < 0 || end < 0) throw new Error(`Missing markers: ${startMarker} -> ${endMarker}`);
+            return source.slice(start, end);
+          }
+
+          assert(source.includes('const OFFSCREEN_IDLE_CLOSE_REQUEST_TIMEOUT_MS = 10 * 1000;'));
+          assert(source.includes('let idleCloseRequestActual = null;'));
+          assert(source.includes('requestOffscreenIdleCloseBounded(nonce)'));
+          assert(source.includes("error.code = 'WEBCLIP_OFFSCREEN_IDLE_CLOSE_TIMEOUT'"));
+          assert(/requestOffscreenIdleCloseBounded\(nonce\)[\s\S]{0,800}scheduleIdleClose\(\)/.test(source));
+
+          (async () => {
+            const timers = [];
+            let nextTimerId = 1;
+            let sends = 0;
+            const fakeSetTimeout = (fn, ms) => {
+              const timer = { id: nextTimerId++, fn, ms: Number(ms) };
+              timers.push(timer);
+              return timer.id;
+            };
+            const fakeClearTimeout = (id) => {
+              const index = timers.findIndex((timer) => timer.id === id);
+              if (index >= 0) timers.splice(index, 1);
+            };
+            const chrome = {
+              runtime: {
+                sendMessage() {
+                  sends += 1;
+                  return new Promise(() => {});
+                }
+              }
+            };
+            const context = vm.createContext({
+              console, Promise, Error, Number, Math, Map,
+              setTimeout: fakeSetTimeout,
+              clearTimeout: fakeClearTimeout,
+              chrome
+            });
+            let code = section(source, 'const blobUrls = new Map();', 'function beginOffscreenActivity()');
+            code = code
+              .replace('const OFFSCREEN_IDLE_CLOSE_MS = 60 * 1000;', 'const OFFSCREEN_IDLE_CLOSE_MS = 10;')
+              .replace('const OFFSCREEN_IDLE_CLOSE_REQUEST_TIMEOUT_MS = 10 * 1000;', 'const OFFSCREEN_IDLE_CLOSE_REQUEST_TIMEOUT_MS = 5;');
+            vm.runInContext(`${code}\nthis.scheduleForTest = scheduleIdleClose; this.pendingForTest = () => idleCloseRequestActual;`, context);
+
+            context.scheduleForTest();
+            const idle = timers.find((timer) => timer.ms === 10);
+            assert(idle, 'initial idle cleanup timer must be armed');
+            fakeClearTimeout(idle.id);
+            idle.fn();
+            await Promise.resolve();
+            assert.strictEqual(sends, 1, 'first cleanup cycle sends exactly one raw close request');
+
+            const deadline = timers.find((timer) => timer.ms === 5);
+            assert(deadline, 'runtime close request must have a caller deadline');
+            fakeClearTimeout(deadline.id);
+            deadline.fn();
+            await Promise.resolve();
+            await Promise.resolve();
+            const retryIdle = timers.find((timer) => timer.ms === 10);
+            assert(retryIdle, 'timeout must reschedule a future idle cleanup cycle');
+            assert(context.pendingForTest(), 'raw non-cancellable runtime request stays single-flight after timeout');
+
+            fakeClearTimeout(retryIdle.id);
+            retryIdle.fn();
+            await Promise.resolve();
+            assert.strictEqual(sends, 1, 'rescheduled cycle must not stack another raw request while actual settlement is unknown');
+            console.log('P1-128 offscreen idle-close deadline/reschedule regression PASS');
+          })().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          '''
+          p1128 = '\n'.join(line[10:] if line.startswith('          ') else line for line in p1128.splitlines()) + '\n'
+          (root / 'project_tools' / 'test_p1_128_offscreen_idle_close_request.js').write_text(p1128, encoding='utf-8')
+
+          # ---------------- Dedicated P1-129 regression ----------------
+          p1129 = r'''const fs = require('fs');
+          const path = require('path');
+          const vm = require('vm');
+          const assert = require('assert');
+
+          const root = path.resolve(__dirname, '..');
+          const sw = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
+          const helper = fs.readFileSync(path.join(root, 'prepared-save-as.js'), 'utf8');
+          function section(source, startMarker, endMarker) {
+            const start = source.indexOf(startMarker);
+            const end = source.indexOf(endMarker, start + startMarker.length);
+            if (start < 0 || end < 0) throw new Error(`Missing markers: ${startMarker} -> ${endMarker}`);
+            return source.slice(start, end);
+          }
+
+          assert(sw.includes("const PREPARED_SAVE_AS_INDEX_KEY = 'webclipPreparedSaveAsIndex';"));
+          assert(sw.includes("const PREPARED_SAVE_AS_CHECKPOINT_PREFIX = 'webclipPreparedSaveAs:';"));
+          assert(sw.includes('let preparedSaveAsCheckpointMutationSettlement = Promise.resolve();'));
+          assert(sw.includes('queuePreparedSaveAsCheckpointMutation'));
+          assert(sw.includes("preparedSaveAsCheckpointKey(sessionId, 'prepared')"));
+          assert(sw.includes("preparedSaveAsCheckpointKey(sessionId, 'started')"));
+          assert(sw.includes("preparedSaveAsCheckpointKey(sessionId, 'released')"));
+          assert(sw.includes('saveAsSessionId = makePreparedSaveAsSessionId()'));
+          assert(sw.includes('saveAsSessionId\n              };') || sw.includes('saveAsSessionId'));
+          assert(helper.includes('saveAsSessionId'));
+          assert(helper.includes("reason: String(reason || 'page-release')"));
+          assert(!/Promise\.race\s*\(/.test(helper), 'native Save As must remain page-owned without caller timeout');
+          assert(!/setTimeout\s*\(/.test(helper), 'native Save As helper must not time out the system dialog');
+
+          const helpers = section(sw, 'function normalizePreparedSaveAsSessionId', 'function getChromeAlarmBounded');
+
+          (async () => {
+            let resolvePreparedSet;
+            const events = [];
+            const data = {};
+            let setCalls = 0;
+            const chrome = {
+              runtime: { getURL: (value = '') => `chrome-extension://test/${value}` },
+              storage: {
+                session: {
+                  async get(keys) {
+                    const list = Array.isArray(keys) ? keys : [keys];
+                    const out = {};
+                    for (const key of list) if (Object.prototype.hasOwnProperty.call(data, key)) out[key] = data[key];
+                    return out;
+                  },
+                  set(values) {
+                    setCalls += 1;
+                    const call = setCalls;
+                    events.push(`set-${call}-start`);
+                    if (call === 1) {
+                      return new Promise((resolve) => {
+                        resolvePreparedSet = () => {
+                          Object.assign(data, values);
+                          events.push('set-1-finish');
+                          resolve();
+                        };
+                      });
+                    }
+                    Object.assign(data, values);
+                    events.push(`set-${call}-finish`);
+                    return Promise.resolve();
+                  },
+                  async remove(keys) {
+                    for (const key of (Array.isArray(keys) ? keys : [keys])) delete data[key];
+                    events.push('remove');
+                  }
+                }
+              }
+            };
+            function withOperationTimeout(promise, timeoutMs, label) {
+              let timer = 0;
+              return Promise.race([
+                Promise.resolve(promise),
+                new Promise((_, reject) => {
+                  timer = setTimeout(() => {
+                    const error = new Error(`${label} timeout`);
+                    error.code = 'WEBCLIP_TIMEOUT';
+                    reject(error);
+                  }, timeoutMs);
+                })
+              ]).finally(() => { if (timer) clearTimeout(timer); });
+            }
+            const context = vm.createContext({
+              console, Promise, Error, Number, Math, String, Array, Set, Object, Date,
+              setTimeout, clearTimeout, chrome,
+              PREPARED_SAVE_AS_CHECKPOINT_TIMEOUT_MS: 20,
+              PREPARED_SAVE_AS_INDEX_KEY: 'webclipPreparedSaveAsIndex',
+              PREPARED_SAVE_AS_CHECKPOINT_PREFIX: 'webclipPreparedSaveAs:',
+              MAX_PREPARED_SAVE_AS_CHECKPOINTS: 64,
+              preparedSaveAsCheckpointMutationSettlement: Promise.resolve(),
+              withOperationTimeout,
+              readChromeStorageBounded: (start) => Promise.resolve().then(start),
+              normalizePreparedSaveAsBlobUrl: (value) => String(value),
+              revokeBlobUrl: async () => { events.push('revoke'); }
+            });
+            vm.runInContext(`${helpers}\nthis.createForTest = createPreparedSaveAsCheckpoint; this.releaseForTest = releasePreparedSaveAsCheckpoint;`, context);
+
+            const details = {
+              sessionId: 'save-as-race',
+              blobUrl: 'blob:chrome-extension://test/a',
+              filename: 'Journal.json',
+              ownerPage: 'journal.html',
+              operationId: 'op-1'
+            };
+            let prepareError = null;
+            try { await context.createForTest(details); } catch (error) { prepareError = error; }
+            assert(prepareError && prepareError.code === 'WEBCLIP_TIMEOUT', 'first durable PREPARED write must be locally bounded');
+            assert.strictEqual(setCalls, 1);
+
+            const releasePromise = context.releaseForTest({ ...details, reason: 'test-release' });
+            await new Promise((resolve) => setTimeout(resolve, 2));
+            assert.strictEqual(setCalls, 1, 'RELEASE must not overtake unresolved PREPARED actual settlement');
+            resolvePreparedSet();
+            await releasePromise;
+            assert.strictEqual(setCalls, 2, 'queued RELEASE starts after PREPARED actual settlement');
+            assert(events.indexOf('set-1-finish') < events.indexOf('set-2-start'));
+            assert(events.indexOf('set-2-finish') < events.indexOf('revoke'), 'Blob revoke must follow durable RELEASE tombstone');
+            assert(data['webclipPreparedSaveAs:save-as-race:released'], 'released tombstone must remain durable');
+            assert(!data['webclipPreparedSaveAs:save-as-race:prepared'], 'old prepared receipt is removed only after released tombstone');
+            console.log('P1-129 prepared Save As durable checkpoint/late-settlement regression PASS');
+          })().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          '''
+          p1129 = '\n'.join(line[10:] if line.startswith('          ') else line for line in p1129.splitlines()) + '\n'
+          (root / 'project_tools' / 'test_p1_129_prepared_save_as_checkpoint.js').write_text(p1129, encoding='utf-8')
+
+          # Registry/docs reconciliation.
+          priorities_path = root / 'project_docs' / 'PRIORITIES_P0_P1_P2.md'
+          priorities = priorities_path.read_text(encoding='utf-8')
+          rows = {
+            'P1-128': '| P1-128 | P1 | REGRESSION | Offscreen idle-close request имеет bounded 10-секундный runtime-message deadline. Raw request остаётся single-flight до actual settlement; timeout/error/`closed:false` планирует следующий idle cleanup cycle, не создавая очередь неизвестных close RPC. |',
+            'P1-129': '| P1-129 | P1 | REGRESSION | Page-owned prepared Save As получает durable `storage.session` checkpoint receipts `prepared/started/released`. Мутации сериализованы по actual settlement; `released` — отдельный tombstone, поэтому late PREPARED/STARTED не может стать финальным состоянием. Native `saveAs:true` остаётся без искусственного timeout/retry. |'
+          }
+          for code, row in rows.items():
+              if re.search(rf'^\|\s*{re.escape(code)}\s*\|', priorities, re.M):
+                  priorities = re.sub(rf'^\|\s*{re.escape(code)}\s*\|.*$', row, priorities, count=1, flags=re.M)
+              else:
+                  priorities = priorities.rstrip() + '\n' + row + '\n'
+          priorities_path.write_text(priorities, encoding='utf-8')
+
+          readme_path = root / 'README.md'
+          readme = readme_path.read_text(encoding='utf-8')
+          note = '''### Audit WIP — P1-128 / P1-129
+
+          Offscreen idle-close RPC теперь bounded и single-flight: локальный timeout не создаёт второй неизвестный close-запрос, а сохраняет следующий cleanup cycle. Prepared native Save As остаётся extension-page owned без timeout; перед передачей Blob странице service worker фиксирует session-durable PREPARED checkpoint, а STARTED/RELEASE используют actual-settlement serialization и отдельный RELEASED tombstone. Manifest остаётся `0.9.8`; это не release QA.
+
+          '''
+          note = '\n'.join(line[10:] if line.startswith('          ') else line for line in note.splitlines()) + '\n'
+          if '### Audit WIP — P1-128 / P1-129' not in readme:
+              marker = '## Изменения 0.9.7'
+              if marker not in readme: raise SystemExit('README marker missing')
+              readme_path.write_text(readme.replace(marker, note + marker, 1), encoding='utf-8')
+
+          qa_path = root / 'QA_STATUS_0_9_9.md'
+          qa = qa_path.read_text(encoding='utf-8')
+          qa_note = '''
+
+          ## 2026-08-25 — P1-128 / P1-129
+
+          - P1-128: offscreen idle-close request bounded 10 с; raw runtime message single-flight до actual settlement; timeout/reject/`closed:false` reschedule future cleanup.
+          - P1-129: Full Journal и OperationLog prepared Save As фиксируют durable session checkpoint до передачи Blob странице; STARTED/RELEASE проходят actual-settlement barrier, RELEASED хранится отдельным tombstone. Native `saveAs:true` по-прежнему page-owned без timeout/retry.
+          - Dedicated regressions: `test_p1_128_offscreen_idle_close_request.js`, `test_p1_129_prepared_save_as_checkpoint.js`.
+          - Manifest остаётся `0.9.8`; real unpacked Chrome Save As/offscreen lifecycle остаются release regression QA.
+          '''
+          qa_note = '\n'.join(line[10:] if line.startswith('          ') else line for line in qa_note.splitlines()) + '\n'
+          if '## 2026-08-25 — P1-128 / P1-129' not in qa:
+              qa_path.write_text(qa.rstrip() + qa_note, encoding='utf-8')
+
+          print('P1-128/P1-129 patch complete')
+          PY
+
+      - name: Run full deterministic gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const m=require('./manifest.json'); if(m.manifest_version!==3||m.version!=='0.9.8') process.exit(1)"
+          mapfile -t jsfiles < <(find . -type f -name '*.js' -not -path './.git/*' -not -path './builds/*' -not -path './handoff/*' | sort)
+          echo "JS files: ${#jsfiles[@]}"
+          test "${#jsfiles[@]}" -eq 75
+          for f in "${jsfiles[@]}"; do node --check "$f" >/dev/null; done
+          mapfile -t tests < <(find project_tools -maxdepth 1 -type f -name 'test_*.js' | sort)
+          echo "Deterministic tests: ${#tests[@]}"
+          test "${#tests[@]}" -eq 62
+          for t in "${tests[@]}"; do echo "RUN $t"; node "$t"; done
+          node project_tools/test_p1_128_offscreen_idle_close_request.js
+          node project_tools/test_p1_129_prepared_save_as_checkpoint.js
+          test "$(grep -o 'saveAs: true' service-worker.js | wc -l)" -eq 0
+          grep -q "saveAs: true" prepared-save-as.js
+          git diff --check
+
+      - name: Write closure evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > P1-128_CLOSURE.md <<'EOF'
+          # P1-128 closure — bounded offscreen idle-close request + cleanup reschedule
+
+          Status: **REGRESSION**. Manifest remains **0.9.8 / Manifest V3**.
+
+          `offscreen.js` now gives `WEBCLIP_OFFSCREEN_IDLE_CLOSE_REQUEST` a 10-second caller deadline. The underlying non-cancellable runtime message remains single-flight until its actual settlement, so repeated cleanup cycles cannot stack duplicate unknown close requests. Timeout, reject, or a normal `{closed:false}` response schedules another future idle cleanup cycle. Activity/Blob/nonce/`closingForIdle` guards remain unchanged.
+
+          Dedicated `project_tools/test_p1_128_offscreen_idle_close_request.js` uses controlled timers and a never-settling runtime message to prove deadline, future cleanup reschedule and exactly one raw request while settlement is unknown. Full gate: **75/75 JS syntax PASS; 62/62 deterministic tests PASS**.
+
+          Real unpacked Chrome offscreen lifecycle timing remains release QA; manifest is not bumped.
+          EOF
+
+          cat > P1-129_CLOSURE.md <<'EOF'
+          # P1-129 closure — durable prepared Save As checkpoint serialization
+
+          Status: **REGRESSION**. Manifest remains **0.9.8 / Manifest V3**.
+
+          Full Journal and OperationLog export now create a `chrome.storage.session` durable PREPARED checkpoint before returning the prepared Blob to `journal.html` / `options.html`. Page-owned `prepared-save-as.js` carries the session id through STARTED and RELEASE messages. PREPARED, STARTED and RELEASED are distinct receipt keys; RELEASED is the durable tombstone. Checkpoint mutations are queued behind actual settlement rather than only caller settlement, so a local timeout cannot let a later transition overtake the unresolved storage side effect. RELEASE writes its tombstone before removing older receipts and revoking the Blob.
+
+          The native `chrome.downloads.download({saveAs:true})` call is still owned by the extension page, has no synthetic timeout, and is never automatically retried. The existing page-owned terminal listener and worker Blob watchdog are preserved.
+
+          Dedicated `project_tools/test_p1_129_prepared_save_as_checkpoint.js` forces a PREPARED storage write past its local deadline, proves RELEASE cannot overtake it, then proves RELEASED is durable before Blob revoke. P1-079/P1-080 owner regression remains green. Full gate: **75/75 JS syntax PASS; 62/62 deterministic tests PASS**.
+
+          Real unpacked Chrome native Save As interaction remains release QA; manifest is not bumped.
+          EOF
+
+          cat > STATIC_CHECKS_P1-128_P1-129.md <<'EOF'
+          # Static checks — P1-128 / P1-129
+
+          Checkpoint date: 2026-08-25.
+
+          - Manifest parse: PASS; Manifest V3; version **0.9.8**.
+          - JavaScript syntax: **75/75 PASS**.
+          - Deterministic `project_tools/test_*.js`: **62/62 PASS**.
+          - P1-128 hung idle-close runtime RPC: deadline + cleanup reschedule + raw single-flight PASS.
+          - P1-129 PREPARED late-settlement / RELEASE barrier regression: PASS.
+          - P1-079/P1-080 native Save As owner regression: PASS; `saveAs:true` remains absent from the worker.
+          - No release/build/handoff artifact created.
+
+          This is engineering regression evidence, not unmanaged-Chrome release QA.
+          EOF
+          git diff --check
+
+      - name: Commit closure and remove workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/close-p1-128-p1-129.yml
+          git add offscreen.js service-worker.js prepared-save-as.js \
+            project_tools/test_p1_079_080_save_as_owner.js \
+            project_tools/test_p1_128_offscreen_idle_close_request.js \
+            project_tools/test_p1_129_prepared_save_as_checkpoint.js \
+            P1-128_CLOSURE.md P1-129_CLOSURE.md STATIC_CHECKS_P1-128_P1-129.md \
+            project_docs/PRIORITIES_P0_P1_P2.md README.md QA_STATUS_0_9_9.md
+          git commit -m 'audit: close offscreen and prepared Save As races (P1-128 P1-129)'
+          git push origin HEAD:main
