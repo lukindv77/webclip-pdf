@@ -1,0 +1,70 @@
+name: Close P1-149
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/close-p1-149.yml'
+      - 'project_tools/patch_p1_149.py'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply P1-149 patch
+        run: python3 project_tools/patch_p1_149.py
+
+      - name: JavaScript syntax gate
+        id: syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -type f -name '*.js' -not -path './.git/*' | sort)
+          echo "js_count=${#files[@]}" >> "$GITHUB_OUTPUT"
+          for file in "${files[@]}"; do
+            node --check "$file"
+          done
+          echo "JavaScript syntax PASS: ${#files[@]}/${#files[@]}"
+
+      - name: Deterministic regression gate
+        id: tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t tests < <(find project_tools -maxdepth 1 -type f -name 'test_*.js' | sort)
+          echo "test_count=${#tests[@]}" >> "$GITHUB_OUTPUT"
+          for test_file in "${tests[@]}"; do
+            echo "==> $test_file"
+            node "$test_file"
+          done
+          echo "Deterministic tests PASS: ${#tests[@]}/${#tests[@]}"
+
+      - name: Verify manifest unchanged
+        run: |
+          node - <<'NODE'
+          const m = require('./manifest.json');
+          if (m.manifest_version !== 3 || m.version !== '0.9.8' || m.minimum_chrome_version !== '118') {
+            throw new Error(`Unexpected manifest gate: ${JSON.stringify({manifest_version:m.manifest_version,version:m.version,minimum_chrome_version:m.minimum_chrome_version})}`);
+          }
+          console.log('Manifest gate PASS: MV3 / 0.9.8 / Chrome 118+');
+          NODE
+
+      - name: Commit final source and remove one-shot CI files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f project_tools/patch_p1_149.py .github/workflows/close-p1-149.yml
+          git add -A
+          git status --short
+          git commit -m 'fix: normalize selected iframe print flow (P1-149)'
+          git push origin HEAD:main
