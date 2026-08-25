@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebClip — инструкция по авторизации Яндекс Диска</title>
+  <link rel="stylesheet" href="yandex-auth-help.css">
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div>
+        <div id="extensionVersion" class="eyebrow">WebClip PDF Prototype</div>
+        <h1>Авторизация в Яндекс Диске</h1>
+        <p>Пошаговая настройка OAuth для отправки PDF из WebClip напрямую на ваш Яндекс Диск.</p>
+      </div>
+      <a class="button secondary" href="options.html">Открыть настройки WebClip</a>
+    </header>
+
+    <section class="notice">
+      <strong>Используемая схема:</strong> Authorization Code + PKCE с фиксированным Redirect URI
+      <code>https://oauth.yandex.ru/verification_code</code>. Client Secret расширению не нужен.
+    </section>
+
+    <nav class="toc" aria-label="Содержание">
+      <strong>Содержание</strong>
+      <a href="#create-app">1. Создать приложение Яндекс OAuth</a>
+      <a href="#permissions">2. Выдать права Яндекс Диска</a>
+      <a href="#client-id">3. Скопировать Client ID</a>
+      <a href="#authorize">4. Получить код подтверждения</a>
+      <a href="#finish">5. Завершить подключение</a>
+      <a href="#root">6. Выбрать корневую папку</a>
+      <a href="#check">7. Проверить работу</a>
+      <a href="#errors">Типовые ошибки</a>
+    </nav>
+
+    <section id="create-app" class="panel step">
+      <div class="step-number">1</div>
+      <div>
+        <h2>Создайте приложение в Яндекс OAuth</h2>
+        <ol>
+          <li>Войдите в тот аккаунт Яндекса, на Диск которого должны сохраняться PDF.</li>
+          <li>Откройте страницу создания OAuth-приложения.</li>
+          <li>Выберите тип <strong>«Для доступа к API или отладки»</strong>.</li>
+          <li>Укажите понятное название, например <code>WebClip PDF</code>, и актуальную контактную почту.</li>
+          <li>Для такого типа приложения Redirect URI задаётся Яндексом автоматически. Он должен быть <code>https://oauth.yandex.ru/verification_code</code>. Менять его не требуется и нельзя.</li>
+        </ol>
+        <p class="actions"><a class="button" href="https://oauth.yandex.ru/client/new/" target="_blank" rel="noopener noreferrer">Открыть создание приложения Яндекс OAuth</a></p>
+      </div>
+    </section>
+
+    <section id="permissions" class="panel step">
+      <div class="step-number">2</div>
+      <div>
+        <h2>Разрешите приложению работу с Яндекс Диском</h2>
+        <p>В разделе доступа к данным добавьте права Яндекс Диска, необходимые текущей версии WebClip:</p>
+        <div class="scope-list">
+          <code>cloud_api:disk.read</code>
+          <span>чтение дерева папок и проверка существующих ресурсов;</span>
+          <code>cloud_api:disk.write</code>
+          <span>создание папок и загрузка PDF;</span>
+          <code>cloud_api:disk.info</code>
+          <span>получение информации о Диске и проверка подключения.</span>
+        </div>
+        <p class="warning"><strong>Важно:</strong> если изменить права приложения уже после получения кода, старый код может перестать подходить. В таком случае начните авторизацию заново.</p>
+      </div>
+    </section>
+
+    <section id="client-id" class="panel step">
+      <div class="step-number">3</div>
+      <div>
+        <h2>Скопируйте Client ID</h2>
+        <ol>
+          <li>Сохраните приложение Яндекс OAuth.</li>
+          <li>Откройте его карточку.</li>
+          <li>Скопируйте значение <strong>ClientID / Client ID</strong>.</li>
+          <li>В WebClip откройте <strong>Настройки Яндекс Диска</strong> и вставьте Client ID в одноимённое поле.</li>
+        </ol>
+        <p>Не вставляйте Client Secret в расширение. Текущая схема WebClip его не использует.</p>
+      </div>
+    </section>
+
+    <section id="authorize" class="panel step">
+      <div class="step-number">4</div>
+      <div>
+        <h2>Получите одноразовый код подтверждения</h2>
+        <ol>
+          <li>В настройках WebClip нажмите <strong>«1. Получить код»</strong>.</li>
+          <li>Расширение локально создаст случайный <code>code_verifier</code> и производный <code>code_challenge</code> для PKCE.</li>
+          <li>Откроется страница Яндекс OAuth. Проверьте аккаунт и подтвердите запрашиваемый доступ.</li>
+          <li>Яндекс перенаправит браузер на фиксированную страницу <code>https://oauth.yandex.ru/verification_code</code>.</li>
+          <li>На этой странице Яндекс покажет код подтверждения. Скопируйте его.</li>
+        </ol>
+        <p class="warning"><strong>Код действует 10 минут.</strong> Если время истекло, снова нажмите «1. Получить код» и используйте новый код.</p>
+      </div>
+    </section>
+
+    <section id="finish" class="panel step">
+      <div class="step-number">5</div>
+      <div>
+        <h2>Завершите подключение в WebClip</h2>
+        <ol>
+          <li>Вернитесь во вкладку настроек WebClip.</li>
+          <li>Вставьте код Яндекса в поле <strong>«Код подтверждения»</strong>.</li>
+          <li>Нажмите <strong>«2. Завершить подключение»</strong>.</li>
+          <li>WebClip отправит код вместе с сохранённым <code>code_verifier</code> на OAuth-сервер Яндекса и получит access token.</li>
+          <li>При успехе состояние изменится на <strong>«Подключено»</strong>.</li>
+        </ol>
+        <p>PKCE связывает одноразовый код именно с той попыткой авторизации, которую начал WebClip. Поэтому нельзя получить код в одном экземпляре/профиле расширения, а завершить его в другом.</p>
+      </div>
+    </section>
+
+    <section id="root" class="panel step">
+      <div class="step-number">6</div>
+      <div>
+        <h2>Выберите корневую папку Яндекс Диска</h2>
+        <ol>
+          <li>В настройках нажмите <strong>«Выбрать папку на Диске»</strong>.</li>
+          <li>Откройте существующую папку или создайте новую, например <code>/WebClips</code>.</li>
+          <li>Нажмите <strong>«Выбрать эту папку»</strong>.</li>
+        </ol>
+        <p>Дальше WebClipper сам поддерживает служебные папки <code>Upload</code> и <code>Backup/Journal</code>. Например, PDF с <code>its.1c.ru</code> будет сохраняться в <code>/WebClips/Upload/1c.ru/its/</code>, а версии резервной копии полного журнала — в месячных папках вида <code>/WebClips/Backup/Journal/08-2026/WebClip_Journal_2026-08-23_18-53-10-000.json</code>. Предыдущие версии не удаляются.</p>
+      </div>
+    </section>
+
+    <section id="check" class="panel step">
+      <div class="step-number">7</div>
+      <div>
+        <h2>Проверьте подключение</h2>
+        <ol>
+          <li>Нажмите в настройках <strong>«Проверить доступ»</strong>.</li>
+          <li>Затем откройте обычную веб-страницу, запустите WebClip и выделите область.</li>
+          <li>Нажмите <strong>«Готово» → «Отправить на Яндекс Диск»</strong>.</li>
+          <li>После успешной загрузки WebClip покажет полный путь к PDF на Диске.</li>
+        </ol>
+        <p class="success">Если отправка завершена успешно, выбранные области можно очистить. При ошибке WebClip сохраняет области Включены/Исключены, чтобы отправку можно было повторить или выбрать «Скачать PDF».</p>
+      </div>
+    </section>
+
+    <section id="errors" class="panel">
+      <h2>Типовые ошибки авторизации</h2>
+      <div class="error-grid">
+        <div><code>bad_verification_code</code></div><div>Код введён неверно. Проверьте его и повторите. Код Яндекса обычно является коротким числовым кодом.</div>
+        <div><code>invalid_grant</code></div><div>Код просрочен, уже использован или не соответствует текущей PKCE-сессии. Получите новый код через «1. Получить код».</div>
+        <div><code>invalid_client</code></div><div>Неверный Client ID, приложение удалено/заблокировано либо выбран не тот OAuth-клиент.</div>
+        <div><code>invalid_scope</code></div><div>Набор прав изменился или запрошенное право недоступно приложению. Проверьте права Яндекс Диска в OAuth-приложении и начните авторизацию заново.</div>
+        <div><code>unauthorized_client</code></div><div>OAuth-приложение не может выполнять эту авторизацию, например ожидает модерации или заблокировано.</div>
+        <div><strong>Кнопка «Завершить» говорит, что нет активной попытки</strong></div><div>Сессия расширения была потеряна/перезапущена или прошло слишком много времени. Снова нажмите «1. Получить код».</div>
+        <div><strong>Авторизация есть, но Диск возвращает 401/403</strong></div><div>Токен недействителен либо не хватает прав. Переподключите Яндекс Диск после проверки scopes приложения.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Что WebClip хранит локально</h2>
+      <ul>
+        <li><strong>Client ID</strong> и выбранный путь Яндекс Диска — в локальном хранилище расширения.</li>
+        <li><strong>code_verifier</strong> — только во временном session storage на время попытки авторизации.</li>
+        <li><strong>OAuth access token</strong> — в <code>chrome.storage.local</code> текущего прототипа.</li>
+        <li><strong>Client Secret</strong> — не запрашивается и не хранится.</li>
+      </ul>
+      <p class="warning">Для публичного распространения расширения модель долговременного хранения токена стоит дополнительно усилить. Текущая реализация рассчитана прежде всего на тестирование и личное использование прототипа.</p>
+    </section>
+
+    <section class="panel sources">
+      <h2>Официальная документация Яндекса</h2>
+      <p>Инструкция в этой версии расширения подготовлена по официальной документации Яндекс OAuth. Внешние ссылки требуют интернет.</p>
+      <ul>
+        <li><a href="https://yandex.ru/dev/id/doc/ru/register-api" target="_blank" rel="noopener noreferrer">Регистрация приложения для доступа к API</a></li>
+        <li><a href="https://yandex.ru/dev/id/doc/ru/codes/screen-code" target="_blank" rel="noopener noreferrer">Получение кода подтверждения от пользователя</a></li>
+      </ul>
+    </section>
+  </main>
+  <script src="yandex-auth-help.js"></script>
+</body>
+</html>

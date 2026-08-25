@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "WebClip PDF Prototype",
+  "version": "0.9.8",
+  "minimum_chrome_version": "118",
+  "description": "WebClip: frame-aware области Включены/Исключены, PDF, Яндекс Диск, журнал, фоновые резервные копии и контекстное меню.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "debugger",
+    "offscreen",
+    "storage",
+    "alarms",
+    "contextMenus",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://cloud-api.yandex.net/*",
+    "https://*.disk.yandex.net/*",
+    "https://oauth.yandex.ru/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "action": {
+    "default_title": "WebClip PDF",
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ]
+}

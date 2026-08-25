@@ -46,3 +46,8 @@ coverage/
 Thumbs.db
 .idea/
 .vscode/
+
+# Canonical handoff checkpoint is intentionally versioned under handoff/
+!handoff/
+!handoff/WebClip_Handoff_*.zip
+!handoff/WebClip_Handoff_*.zip.sha256

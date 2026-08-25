@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebClip — Яндекс Диск</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>WebClip — Яндекс Диск</h1>
+      <p>Подключение облачного хранилища, выбор единственной корневой папки и настройка резервного копирования журнала.</p>
+      <div id="extensionVersion" class="version"></div>
+    </header>
+
+    <section class="panel">
+      <div class="section-title-row">
+        <h2>1. Подключение</h2>
+        <button id="openAuthHelp" type="button" class="secondary compact">Инструкция по авторизации</button>
+      </div>
+      <div id="connectionStatus" class="status neutral">Проверяем состояние…</div>
+
+      <label class="field">
+        <span>Client ID приложения Яндекс OAuth</span>
+        <input id="clientId" type="text" autocomplete="off" spellcheck="false" placeholder="Введите Client ID">
+      </label>
+
+      <label class="field">
+        <span>Фиксированный Redirect URI Яндекса</span>
+        <div class="inline">
+          <input id="redirectUri" type="text" readonly>
+          <button id="copyRedirect" type="button" class="secondary compact">Копировать</button>
+        </div>
+      </label>
+
+      <div class="help">
+        В приложении Яндекс OAuth должен быть указан фиксированный Redirect URI <code>https://oauth.yandex.ru/verification_code</code>.
+        Для OAuth-приложения нужны права <code>cloud_api:disk.read</code>, <code>cloud_api:disk.write</code> и <code>cloud_api:disk.info</code>.
+        Используется Authorization Code + PKCE, поэтому Client Secret расширению не нужен.
+      </div>
+
+      <div class="auth-steps">
+        <div class="auth-step">
+          <strong>Шаг 1</strong>
+          <p>Откройте Яндекс OAuth, разрешите доступ. На странице <code>verification_code</code> Яндекс покажет код подтверждения.</p>
+          <button id="startAuth" type="button">1. Получить код</button>
+        </div>
+        <div class="auth-step">
+          <strong>Шаг 2</strong>
+          <p>Скопируйте показанный Яндексом код и вставьте его сюда. Код действует ограниченное время.</p>
+          <div class="inline">
+            <input id="confirmationCode" type="text" autocomplete="one-time-code" spellcheck="false" placeholder="Код подтверждения">
+            <button id="finishAuth" type="button">2. Завершить подключение</button>
+          </div>
+          <div id="pendingStatus" class="pending-status"></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="test" type="button" class="secondary">Проверить доступ</button>
+        <button id="disconnect" type="button" class="danger secondary">Отключить</button>
+      </div>
+
+      <div class="help">
+        OAuth-токен хранится только в <code>chrome.storage.session</code> и удаляется после полного закрытия Chrome, перезагрузки или обновления расширения.
+        После нового запуска Chrome для операций с Яндекс Диском потребуется повторное подключение. Постоянное хранение OAuth-токена намеренно не используется.
+      </div>
+
+      <details class="manual-token">
+        <summary>Тестовый вариант: использовать готовый OAuth-токен</summary>
+        <p>Можно вставить отладочный токен с правами чтения, записи и информации о Диске. Это удобно для локального тестирования прототипа.</p>
+        <div class="inline">
+          <input id="manualToken" type="password" autocomplete="off" placeholder="OAuth-токен">
+          <button id="useManualToken" type="button" class="secondary">Использовать</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2>2. Корневая папка</h2>
+      <p class="hint">WebClipper сам создаёт внутри выбранной папки служебные каталоги <code>Upload</code>, <code>ReadmeLater</code>, <code>Trash</code> (по мере необходимости) и <code>Backup/Journal</code>. PDF режима «Прочитано» сохраняются в <code>Upload</code>, режима «Прочитать позже» — в <code>ReadmeLater</code>, версии резервной копии полного журнала — в <code>Backup/Journal/MM-YYYY</code>.</p>
+
+      <label class="field">
+        <span>Выбранная корневая папка</span>
+        <div class="inline">
+          <input id="rootPath" type="text" autocomplete="off" spellcheck="false" placeholder="/WebClips">
+          <button id="saveRoot" type="button" class="secondary compact">Сохранить</button>
+        </div>
+      </label>
+
+      <div class="actions">
+        <button id="browse" type="button" class="secondary">Выбрать папку на Диске</button>
+      </div>
+
+      <div id="browser" class="browser hidden">
+        <div class="browser-head">
+          <button id="up" type="button" class="secondary compact">Вверх</button>
+          <strong id="currentPath">/</strong>
+          <button id="selectCurrent" type="button" class="compact">Выбрать эту папку</button>
+        </div>
+        <div id="folderList" class="folder-list"></div>
+        <div class="create-row">
+          <input id="newFolderName" type="text" placeholder="Новая папка">
+          <button id="createFolder" type="button" class="secondary">Создать</button>
+        </div>
+      </div>
+
+      <div class="help">
+        Пример для корня <code>/WebClips</code>: обычный PDF страницы <code>its.1c.ru</code> попадёт в <code>/WebClips/Upload/1c.ru/its/</code>, «Прочитать позже» — в <code>/WebClips/ReadmeLater/1c.ru/its/</code>, а версии полного журнала — в месячных папках вида <code>/WebClips/Backup/Journal/08-2026/WebClip_Journal_2026-08-23_18-53-10-000.json</code>.
+      </div>
+
+      <label class="switch-row">
+        <input id="publicLinksEnabled" type="checkbox" checked>
+        <span>Создавать постоянную ссылку Яндекс Диска для каждого успешно загруженного PDF</span>
+      </label>
+      <div class="help">
+        Постоянная ссылка сохраняется в журнале WebClip и используется для открытия файла независимо от его текущего имени и расположения на вашем Яндекс Диске. Важно: файл становится доступен любому, у кого есть эта ссылка, пока публикация не будет отключена в Яндекс Диске.
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>3. Фоновая резервная копия журнала</h2>
+      <p class="hint">Сам журнал хранится локально. Яндекс Диск используется для версионных полных копий журнала. Предыдущие копии не перезаписываются и не удаляются; новые файлы создаются в подпапках <code>MM-YYYY</code>. Отдельную папку выбирать не требуется.</p>
+
+      <label class="switch-row">
+        <input id="backupEnabled" type="checkbox">
+        <span>Включить автоматический экспорт полного журнала на Яндекс Диск</span>
+      </label>
+
+      <div class="interval-grid">
+        <label class="field">
+          <span>Период фоновой выгрузки, минут</span>
+          <input id="backupIntervalMinutes" type="number" min="1" step="1" inputmode="numeric" value="1440">
+        </label>
+        <label class="field">
+          <span>Повтор после ошибки, минут</span>
+          <input id="backupRetryMinutes" type="number" min="1" step="1" inputmode="numeric" value="60">
+        </label>
+      </div>
+
+      <div class="help">
+        Значение <code>1440</code> минут соответствует 24 часам. Если очередная выгрузка была пропущена из-за закрытого Chrome, отсутствия сети или другой причины, WebClipper проверит просрочку при следующем запуске/возобновлении работы. После ошибки повтор выполняется через отдельный заданный интервал.
+      </div>
+
+      <div class="backup-path-box">
+        <strong>Папка резервных копий:</strong>
+        <code id="backupRemotePath">Корневая папка не выбрана</code>
+      </div>
+
+      <div id="backupStatus" class="status neutral">Состояние резервного копирования загружается…</div>
+      <div class="actions">
+        <button id="saveBackupSettings" type="button">Сохранить настройки резервирования</button>
+        <button id="backupNow" type="button" class="secondary">Создать резервную копию сейчас</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>4. Диагностические логи операций</h2>
+      <p class="hint">WebClip сохраняет подробный timeline операций локально в IndexedDB. По умолчанию логи хранятся 24 часа. OAuth-токены, Authorization, Client Secret, verification code и signed query-параметры в лог не записываются.</p>
+
+      <div class="interval-grid log-settings-grid">
+        <label class="field">
+          <span>Хранить логи, часов</span>
+          <input id="operationLogRetentionHours" type="number" min="1" max="8760" step="1" inputmode="numeric" value="24">
+        </label>
+        <label class="field">
+          <span>Найти по operationId</span>
+          <input id="operationLogSearch" type="search" autocomplete="off" spellcheck="false" placeholder="например: journal-delete-…">
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="saveOperationLogSettings" type="button">Как записать настройки хранения</button>
+        <button id="refreshOperationLogs" type="button" class="secondary">Обновить список</button>
+        <button id="clearOperationLogs" type="button" class="danger secondary">Удалить все логи сейчас</button>
+      </div>
+
+      <div id="operationLogStatus" class="status neutral">Логи операций загружаются…</div>
+      <div id="operationLogList" class="operation-log-list"></div>
+
+      <section id="operationLogDetail" class="operation-log-detail hidden" aria-live="polite">
+        <div class="operation-log-detail-head">
+          <div>
+            <div class="operation-log-caption">ВЫБРАННАЯ ОПЕРАЦИЯ</div>
+            <h3 id="operationLogTitle">Диагностический лог</h3>
+          </div>
+          <div class="actions compact-actions">
+            <button id="toggleOperationLogText" type="button" class="secondary compact">Свернуть текст лога</button>
+            <button id="copyOperationLog" type="button" class="secondary compact">Скопировать весь лог</button>
+            <button id="copyOperationLogId" type="button" class="secondary compact">Копировать operationId</button>
+            <button id="exportOperationLog" type="button" class="secondary compact">Экспортировать JSON</button>
+          </div>
+        </div>
+        <div id="operationLogDescription" class="operation-log-description"></div>
+        <div id="operationLogId" class="operation-id-box"></div>
+        <pre id="operationLogJson" class="operation-log-json"></pre>
+      </section>
+    </section>
+
+    <section class="panel">
+      <h2>5. Локальное хранилище</h2>
+      <p class="hint">Журнал, временные PDF и диагностические данные WebClip используют хранилище origin расширения. WebClip не удаляет рабочий журнал автоматически при нехватке места; перед крупными операциями выполняется проверка доступной квоты.</p>
+      <div id="storageHealthStatus" class="status neutral">Состояние локального хранилища загружается…</div>
+      <div class="actions">
+        <button id="refreshStorageHealth" type="button" class="secondary">Обновить состояние</button>
+        <button id="requestStoragePersistence" type="button">Защитить локальное хранилище</button>
+      </div>
+      <div class="help">Кнопка защиты запрашивает у Chrome режим persistent storage для origin расширения через стандартный Storage API. Новые permissions расширения не добавляются. Chrome может не удовлетворить запрос — в этом случае WebClip продолжит работать с обычной политикой хранения.</div>
+    </section>
+
+    <section class="panel">
+      <h2>6. Экспорт и импорт настроек</h2>
+      <p class="hint">Файл содержит только пользовательские настройки WebClip. OAuth access token, PKCE state, временные checkpoint'ы, журнал, состояние backup-операций и диагностические логи в него не включаются.</p>
+      <div class="actions">
+        <button id="exportUserSettings" type="button">Экспорт настроек</button>
+        <button id="importUserSettings" type="button" class="secondary">Импорт настроек</button>
+        <input id="importUserSettingsFile" type="file" accept="application/json,.json" hidden>
+      </div>
+      <div id="userSettingsStatus" class="status neutral">OAuth-секреты никогда не экспортируются и не перезаписываются импортом.</div>
+    </section>
+
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+  </main>
+
+  <div id="backupProgressBackdrop" class="progress-backdrop hidden" role="presentation">
+    <section id="backupProgressDialog" class="progress-dialog" role="dialog" aria-modal="true" aria-labelledby="backupProgressTitle" tabindex="-1">
+      <div class="progress-head">
+        <div id="backupProgressIcon" class="progress-icon">↻</div>
+        <div>
+          <div id="backupProgressKicker" class="progress-kicker">ИДЁТ РЕЗЕРВНОЕ КОПИРОВАНИЕ</div>
+          <h2 id="backupProgressTitle">Создание резервной копии</h2>
+        </div>
+      </div>
+      <p id="backupProgressText" class="progress-text">Подготавливаем операцию…</p>
+      <div class="operation-id-inline">operationId: <code id="backupProgressOperationId"></code> <button id="copyBackupProgressOperationId" type="button" class="secondary compact">Копировать</button></div>
+      <div class="progress-track" aria-hidden="true"><div id="backupProgressBar" class="progress-bar"></div></div>
+      <div id="backupProgressPercent" class="progress-percent">0%</div>
+      <ol id="backupProgressStages" class="progress-stages"></ol>
+      <div class="progress-warning">Не закрывайте эту вкладку до завершения операции. Пока идёт резервное копирование, WebClip включает защиту от случайного закрытия страницы.</div>
+      <div class="progress-actions">
+        <button id="backupProgressClose" type="button" class="hidden">Закрыть</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="prepared-save-as.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+'use strict';
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const ROOT = path.resolve(__dirname, '..');
+const js = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
+const css = fs.readFileSync(path.join(ROOT, 'journal.css'), 'utf8');
+
+assert(js.includes("destinationBadge.textContent = isYandexDestination ? 'Яндекс Диск' : 'Скачан локально';"), 'local destination badge label must be Скачан локально');
+assert(!js.includes('Режим выгрузки:'), 'duplicated mode summary must be removed');
+assert(!js.includes('Статус чтения:'), 'duplicated reading status summary must be removed');
+assert(!js.includes("entry-mode-summary"), 'obsolete mode summary element must be removed');
+assert(!js.includes("entry-mode-row"), 'obsolete mode row element must be removed');
+assert(js.includes("readingBadge.textContent = later ? 'Прочитать позже' : 'Прочитано';"), 'reading badge must remain');
+assert(js.includes("document.createElement(isYandexDestination ? 'button' : 'span')"), 'Yandex badge action/local info semantics must remain');
+assert(css.includes('.badge.download { background: #f1f3f4; color: #3c4043; border: 1px solid #dadce0; }'), 'local badge must use neutral gray styling');
+assert(!css.includes('.entry-mode-summary'), 'obsolete mode summary CSS must be removed');
+assert(!css.includes('.entry-mode-row'), 'obsolete mode row CSS must be removed');
+assert(css.includes('.entry-badges { display: flex;') && css.includes('flex-wrap: nowrap;'), 'destination and reading badges must remain horizontally grouped');
+console.log(JSON.stringify({ok:true,p1:'P1-027',duplicatedModeRowRemoved:true,localBadge:'Скачан локально',neutralLocalBadge:true,horizontalBadges:true}));

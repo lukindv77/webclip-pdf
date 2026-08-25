@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Журнал WebClip</title>
+  <link rel="stylesheet" href="journal.css">
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <div>
+        <h1>Журнал WebClip</h1>
+        <p>Локальный журнал всех сформированных копий: «Прочитано» и «Прочитать позже», локальные PDF и Яндекс Диск.</p>
+      </div>
+      <div id="version" class="version"></div>
+    </header>
+
+    <section class="toolbar reading-toolbar" aria-label="Первичный фильтр режима чтения">
+      <strong class="toolbar-label">Режим:</strong>
+      <button id="readingAll" type="button">Все</button>
+      <button id="readingRead" type="button">Прочитано</button>
+      <button id="readingLater" type="button" class="read-later-filter">Прочитать позже</button>
+      <span class="spacer"></span>
+      <label class="group-toggle"><input id="groupByUrl" type="checkbox"> <span>Группировать по URL</span></label>
+    </section>
+
+    <section class="journal-nav-panel" aria-label="Журнал">
+      <div class="journal-nav-title">Журнал</div>
+      <div class="journal-nav-buttons">
+        <button id="showCurrent" type="button">Текущего URL</button>
+        <button id="showSite" type="button">Текущего сайта</button>
+        <button id="showAll" type="button">Полный</button>
+      </div>
+    </section>
+
+    <section class="toolbar storage-toolbar" aria-label="Экспорт, импорт и резервные копии">
+      <strong class="toolbar-label">Полный журнал:</strong>
+      <button id="exportFile" type="button">Экспорт в файл</button>
+      <button id="importFile" type="button">Импорт из файла</button>
+      <input id="importFileInput" type="file" accept="application/json,.json" hidden>
+      <button id="exportYandex" type="button">Экспорт на Яндекс Диск</button>
+      <button id="importYandex" type="button">Импорт с Яндекс Диска</button>
+      <span class="spacer"></span>
+      <button id="clearSite" type="button" class="danger">Очистить журнал домена</button>
+      <button id="clearAll" type="button" class="danger strong-danger">Очистить весь журнал</button>
+    </section>
+
+    <section class="info">
+      <div><strong>Текущий URL:</strong> <span id="sourceUrl">—</span></div>
+      <div><strong>Текущий домен:</strong> <span id="siteKey">—</span></div>
+    </section>
+
+    <details id="domainFilterPanel" class="domain-filter-panel hidden">
+      <summary class="domain-filter-title">Фильтр общего журнала по доменам</summary>
+      <div class="domain-filter-content">
+        <label class="domain-search-label" for="domainSearchInput">
+          <span>Поиск по домену</span>
+          <input id="domainSearchInput" type="search" placeholder="Например: 1c.ru или its.1c.ru" autocomplete="off" spellcheck="false">
+        </label>
+        <div id="domainFilterTree" class="domain-filter-tree"></div>
+      </div>
+    </details>
+
+    <details id="textFilterPanel" class="text-filter-panel">
+      <summary class="text-filter-title">Универсальный фильтр журнала</summary>
+      <div class="text-filter-content">
+        <div class="text-filter-toolbar">
+          <span>Строки объединяются:</span>
+          <label><input type="radio" name="journalTextFilterLogic" value="and" checked> И</label>
+          <label><input type="radio" name="journalTextFilterLogic" value="or"> ИЛИ</label>
+          <button id="addTextFilterRow" type="button" class="secondary">Добавить строку</button>
+          <button id="clearTextFilter" type="button" class="secondary">Очистить</button>
+        </div>
+        <div id="textFilterRows" class="text-filter-rows"></div>
+        <div class="text-filter-help">Каждая непустая строка применяется поверх режима чтения, URL/сайта и доменного фильтра до пагинации. «Наименование» включено по умолчанию.</div>
+      </div>
+    </details>
+
+    <section id="backupInfo" class="backup-info" aria-label="Резервная копия журнала на Яндекс Диске"></section>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <div id="lastOperationIdRow" class="operation-id-row journal-last-operation hidden">Последний operationId: <code id="lastOperationId"></code> <button id="copyLastOperationId" type="button">Копировать</button></div>
+    <section id="entries" class="entries" aria-label="Записи журнала"></section>
+    <nav id="pagination" class="pagination hidden" aria-label="Пагинация журнала">
+      <button id="pagePrev" type="button">← Предыдущая</button>
+      <div id="pageInfo" class="page-info">Страница 1 из 1</div>
+      <button id="pageNext" type="button">Следующая →</button>
+    </nav>
+  </main>
+
+  <div id="confirmBackdrop" class="confirm-backdrop hidden" role="presentation">
+    <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="confirm-warning">!</div>
+      <div>
+        <div class="confirm-kicker">ТРЕБУЕТСЯ РУЧНОЕ ПОДТВЕРЖДЕНИЕ</div>
+        <h2 id="confirmTitle">Подтверждение операции</h2>
+      </div>
+      <p id="confirmText" class="confirm-text"></p>
+      <div class="code-box">
+        <span>Введите показанный код:</span>
+        <strong id="confirmCode" aria-label="Код подтверждения"></strong>
+      </div>
+      <label class="confirm-input-label">
+        <span>9-значный код</span>
+        <input id="confirmInput" inputmode="numeric" pattern="[0-9]*" maxlength="9" autocomplete="off" spellcheck="false">
+      </label>
+      <div id="confirmError" class="confirm-error" aria-live="polite"></div>
+      <div class="confirm-actions">
+        <button id="confirmCancel" type="button">Отмена</button>
+        <button id="confirmProceed" type="button" class="danger strong-danger">Подтвердить</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="deleteBackdrop" class="delete-backdrop hidden" role="presentation">
+    <section id="deleteDialog" class="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
+      <div class="delete-head">
+        <div class="delete-warning">!</div>
+        <div>
+          <div class="delete-kicker">УДАЛЕНИЕ ЗАПИСИ ЖУРНАЛА</div>
+          <h2 id="deleteTitle">Что сделать с файлом на Яндекс Диске?</h2>
+        </div>
+      </div>
+      <p id="deleteText" class="delete-text"></p>
+      <fieldset id="deleteChoices" class="delete-choices">
+        <legend>Выберите один вариант</legend>
+        <label class="delete-choice">
+          <input id="deleteKeepFile" type="radio" name="deleteDiskAction" value="keep">
+          <span><strong>Оставить файл на Яндекс Диске</strong><small>Удалится только запись из локального журнала WebClip.</small></span>
+        </label>
+        <label class="delete-choice danger-choice">
+          <input id="deleteTrashFile" type="radio" name="deleteDiskAction" value="trash">
+          <span><strong>Так же удалить файл на Яндекс Диске</strong><small>Файл не уничтожается: он переносится в папку Trash/MM-YYYY внутри выбранной корневой папки WebClip.</small></span>
+        </label>
+      </fieldset>
+      <div id="deleteProgress" class="delete-progress hidden">
+        <div class="progress-track"><div id="deleteProgressBar" class="progress-bar"></div></div>
+        <div id="deleteProgressPercent" class="progress-percent">0%</div>
+        <ol id="deleteProgressStages" class="progress-stages"></ol>
+      </div>
+      <div id="deleteOperationIdRow" class="operation-id-row hidden">operationId: <code id="deleteOperationId"></code> <button id="copyDeleteOperationId" type="button">Копировать</button></div>
+      <div id="deleteStatus" class="delete-status" aria-live="polite"></div>
+      <div class="delete-actions">
+        <button id="deleteCancel" type="button">Отмена</button>
+        <button id="deleteOnlyAfterError" type="button" class="hidden">Удалить только запись журнала</button>
+        <button id="deleteRetry" type="button" class="primary hidden">Повторить</button>
+        <button id="deleteProceed" type="button" class="danger strong-danger" disabled>Удалить запись</button>
+      </div>
+    </section>
+  </div>
+
+
+
+  <div id="moveReadConfirmBackdrop" class="confirm-backdrop hidden" role="presentation">
+    <section class="confirm-dialog simple-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="moveReadConfirmTitle">
+      <div class="confirm-warning">?</div>
+      <div>
+        <div class="confirm-kicker">ПОДТВЕРЖДЕНИЕ ПЕРЕНОСА</div>
+        <h2 id="moveReadConfirmTitle">Перенести в «Прочитано»?</h2>
+      </div>
+      <p id="moveReadConfirmText" class="confirm-text"></p>
+      <div class="confirm-actions">
+        <button id="moveReadConfirmCancel" type="button">Отмена</button>
+        <button id="moveReadConfirmProceed" type="button" class="primary">Подтвердить</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="moveReadBackdrop" class="progress-backdrop hidden" role="presentation">
+    <section id="moveReadDialog" class="progress-dialog" role="dialog" aria-modal="true" aria-labelledby="moveReadTitle">
+      <div class="progress-head">
+        <div id="moveReadIcon" class="progress-icon">↻</div>
+        <div>
+          <div id="moveReadKicker" class="progress-kicker">ПЕРЕНОС В «ПРОЧИТАНО»</div>
+          <h2 id="moveReadTitle">Перемещение файла в Upload</h2>
+        </div>
+      </div>
+      <p id="moveReadText" class="progress-text">Подготавливаем операцию…</p>
+      <div class="operation-id-row">operationId: <code id="moveReadOperationId"></code> <button id="copyMoveReadOperationId" type="button">Копировать</button></div>
+      <div class="progress-track"><div id="moveReadBar" class="progress-bar"></div></div>
+      <div id="moveReadPercent" class="progress-percent">0%</div>
+      <ol id="moveReadStages" class="progress-stages"></ol>
+      <div class="progress-warning">Не закрывайте вкладку до завершения перемещения файла и обновления записи журнала.</div>
+      <div class="progress-actions"><button id="moveReadClose" type="button" class="primary hidden">Закрыть</button></div>
+    </section>
+  </div>
+
+
+  <div id="backupPickerBackdrop" class="picker-backdrop hidden" role="presentation">
+    <section class="picker-dialog" role="dialog" aria-modal="true" aria-labelledby="backupPickerTitle">
+      <div class="picker-head">
+        <div>
+          <div class="picker-kicker">ИМПОРТ С ЯНДЕКС ДИСКА</div>
+          <h2 id="backupPickerTitle">Выберите резервную копию</h2>
+        </div>
+        <button id="backupPickerCancelTop" type="button" class="secondary">Закрыть</button>
+      </div>
+      <p class="picker-help">Сначала показываются резервные копии текущего месяца. Перелистывайте месяцы и выберите конкретную версию журнала.</p>
+      <div class="month-nav" aria-label="Выбор месяца резервной копии">
+        <button id="backupMonthPrev" type="button">← Предыдущий месяц</button>
+        <strong id="backupMonthLabel">—</strong>
+        <button id="backupMonthNext" type="button">Следующий месяц →</button>
+      </div>
+      <div id="backupPickerStatus" class="picker-status" aria-live="polite"></div>
+      <div id="backupPickerList" class="backup-picker-list" role="radiogroup" aria-label="Резервные копии"></div>
+      <div class="picker-actions">
+        <button id="backupPickerCancel" type="button">Отмена</button>
+        <button id="backupPickerProceed" type="button" class="primary" disabled>Импортировать выбранный файл</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="backupProgressBackdrop" class="progress-backdrop hidden" role="presentation">
+    <section id="backupProgressDialog" class="progress-dialog" role="dialog" aria-modal="true" aria-labelledby="backupProgressTitle" tabindex="-1">
+      <div class="progress-head">
+        <div id="backupProgressIcon" class="progress-icon">↻</div>
+        <div>
+          <div id="backupProgressKicker" class="progress-kicker">ИДЁТ РЕЗЕРВНОЕ КОПИРОВАНИЕ</div>
+          <h2 id="backupProgressTitle">Создание резервной копии</h2>
+        </div>
+      </div>
+      <p id="backupProgressText" class="progress-text">Подготавливаем операцию…</p>
+      <div class="operation-id-row">operationId: <code id="backupProgressOperationId"></code> <button id="copyBackupProgressOperationId" type="button">Копировать</button></div>
+      <div class="progress-track" aria-hidden="true"><div id="backupProgressBar" class="progress-bar"></div></div>
+      <div id="backupProgressPercent" class="progress-percent">0%</div>
+      <ol id="backupProgressStages" class="progress-stages"></ol>
+      <div class="progress-warning">Не закрывайте эту вкладку до завершения операции. Пока идёт резервное копирование, WebClip дополнительно включает защиту от случайного закрытия страницы.</div>
+      <div class="progress-actions">
+        <button id="backupProgressClose" type="button" class="primary hidden">Закрыть</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="public-suffix.js"></script>
+  <script src="journal-text-filter.js"></script>
+  <script src="prepared-save-as.js"></script>
+  <script src="journal.js"></script>
+</body>
+</html>

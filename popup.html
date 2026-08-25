@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebClip PDF</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="card">
+    <h1>WebClip PDF</h1>
+    <div id="extensionVersion" class="version" aria-label="Версия расширения"></div>
+    <p>Выберите основной контент автоматически или соберите сохраняемую область вручную; ненужные вложенные блоки можно исключить.</p>
+    <section class="primary-modes" aria-label="Основные режимы работы">
+      <div class="primary-modes-title">Основные режимы работы</div>
+      <button id="readLater" type="button" class="read-later">Прочитать позже</button>
+      <button id="start" type="button">Прочитано — начать выделение</button>
+      <button id="grantFrameAccess" type="button" class="secondary">Разрешить доступ к cross-origin iframe</button>
+    </section>
+    <section class="journal-nav-panel" aria-label="Журнал">
+      <div class="journal-nav-title">Журнал</div>
+      <div class="journal-nav-buttons">
+        <button id="journalCurrent" type="button" class="secondary journal-mode">Текущего URL</button>
+        <button id="journalSite" type="button" class="secondary journal-mode">Текущего сайта</button>
+        <button id="journalAll" type="button" class="secondary journal-mode">Полный</button>
+      </div>
+    </section>
+    <button id="settings" type="button" class="secondary">Настройки Яндекс Диска</button>
+    <button id="authHelp" type="button" class="secondary">Инструкция по авторизации</button>
+    <section id="backupPanel" class="backup-panel" aria-label="Состояние резервной копии журнала">
+      <strong>Резервная копия журнала</strong>
+      <div id="backupState">Проверяем…</div>
+      <div><span>Последняя успешная фоновая:</span> <b id="backupLastSuccess">—</b></div>
+      <div><span>Последняя неудачная фоновая:</span> <b id="backupLastFailure">—</b></div>
+      <div id="backupError" class="backup-error"></div>
+    </section>
+    <div id="status" role="status" aria-live="polite"></div>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
