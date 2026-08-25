@@ -29,7 +29,7 @@ jobs:
           if (m.manifest_version !== 3 || m.version !== '0.9.8' || m.minimum_chrome_version !== '118') throw new Error('Manifest baseline mismatch');
           NODE
 
-      - name: Repair staged patch quoting
+      - name: Repair staged patch quoting and registry anchor
         shell: bash
         run: |
           set -euo pipefail
@@ -48,6 +48,11 @@ jobs:
           end += len(needle_end)
           replacement = "vm.runInContext(source + '\\\\n;globalThis.__p0063 = { reserveSignedTransferAdmission, resizeSignedTransferReservation, releaseSignedTransferAdmission, getSignedTransferAdmissionBytes, state: () => ({ activeTransfers, activeSignedTransferBytes, reservations: activeSignedTransferReservations.size }) };', context);"
           s = s[:start] + replacement + s[end:]
+          old = "if ((priorities.split(oldPriority).length - 1) !== 1) throw new Error('priority anchor mismatch');\npriorities = priorities.replace(oldPriority, newPriority);"
+          new = "const priorityPattern = /^\\| P0-063 \\| P0 \\| OPEN \\|.*\\|$/m;\nif (!priorityPattern.test(priorities)) throw new Error('priority anchor mismatch');\npriorities = priorities.replace(priorityPattern, newPriority);"
+          if old not in s:
+              raise SystemExit('Expected priority guard anchor not found')
+          s = s.replace(old, new, 1)
           p.write_text(s)
           PY
           node --check project_tools/_patch_p0_063.js
