@@ -83,3 +83,31 @@ Chrome documents that `storage.session` is memory-backed, cleared on disable/rel
 ### Test evidence note
 
 This continuation changed audit documentation only. It did not rerun product tests. The last verified product gate remains the P0-063 gate: JavaScript syntax 88/88 PASS and deterministic `project_tools/test_*.js` 74/74 PASS. Real unmanaged unpacked Chrome and real Yandex OAuth/API/upload/move/backup E2E remain release blockers.
+
+
+## Continuation at HEAD `3285adac4aa8064eb4bf1f6da20a1bacc3fd30bb` — URL confidentiality and page-side-effect review
+
+No production source changed during this continuation. The audit re-read current `content.js`, `frame-agent.js`, `service-worker.js`, `journal.js`, `popup.js`, `prepared-save-as.js`, and `offscreen.js` from GitHub `main`.
+
+### Newly confirmed findings
+
+- **P0-066 OPEN — durable source-URL confidentiality boundary.** Live metadata uses `location.href`; the PDF header emits it as both text and hyperlink; content metadata sanitization returns the current tab URL with `URL.toString()`. `normalizeJournalUrl()` and imported HTTP URL normalization do not remove URL userinfo and only partly handle fragment. OperationLog already redacts secret query material, but PDF/Journal/backup do not share that sanitizer. Introduce one durable/display URL sanitizer: strip `username/password`, strip fragment, redact/drop known credential query names, preserve ordinary query parameters, and reject userinfo on imported Yandex public URLs.
+- **P0-067 OPEN — synthetic host-page click during PDF preparation.** `expandSpoilersInIncludedContent()` calls `control.click()`. The current safety predicate still accepts semantic-toggle submit buttons and links; programmatic `HTMLElement.click()` fires the element click, and submit controls can submit their form. PDF save must never activate host controls. Keep native `<details>` state mutation and inert visual panel unlocking, but require explicit manual user expansion when real page interaction is needed.
+- **P0-068 OPEN — flattened iframe proxy is live, not inert.** The clone is built with deep `cloneNode(true)`, only scripts and Exclude nodes are removed, and the proxy is appended to the top document. Nested browsing/plugin elements and custom elements remain. Inserting custom elements can run `connectedCallback`; embedded frames/resources can establish new browsing contexts or loads. Duplicate ids/names can also perturb page selectors while the proxy exists. Build an inert sanitized clone before any live insertion.
+- **P1-166 OPEN — unresolved Chrome side-effect registry admission.** `scriptExecutionSettlements` and `tabCreateSettlements` correctly preserve actual settlement after local timeout and dedupe identical requests, but unlike Action/download/PDF pending paths they have no global unresolved-count admission budget. A never-settling Chrome Promise therefore leaves a retained entry and unique operations can accumulate. Add fail-closed global caps while retaining actual-settlement semantics.
+- **P1-167 OPEN — unbounded selected-content PDF preprocessing.** Resource prefetch itself is bounded, but link absolutization, image wrapping and disclosure collection call full-subtree `querySelectorAll` and build Sets/rollback arrays without a shared traversal or time budget. This is a separate large-page availability path from P1-160 discovery and P0-064 iframe clone admission.
+- **P1-168 OPEN — locator sibling enumeration.** Candidate collection is bounded after P1-155, but locator construction and v3 scoring still allocate whole sibling arrays, sometimes for every candidate. Replace full-array sibling indexing/filtering with bounded traversal/index helpers and degrade positional fingerprint when the sibling budget is exceeded.
+
+### Rejected / non-new hypotheses in this pass
+
+- The suspected `joinDiskPath()` `..` escape through filename components did **not** reproduce: `sanitizeDiskName()` strips trailing dots/spaces and dot-only segments collapse to `_`; destructive Yandex moves also revalidate the source through managed-branch containment before mutation. P0-040/P1-090 controls remain effective for the paths reviewed.
+- No new Journal/options DOM-XSS sink was found: dynamic Journal content is built with DOM nodes/`textContent`; Options `innerHTML` uses static extension-owned markup and external errors are inserted as text.
+- `prepared-save-as.js` produced no new finding beyond existing P1-156/P1-157: native `saveAs:true` remains page-owned/unbounded, while listener/release/runtime-message cleanup gaps are already registered.
+
+### Standards check for P0-067/P0-068
+
+Current MDN/HTML documentation confirms that `HTMLElement.click()` simulates a click and fires the element click event; submit buttons can submit their associated form. Custom-element `connectedCallback()` runs when an element is added to the document, and custom-element lifecycle is explicitly allowed to perform initialization/resource work. This supports treating live proxy insertion and synthetic page activation as real side-effect boundaries rather than only visual fidelity concerns.
+
+### Evidence / test note
+
+This audit continuation changes documentation only. Product tests were not rerun. The last product gate remains P0-063: JavaScript syntax 88/88 PASS and deterministic tests 74/74 PASS. Browser-level regressions are required when P0-066/P0-067/P0-068 and the new P1 bounds are implemented.
