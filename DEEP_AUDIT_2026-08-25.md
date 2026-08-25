@@ -206,3 +206,20 @@ Current Yandex documentation continues to describe confirmation-code exchange as
 
 Audit documentation only; production tests were not rerun. The last verified production gate remains 88/88 JavaScript syntax + 74/74 deterministic tests from P0-063, and real unpacked Chrome/Yandex E2E remains a release blocker.
 
+## Continuation at HEAD `a3a10308d060fc9926ff348f19a14dba3d5c91d9` — Yandex backup identity and destructive public-link retention
+
+No production source changed during this continuation.
+
+### Newly confirmed findings
+
+- **P1-179 OPEN — backup state is not namespaced by Yandex account/root identity.** `journalBackupState` combines current config with old global last-success/failure timestamps. A newly selected root/account can therefore appear recently backed up even though no backup exists there. The prepared upload checkpoint likewise lacks account/root identity. `recoverPendingJournalBackup()` first creates/uses the current configured backup tree; if the old pending path is outside it, the checkpoint is removed immediately. If the path string still matches, recovery validates file/type and exact size but does not prove the original Yandex account. The checkpoint and state need immutable accountUid/rootPath and mismatch handling that preserves unknown-settlement evidence instead of discarding it because configuration changed.
+- **P1-180 OPEN — bulk local clear/import can orphan public-link management.** Domain/all clear and full import/replace intentionally mutate the local Journal only. With public links enabled by default, entries removed from the Journal may still point to Yandex files whose public access remains active. Once their local `publicUrl`/identity metadata is gone, P1-164 cannot offer per-entry revoke for them. Before bulk confirmation, count affected published Yandex entries using a bounded scan and explicitly warn that these public links remain active and will no longer be manageable from WebClip. Do not silently turn a local clear/import into a large remote unpublish operation.
+
+### P0-069 clarification
+
+The single-entry privacy invariant applies to both Yandex delete choices. Moving to WebClip Trash does not itself revoke a published link, while `keep` intentionally leaves the remote file untouched. Either revoke must be explicitly confirmed and reconciled before the local record disappears, or the user must explicitly confirm that public access will remain after WebClip forgets the entry.
+
+### Test evidence note
+
+Audit documentation only; production tests were not rerun and the release gate remains unchanged.
+
