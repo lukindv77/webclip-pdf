@@ -26,7 +26,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -i "s/async function getPendingRemoteSave(/async function removePendingRemoteSave(/" project_tools/patch_p1_147_148.py
+          python3 - <<'PY'
+          from pathlib import Path
+          sw = Path('service-worker.js')
+          text = sw.read_text(encoding='utf-8')
+          old = "  const prepared = normalizePendingJournalAppendData({ ...data, destination: 'yandex' });"
+          new = "  const prepared = normalizePendingJournalAppendData({ ...data, destination: 'yandex', operationId: String(operationId || data?.operationId || '').slice(0, MAX_OPERATION_ID_CHARS) });"
+          if text.count(old) != 1:
+              raise SystemExit(f'remote checkpoint source anchor count={text.count(old)}')
+          sw.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          patch = Path('project_tools/patch_p1_147_148.py')
+          source = patch.read_text(encoding='utf-8')
+          lines = source.splitlines()
+          found = 0
+          out = []
+          for line in lines:
+              if "checkpointPendingRemoteSaveIntent" in line and "remote checkpoint block" in line and line.lstrip().startswith('worker = edit_block'):
+                  out.append("worker = worker  # remote checkpoint operationId patched explicitly by workflow")
+                  found += 1
+              else:
+                  out.append(line)
+          if found != 1:
+              raise SystemExit(f'remote patcher line count={found}')
+          patch.write_text('\n'.join(out) + '\n', encoding='utf-8')
+          PY
           python3 project_tools/patch_p1_147_148.py
 
       - name: JavaScript syntax gate
