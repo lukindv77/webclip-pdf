@@ -51,6 +51,12 @@ let operationLogDetailRequestInFlight = false;
 let queuedOperationLogDetailRequest = null;
 let yandexStatusGeneration = 0;
 let backupStatusGeneration = 0;
+const OPERATION_LOG_RENDER_BATCH_SIZE = 80;
+const OPERATION_LOG_SEARCH_DEBOUNCE_MS = 120;
+let operationLogRenderGeneration = 0;
+let operationLogSearchTimer = 0;
+let selectedOperationLogValue = null;
+let selectedOperationLogJsonText = '';
 
 function createReconnectableProgressPort(name, onMessage, isActive = () => false) {
   let port = null;
@@ -477,14 +483,20 @@ function bindEvents() {
   }));
 
   el('refreshOperationLogs').addEventListener('click', () => refreshOperationLogs());
-  operationLogSearch.addEventListener('input', renderOperationLogList);
+  operationLogSearch.addEventListener('input', () => {
+    if (operationLogSearchTimer) clearTimeout(operationLogSearchTimer);
+    operationLogSearchTimer = setTimeout(() => {
+      operationLogSearchTimer = 0;
+      renderOperationLogList();
+    }, OPERATION_LOG_SEARCH_DEBOUNCE_MS);
+  });
   operationLogSearch.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     const requestedId = operationLogSearch.value.trim();
     if (requestedId) openOperationLog(requestedId);
   });
   el('toggleOperationLogText').addEventListener('click', toggleOperationLogText);
-  el('copyOperationLog').addEventListener('click', () => copyText(operationLogJson.textContent, 'Весь лог скопирован в буфер обмена.'));
+  el('copyOperationLog').addEventListener('click', () => copySelectedOperationLog());
   el('copyOperationLogId').addEventListener('click', () => copyText(selectedOperationLogId, 'operationId скопирован.'));
   el('exportOperationLog').addEventListener('click', () => runBusy(el('exportOperationLog'), async () => {
     if (!selectedOperationLogId) throw new Error('Сначала выберите операцию.');
@@ -498,6 +510,9 @@ function bindEvents() {
     const response = await chrome.runtime.sendMessage({ type: 'WEBCLIP_OPERATION_LOG_CLEAR' });
     requireOk(response);
     selectedOperationLogId = '';
+    selectedOperationLogValue = null;
+    selectedOperationLogJsonText = '';
+    operationLogJson.textContent = '';
     operationLogDetail.classList.add('hidden');
     showMessage('Все диагностические логи удалены.', 'ok');
     await refreshOperationLogs();
@@ -730,6 +745,9 @@ async function refreshOperationLogs() {
       await openOperationLog(selectedOperationLogId, { quiet: true });
     } else if (selectedOperationLogId) {
       selectedOperationLogId = '';
+      selectedOperationLogValue = null;
+      selectedOperationLogJsonText = '';
+      operationLogJson.textContent = '';
       operationLogDetail.classList.add('hidden');
     }
   } catch (error) {
@@ -740,7 +758,40 @@ async function refreshOperationLogs() {
   }
 }
 
+function createOperationLogRow(item) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'operation-log-row';
+  button.addEventListener('click', () => openOperationLog(item.operationId));
+
+  const main = document.createElement('div');
+  main.className = 'operation-log-row-main';
+  const title = document.createElement('div');
+  title.className = 'operation-log-row-title';
+  title.textContent = item.description || item.title || item.type || 'Операция WebClip';
+  const technicalTitle = document.createElement('div');
+  technicalTitle.className = 'operation-log-row-description';
+  technicalTitle.textContent = item.title && item.title !== title.textContent ? item.title : '';
+  const meta = document.createElement('div');
+  meta.className = 'operation-log-row-meta';
+  meta.textContent = `${formatDateTime(item.updatedAt) || 'дата не указана'} · событий: ${Number(item.eventCount || 0)}${item.summary ? ` · ${item.summary}` : ''}`;
+  const id = document.createElement('div');
+  id.className = 'operation-log-row-id';
+  id.textContent = item.operationId || '';
+  main.append(title);
+  if (technicalTitle.textContent) main.append(technicalTitle);
+  main.append(meta, id);
+
+  const state = document.createElement('span');
+  const status = String(item.status || 'running');
+  state.className = `operation-log-status-pill ${status}`;
+  state.textContent = status === 'success' ? 'Успешно' : status === 'partial' ? 'Частично' : status === 'error' ? 'Ошибка' : status === 'canceled' ? 'Отменено' : 'Выполняется';
+  button.append(main, state);
+  return button;
+}
+
 function renderOperationLogList() {
+  const generation = ++operationLogRenderGeneration;
   const query = operationLogSearch.value.trim().toLowerCase();
   const filtered = operationLogs.filter((item) => {
     if (!query) return true;
@@ -755,37 +806,20 @@ function renderOperationLogList() {
     operationLogList.appendChild(empty);
     return;
   }
-  for (const item of filtered) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'operation-log-row';
-    button.addEventListener('click', () => openOperationLog(item.operationId));
 
-    const main = document.createElement('div');
-    main.className = 'operation-log-row-main';
-    const title = document.createElement('div');
-    title.className = 'operation-log-row-title';
-    title.textContent = item.description || item.title || item.type || 'Операция WebClip';
-    const technicalTitle = document.createElement('div');
-    technicalTitle.className = 'operation-log-row-description';
-    technicalTitle.textContent = item.title && item.title !== title.textContent ? item.title : '';
-    const meta = document.createElement('div');
-    meta.className = 'operation-log-row-meta';
-    meta.textContent = `${formatDateTime(item.updatedAt) || 'дата не указана'} · событий: ${Number(item.eventCount || 0)}${item.summary ? ` · ${item.summary}` : ''}`;
-    const id = document.createElement('div');
-    id.className = 'operation-log-row-id';
-    id.textContent = item.operationId || '';
-    main.append(title);
-    if (technicalTitle.textContent) main.append(technicalTitle);
-    main.append(meta, id);
-
-    const state = document.createElement('span');
-    const status = String(item.status || 'running');
-    state.className = `operation-log-status-pill ${status}`;
-    state.textContent = status === 'success' ? 'Успешно' : status === 'partial' ? 'Частично' : status === 'error' ? 'Ошибка' : status === 'canceled' ? 'Отменено' : 'Выполняется';
-    button.append(main, state);
-    operationLogList.appendChild(button);
-  }
+  let index = 0;
+  const appendBatch = () => {
+    if (generation !== operationLogRenderGeneration) return;
+    const fragment = document.createDocumentFragment();
+    const end = Math.min(filtered.length, index + OPERATION_LOG_RENDER_BATCH_SIZE);
+    for (; index < end; index += 1) fragment.appendChild(createOperationLogRow(filtered[index]));
+    operationLogList.appendChild(fragment);
+    if (index < filtered.length) {
+      const schedule = globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 0));
+      schedule(appendBatch);
+    }
+  };
+  appendBatch();
 }
 
 function openOperationLog(id, { quiet = false } = {}) {
@@ -823,9 +857,11 @@ async function drainOperationLogDetailRequests() {
     operationLogTitle.textContent = response.log?.title || 'Диагностический лог';
     operationLogDescription.textContent = `Описание операции: ${response.log?.description || response.log?.title || 'Операция WebClip'}`;
     operationLogId.textContent = `operationId: ${request.operationIdValue}`;
-    operationLogJson.textContent = JSON.stringify(response.log || {}, null, 2);
-    operationLogJson.classList.remove('hidden');
-    el('toggleOperationLogText').textContent = 'Свернуть текст лога';
+    selectedOperationLogValue = response.log || {};
+    selectedOperationLogJsonText = '';
+    operationLogJson.textContent = '';
+    operationLogJson.classList.add('hidden');
+    el('toggleOperationLogText').textContent = 'Показать JSON лога';
     operationLogDetail.classList.remove('hidden');
     if (!request.quiet) operationLogDetail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   } catch (error) {
@@ -846,9 +882,28 @@ async function drainOperationLogDetailRequests() {
 }
 
 
+function materializeSelectedOperationLogJson() {
+  if (!selectedOperationLogValue) return '';
+  if (!selectedOperationLogJsonText) selectedOperationLogJsonText = JSON.stringify(selectedOperationLogValue, null, 2);
+  return selectedOperationLogJsonText;
+}
+
 function toggleOperationLogText() {
-  const hidden = operationLogJson.classList.toggle('hidden');
-  el('toggleOperationLogText').textContent = hidden ? 'Развернуть текст лога' : 'Свернуть текст лога';
+  const currentlyHidden = operationLogJson.classList.contains('hidden');
+  if (currentlyHidden) {
+    operationLogJson.textContent = materializeSelectedOperationLogJson();
+    operationLogJson.classList.remove('hidden');
+    el('toggleOperationLogText').textContent = 'Скрыть JSON лога';
+  } else {
+    operationLogJson.classList.add('hidden');
+    el('toggleOperationLogText').textContent = 'Показать JSON лога';
+  }
+}
+
+async function copySelectedOperationLog() {
+  const text = materializeSelectedOperationLogJson();
+  if (!text) throw new Error('Сначала выберите операцию.');
+  await copyText(text, 'Весь лог скопирован в буфер обмена.');
 }
 
 async function copyText(text, successMessage = 'Скопировано.') {

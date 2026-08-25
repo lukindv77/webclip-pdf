@@ -589,3 +589,11 @@ REGRESSION: selected iframe print height is now remeasured at a conservative A4-
 - OperationLog: resources **5/5**, Chromium PDF **134659 bytes**, `documentScrollHeight=1155` vs viewport `878`; root pagination is no longer viewport-clipped.
 - P1-147/P1-153 structural/root diagnostics remain permanent product diagnostics.
 - P1-153 status promoted from `REGRESSION` to `DONE` for this behavioral repro.
+
+
+## 2026-08-25 — повторный deep audit
+- Audit baseline: 84/84 JS syntax, 71/71 deterministic tests до изменений.
+- Новые findings зарегистрированы как P0-063/P0-064, P1-154…P1-160, P2-014…P2-016.
+- P1-155/P1-159 исправлены и должны пройти новый полный gate.
+- OperationLog structural/page/print diagnostics остаются постоянным продуктовым функционалом.
+- Этот аудит не заменяет unmanaged unpacked Chrome + реальный Yandex release QA.

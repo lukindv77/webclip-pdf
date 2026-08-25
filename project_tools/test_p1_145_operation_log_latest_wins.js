@@ -39,7 +39,15 @@ function createHarness({ timeoutIds = [] } = {}) {
   const operationLogTitle = { textContent: '' };
   const operationLogDescription = { textContent: '' };
   const operationLogId = { textContent: '' };
-  const operationLogJson = { textContent: '', classList: { remove() {} } };
+  const operationLogJson = {
+    textContent: '',
+    hidden: false,
+    classList: {
+      add(name) { if (name === 'hidden') operationLogJson.hidden = true; },
+      remove(name) { if (name === 'hidden') operationLogJson.hidden = false; },
+      contains(name) { return name === 'hidden' ? operationLogJson.hidden : false; }
+    }
+  };
   const toggle = { textContent: '' };
 
   const context = vm.createContext({
@@ -65,7 +73,7 @@ function createHarness({ timeoutIds = [] } = {}) {
     }
   });
 
-  const code = `let selectedOperationLogId = 'previous';\nlet operationLogDetailGeneration = 0;\nlet operationLogSelectionGeneration = 0;\nlet operationLogDetailRequestInFlight = false;\nlet queuedOperationLogDetailRequest = null;\n${between(source, 'function openOperationLog', 'function toggleOperationLogText')}\nthis.openForTest = openOperationLog;\nthis.getSelected = () => selectedOperationLogId;`;
+  const code = `let selectedOperationLogId = 'previous';\nlet selectedOperationLogValue = null;\nlet selectedOperationLogJsonText = '';\nlet operationLogDetailGeneration = 0;\nlet operationLogSelectionGeneration = 0;\nlet operationLogDetailRequestInFlight = false;\nlet queuedOperationLogDetailRequest = null;\n${between(source, 'function openOperationLog', 'function toggleOperationLogText')}\nthis.openForTest = openOperationLog;\nthis.getSelected = () => selectedOperationLogId;`;
   vm.runInContext(code, context);
 
   return { context, pending, started, shown, operationLogTitle, getMaxActive: () => maxActiveUnderlying };

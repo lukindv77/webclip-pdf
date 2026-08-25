@@ -31,7 +31,15 @@ function deferred() {
   const operationLogTitle = { textContent: '' };
   const operationLogDescription = { textContent: '' };
   const operationLogId = { textContent: '' };
-  const operationLogJson = { textContent: '', classList: { remove() {} } };
+  const operationLogJson = {
+    textContent: '',
+    hidden: false,
+    classList: {
+      add(name) { if (name === 'hidden') operationLogJson.hidden = true; },
+      remove(name) { if (name === 'hidden') operationLogJson.hidden = false; },
+      contains(name) { return name === 'hidden' ? operationLogJson.hidden : false; }
+    }
+  };
   const toggle = { textContent: '' };
 
   const context = vm.createContext({
@@ -47,7 +55,7 @@ function deferred() {
     },
     waitReadOnlyRuntimeMessage(actual) { return actual; }
   });
-  const code = `let selectedOperationLogId = 'previous';\nlet operationLogDetailGeneration = 0;\nlet operationLogSelectionGeneration = 0;\nlet operationLogDetailRequestInFlight = false;\nlet queuedOperationLogDetailRequest = null;\n${between(source, 'function openOperationLog', 'function toggleOperationLogText')}\nthis.openForTest = openOperationLog;\nthis.getSelected = () => selectedOperationLogId;`;
+  const code = `let selectedOperationLogId = 'previous';\nlet selectedOperationLogValue = null;\nlet selectedOperationLogJsonText = '';\nlet operationLogDetailGeneration = 0;\nlet operationLogSelectionGeneration = 0;\nlet operationLogDetailRequestInFlight = false;\nlet queuedOperationLogDetailRequest = null;\n${between(source, 'function openOperationLog', 'function toggleOperationLogText')}\nthis.openForTest = openOperationLog;\nthis.getSelected = () => selectedOperationLogId;`;
   vm.runInContext(code, context);
 
   const first = context.openForTest('A');
@@ -61,6 +69,9 @@ function deferred() {
   await second;
   assert.strictEqual(context.getSelected(), 'B');
   assert.strictEqual(operationLogTitle.textContent, 'B title');
+  assert.strictEqual(operationLogJson.textContent, '', 'large raw JSON must remain unmaterialized after detail selection');
+  assert.strictEqual(operationLogJson.hidden, true, 'raw JSON area is lazy/collapsed until explicit Show');
+  assert.strictEqual(toggle.textContent, 'Показать JSON лога');
   assert.strictEqual(shown.length, 0);
 
   console.log('Operation log UI stale-response/queue race tests OK');

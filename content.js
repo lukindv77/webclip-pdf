@@ -404,7 +404,7 @@
       if (!ownerDoc || visited.has(ownerDoc)) return;
       visited.add(ownerDoc);
       let frames = [];
-      try { frames = [...ownerDoc.querySelectorAll('iframe, frame')].slice(0, 256); } catch (_) { frames = []; }
+      try { frames = collectFrameElementsBounded(ownerDoc, 256); } catch (_) { frames = []; }
       for (const frame of frames) {
         let child = null;
         try { child = frame.contentDocument; } catch (_) { child = null; }
@@ -1193,6 +1193,43 @@
     return resolveElementLocatorV3InDocument(locator, ownerDoc, allowFrame);
   }
 
+  function collectTagCandidatesBounded(ownerDoc, tag, limit = 5000) {
+    const out = [];
+    if (!ownerDoc?.getElementsByTagName) return out;
+    const safeLimit = Math.max(0, Math.min(5000, Math.floor(Number(limit) || 0)));
+    if (!safeLimit) return out;
+    let collection = null;
+    try { collection = ownerDoc.getElementsByTagName(String(tag || '*').toLowerCase() || '*'); } catch (_) { collection = null; }
+    if (!collection) return out;
+    const count = Math.min(safeLimit, Math.max(0, Number(collection.length) || 0));
+    for (let index = 0; index < count; index += 1) {
+      const element = collection[index];
+      if (element?.nodeType === 1) out.push(element);
+    }
+    return out;
+  }
+
+  function collectFrameElementsBounded(ownerDoc, limit = 256) {
+    const out = [];
+    const seen = new Set();
+    const safeLimit = Math.max(0, Math.min(256, Math.floor(Number(limit) || 0)));
+    if (!ownerDoc?.getElementsByTagName || !safeLimit) return out;
+    for (const tag of ['iframe', 'frame']) {
+      let collection = null;
+      try { collection = ownerDoc.getElementsByTagName(tag); } catch (_) { collection = null; }
+      if (!collection) continue;
+      const count = Math.min(Math.max(0, Number(collection.length) || 0), safeLimit - out.length);
+      for (let index = 0; index < count; index += 1) {
+        const frame = collection[index];
+        if (!frame || seen.has(frame)) continue;
+        seen.add(frame);
+        out.push(frame);
+        if (out.length >= safeLimit) return out;
+      }
+    }
+    return out;
+  }
+
   function resolveElementLocatorLegacyInDocument(locator, ownerDoc, allowFrame = false) {
     if (!locator || !ownerDoc) return null;
 
@@ -1214,7 +1251,7 @@
     const tag = String(locator.tag || '*').toLowerCase() || '*';
     let candidates = [];
     try {
-      candidates = [...ownerDoc.querySelectorAll(tag)].slice(0, 5000);
+      candidates = collectTagCandidatesBounded(ownerDoc, tag, 5000);
     } catch (_) {
       candidates = [];
     }
@@ -1257,7 +1294,7 @@
     const domCandidate = resolveDomPathCandidate(locator.domPath, ownerDoc);
     let candidates = [];
     try {
-      candidates = [...ownerDoc.querySelectorAll(tag)].slice(0, 5000);
+      candidates = collectTagCandidatesBounded(ownerDoc, tag, 5000);
     } catch (_) {
       candidates = [];
     }
@@ -1979,8 +2016,17 @@
     const images = el.querySelectorAll('img,picture,figure,svg,canvas').length;
     const tables = el.querySelectorAll('table').length;
     const lists = el.querySelectorAll('ul,ol').length;
-    const links = [...el.querySelectorAll('a[href]')];
-    const linkTextLength = links.reduce((sum, a) => sum + ((a.innerText || '').trim().length), 0);
+    let linkTextLength = 0;
+    try {
+      const links = el.getElementsByTagName('a');
+      const linkLimit = Math.min(5000, Math.max(0, Number(links.length) || 0));
+      for (let index = 0; index < linkLimit; index += 1) {
+        const link = links[index];
+        if (!link?.hasAttribute?.('href')) continue;
+        linkTextLength += (link.innerText || '').trim().length;
+        if (linkTextLength >= textLength) { linkTextLength = textLength; break; }
+      }
+    } catch (_) {}
     const linkDensity = textLength ? Math.min(1, linkTextLength / textLength) : 1;
     const marker = `${el.tagName} ${el.id || ''} ${typeof el.className === 'string' ? el.className : ''}`;
 

@@ -252,3 +252,21 @@
 
 ### P1-153 — DONE — root document print-flow normalization
 Real its.1c.ru diagnostics after P1-152 showed complete top-body flattening but `bodyScrollHeight > viewportHeight` while `documentScrollHeight == viewportHeight`. The print-only root CSS now normalizes `html/body` height/position/overflow/contain/transform/clip constraints so Chromium can paginate ordinary top-level flow. Permanent bounded OperationLog diagnostics record `document.rootLayout.html/body`; rollback remains style-node removal only. Real Chrome verification on the original its.1c.ru repro PASS: the generated copy is 2 pages and includes the complete article tail; `documentScrollHeight=1155` exceeds the viewport and Chromium pagination is no longer clipped. See `P1-153_CLOSURE.md`.
+
+
+## Повторный глубокий аудит 2026-08-25 — memory / timeout / security / performance
+
+| Код | Приоритет | Статус | Пункт |
+|---|---|---|---|
+| P0-063 | P0 | OPEN | Offscreen signed-transfer не имеет глобального admission budget по числу/байтам реально незавершённых крупных transfer. Несколько параллельных 50–64 МБ операций могут одновременно материализовать IDB/Blob/fetch body и создать OOM/крах Chrome; нужен actual-settlement count+byte budget до materialization. |
+| P0-064 | P0 | OPEN | Same-origin iframe flattening ограничивает только копирование computed styles (2500), но deep clone и полные source/target descendant arrays создаются до лимита. Нужен preflight node/text/byte budget и инкрементальный traversal, чтобы патологический iframe fail-safe завершался ошибкой вместо OOM. |
+| P1-154 | P1 | OPEN | Top-document Include/Exclude в `content.js` не имеют live-count budget; каждое изменение запускает O(N) outline/snapshot work. Требуется лимит, согласованный с frame-agent (250), и bounded restore с понятной диагностикой. |
+| P1-155 | P1 | REGRESSION | Реальный предел DOM locator candidates: устранён spread полного `querySelectorAll` перед `.slice(0,5000)`; top/frame-agent используют bounded indexed tag collections, cross-origin frame enumeration/link-density также не создают прежний полный Array. |
+| P1-156 | P1 | OPEN | Page-owned native Save As: listener `downloads.onChanged` может остаться навсегда при пропущенном terminal event; release RPC не имеет bounded control deadline. Native `saveAs:true` остаётся без timeout, но cleanup требует fallback lifetime + `downloads.search` reconciliation и bounded/dedup release RPC. |
+| P1-157 | P1 | OPEN | В popup/Journal/Options/content остались прямые Chrome API/runtime RPC вне централизованных deadline helpers. Reads/idempotent calls должны быть bounded; non-idempotent side effects — operation-id/actual-settlement reconciled без blind retry. |
+| P1-158 | P1 | OPEN | В service-worker остались direct awaited Chrome maintenance/config reads (в т.ч. отдельные yandexConfig/version-refresh/tabs paths), которые не все проходят центральный bounded read/serialized mutation слой. Нужен полный per-call reconciliation. |
+| P1-159 | P1 | REGRESSION | Большие UI-результаты: OperationLog search debounce 120 мс, список по 80 строк/frame + DocumentFragment, raw JSON lazy/cached, Journal linked log без двойного stringify, domain tree строится detached. |
+| P1-160 | P1 | OPEN | Auto-content/page discovery всё ещё содержит широкие DOM query scans без общего visited-node/time budget. Нужен shared traversal budget с graceful fallback к ручному выбору вместо риска подвисания страницы. |
+| P2-014 | P2 | OPEN | Декомпозиция монолитов `service-worker.js` (~523 KiB) и `content.js` (~186 KiB) по trust/subsystem boundaries; измерить cold-start parse/maintenance эффект и закрепить интерфейсы regression-тестами. |
+| P2-015 | P2 | OPEN | После P0-063 исследовать streaming upload крупных staged/chunked payload в signed Yandex upload, чтобы не восстанавливать полный 50–64 МБ Blob в памяти перед fetch. |
+| P2-016 | P2 | OPEN | Least-privilege hardening: exact capability matrix для extension pages и повторная проверка необходимости широкого `tabs` permission. `debugger` остаётся функционально необходимым для `Page.printToPDF`, optional host access — только по user grant. |

@@ -1466,6 +1466,7 @@ function renderDomainFilter() {
   domainFilterPanel.classList.toggle('hidden', !visible);
   domainFilterTree.replaceChildren();
   if (!visible) return;
+  const fragment = document.createDocumentFragment();
 
   const model = journalDomainModel && typeof journalDomainModel === 'object'
     ? journalDomainModel
@@ -1473,7 +1474,7 @@ function renderDomainFilter() {
   const allRow = document.createElement('div');
   allRow.className = 'domain-filter-row domain-filter-all';
   allRow.appendChild(makeDomainFilterButton('Все позиции', Number(model.totalEntries || 0), 'all', ''));
-  domainFilterTree.appendChild(allRow);
+  fragment.appendChild(allRow);
 
   const groups = Array.isArray(model.groups) ? model.groups : [];
   const visibleDomainBases = new Set(groups.map((group) => String(group?.base || '')).filter(Boolean));
@@ -1517,22 +1518,23 @@ function renderDomainFilter() {
       }
       node.appendChild(childrenWrap);
     }
-    domainFilterTree.appendChild(node);
+    fragment.appendChild(node);
   }
 
   if (!groups.length && domainSearchQuery) {
     const empty = document.createElement('div');
     empty.className = 'domain-search-empty';
     empty.textContent = 'Домены по этому запросу не найдены.';
-    domainFilterTree.appendChild(empty);
+    fragment.appendChild(empty);
   } else if (model.truncated || model.childrenTruncated) {
     const note = document.createElement('div');
     note.className = 'domain-search-empty';
     note.textContent = domainSearchQuery
       ? 'Показаны наиболее свежие совпадения в пределах memory budget. Уточните поиск, чтобы увидеть другие домены.'
       : 'Список доменов ограничен memory budget. Используйте поиск доменов для доступа к более старым позициям.';
-    domainFilterTree.appendChild(note);
+    fragment.appendChild(note);
   }
+  domainFilterTree.appendChild(fragment);
 }
 
 function makeDomainFilterButton(label, count, level, value) {
@@ -1998,6 +2000,7 @@ function buildLinkedOperationLog(entry) {
   root.append(label, status, pre);
 
   let cachedLog = null;
+  let cachedJson = '';
   let loading = null;
 
   const exactOperationId = /^[A-Za-z0-9._:-]{1,160}$/.test(operationId) ? operationId : '';
@@ -2023,7 +2026,7 @@ function buildLinkedOperationLog(entry) {
         }
         cachedLog = log;
         status.textContent = `${log.title || 'OperationLog'} · ${log.status || 'unknown'} · событий: ${Number(log.eventCount || log.events?.length || 0)}`;
-        pre.textContent = JSON.stringify(log, null, 2);
+        cachedJson = '';
         return log;
       }).finally(() => { loading = null; });
     }
@@ -2039,7 +2042,9 @@ function buildLinkedOperationLog(entry) {
     }
     showButton.disabled = true;
     try {
-      await load();
+      const log = await load();
+      if (!cachedJson) cachedJson = JSON.stringify(log, null, 2);
+      pre.textContent = cachedJson;
       pre.classList.remove('hidden');
       showButton.textContent = 'Скрыть лог';
     } catch (error) {
@@ -2055,7 +2060,8 @@ function buildLinkedOperationLog(entry) {
     copyButton.disabled = true;
     try {
       const log = await load();
-      await navigator.clipboard.writeText(JSON.stringify(log, null, 2));
+      if (!cachedJson) cachedJson = JSON.stringify(log, null, 2);
+      await navigator.clipboard.writeText(cachedJson);
       setStatus(`OperationLog ${exactOperationId} скопирован.`, 'ok');
     } catch (error) {
       status.textContent = error?.message || String(error);

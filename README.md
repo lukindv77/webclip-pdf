@@ -481,3 +481,7 @@ Real its.1c.ru P1-151 evidence preserved the complete cloned body but Chromium s
 
 ### Audit WIP — P1-153
 Selected iframe content that has already been flattened to the top document now also receives root `html/body` print-flow normalization. Permanent OperationLog page diagnostics include bounded root computed layout/geometry to diagnose future fixed-height/legacy print failures without a special debug build.
+
+
+### Deep audit — 2026-08-25
+Повторный аудит с нуля зафиксирован в `DEEP_AUDIT_2026-08-25.md`. Новые safety/backlog: P0-063/P0-064, P1-154…P1-160, P2-014…P2-016. В этом проходе закрыты regression P1-155 (реально bounded DOM candidate enumeration) и P1-159 (large-result UI batching/lazy JSON). Постоянная OperationLog page/print диагностика сохранена без сокращения.
