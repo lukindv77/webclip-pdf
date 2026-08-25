@@ -1,0 +1,116 @@
+name: Build P1-149 diagnostic pre-release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-p1-149-diagnostic.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  test-build-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: Asia/Bangkok
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: JavaScript syntax gate
+        id: syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -type f -name '*.js' -not -path './.git/*' | sort)
+          echo "js_count=${#files[@]}" >> "$GITHUB_OUTPUT"
+          for file in "${files[@]}"; do
+            node --check "$file"
+          done
+          echo "JavaScript syntax PASS: ${#files[@]}/${#files[@]}"
+
+      - name: Deterministic regression gate
+        id: tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t tests < <(find project_tools -maxdepth 1 -type f -name 'test_*.js' | sort)
+          echo "test_count=${#tests[@]}" >> "$GITHUB_OUTPUT"
+          for test_file in "${tests[@]}"; do
+            echo "==> $test_file"
+            node "$test_file"
+          done
+          echo "Deterministic tests PASS: ${#tests[@]}/${#tests[@]}"
+
+      - name: Verify manifest unchanged
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const m = require('./manifest.json');
+          if (m.manifest_version !== 3 || m.version !== '0.9.8' || m.minimum_chrome_version !== '118') {
+            throw new Error(`Unexpected manifest gate: ${JSON.stringify({manifest_version:m.manifest_version,version:m.version,minimum_chrome_version:m.minimum_chrome_version})}`);
+          }
+          console.log('Manifest gate PASS: MV3 / 0.9.8 / Chrome 118+');
+          NODE
+
+      - name: Remove one-shot workflow and commit source snapshot
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/build-p1-149-diagnostic.yml
+          git commit -m 'ci: finalize P1-149 diagnostic build snapshot'
+          git push origin HEAD:main
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build diagnostic artifact
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp_tag=$(date '+%Y%m%d-%H%M')
+          stamp_name=$(date '+%Y-%m-%d_%H%M')
+          tag="v0.9.8-build-${stamp_tag}-p1-149-diag"
+          artifact="WebClip_PDF_Prototype_v0_9_8_build_${stamp_name}_p1_149_diagnostic_github.zip"
+          git archive --format=zip --output="$artifact" HEAD
+          sha=$(sha256sum "$artifact" | awk '{print $1}')
+          printf '%s  %s\n' "$sha" "$artifact" > "$artifact.sha256"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Publish diagnostic pre-release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.txt <<EOF
+          Diagnostic WebClip build for retesting the empty-PDF issue on its.1c.ru after P1-149.
+
+          Manifest: MV3 / 0.9.8 / Chrome 118+
+          Source snapshot: ${{ steps.commit.outputs.commit_sha }}
+          Build gate: ${{ steps.syntax.outputs.js_count }}/${{ steps.syntax.outputs.js_count }} JavaScript syntax PASS; ${{ steps.tests.outputs.test_count }}/${{ steps.tests.outputs.test_count }} deterministic tests PASS.
+          Artifact SHA-256: ${{ steps.build.outputs.sha }}
+
+          Included diagnostics/fixes:
+          - P1-147: page-analysis/copy-save structural diagnostics in OperationLog.
+          - P1-148: exact operationId linkage with Show log / Copy log in Journal.
+          - P1-149: selected iframe/ancestor print-flow normalization with exact rollback after PDF generation.
+
+          Purpose of this build: repeat https://its.1c.ru/db/metod8dev/content/2334/hdoc, save PDF with the same Include selection, then provide the resulting PDF and linked OperationLog.
+
+          This remains a diagnostic 0.9.8 pre-release and does not claim the 0.9.9 release-QA gate.
+          EOF
+          gh release create '${{ steps.build.outputs.tag }}' \
+            '${{ steps.build.outputs.artifact }}' \
+            '${{ steps.build.outputs.artifact }}.sha256' \
+            --repo '${{ github.repository }}' \
+            --target '${{ steps.commit.outputs.commit_sha }}' \
+            --title 'WebClip 0.9.8 diagnostic build P1-149' \
+            --notes-file release-notes.txt \
+            --prerelease
