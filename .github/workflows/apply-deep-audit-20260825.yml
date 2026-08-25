@@ -1,4 +1,5 @@
 name: Apply deep audit findings and optimizations
+# rerun: 4 - P1-145 lazy OperationLog harness repaired
 on:
   push:
     paths:
@@ -69,4 +70,3 @@ jobs:
           git commit -m 'audit: register deep findings and optimize bounded UI work (P1-155 P1-159)'
           git push origin HEAD:main
           echo "FINAL_HEAD=$(git rev-parse HEAD)"
-          # run-3 marker
