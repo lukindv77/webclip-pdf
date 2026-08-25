@@ -20,7 +20,11 @@ jobs:
           git merge-base --is-ancestor "$base" HEAD
           git diff --exit-code "$base" -- content.js frame-agent.js options.js journal.js service-worker.js offscreen.js prepared-save-as.js manifest.json project_docs/PRIORITIES_P0_P1_P2.md README.md QA_STATUS_0_9_9.md
       - name: Apply audit remediation patch
-        run: python3 project_tools/patch_deep_audit_20260825.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 project_tools/patch_deep_audit_20260825.py
+          python3 project_tools/patch_deep_audit_harness.py
       - name: JavaScript syntax gate
         id: syntax
         shell: bash
@@ -59,7 +63,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm -f .github/workflows/deep-audit-20260825.yml .github/workflows/apply-deep-audit-20260825.yml project_tools/patch_deep_audit_20260825.py
+          git rm -f .github/workflows/deep-audit-20260825.yml .github/workflows/apply-deep-audit-20260825.yml project_tools/patch_deep_audit_20260825.py project_tools/patch_deep_audit_harness.py
           git add -A
           git status --short
           git commit -m 'audit: register deep findings and optimize bounded UI work (P1-155 P1-159)'
