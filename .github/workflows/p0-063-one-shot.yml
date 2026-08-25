@@ -65,9 +65,18 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p = Path('project_tools/test_p0_063_offscreen_transfer_budget.js')
-          s = p.read_text()
-          s = s.replace('assert.deepStrictEqual(api.state(), {', 'assert.deepStrictEqual(JSON.parse(JSON.stringify(api.state())), {')
-          p.write_text(s)
+          lines = p.read_text().splitlines()
+          fixed = []
+          vm_replaced = False
+          for line in lines:
+              if line.startswith('vm.runInContext('):
+                  fixed.append("vm.runInContext(source + String.fromCharCode(10) + ';globalThis.__p0063 = { reserveSignedTransferAdmission, resizeSignedTransferReservation, releaseSignedTransferAdmission, getSignedTransferAdmissionBytes, state: () => ({ activeTransfers, activeSignedTransferBytes, reservations: activeSignedTransferReservations.size }) };', context);")
+                  vm_replaced = True
+              else:
+                  fixed.append(line.replace('assert.deepStrictEqual(api.state(), {', 'assert.deepStrictEqual(JSON.parse(JSON.stringify(api.state())), {'))
+          if not vm_replaced:
+              raise SystemExit('Generated VM harness line not found')
+          p.write_text('\n'.join(fixed) + '\n')
           PY
           node --check offscreen.js
           node --check project_tools/test_p0_063_offscreen_transfer_budget.js
