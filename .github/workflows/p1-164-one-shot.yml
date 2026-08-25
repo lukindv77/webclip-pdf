@@ -50,7 +50,7 @@ jobs:
               if end < 0:
                   raise SystemExit('temporary fn template terminator missing')
               body = s[body_start:end]
-              body = body.replace('\\', '\\\\').replace('${', '\\${')
+              body = body.replace('\\', '\\\\').replace('`', '\\`').replace('${', '\\${')
               s = s[:start] + 'const fn = `' + body + s[end:]
           p.write_text(s)
           PY
