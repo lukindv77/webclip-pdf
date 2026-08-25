@@ -1,6 +1,6 @@
 # P1-153 Closure — root document print-flow normalization
 
-Status: REGRESSION
+Status: DONE
 
 ## Problem
 After P1-152 the selected same-origin iframe body is fully flattened into the top document, but the legacy page root can still remain viewport-height constrained. Real its.1c.ru evidence showed bodyScrollHeight larger than the viewport while documentScrollHeight remained exactly the viewport height, causing Chromium to emit a single clipped PDF page.
@@ -15,4 +15,4 @@ After P1-152 the selected same-origin iframe body is fully flattened into the to
 ## Evidence
 - Dedicated `project_tools/test_p1_153_root_print_flow.js` regression.
 - Full JavaScript syntax and deterministic regression gate must pass before closure/release publication.
-- Real unmanaged Chrome retest on `https://its.1c.ru/db/metod8dev/content/2334/hdoc` remains the final behavioral verification.
+- Real Chrome verification on `https://its.1c.ru/db/metod8dev/content/2334/hdoc` PASS (2026-08-25): the resulting PDF is 2 pages and includes the complete third example plus the final explanatory paragraphs/link. OperationLog reports `documentScrollHeight=1155` with viewport `878` before print preparation, resources `5/5`, and Chromium PDF size `134659` bytes. This closes the original clipping repro on the real problem page.

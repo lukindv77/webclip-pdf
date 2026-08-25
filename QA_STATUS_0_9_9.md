@@ -580,3 +580,12 @@ REGRESSION: selected iframe print height is now remeasured at a conservative A4-
 - Root `html/body` print-flow normalization added for legacy viewport-height layouts after confirmed its.1c.ru clipping with a complete P1-152 flattened proxy.
 - Permanent bounded OperationLog root diagnostics added; existing page/iframe diagnostics are retained.
 - Real unmanaged Chrome its.1c.ru PDF pagination retest remains required.
+
+
+## 2026-08-25 — P1-153 real its.1c.ru verification
+
+- **PASS** on the original `https://its.1c.ru/db/metod8dev/content/2334/hdoc` clipping repro in real Chrome.
+- Resulting PDF: **2 pages**, complete third transaction example and final explanatory paragraphs/link are present.
+- OperationLog: resources **5/5**, Chromium PDF **134659 bytes**, `documentScrollHeight=1155` vs viewport `878`; root pagination is no longer viewport-clipped.
+- P1-147/P1-153 structural/root diagnostics remain permanent product diagnostics.
+- P1-153 status promoted from `REGRESSION` to `DONE` for this behavioral repro.
