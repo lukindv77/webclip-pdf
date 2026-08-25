@@ -170,3 +170,21 @@ No production source changed in this continuation. The audit re-read current `co
 
 No product code changed and the deterministic product suite was not rerun. The local Chromium reproduction was an audit-only print-to-PDF experiment confirming annotation preservation for unsafe schemes, not a release regression gate. The last verified product gate remains 88/88 JavaScript syntax PASS + 74/74 deterministic tests PASS from P0-063.
 
+## Continuation at HEAD `b797eef1ceac24d65ce4681ed067c474cae0d7e8` — queue admission and Journal foreground lifecycle
+
+No production source changed in this continuation. The audit re-read the current service-worker late-settlement helpers and current Journal direct IndexedDB/render/apply paths.
+
+### Newly confirmed findings
+
+- **P1-173 OPEN — serialized late-settlement waiters can accumulate.** `runSerializedLateSettlementOperation()` correctly prevents a newer mutation from overtaking an older Chrome Storage/alarm mutation after local timeout, but each retry allocates a fresh `turn` and chains it behind the same unresolved predecessor. Yandex auth/config use analogous manually serialized chains; prepared Save As has its own settlement chain. If Chrome never settles the original promise, repeated callers add unresolved waiters even though no later side effect starts. Preserve actual-settlement ordering but coalesce callers onto one barrier or enforce fail-closed admission so one hung API operation cannot retain an unbounded Promise chain.
+- **P1-174 OPEN — page-size bounding does not bound Journal card memory.** The normal page reads up to 20 full entries. `buildEntryCard()` immediately calls `buildJournalComments(entry)` and `buildSelectionDetails(...)`; comment rendering creates text nodes for every active/deleted comment, file comment is rendered in full, and locator groups are fully built even though they are visually collapsed. Current authoritative data limits allow ~2 MiB aggregate journal comments and a 2 MiB selection snapshot per entry, so a valid 20-entry page can hold tens of MiB plus thousands of DOM nodes. Heavy sections should be lazy and ideally point-loaded only when expanded.
+- **P1-175 OPEN — Journal source tab is not revalidated at apply time.** `resolveSourceContext()` may update cached `sourceUrl` when it runs, but a `tabs.get` failure is swallowed and leaves the old context; the Journal does not subscribe to tab navigation for this state. `applyEntry()` later directly executes `content.js`, sends the snapshot and activates `sourceTabId` without a fresh current-tab/site check. Revalidate immediately before injection and fail closed if the tab disappeared or its current site is outside the intended same-site template policy.
+
+### Non-finding / OAuth disconnect clarification
+
+Current Yandex documentation explicitly says that for ordinary (non-device) tokens an application can implement account logout by deleting the local token; the token remains active in Yandex access management until revoked by one of Yandex's revocation mechanisms. Therefore current `Отключить` behavior — deleting WebClip's session token — is not classified as a security defect by itself. If the product later adopts Yandex device-specific tokens, explicit server-side revoke can be evaluated under P2-017 together with device identity and OS-backed/persistent credential options.
+
+### Test evidence note
+
+This continuation is audit documentation only. Product deterministic/browser tests were not rerun; the last verified production gate remains unchanged. Release remains blocked on real unmanaged unpacked Chrome and real Yandex OAuth/API/upload/move/backup E2E.
+
