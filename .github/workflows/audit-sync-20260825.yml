@@ -1,0 +1,39 @@
+name: one-shot audit sync 2026-08-25
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.event.head_commit.message == 'chore: add guarded audit sync workflow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Guarded audit patch
+        run: python project_tools/_audit_sync_20260825.py
+      - name: Verify product invariants
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('manifest.json', encoding='utf-8'))
+          assert m['manifest_version']==3
+          assert m['version']=='0.9.8'
+          assert int(m['minimum_chrome_version'])==118
+          assert m['content_security_policy']['extension_pages']=="script-src 'self'; object-src 'self'"
+          print('manifest invariants PASS')
+          PY
+          test "$(git diff --name-only | sort)" = $'DEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+      - name: Commit synchronized audit state and remove one-shot tooling
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/audit-sync-20260825.yml project_tools/_audit_sync_20260825.py
+          git add DEEP_AUDIT_2026-08-25.md project_docs/PRIORITIES_P0_P1_P2.md
+          git commit -m 'docs: sync audit state through P0-069'
+          git push origin HEAD:main
