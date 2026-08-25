@@ -465,3 +465,7 @@ PDF operations now record bounded `page-analysis` and `copy-save` structure diag
 - Real `its.1c.ru` diagnostic evidence localized the empty-PDF regression to an Include inside a same-origin iframe whose frame shell did not participate in top-level print flow.
 - Selected iframe/ancestor chains are now normalized only for the PDF window and fully rolled back afterward.
 - Dedicated deterministic regression: `project_tools/test_p1_149_iframe_print_flow.js`.
+
+### Audit WIP — P1-150
+
+Real its.1c.ru retest after P1-149 exposed print-time iframe height clipping: the child was measured at wide screen width but reflowed taller on A4. P1-150 adds conservative post-layout iframe height stabilization after selection print styles and on beforeprint, with bounded diagnostics and exact rollback.

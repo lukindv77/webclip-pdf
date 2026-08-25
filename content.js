@@ -28,6 +28,12 @@
   const PAGE_DIAGNOSTICS_MAX_ANCESTORS = 10;
   const PAGE_DIAGNOSTICS_MAX_CLASSES = 8;
   const PAGE_DIAGNOSTICS_MAX_STRING_CHARS = 240;
+  // A4 content width with the injected @page rule is about 703 CSS px.
+  // Measure selected iframe content at a slightly narrower width so the
+  // resulting height is a conservative upper bound for Chromium print layout.
+  const SELECTED_FRAME_PRINT_MEASURE_MAX_WIDTH_PX = 640;
+  const SELECTED_FRAME_PRINT_HEIGHT_PAD_PX = 48;
+  const SELECTED_FRAME_PRINT_STABILIZE_PASSES = 3;
 
   const state = {
     phase: 'idle',
@@ -74,7 +80,8 @@
     printUiHidden: false,
     printUiPreviousDisplay: '',
     lastBeforePrintDiagnostics: null,
-    lastAfterPrintDiagnostics: null
+    lastAfterPrintDiagnostics: null,
+    lastFramePrintMeasurements: []
   };
 
   // Page.printToPDF fires beforeprint/afterprint synchronously around the print
@@ -83,6 +90,10 @@
   // duration of PDF generation. No animation frame is painted between these
   // two events in Chromium's printToPDF pipeline.
   function hideWebClipUiForPrintRender() {
+    // Re-measure after all selected-only styles and the print-flow normalization
+    // are active. Scroll position is deliberately irrelevant: we measure the
+    // complete child document at a conservative print-equivalent width.
+    try { stabilizeSelectedFramePrintHeights('beforeprint'); } catch (_) {}
     try { state.lastBeforePrintDiagnostics = capturePageStructureDiagnostics('beforeprint'); } catch (_) { state.lastBeforePrintDiagnostics = null; }
     if (!state.host?.isConnected || state.printUiHidden) return;
     state.printUiPreviousDisplay = state.host.style.display;
@@ -2906,7 +2917,17 @@
         headerConnected: Boolean(document.getElementById(PRINT_HEADER_ID)?.isConnected),
         printStyleDocuments: Math.max(0, state.printStyles.length),
         uiHidden: Boolean(state.printUiHidden),
-        remotePreparedCount: Math.max(0, state.remotePrintPrepared.size)
+        remotePreparedCount: Math.max(0, state.remotePrintPrepared.size),
+        frameMeasurements: (state.lastFramePrintMeasurements || []).slice(0, PAGE_DIAGNOSTICS_MAX_SELECTION_ITEMS).map((item) => ({
+          reason: String(item?.reason || '').slice(0, 32),
+          pass: Math.max(0, Number(item?.pass) || 0),
+          depth: Math.max(0, Number(item?.depth) || 0),
+          sameOrigin: Boolean(item?.sameOrigin),
+          screenWidth: Math.max(0, Number(item?.screenWidth) || 0),
+          measureWidth: Math.max(0, Number(item?.measureWidth) || 0),
+          measuredHeight: Math.max(0, Number(item?.measuredHeight) || 0),
+          appliedHeight: Math.max(0, Number(item?.appliedHeight) || 0)
+        }))
       }
     };
   }
@@ -2966,6 +2987,7 @@
     installPrintStylesForSelectionDocuments();
     absolutizeLinksInIncludedContent();
     wrapUnlinkedImagesForPdf();
+    stabilizeSelectedFramePrintHeights('prepared');
 
     meta.pageAnalysis = capturePageStructureDiagnostics('prepared');
     state.printHeader = header;
@@ -3433,6 +3455,120 @@
         ancestor = ancestor.parentElement;
       }
     }
+  }
+
+  function measureSelectedFrameHeightAtPrintWidth(frame) {
+    if (!frame?.style || frame.isConnected === false) {
+      return { sameOrigin: false, screenWidth: 0, measureWidth: 0, measuredHeight: 0 };
+    }
+
+    let childDoc = null;
+    try { childDoc = frame.contentDocument; } catch (_) { childDoc = null; }
+    if (!childDoc?.documentElement) {
+      return { sameOrigin: false, screenWidth: 0, measureWidth: 0, measuredHeight: 0 };
+    }
+
+    let screenWidth = 0;
+    try { screenWidth = Math.max(0, Number(frame.getBoundingClientRect?.().width) || 0); } catch (_) { screenWidth = 0; }
+    const measureWidth = Math.max(1, Math.min(
+      screenWidth > 0 ? screenWidth : SELECTED_FRAME_PRINT_MEASURE_MAX_WIDTH_PX,
+      SELECTED_FRAME_PRINT_MEASURE_MAX_WIDTH_PX
+    ));
+
+    // An iframe does not grow intrinsically with its document. To learn the height
+    // Chromium needs on A4 we temporarily narrow the iframe, force layout, read the
+    // complete child scroll/offset height, then restore P1-149's normalized 100% width.
+    try {
+      frame.style.setProperty('width', `${Math.ceil(measureWidth)}px`, 'important');
+      frame.style.setProperty('max-width', `${Math.ceil(measureWidth)}px`, 'important');
+      void frame.getBoundingClientRect?.().width;
+    } catch (_) {}
+
+    let measuredHeight = 0;
+    try {
+      measuredHeight = Math.max(
+        Number(childDoc.documentElement?.scrollHeight) || 0,
+        Number(childDoc.body?.scrollHeight) || 0,
+        Number(childDoc.documentElement?.offsetHeight) || 0,
+        Number(childDoc.body?.offsetHeight) || 0
+      );
+    } catch (_) { measuredHeight = 0; }
+
+    try {
+      frame.style.setProperty('width', '100%', 'important');
+      frame.style.setProperty('max-width', '100%', 'important');
+      void frame.getBoundingClientRect?.().width;
+    } catch (_) {}
+
+    return {
+      sameOrigin: true,
+      screenWidth,
+      measureWidth,
+      measuredHeight: Math.max(0, Math.min(200000, Math.ceil(measuredHeight || 0)))
+    };
+  }
+
+  function stabilizeSelectedFramePrintHeights(reason = 'prepared') {
+    const unique = new Set();
+    const frames = [];
+    for (const item of state.changedFrameStyles || []) {
+      const frame = item?.kind === 'frame' ? item.element : null;
+      if (!frame || frame.isConnected === false || unique.has(frame)) continue;
+      unique.add(frame);
+      let depth = 1;
+      try { depth = Math.max(1, getFrameChainForDocument(frame.ownerDocument).length + 1); } catch (_) {}
+      frames.push({ frame, depth });
+    }
+    frames.sort((a, b) => b.depth - a.depth);
+
+    let latest = [];
+    for (let pass = 1; pass <= SELECTED_FRAME_PRINT_STABILIZE_PASSES; pass += 1) {
+      let grew = false;
+      latest = [];
+      for (const entry of frames) {
+        const frame = entry.frame;
+        const measured = measureSelectedFrameHeightAtPrintWidth(frame);
+        let sameOriginHeight = 0;
+        let remoteHeight = 0;
+        try {
+          const childDoc = frame.contentDocument;
+          sameOriginHeight = Math.max(
+            Number(childDoc?.documentElement?.scrollHeight) || 0,
+            Number(childDoc?.body?.scrollHeight) || 0,
+            Number(childDoc?.documentElement?.offsetHeight) || 0,
+            Number(childDoc?.body?.offsetHeight) || 0
+          );
+        } catch (_) {}
+        try { remoteHeight = Math.max(0, Number(remoteFrameForElement(frame)?.printHeight) || 0); } catch (_) {}
+
+        const baseHeight = Math.max(measured.measuredHeight || 0, sameOriginHeight, remoteHeight);
+        let existingHeight = 0;
+        try { existingHeight = Math.max(0, parseFloat(frame.style.height) || 0); } catch (_) {}
+        const targetHeight = Math.max(
+          existingHeight,
+          baseHeight > 0
+            ? Math.min(200000, Math.ceil(baseHeight + SELECTED_FRAME_PRINT_HEIGHT_PAD_PX))
+            : existingHeight
+        );
+        if (targetHeight > existingHeight + 0.5) {
+          try { frame.style.setProperty('height', `${targetHeight}px`, 'important'); } catch (_) {}
+          grew = true;
+        }
+        latest.push({
+          reason: String(reason || 'prepared').slice(0, 32),
+          pass,
+          depth: entry.depth,
+          sameOrigin: Boolean(measured.sameOrigin),
+          screenWidth: Math.round((measured.screenWidth || 0) * 100) / 100,
+          measureWidth: Math.round((measured.measureWidth || 0) * 100) / 100,
+          measuredHeight: Math.round(baseHeight * 100) / 100,
+          appliedHeight: Math.round(targetHeight * 100) / 100
+        });
+      }
+      if (!grew) break;
+    }
+    state.lastFramePrintMeasurements = latest.slice(0, PAGE_DIAGNOSTICS_MAX_SELECTION_ITEMS);
+    return state.lastFramePrintMeasurements;
   }
 
   function installPrintStylesForSelectionDocuments() {

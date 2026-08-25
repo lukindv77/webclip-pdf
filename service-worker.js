@@ -2569,7 +2569,17 @@ function sanitizePageStructureDiagnostics(rawDiagnostics) {
       headerConnected: Boolean(print.headerConnected),
       printStyleDocuments: pageDiagnosticCount(print.printStyleDocuments, 256),
       uiHidden: Boolean(print.uiHidden),
-      remotePreparedCount: pageDiagnosticCount(print.remotePreparedCount, 256)
+      remotePreparedCount: pageDiagnosticCount(print.remotePreparedCount, 256),
+      frameMeasurements: (Array.isArray(print.frameMeasurements) ? print.frameMeasurements : []).slice(0, MAX_PAGE_ANALYSIS_ITEMS).map((item) => ({
+        reason: pageDiagnosticString(item?.reason, 32),
+        pass: pageDiagnosticCount(item?.pass, 8),
+        depth: pageDiagnosticCount(item?.depth, 32),
+        sameOrigin: Boolean(item?.sameOrigin),
+        screenWidth: pageDiagnosticCount(item?.screenWidth, 200000),
+        measureWidth: pageDiagnosticCount(item?.measureWidth, 200000),
+        measuredHeight: pageDiagnosticCount(item?.measuredHeight, 200000),
+        appliedHeight: pageDiagnosticCount(item?.appliedHeight, 200000)
+      }))
     }
   };
   if (jsonSizeChars(safe) > MAX_PAGE_ANALYSIS_JSON_CHARS) {
