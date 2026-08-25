@@ -1,0 +1,93 @@
+name: Package requested WebClip handoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/package-handoff-20260825-1605.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify manifest and deterministic gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const m=require('./manifest.json'); if(m.manifest_version!==3||m.version!=='0.9.8') process.exit(1)"
+          mapfile -t jsfiles < <(find . -type f -name '*.js' -not -path './.git/*' -not -path './builds/*' -not -path './handoff/*' | sort)
+          test "${#jsfiles[@]}" -eq 68
+          for f in "${jsfiles[@]}"; do node --check "$f" >/dev/null; done
+          mapfile -t tests < <(find project_tools -maxdepth 1 -type f -name 'test_*.js' | sort)
+          test "${#tests[@]}" -eq 55
+          for t in "${tests[@]}"; do node "$t"; done
+
+      - name: Build canonical handoff archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_COMMIT="$(git rev-parse HEAD)"
+          NAME='WebClip_Handoff_Audit_2026-08-25_1605.zip'
+          STAGE="$(mktemp -d)"
+          mkdir -p "$STAGE/WebClip_Handoff_2026-08-25_1605/repository"
+          rsync -a ./ "$STAGE/WebClip_Handoff_2026-08-25_1605/repository/" \
+            --exclude='.git/' \
+            --exclude='.github/workflows/package-handoff-20260825-1605.yml' \
+            --exclude='handoff/*.zip' \
+            --exclude='handoff/*.zip.sha256' \
+            --exclude='builds/*.zip' \
+            --exclude='builds/*/*.zip'
+          cat > "$STAGE/WebClip_Handoff_2026-08-25_1605/HANDOFF_META.md" <<META
+          # Handoff metadata
+
+          Repository: lukindv77/webclip-pdf
+          Branch: main
+          Handoff source commit: $SOURCE_COMMIT
+          Manifest: MV3 / 0.9.8
+          Gate at packaging: 68/68 JS syntax PASS; 55/55 deterministic tests PASS
+          Published build release: v0.9.8-build-20260825-1442
+          Published build SHA-256: cd40a7d248936015e629aaef134004ef14ee422230e54ffac6e912ceb29521a4
+
+          Start with repository/PROMPT_FOR_NEW_CHAT.md and repository/handoff/CURRENT_STATE_2026-08-25_1605.md.
+          The archive excludes older handoff ZIP files and the large builds/*.zip copy; build metadata/checksums and the GitHub Release remain in the repository.
+          META
+          mkdir -p handoff
+          (cd "$STAGE" && zip -qr "$GITHUB_WORKSPACE/handoff/$NAME" WebClip_Handoff_2026-08-25_1605)
+          sha256sum "handoff/$NAME" > "handoff/$NAME.sha256"
+          HASH="$(sha256sum "handoff/$NAME" | awk '{print $1}')"
+          cat > handoff/LATEST.md <<LATEST
+          # Latest WebClip handoff
+
+          This is the canonical handoff checkpoint requested on 2026-08-25 16:05 +07:00.
+
+          - Repository: \`lukindv77/webclip-pdf\`
+          - Branch: \`main\`
+          - Handoff source commit: \`$SOURCE_COMMIT\`
+          - Archive: \`handoff/$NAME\`
+          - Archive SHA-256: \`$HASH\`
+          - New-chat prompt: \`PROMPT_FOR_NEW_CHAT.md\`
+          - Current-state note: \`handoff/CURRENT_STATE_2026-08-25_1605.md\`
+          - Manifest: MV3 / \`0.9.8\`
+          - Packaging gate: 68/68 JS syntax PASS; 55/55 deterministic tests PASS
+          - Published pre-release: \`v0.9.8-build-20260825-1442\`
+
+          The source of truth for continued work is the current GitHub \`main\`; the archive is a synchronized checkpoint for chat/environment recovery.
+          LATEST
+
+      - name: Commit handoff and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/package-handoff-20260825-1605.yml
+          git add handoff/LATEST.md handoff/WebClip_Handoff_Audit_2026-08-25_1605.zip handoff/WebClip_Handoff_Audit_2026-08-25_1605.zip.sha256
+          git commit -m 'handoff: package canonical checkpoint 2026-08-25 1605'
+          git push origin main
