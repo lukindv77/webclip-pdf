@@ -166,9 +166,82 @@ const SCRIPT_EXECUTION_LATE_SUCCESS_TTL_MS = 60_000;
 const TAB_GET_TIMEOUT_MS = 5_000;
 const TAB_CREATE_TIMEOUT_MS = 10_000;
 const TAB_CREATE_LATE_SUCCESS_TTL_MS = 60_000;
+const ACTION_OPERATION_TIMEOUT_MS = 5_000;
+const MAX_PENDING_ACTION_ACTUAL_SETTLEMENTS = 64;
 const frameAgentsByTab = new Map();
 const scriptExecutionSettlements = new Map();
 const tabCreateSettlements = new Map();
+const actionUpdateGenerationByTab = new Map();
+const actionPendingActualSettlements = new Set();
+const actionRepairScheduledTabs = new Set();
+
+function makeActionPendingLimitError() {
+  const error = new Error('Слишком много незавершённых Chrome Action операций WebClip.');
+  error.code = 'WEBCLIP_ACTION_PENDING_LIMIT';
+  return error;
+}
+
+function beginActionUpdateGeneration(tabId) {
+  const id = Number(tabId || 0);
+  const next = (Number(actionUpdateGenerationByTab.get(id) || 0) + 1) >>> 0;
+  const generation = next || 1;
+  actionUpdateGenerationByTab.set(id, generation);
+  return generation;
+}
+
+function isActionUpdateGenerationCurrent(tabId, generation) {
+  return Number(actionUpdateGenerationByTab.get(Number(tabId || 0)) || 0) === Number(generation || 0);
+}
+
+function scheduleActionRepairForTab(tabId) {
+  const id = Number(tabId || 0);
+  if (!id || !actionUpdateGenerationByTab.has(id) || actionRepairScheduledTabs.has(id)) return;
+  actionRepairScheduledTabs.add(id);
+  void Promise.resolve().then(() => {
+    actionRepairScheduledTabs.delete(id);
+    if (!actionUpdateGenerationByTab.has(id)) return;
+    return updateActionForTab(id).catch(() => {});
+  }).catch(() => {
+    actionRepairScheduledTabs.delete(id);
+  });
+}
+
+async function runChromeActionMutationBounded(tabId, generation, start, label) {
+  if (!isActionUpdateGenerationCurrent(tabId, generation)) return { stale: true };
+  if (actionPendingActualSettlements.size >= MAX_PENDING_ACTION_ACTUAL_SETTLEMENTS) {
+    throw makeActionPendingLimitError();
+  }
+
+  let callerTimedOut = false;
+  const actual = Promise.resolve().then(start);
+  actionPendingActualSettlements.add(actual);
+  void actual.finally(() => {
+    actionPendingActualSettlements.delete(actual);
+    void Promise.resolve().then(() => {
+      if (callerTimedOut || !isActionUpdateGenerationCurrent(tabId, generation)) {
+        scheduleActionRepairForTab(tabId);
+      }
+    });
+  }).catch(() => {});
+
+  try {
+    await withOperationTimeout(actual, ACTION_OPERATION_TIMEOUT_MS, label);
+  } catch (error) {
+    if (error?.code === 'WEBCLIP_TIMEOUT') callerTimedOut = true;
+    throw error;
+  }
+  return { stale: !isActionUpdateGenerationCurrent(tabId, generation) };
+}
+
+async function applyChromeActionMutationBestEffort(tabId, generation, start, label) {
+  try {
+    const result = await runChromeActionMutationBounded(tabId, generation, start, label);
+    return result?.stale !== true && isActionUpdateGenerationCurrent(tabId, generation);
+  } catch (error) {
+    if (error?.code === 'WEBCLIP_TIMEOUT' || error?.code === 'WEBCLIP_ACTION_PENDING_LIMIT') throw error;
+    return isActionUpdateGenerationCurrent(tabId, generation);
+  }
+}
 
 async function runSerializedLateSettlementOperation(chains, queueKey, start, label, timeoutMs) {
   const key = String(queueKey || label || 'operation');
@@ -2885,6 +2958,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   clearScriptExecutionSettlementsForTab(tabId);
   frameAgentsByTab.delete(Number(tabId || 0));
+  actionUpdateGenerationByTab.delete(Number(tabId || 0));
+  actionRepairScheduledTabs.delete(Number(tabId || 0));
   deleteCachedPdf(tabId).catch(() => {});
 });
 
@@ -8619,6 +8694,20 @@ function withOperationTimeout(promise, timeoutMs, label) {
 const debuggerActiveTabs = new Set();
 const debuggerLateAttachCleanupByTab = new Map();
 const debuggerPendingDetachByTab = new Map();
+const debuggerPendingActualSettlements = new Set();
+
+function trackDebuggerActualSettlement(actual) {
+  const pending = Promise.resolve(actual);
+  debuggerPendingActualSettlements.add(pending);
+  void pending.finally(() => {
+    debuggerPendingActualSettlements.delete(pending);
+  }).catch(() => {});
+  return pending;
+}
+
+function hasGlobalPdfPendingDebuggerWork() {
+  return debuggerActiveTabs.size > 0 || debuggerPendingActualSettlements.size > 0;
+}
 
 function makeDebuggerBusyError(tabId) {
   const error = new Error(`Chrome Debugger для вкладки ${tabId} ещё завершает предыдущую операцию WebClip. Повторите позже.`);
@@ -8635,7 +8724,7 @@ function makeGlobalPdfBusyError() {
 async function attachDebuggerBounded(debuggee) {
   const tabId = Number(debuggee?.tabId);
   let timedOut = false;
-  const rawAttach = Promise.resolve(chrome.debugger.attach(debuggee, '1.3'));
+  const rawAttach = trackDebuggerActualSettlement(Promise.resolve(chrome.debugger.attach(debuggee, '1.3')));
 
   // If our local deadline wins, chrome.debugger.attach() is still not
   // cancelled. Keep the tab blocked until the browser settles the original
@@ -8645,7 +8734,7 @@ async function attachDebuggerBounded(debuggee) {
   const lateCleanup = rawAttach.then(async () => {
     if (!timedOut) return;
     try {
-      await withOperationTimeout(chrome.debugger.detach(debuggee), 10_000, 'Отключение Chrome Debugger после позднего attach');
+      await detachDebuggerBounded(debuggee, 'Отключение Chrome Debugger после позднего attach');
     } catch (error) {
       console.warn('WebClip late debugger attach cleanup:', error);
     }
@@ -8670,14 +8759,14 @@ async function attachDebuggerBounded(debuggee) {
   }
 }
 
-async function detachDebuggerBounded(debuggee) {
+async function detachDebuggerBounded(debuggee, label = 'Отключение Chrome Debugger') {
   const tabId = Number(debuggee?.tabId);
-  const rawDetach = Promise.resolve(chrome.debugger.detach(debuggee));
+  const rawDetach = trackDebuggerActualSettlement(Promise.resolve(chrome.debugger.detach(debuggee)));
   debuggerPendingDetachByTab.set(tabId, rawDetach);
   void rawDetach.finally(() => {
     if (debuggerPendingDetachByTab.get(tabId) === rawDetach) debuggerPendingDetachByTab.delete(tabId);
   }).catch(() => {});
-  await withOperationTimeout(rawDetach, 10_000, 'Отключение Chrome Debugger');
+  await withOperationTimeout(rawDetach, 10_000, label);
 }
 
 async function generatePdfBlob(tabId) {
@@ -8688,7 +8777,7 @@ async function generatePdfBlob(tabId) {
   if (debuggerLateAttachCleanupByTab.has(tabId) || debuggerPendingDetachByTab.has(tabId)) {
     throw makeDebuggerBusyError(tabId);
   }
-  if (debuggerActiveTabs.size > 0) throw makeGlobalPdfBusyError();
+  if (hasGlobalPdfPendingDebuggerWork()) throw makeGlobalPdfBusyError();
   debuggerActiveTabs.add(tabId);
 
   try {
@@ -9943,67 +10032,67 @@ function makeActionIconImageData(size, color) {
 
 async function updateActionForTab(tabId, knownUrl = '') {
   if (!tabId) return;
+  const generation = beginActionUpdateGeneration(tabId);
   let url = knownUrl;
   if (!url) {
     try {
       const tab = await getChromeTabBounded(tabId, 'Чтение URL вкладки для Chrome Action');
       url = tab?.url || '';
     } catch (_) {
-      return;
+      url = '';
     }
   }
+  if (!isActionUpdateGenerationCurrent(tabId, generation)) return;
 
   if (!/^https?:\/\//i.test(url)) {
-    try {
-      await chrome.action.setIcon({
-        tabId,
-        imageData: {
-          16: makeActionIconImageData(16, '#5f6368'),
-          32: makeActionIconImageData(32, '#5f6368')
-        }
-      });
-    } catch (_) {}
-    await chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {});
-    await chrome.action.setTitle({ tabId, title: 'WebClip PDF' }).catch(() => {});
+    if (!await applyChromeActionMutationBestEffort(tabId, generation, () => chrome.action.setIcon({
+      tabId,
+      imageData: {
+        16: makeActionIconImageData(16, '#5f6368'),
+        32: makeActionIconImageData(32, '#5f6368')
+      }
+    }), 'Обновление иконки Chrome Action')) return;
+    if (!await applyChromeActionMutationBestEffort(tabId, generation, () => chrome.action.setBadgeText({ tabId, text: '' }), 'Очистка badge Chrome Action')) return;
+    await applyChromeActionMutationBestEffort(tabId, generation, () => chrome.action.setTitle({ tabId, title: 'WebClip PDF' }), 'Обновление title Chrome Action');
     return;
   }
 
   const summary = await getJournalSummaryForUrl(url);
+  if (!isActionUpdateGenerationCurrent(tabId, generation)) return;
   const age = summary.lastSavedAt ? Date.now() - summary.lastSavedAt : Infinity;
-  let color = '#5f6368';
-  let stateText = 'В журнале ещё нет сохранений этого URL';
+  const DAY = 24 * 60 * 60 * 1000;
+  let color = '#9aa0a6';
+  let stateText = 'Сохранений для этой страницы ещё нет';
   if (summary.lastSavedAt) {
-    if (age <= 24 * 60 * 60 * 1000) {
-      color = '#188038';
-      stateText = 'Последняя запись сохранения: менее 24 часов назад';
-    } else if (age <= 30 * 24 * 60 * 60 * 1000) {
-      color = '#e37400';
-      stateText = 'Последняя запись сохранения: не более 30 дней назад';
+    if (age <= 7 * DAY) {
+      color = '#34a853';
+      stateText = 'Последняя запись сохранения: не более 7 дней назад';
+    } else if (age <= 30 * DAY) {
+      color = '#f9ab00';
+      stateText = 'Последняя запись сохранения: от 8 до 30 дней назад';
     } else {
-      color = '#d93025';
+      color = '#ea4335';
       stateText = 'Последняя запись сохранения: более 30 дней назад';
     }
   }
 
-  try {
-    await chrome.action.setIcon({
-      tabId,
-      imageData: {
-        16: makeActionIconImageData(16, color),
-        32: makeActionIconImageData(32, color)
-      }
-    });
-  } catch (_) {}
+  if (!await applyChromeActionMutationBestEffort(tabId, generation, () => chrome.action.setIcon({
+    tabId,
+    imageData: {
+      16: makeActionIconImageData(16, color),
+      32: makeActionIconImageData(32, color)
+    }
+  }), 'Обновление иконки Chrome Action')) return;
 
   const badge = summary.uniqueDays ? String(summary.uniqueDays) : '';
-  await chrome.action.setBadgeText({ tabId, text: badge }).catch(() => {});
-  await chrome.action.setBadgeBackgroundColor({ tabId, color: '#202124' }).catch(() => {});
-  await chrome.action.setTitle({
+  if (!await applyChromeActionMutationBestEffort(tabId, generation, () => chrome.action.setBadgeText({ tabId, text: badge }), 'Обновление badge Chrome Action')) return;
+  if (!await applyChromeActionMutationBestEffort(tabId, generation, () => chrome.action.setBadgeBackgroundColor({ tabId, color: '#202124' }), 'Обновление фона badge Chrome Action')) return;
+  await applyChromeActionMutationBestEffort(tabId, generation, () => chrome.action.setTitle({
     tabId,
     title: summary.uniqueDays
       ? `WebClip PDF · ${stateText} · Дней с записями журнала: ${summary.uniqueDays}`
       : `WebClip PDF · ${stateText}`
-  }).catch(() => {});
+  }), 'Обновление title Chrome Action');
 }
 
 async function refreshActionForAllTabs() {

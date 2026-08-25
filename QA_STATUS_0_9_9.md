@@ -538,3 +538,10 @@ Recovery-gap applies: this mounted artifact is not the canonical physical P1-131
 - P1-129: Full Journal и OperationLog prepared Save As фиксируют durable session checkpoint до передачи Blob странице; STARTED/RELEASE проходят actual-settlement barrier, RELEASED хранится отдельным tombstone. Native `saveAs:true` по-прежнему page-owned без timeout/retry.
 - Dedicated regressions: `test_p1_128_offscreen_idle_close_request.js`, `test_p1_129_prepared_save_as_checkpoint.js`.
 - Manifest остаётся `0.9.8`; real unpacked Chrome Save As/offscreen lifecycle остаются release regression QA.
+
+## 2026-08-25 — P1-130 / P1-131
+
+- P1-130: Chrome Action mutations bounded 5 s, generation-fenced per tab, global actual-promise pending cap 64, late/stale settlement schedules latest-state repair.
+- P1-131: raw debugger attach/detach promises remain in global PDF pending budget through actual settlement; different-tab PDF starts are blocked after local timeout until Chrome settles the original side effect.
+- Dedicated regressions: `test_p1_130_action_deadline_fencing.js`, `test_p1_131_debugger_global_pending_budget.js`.
+- Manifest remains `0.9.8`; real unpacked Chrome Action/debugger timing remains release regression QA.

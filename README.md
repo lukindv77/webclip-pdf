@@ -41,6 +41,10 @@ Service-worker script injection имеет 10-секундный caller deadline
 
 Offscreen idle-close RPC теперь bounded и single-flight: локальный timeout не создаёт второй неизвестный close-запрос, а сохраняет следующий cleanup cycle. Prepared native Save As остаётся extension-page owned без timeout; перед передачей Blob странице service worker фиксирует session-durable PREPARED checkpoint, а STARTED/RELEASE используют actual-settlement serialization и отдельный RELEASED tombstone. Manifest остаётся `0.9.8`; это не release QA.
 
+### Audit WIP — P1-130 / P1-131
+
+Chrome Action mutations now have bounded 5-second waits, per-tab latest-generation fencing, a global 64 actual-promise pending cap, and late-settlement repair. Debugger attach/detach actual promises now remain in the global PDF busy budget until Chrome really settles them, including late-attach cleanup. Manifest remains `0.9.8`; this is not release QA.
+
 ## Изменения 0.9.7
 
 - Контекст исходной вкладки теперь передаётся через `chrome.storage.session` по одноразовому `contextId`; URL и tabId исходного сайта больше не включаются в URL `journal.html`.
