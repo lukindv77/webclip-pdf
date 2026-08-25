@@ -1,0 +1,443 @@
+name: Finalize P1-125 and P1-126
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/finalize-p1-125-p1-126.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch canonical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+          sw_path = root / 'service-worker.js'
+          sw = sw_path.read_text(encoding='utf-8')
+
+          old = "const FRAME_AGENT_COMMAND_TIMEOUT_MS = 5_000;\nconst FRAME_AGENT_MAX_PER_TAB = 64;\nconst TAB_CREATE_TIMEOUT_MS = 10_000;\nconst TAB_CREATE_LATE_SUCCESS_TTL_MS = 60_000;\nconst frameAgentsByTab = new Map();\nconst tabCreateSettlements = new Map();"
+          new = "const FRAME_AGENT_COMMAND_TIMEOUT_MS = 5_000;\nconst FRAME_AGENT_MAX_PER_TAB = 64;\nconst SCRIPT_EXECUTION_TIMEOUT_MS = 10_000;\nconst SCRIPT_EXECUTION_LATE_SUCCESS_TTL_MS = 60_000;\nconst TAB_GET_TIMEOUT_MS = 5_000;\nconst TAB_CREATE_TIMEOUT_MS = 10_000;\nconst TAB_CREATE_LATE_SUCCESS_TTL_MS = 60_000;\nconst frameAgentsByTab = new Map();\nconst scriptExecutionSettlements = new Map();\nconst tabCreateSettlements = new Map();"
+          if old not in sw: raise SystemExit('constants anchor missing')
+          sw = sw.replace(old, new, 1)
+
+          marker = "function makeTabCreatePendingError(label = 'Создание вкладки Chrome') {"
+          if marker not in sw: raise SystemExit('tab-create marker missing')
+          helpers = r'''function makeScriptExecutionPendingError(label = 'Инъекция скрипта Chrome') {
+            const error = new Error(`${label} ещё выполняется Chrome. WebClip не запускает повторную инъекцию, пока исходный scripting.executeScript() не завершится.`);
+            error.code = 'WEBCLIP_SCRIPT_EXECUTION_PENDING';
+            return error;
+          }
+
+          function scriptExecutionRequestKey(details = {}, requestKey = '') {
+            const explicit = String(requestKey || '').trim();
+            if (explicit) return `logical:${explicit.slice(0, 512)}`;
+            const target = details?.target && typeof details.target === 'object' ? details.target : {};
+            const tabId = Math.max(0, Math.floor(Number(target.tabId) || 0));
+            const frameIds = (Array.isArray(target.frameIds) ? target.frameIds : []).map((value) => Math.floor(Number(value))).filter((value) => Number.isInteger(value) && value >= 0).sort((a, b) => a - b);
+            const documentIds = (Array.isArray(target.documentIds) ? target.documentIds : []).map((value) => String(value || '').slice(0, 256)).filter(Boolean).sort();
+            const files = (Array.isArray(details?.files) ? details.files : []).map((value) => String(value || '').slice(0, 512)).filter(Boolean);
+            return `tab:${tabId}|all:${target.allFrames === true ? 1 : 0}|frames:${frameIds.join(',')}|documents:${documentIds.join(',')}|files:${files.join(',')}|world:${String(details?.world || 'ISOLATED')}`;
+          }
+
+          function clearScriptExecutionSettlement(key, entry) {
+            if (entry?.cleanupTimer) clearTimeout(entry.cleanupTimer);
+            if (scriptExecutionSettlements.get(key) === entry) scriptExecutionSettlements.delete(key);
+          }
+
+          function clearScriptExecutionSettlementsForTab(tabId) {
+            const id = Math.max(0, Math.floor(Number(tabId) || 0));
+            if (!id) return;
+            for (const [key, entry] of [...scriptExecutionSettlements]) {
+              if (key === `logical:content:${id}` || key === `logical:frame-agent:${id}:all` || key.startsWith(`tab:${id}|`)) {
+                clearScriptExecutionSettlement(key, entry);
+              }
+            }
+          }
+
+          function waitForScriptExecutionSettlement(entry, label, timeoutMs = SCRIPT_EXECUTION_TIMEOUT_MS) {
+            return new Promise((resolve, reject) => {
+              let settled = false;
+              const finish = (fn, value) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                fn(value);
+              };
+              const timer = setTimeout(() => {
+                entry.timedOut = true;
+                finish(reject, makeScriptExecutionPendingError(label));
+              }, Math.max(1, Number(timeoutMs) || SCRIPT_EXECUTION_TIMEOUT_MS));
+              entry.raw.then((result) => finish(resolve, result), (error) => finish(reject, error));
+            });
+          }
+
+          async function executeScriptSingletonBounded(details, { requestKey = '', label = 'Инъекция скрипта Chrome', timeoutMs = SCRIPT_EXECUTION_TIMEOUT_MS } = {}) {
+            const key = scriptExecutionRequestKey(details, requestKey);
+            const existing = scriptExecutionSettlements.get(key);
+            if (existing) {
+              if (existing.hasLateSuccess) {
+                const result = existing.lateSuccess;
+                clearScriptExecutionSettlement(key, existing);
+                return result;
+              }
+              const result = await waitForScriptExecutionSettlement(existing, `${label}: ожидание уже начатого scripting.executeScript()`, timeoutMs);
+              if (existing.timedOut) clearScriptExecutionSettlement(key, existing);
+              return result;
+            }
+
+            let raw;
+            try { raw = Promise.resolve(chrome.scripting.executeScript(details)); }
+            catch (error) { raw = Promise.reject(error); }
+            const entry = { raw, timedOut: false, hasLateSuccess: false, lateSuccess: null, cleanupTimer: 0 };
+            scriptExecutionSettlements.set(key, entry);
+            raw.then(
+              (result) => {
+                if (scriptExecutionSettlements.get(key) !== entry) return;
+                if (entry.timedOut) {
+                  entry.hasLateSuccess = true;
+                  entry.lateSuccess = result;
+                  entry.cleanupTimer = setTimeout(() => clearScriptExecutionSettlement(key, entry), SCRIPT_EXECUTION_LATE_SUCCESS_TTL_MS);
+                } else {
+                  clearScriptExecutionSettlement(key, entry);
+                }
+              },
+              () => {
+                if (scriptExecutionSettlements.get(key) === entry) clearScriptExecutionSettlement(key, entry);
+              }
+            );
+            return waitForScriptExecutionSettlement(entry, label, timeoutMs);
+          }
+
+          '''
+          helpers = '\n'.join(line[10:] if line.startswith('          ') else line for line in helpers.splitlines())
+          sw = sw.replace(marker, helpers + marker, 1)
+
+          frame_pattern = re.compile(
+              r"results\s*=\s*await\s+withOperationTimeout\(\s*chrome\.scripting\.executeScript\(\{\s*target:\s*\{\s*tabId:\s*id,\s*allFrames:\s*true\s*\},\s*files:\s*\['frame-agent\.js'\]\s*\}\),\s*10_000,\s*'Инъекция frame-agent в разрешённые iframe'\s*\);",
+              re.S
+          )
+          frame_replacement = """results = await executeScriptSingletonBounded(
+              { target: { tabId: id, allFrames: true }, files: ['frame-agent.js'] },
+              {
+                requestKey: `frame-agent:${id}:all`,
+                label: 'Инъекция frame-agent в разрешённые iframe',
+                timeoutMs: SCRIPT_EXECUTION_TIMEOUT_MS
+              }
+            );"""
+          sw, count = frame_pattern.subn(frame_replacement, sw, count=1)
+          if count != 1: raise SystemExit(f'frame-agent replacement count={count}')
+
+          content_pattern = re.compile(
+              r"async function ensureWebClipContentScript\(tabId\) \{\s*await ensureStorageAccessInitialized\(\);\s*await chrome\.scripting\.executeScript\(\{\s*target:\s*\{\s*tabId\s*\},\s*files:\s*\['content\.js'\]\s*\}\);\s*\}",
+              re.S
+          )
+          content_replacement = """async function ensureWebClipContentScript(tabId) {
+            await ensureStorageAccessInitialized();
+            const id = Math.max(0, Math.floor(Number(tabId) || 0));
+            if (!id) throw new Error('Не указана вкладка для подключения WebClip content script.');
+            await executeScriptSingletonBounded(
+              { target: { tabId: id }, files: ['content.js'] },
+              {
+                requestKey: `content:${id}`,
+                label: 'Инъекция WebClip content script',
+                timeoutMs: SCRIPT_EXECUTION_TIMEOUT_MS
+              }
+            );
+          }"""
+          sw, count = content_pattern.subn(content_replacement, sw, count=1)
+          if count != 1: raise SystemExit(f'content replacement count={count}')
+
+          tab_marker = "async function createTabNextTo(sourceTabId, url, active = true, requestKey = '') {"
+          if tab_marker not in sw: raise SystemExit('createTabNextTo marker missing')
+          tab_helper = r'''function getChromeTabBounded(tabId, label = 'Чтение вкладки Chrome', timeoutMs = TAB_GET_TIMEOUT_MS) {
+            const id = Math.max(0, Math.floor(Number(tabId) || 0));
+            if (!id) {
+              const error = new Error('Не указан корректный tabId для Chrome tabs.get().');
+              error.code = 'WEBCLIP_INVALID_TAB_ID';
+              return Promise.reject(error);
+            }
+            return withOperationTimeout(
+              Promise.resolve().then(() => chrome.tabs.get(id)),
+              Math.max(1, Number(timeoutMs) || TAB_GET_TIMEOUT_MS),
+              label
+            );
+          }
+
+          '''
+          tab_helper = '\n'.join(line[10:] if line.startswith('          ') else line for line in tab_helper.splitlines())
+          sw = sw.replace(tab_marker, tab_helper + tab_marker, 1)
+
+          replacements = [
+            ("const source = await chrome.tabs.get(id);", "const source = await getChromeTabBounded(id, 'Определение позиции новой вкладки');"),
+            ("sourceTab = await withOperationTimeout(chrome.tabs.get(tabId), 5_000, 'Проверка исходной вкладки журнала');", "sourceTab = await getChromeTabBounded(tabId, 'Проверка исходной вкладки журнала');"),
+            ("placementTab = await withOperationTimeout(chrome.tabs.get(placementTabId), 5_000, 'Проверка anchor-вкладки журнала');", "placementTab = await getChromeTabBounded(placementTabId, 'Проверка anchor-вкладки журнала');"),
+            ("currentUrl = normalizeJournalUrl((await chrome.tabs.get(tabId))?.url || '');", "currentUrl = normalizeJournalUrl((await getChromeTabBounded(tabId, 'Проверка текущего URL PDF retry cache'))?.url || '');"),
+            ("const tab = await chrome.tabs.get(tabId);", "const tab = await getChromeTabBounded(tabId, 'Чтение URL вкладки для Chrome Action');")
+          ]
+          for old_text, new_text in replacements:
+              if old_text not in sw: raise SystemExit(f'tabs.get anchor missing: {old_text}')
+              sw = sw.replace(old_text, new_text, 1)
+
+          old_removed = "chrome.tabs.onRemoved.addListener((tabId) => {\n  frameAgentsByTab.delete(Number(tabId || 0));"
+          new_removed = "chrome.tabs.onRemoved.addListener((tabId) => {\n  clearScriptExecutionSettlementsForTab(tabId);\n  frameAgentsByTab.delete(Number(tabId || 0));"
+          if old_removed not in sw: raise SystemExit('tabs.onRemoved anchor missing')
+          sw = sw.replace(old_removed, new_removed, 1)
+
+          old_updated = "chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {\n  if (changeInfo?.url) {\n    frameAgentsByTab.delete(Number(tabId || 0));"
+          new_updated = "chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {\n  if (changeInfo?.url) {\n    clearScriptExecutionSettlementsForTab(tabId);\n    frameAgentsByTab.delete(Number(tabId || 0));"
+          if old_updated not in sw: raise SystemExit('tabs.onUpdated anchor missing')
+          sw = sw.replace(old_updated, new_updated, 1)
+
+          if sw.count('chrome.scripting.executeScript(') != 1: raise SystemExit('executeScript low-level count mismatch')
+          if sw.count('chrome.tabs.get(') != 1: raise SystemExit('tabs.get low-level count mismatch')
+          sw_path.write_text(sw, encoding='utf-8')
+
+          p1124_path = root / 'project_tools' / 'test_p1_124_tab_create_late_settlement.js'
+          p1124 = p1124_path.read_text(encoding='utf-8')
+          old_ctx = "const context = vm.createContext({ console, Promise, Error, Number, Math, String, Map, setTimeout, clearTimeout, chrome });"
+          new_ctx = "const context = vm.createContext({ console, Promise, Error, Number, Math, String, Map, setTimeout, clearTimeout, chrome, withOperationTimeout: (promise) => Promise.resolve(promise) });"
+          if old_ctx not in p1124: raise SystemExit('P1-124 context anchor missing')
+          p1124_path.write_text(p1124.replace(old_ctx, new_ctx, 1), encoding='utf-8')
+
+          p1125 = r'''const fs = require('fs');
+          const path = require('path');
+          const vm = require('vm');
+          const assert = require('assert');
+          const root = path.resolve(__dirname, '..');
+          const sw = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
+          const content = fs.readFileSync(path.join(root, 'content.js'), 'utf8');
+          const frameAgent = fs.readFileSync(path.join(root, 'frame-agent.js'), 'utf8');
+          function section(source, startMarker, endMarker) {
+            const start = source.indexOf(startMarker);
+            const end = source.indexOf(endMarker, start + startMarker.length);
+            if (start < 0 || end < 0) throw new Error(`Missing markers: ${startMarker} -> ${endMarker}`);
+            return source.slice(start, end);
+          }
+          assert(sw.includes('const SCRIPT_EXECUTION_TIMEOUT_MS = 10_000;'));
+          assert(sw.includes('const SCRIPT_EXECUTION_LATE_SUCCESS_TTL_MS = 60_000;'));
+          assert(sw.includes('const scriptExecutionSettlements = new Map();'));
+          assert.strictEqual((sw.match(/chrome\.scripting\.executeScript\(/g) || []).length, 1);
+          assert(content.includes('__WEBCLIP_PDF_PROTOTYPE_LOADED__'));
+          assert(frameAgent.includes('__WEBCLIP_FRAME_AGENT_LOADED__'));
+          assert(/async function enableFrameAgentsForTab[\s\S]{0,2500}executeScriptSingletonBounded\(/.test(sw));
+          assert(/async function ensureWebClipContentScript[\s\S]{0,1500}executeScriptSingletonBounded\(/.test(sw));
+          assert(sw.includes('clearScriptExecutionSettlementsForTab(tabId);'));
+          const helperBlock = section(sw, 'function makeScriptExecutionPendingError', 'function makeTabCreatePendingError');
+          (async () => {
+            let calls = 0;
+            let resolveFirst;
+            const firstRaw = new Promise((resolve) => { resolveFirst = resolve; });
+            const chrome = { scripting: { executeScript() { calls += 1; return calls === 1 ? firstRaw : Promise.resolve([{ frameId: 0, result: 'normal' }]); } } };
+            const context = vm.createContext({ console, Promise, Error, Number, Math, String, Array, Map, setTimeout, clearTimeout, chrome });
+            vm.runInContext(`const SCRIPT_EXECUTION_TIMEOUT_MS = 20;\nconst SCRIPT_EXECUTION_LATE_SUCCESS_TTL_MS = 1000;\nconst scriptExecutionSettlements = new Map();\n${helperBlock}\nthis.execForTest = executeScriptSingletonBounded; this.pendingForTest = scriptExecutionSettlements; this.clearForTab = clearScriptExecutionSettlementsForTab;`, context);
+            const details = { target: { tabId: 7 }, files: ['content.js'] };
+            let error = null;
+            try { await context.execForTest(details, { requestKey: 'content:7', label: 'test injection' }); } catch (e) { error = e; }
+            assert(error); assert.strictEqual(error.code, 'WEBCLIP_SCRIPT_EXECUTION_PENDING'); assert.strictEqual(calls, 1); assert.strictEqual(context.pendingForTest.size, 1);
+            let retryError = null;
+            try { await context.execForTest(details, { requestKey: 'content:7', label: 'test injection' }); } catch (e) { retryError = e; }
+            assert(retryError); assert.strictEqual(retryError.code, 'WEBCLIP_SCRIPT_EXECUTION_PENDING'); assert.strictEqual(calls, 1);
+            resolveFirst([{ frameId: 0, result: 'late' }]);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            assert.strictEqual(context.pendingForTest.size, 1);
+            const recovered = await context.execForTest(details, { requestKey: 'content:7', label: 'test injection' });
+            assert.strictEqual(recovered[0].result, 'late'); assert.strictEqual(calls, 1); assert.strictEqual(context.pendingForTest.size, 0);
+            const normal = await context.execForTest(details, { requestKey: 'content:7', label: 'test injection' });
+            assert.strictEqual(normal[0].result, 'normal'); assert.strictEqual(calls, 2);
+
+            let resolveNav;
+            const navChrome = { scripting: { executeScript() { return new Promise((resolve) => { resolveNav = resolve; }); } } };
+            const navContext = vm.createContext({ console, Promise, Error, Number, Math, String, Array, Map, setTimeout, clearTimeout, chrome: navChrome });
+            vm.runInContext(`const SCRIPT_EXECUTION_TIMEOUT_MS = 20;\nconst SCRIPT_EXECUTION_LATE_SUCCESS_TTL_MS = 1000;\nconst scriptExecutionSettlements = new Map();\n${helperBlock}\nthis.execForTest = executeScriptSingletonBounded; this.pendingForTest = scriptExecutionSettlements; this.clearForTab = clearScriptExecutionSettlementsForTab;`, navContext);
+            try { await navContext.execForTest(details, { requestKey: 'content:7', label: 'navigation injection' }); } catch (_) {}
+            assert.strictEqual(navContext.pendingForTest.size, 1);
+            navContext.clearForTab(7);
+            assert.strictEqual(navContext.pendingForTest.size, 0, 'navigation must discard stale pending/receipt state');
+            resolveNav([{ frameId: 0, result: 'stale-late' }]);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            assert.strictEqual(navContext.pendingForTest.size, 0, 'late settlement after navigation must not resurrect stale receipt');
+            console.log('P1-125 bounded executeScript settlement/singleton/navigation regression PASS');
+          })().catch((error) => { console.error(error); process.exitCode = 1; });
+          '''
+          p1125 = '\n'.join(line[10:] if line.startswith('          ') else line for line in p1125.splitlines()) + '\n'
+          (root / 'project_tools' / 'test_p1_125_execute_script_settlement.js').write_text(p1125, encoding='utf-8')
+
+          p1126 = r'''const fs = require('fs');
+          const path = require('path');
+          const vm = require('vm');
+          const assert = require('assert');
+          const root = path.resolve(__dirname, '..');
+          const sw = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
+          function section(source, startMarker, endMarker) {
+            const start = source.indexOf(startMarker);
+            const end = source.indexOf(endMarker, start + startMarker.length);
+            if (start < 0 || end < 0) throw new Error(`Missing markers: ${startMarker} -> ${endMarker}`);
+            return source.slice(start, end);
+          }
+          assert(sw.includes('const TAB_GET_TIMEOUT_MS = 5_000;'));
+          assert.strictEqual((sw.match(/chrome\.tabs\.get\(/g) || []).length, 1);
+          const getHelper = section(sw, 'function getChromeTabBounded', 'async function createTabNextTo');
+          assert(getHelper.includes('withOperationTimeout('));
+          assert(getHelper.includes('chrome.tabs.get(id)'));
+          for (const expected of [
+            "getChromeTabBounded(id, 'Определение позиции новой вкладки')",
+            "getChromeTabBounded(tabId, 'Проверка исходной вкладки журнала')",
+            "getChromeTabBounded(placementTabId, 'Проверка anchor-вкладки журнала')",
+            "getChromeTabBounded(tabId, 'Проверка текущего URL PDF retry cache')",
+            "getChromeTabBounded(tabId, 'Чтение URL вкладки для Chrome Action')"
+          ]) assert(sw.includes(expected), `missing bounded caller: ${expected}`);
+          (async () => {
+            let calls = 0;
+            const chrome = { tabs: { get() { calls += 1; return new Promise(() => {}); } } };
+            function withOperationTimeout(promise, timeoutMs, label) {
+              let timer = 0;
+              return Promise.race([Promise.resolve(promise), new Promise((_, reject) => { timer = setTimeout(() => { const error = new Error(`${label} timeout`); error.code = 'WEBCLIP_TIMEOUT'; reject(error); }, timeoutMs); })]).finally(() => { if (timer) clearTimeout(timer); });
+            }
+            const context = vm.createContext({ Promise, Error, Number, Math, chrome, withOperationTimeout });
+            vm.runInContext(`const TAB_GET_TIMEOUT_MS = 20;\n${getHelper}\nthis.getForTest = getChromeTabBounded;`, context);
+            let error = null;
+            try { await context.getForTest(9, 'hung tabs.get'); } catch (e) { error = e; }
+            assert(error); assert.strictEqual(error.code, 'WEBCLIP_TIMEOUT'); assert.strictEqual(calls, 1);
+            let invalid = null;
+            try { await context.getForTest(0); } catch (e) { invalid = e; }
+            assert(invalid); assert.strictEqual(invalid.code, 'WEBCLIP_INVALID_TAB_ID'); assert.strictEqual(calls, 1);
+            console.log('P1-126 centralized bounded tabs.get regression PASS');
+          })().catch((error) => { console.error(error); process.exitCode = 1; });
+          '''
+          p1126 = '\n'.join(line[10:] if line.startswith('          ') else line for line in p1126.splitlines()) + '\n'
+          (root / 'project_tools' / 'test_p1_126_tabs_get_deadlines.js').write_text(p1126, encoding='utf-8')
+
+          priorities_path = root / 'project_docs' / 'PRIORITIES_P0_P1_P2.md'
+          priorities = priorities_path.read_text(encoding='utf-8')
+          rows = {
+            'P1-125': '| P1-125 | P1 | REGRESSION | Все service-worker `chrome.scripting.executeScript()` проходят через bounded actual-settlement helper: local timeout не запускает identical reinjection, late success хранится bounded one-use receipt; навигация очищает stale settlement state, `content.js`/`frame-agent.js` сохраняют singleton guards. |',
+            'P1-126': '| P1-126 | P1 | REGRESSION | Все service-worker `chrome.tabs.get()` сведены к одному `getChromeTabBounded()` с deadline 5 с. Journal source/anchor остаются fail-closed, PDF retry cache при неизвестном URL инвалидируется, Action update прекращается, tab positioning безопасно деградирует. |'
+          }
+          for code, row in rows.items():
+              if re.search(rf'^\|\s*{re.escape(code)}\s*\|', priorities, re.M): priorities = re.sub(rf'^\|\s*{re.escape(code)}\s*\|.*$', row, priorities, count=1, flags=re.M)
+              else: priorities = priorities.rstrip() + '\n' + row + '\n'
+          priorities_path.write_text(priorities, encoding='utf-8')
+
+          readme_path = root / 'README.md'
+          readme = readme_path.read_text(encoding='utf-8')
+          note = '''### Audit WIP — P1-125 / P1-126
+
+          Service-worker script injection имеет 10-секундный caller deadline с actual-settlement tracking: identical retry не запускает второй `executeScript()`, late success хранится как bounded one-use receipt, а навигация очищает stale settlement state; `content.js`/`frame-agent.js` остаются singleton-safe. Все `tabs.get()` worker-кода проходят через единый 5-секундный bounded helper с прежними fail-safe/fail-closed семантиками. Manifest остаётся `0.9.8`; это не release QA.
+
+          '''
+          note = '\n'.join(line[10:] if line.startswith('          ') else line for line in note.splitlines()) + '\n'
+          if '### Audit WIP — P1-125 / P1-126' not in readme:
+              marker = '## Изменения 0.9.7'
+              if marker not in readme: raise SystemExit('README marker missing')
+              readme_path.write_text(readme.replace(marker, note + marker, 1), encoding='utf-8')
+
+          qa_path = root / 'QA_STATUS_0_9_9.md'
+          qa = qa_path.read_text(encoding='utf-8')
+          qa_note = '''
+
+          ## 2026-08-25 — P1-125 / P1-126
+
+          - P1-125: оба service-worker `scripting.executeScript()` пути используют bounded actual-settlement helper. Unknown local timeout держит request barrier; identical retry не reinject'ит, late success возвращается один раз, navigation очищает stale receipt/pending state. Script singleton guards сохранены.
+          - P1-126: все пять service-worker `tabs.get()` мест сведены к `getChromeTabBounded()` (5 с); низкоуровневый `chrome.tabs.get()` остался ровно в одном helper.
+          - Dedicated regressions: `test_p1_125_execute_script_settlement.js`, `test_p1_126_tabs_get_deadlines.js`.
+          - Manifest остаётся `0.9.8`; реальные Chrome timing/navigation races остаются release regression QA.
+          '''
+          qa_note = '\n'.join(line[10:] if line.startswith('          ') else line for line in qa_note.splitlines()) + '\n'
+          if '## 2026-08-25 — P1-125 / P1-126' not in qa: qa_path.write_text(qa.rstrip() + qa_note, encoding='utf-8')
+          print('P1-125/P1-126 patch complete')
+          PY
+
+      - name: Run full deterministic gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const m=require('./manifest.json'); if(m.manifest_version!==3||m.version!=='0.9.8') process.exit(1)"
+          mapfile -t jsfiles < <(find . -type f -name '*.js' -not -path './.git/*' -not -path './builds/*' -not -path './handoff/*' | sort)
+          echo "JS files: ${#jsfiles[@]}"
+          test "${#jsfiles[@]}" -eq 73
+          for f in "${jsfiles[@]}"; do node --check "$f" >/dev/null; done
+          mapfile -t tests < <(find project_tools -maxdepth 1 -type f -name 'test_*.js' | sort)
+          echo "Deterministic tests: ${#tests[@]}"
+          test "${#tests[@]}" -eq 60
+          for t in "${tests[@]}"; do echo "RUN $t"; node "$t"; done
+          test "$(grep -o 'chrome\.scripting\.executeScript(' service-worker.js | wc -l)" -eq 1
+          test "$(grep -o 'chrome\.tabs\.get(' service-worker.js | wc -l)" -eq 1
+          git diff --check
+
+      - name: Write closure evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > P1-125_CLOSURE.md <<'EOF'
+          # P1-125 closure — bounded scripting.executeScript with singleton-safe late injection
+
+          Status: **REGRESSION**. Manifest remains **0.9.8 / Manifest V3**.
+
+          Both service-worker injection paths now use `executeScriptSingletonBounded()` with a 10-second caller deadline while the actual non-cancellable Chrome promise stays tracked to settlement. Identical retry cannot start a second injection during unknown settlement. Late success is retained as a bounded 60-second one-use receipt. URL navigation/tab removal clears stale per-tab settlement state, and a late promise cannot resurrect a stale receipt.
+
+          `content.js` keeps `__WEBCLIP_PDF_PROTOTYPE_LOADED__`; `frame-agent.js` keeps `__WEBCLIP_FRAME_AGENT_LOADED__`, so a later legitimate ensure remains singleton-safe.
+
+          Dedicated `project_tools/test_p1_125_execute_script_settlement.js` proves timeout, no duplicate during unknown settlement, late-success reuse, receipt consumption, navigation fencing, and singleton guards. Full gate: **73/73 JS syntax PASS; 60/60 deterministic tests PASS**.
+
+          Real unpacked Chrome injection/navigation timing remains release QA; manifest is not bumped.
+          EOF
+
+          cat > P1-126_CLOSURE.md <<'EOF'
+          # P1-126 closure — bounded service-worker tabs.get reads
+
+          Status: **REGRESSION**. Manifest remains **0.9.8 / Manifest V3**.
+
+          All service-worker `chrome.tabs.get()` reads route through one `getChromeTabBounded()` helper with a 5-second default deadline. Existing caller semantics remain: Journal source/anchor checks fail closed, PDF retry cache is rejected/deleted when current URL cannot be established, Chrome Action refresh exits safely, and new-tab positioning falls back to normal placement if the source tab cannot be resolved.
+
+          The worker contains exactly one low-level `chrome.tabs.get()` call. Dedicated `project_tools/test_p1_126_tabs_get_deadlines.js` proves hung-read timeout, invalid-tab fail-fast, and static coverage of all five callers. Full gate: **73/73 JS syntax PASS; 60/60 deterministic tests PASS**.
+
+          Real unpacked Chrome timing remains release QA; manifest is not bumped.
+          EOF
+
+          cat > STATIC_CHECKS_P1-125_P1-126.md <<'EOF'
+          # Static checks — P1-125 / P1-126
+
+          Checkpoint date: 2026-08-25.
+
+          - Manifest parse: PASS; Manifest V3; version **0.9.8**.
+          - JavaScript syntax: **73/73 PASS**.
+          - Deterministic `project_tools/test_*.js`: **60/60 PASS**.
+          - Low-level service-worker `chrome.scripting.executeScript()`: exactly **1**, inside the settlement helper.
+          - P1-125: timeout/no-duplicate/late-success/navigation-fence regression PASS; content/frame singleton guards preserved.
+          - Low-level service-worker `chrome.tabs.get()`: exactly **1**, inside `getChromeTabBounded()`.
+          - P1-126: hung-read deadline + invalid-tab fail-fast regression PASS.
+          - No release/build/handoff artifact created.
+
+          This is engineering regression evidence, not unmanaged-Chrome release QA.
+          EOF
+          git diff --check
+
+      - name: Commit coherent closure and remove temporary workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/close-p1-125-p1-126.yml .github/workflows/finalize-p1-125-p1-126.yml
+          git add service-worker.js \
+            project_tools/test_p1_124_tab_create_late_settlement.js \
+            project_tools/test_p1_125_execute_script_settlement.js \
+            project_tools/test_p1_126_tabs_get_deadlines.js \
+            P1-125_CLOSURE.md P1-126_CLOSURE.md STATIC_CHECKS_P1-125_P1-126.md \
+            project_docs/PRIORITIES_P0_P1_P2.md README.md QA_STATUS_0_9_9.md
+          git commit -m 'audit: bound script injection and tab reads (P1-125 P1-126)'
+          git push origin HEAD:main
