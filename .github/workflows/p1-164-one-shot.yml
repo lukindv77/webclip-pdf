@@ -1,0 +1,127 @@
+name: P1-164 one-shot gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/p1-164-one-shot.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard baseline and temporary-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='ef0e12bda980d947b8a02da816cf6f64be47ceb8'
+          git cat-file -e "$BASE^{commit}"
+          actual="$(git diff --name-only "$BASE"..HEAD | sort)"
+          expected="$(printf '%s\n' '.github/workflows/p1-164-one-shot.yml' 'project_tools/_patch_p1_164.js' | sort)"
+          printf 'Baseline: %s\nCurrent: %s\n' "$BASE" "$(git rev-parse HEAD)"
+          if [ "$actual" != "$expected" ]; then
+            echo 'Unexpected files changed since guarded baseline:'
+            printf '%s\n' "$actual"
+            exit 1
+          fi
+
+      - name: Repair temporary patch template escaping
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('project_tools/_patch_p1_164.js')
+          s = p.read_text()
+          marker = 'const fn = String.raw`'
+          for _ in range(2):
+              start = s.find(marker)
+              if start < 0:
+                  raise SystemExit('temporary fn template marker missing')
+              body_start = start + len(marker)
+              end = s.find('\n`;', body_start)
+              if end < 0:
+                  raise SystemExit('temporary fn template terminator missing')
+              body = s[body_start:end]
+              body = body.replace('\\', '\\\\').replace('${', '\\${')
+              s = s[:start] + 'const fn = `' + body + s[end:]
+          p.write_text(s)
+          PY
+          node --check project_tools/_patch_p1_164.js
+
+      - name: Apply guarded product patch
+        run: node project_tools/_patch_p1_164.js
+
+      - name: JavaScript syntax gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          total=0
+          while IFS= read -r -d '' f; do
+            node --check "$f"
+            total=$((total+1))
+          done < <(find . -type f -name '*.js' ! -path './project_tools/_patch_p1_164.js' -print0)
+          echo "JavaScript syntax: ${total}/${total} PASS"
+
+      - name: Deterministic project tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          total=0
+          for f in project_tools/test_*.js; do
+            node "$f"
+            total=$((total+1))
+          done
+          echo "Deterministic project_tools/test_*.js: ${total}/${total} PASS"
+
+      - name: Manifest and patch invariant gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('fs');
+          const m = JSON.parse(fs.readFileSync('manifest.json','utf8'));
+          if (m.manifest_version !== 3) throw new Error('manifest_version changed');
+          if (m.version !== '0.9.8') throw new Error('version changed');
+          if (m.minimum_chrome_version !== '118') throw new Error('minimum Chrome changed');
+          const sw = fs.readFileSync('service-worker.js','utf8');
+          const journal = fs.readFileSync('journal.js','utf8');
+          if (!sw.includes("yandexApi('/resources/unpublish'")) throw new Error('unpublish endpoint missing');
+          if (!sw.includes("resourceId: '',")) throw new Error('path-only identity transition missing');
+          const fn = journal.slice(journal.indexOf('async function unpublishYandexEntry(entry)'), journal.indexOf('async function deleteEntry(entry)'));
+          if (!(fn.indexOf('window.confirm(warning)') >= 0 && fn.indexOf("type: 'WEBCLIP_JOURNAL_UNPUBLISH'") > fn.indexOf('window.confirm(warning)'))) throw new Error('mandatory confirmation ordering missing');
+          const html = fs.readFileSync('options.html','utf8');
+          if (!html.includes('id="publicLinksEnabled" type="checkbox" checked')) throw new Error('default public-link product decision changed');
+          console.log('Manifest/security/product invariant gate: PASS');
+          NODE
+
+      - name: Verify expected product delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' 'DEEP_AUDIT_2026-08-25.md' 'P1-164_CLOSURE.md' 'README.md' 'journal.js' 'project_docs/PRIORITIES_P0_P1_P2.md' 'project_tools/_patch_p1_164.js' 'project_tools/test_p1_164_yandex_unpublish.js' 'service-worker.js' | sort)"
+          if [ "$changed" != "$expected" ]; then
+            echo 'Unexpected working-tree delta:'
+            printf '%s\n' "$changed"
+            exit 1
+          fi
+
+      - name: Remove temporary tooling and commit product result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/p1-164-one-shot.yml project_tools/_patch_p1_164.js
+          git add service-worker.js journal.js project_tools/test_p1_164_yandex_unpublish.js P1-164_CLOSURE.md README.md project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: revoke per-entry Yandex public link (P1-164)'
+          git push origin HEAD:main
+          echo "Product HEAD: $(git rev-parse HEAD)"
