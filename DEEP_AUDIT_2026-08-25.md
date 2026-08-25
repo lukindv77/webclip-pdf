@@ -111,3 +111,33 @@ Current MDN/HTML documentation confirms that `HTMLElement.click()` simulates a c
 ### Evidence / test note
 
 This audit continuation changes documentation only. Product tests were not rerun. The last product gate remains P0-063: JavaScript syntax 88/88 PASS and deterministic tests 74/74 PASS. Browser-level regressions are required when P0-066/P0-067/P0-068 and the new P1 bounds are implemented.
+
+## Continuation at HEAD `3208f927ee330b43e4fd43427fd283668a781dd4` — document identity, destructive privacy and lifecycle state
+
+No production source changed in this continuation. The audit re-read current `service-worker.js`, `content.js`, `popup.js`, `journal.js`, `options.js`, `prepared-save-as.js`, `offscreen.js`, manifest and the priority registry from GitHub `main`.
+
+### Confirmed findings / status corrections
+
+- **P0-023 PARTIAL — retry cache still lacks document identity.** The implementation stores `tabId`, normalized source URL and TTL, but `getValidCachedPdfForTab()` compares only current URL. Cache invalidation on `tabs.onUpdated` is keyed to `changeInfo.url`; a same-URL reload creates a replacement document without changing the URL. The context-menu command `Повторить отправку сформированного PDF` can therefore reach retry from the new document while the old PDF still matches `tabId + URL + TTL`. Persist and verify exact `MessageSender.documentId` (available before the project's Chrome 118 minimum) and fail closed on same-URL document replacement.
+- **P0-069 OPEN — moving a published file to WebClip Trash does not revoke publication.** Journal destructive flow locates the file, performs Yandex `resources/move` to the WebClip-managed Trash folder, verifies the move, deletes the local entry and reports success. No `unpublish` path exists in the current worker. A published URL may therefore remain usable after the Journal record containing `publicUrl` is deleted. Make published-state semantics explicit before local deletion and reconcile remote unpublish without blind retry after unknown settlement.
+- **P1-169 OPEN — released prepared-Save-As tombstones have no GC.** RELEASE intentionally writes a distinct session-storage key so a late PREPARED/STARTED write cannot overwrite terminal state, but the released key is never part of the 64-entry active index and has no TTL cleanup. Repeated Save As operations can therefore accumulate session keys until browser restart; GC must preserve the late-generation safety window.
+- **P1-170 OPEN — Journal mutation triggers unbounded all-tab action refresh fan-out.** Append/delete/clear/import call `refreshActionForAllTabs()`, which uses `tabs.query({})` and `Promise.all()` over every tab. Per-action settlement caps do not bound the preceding Journal-summary reads or total wave concurrency. Coalesce overlapping global refreshes and process tabs through a bounded pool.
+
+### Existing tasks strengthened
+
+- **P1-157:** `chrome.permissions.request()` is a user-owned non-cancellable prompt and must not be treated like a normal bounded read. The current popup helper can locally time out after 10 seconds while the permission request later settles. Keep the prompt request single-flight through actual settlement and avoid a second prompt/false terminal error on unknown result.
+- **P1-168:** bound page-controlled locator `id`/class/string fields before `CSS.escape`, selector construction and runtime serialization in addition to replacing full sibling arrays.
+- **P1-154:** its aggregate selection budget must apply before materializing local + remote locators; per-frame 250-item limits do not by themselves bound the top-frame aggregate before the final slice.
+
+### Revalidated / rejected hypotheses
+
+- Progress-port Sets remove ports on disconnect and on posting failure; Journal page timers are cleared on `pagehide`.
+- Journal session contexts have TTL, a hard count cap and bounded removal batches; Yandex directory/locate/verify loops reviewed here have deadlines/hard limits.
+- Background Journal backup remains explicit opt-in and cannot be enabled without a selected Yandex root.
+- The suspected Yandex `..` filename escape remains rejected: dot-only sanitized name components collapse safely and destructive writes re-check managed-branch containment.
+- Offscreen dormant `text-payload-upload` has a chars-vs-UTF-8-byte reservation weakness, but the current service-worker call graph uses `pdf-cache-upload`, byte-checked `text-chunks-upload` and `text-download`; no live product caller for `text-payload-upload` was found in this pass, so P0-063 status is not changed solely for that dead/residual branch.
+
+### Test evidence note
+
+This synchronization changes audit documentation only. Product tests were not rerun. The last verified product gate remains the P0-063 gate: JavaScript syntax 88/88 PASS and deterministic `project_tools/test_*.js` 74/74 PASS. Real unmanaged unpacked Chrome and real Yandex OAuth/API/upload/move/backup E2E remain release blockers.
+
