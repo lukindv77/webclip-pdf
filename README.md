@@ -454,3 +454,8 @@ Recovery-архив должен формироваться **после** вс�
 ### Audit checkpoint P1-079 / P1-080
 
 `P1-079/P1-080 = REGRESSION`: native Chrome `Save As` dialogs are now owned by the visible extension page rather than the MV3 worker. `journal.html` owns Full Journal Save As; `options.html` owns OperationLog JSON Save As. The worker only prepares bounded Blob metadata. There is no caller timeout or automatic retry while the native dialog is pending; cancel/reject releases the Blob, and successful download start gets terminal cleanup. P1-129 prepared-session durability remains separate history-reserved work. Full gate: 68/68 JS syntax, 55/55 deterministic; Chromium page-owner regression + P1-008/P1-009/P1-007 PASS. Manifest remains 0.9.8/MV3; real unpacked Chrome Save As is release QA. No handoff archive created.
+
+
+### Diagnostic WIP — P1-147 / P1-148
+
+PDF operations now record bounded `page-analysis` and `copy-save` structure diagnostics, including before/after-print snapshots, without recording full page text. New Journal entries retain their exact source `operationId`, and Journal cards can show or copy the associated sanitized OperationLog directly. This diagnostic build remains manifest 0.9.8; it is not the 0.9.9 release-QA gate.

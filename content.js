@@ -24,6 +24,10 @@
   const PDF_RESOURCE_SRCSET_MAX_CHARS = 32_768;
   const PDF_RESOURCE_CSS_VALUE_MAX_CHARS = 65_536;
   const PDF_RESOURCE_FONT_SPEC_MAX_CHARS = 4_096;
+  const PAGE_DIAGNOSTICS_MAX_SELECTION_ITEMS = 16;
+  const PAGE_DIAGNOSTICS_MAX_ANCESTORS = 10;
+  const PAGE_DIAGNOSTICS_MAX_CLASSES = 8;
+  const PAGE_DIAGNOSTICS_MAX_STRING_CHARS = 240;
 
   const state = {
     phase: 'idle',
@@ -68,7 +72,9 @@
     pageUploadOperationId: '',
     lastUploadOptions: { readingMode: 'read', fileComment: '' },
     printUiHidden: false,
-    printUiPreviousDisplay: ''
+    printUiPreviousDisplay: '',
+    lastBeforePrintDiagnostics: null,
+    lastAfterPrintDiagnostics: null
   };
 
   // Page.printToPDF fires beforeprint/afterprint synchronously around the print
@@ -77,6 +83,7 @@
   // duration of PDF generation. No animation frame is painted between these
   // two events in Chromium's printToPDF pipeline.
   function hideWebClipUiForPrintRender() {
+    try { state.lastBeforePrintDiagnostics = capturePageStructureDiagnostics('beforeprint'); } catch (_) { state.lastBeforePrintDiagnostics = null; }
     if (!state.host?.isConnected || state.printUiHidden) return;
     state.printUiPreviousDisplay = state.host.style.display;
     state.host.style.display = 'none';
@@ -90,6 +97,7 @@
     }
     state.printUiHidden = false;
     state.printUiPreviousDisplay = '';
+    try { state.lastAfterPrintDiagnostics = capturePageStructureDiagnostics('afterprint'); } catch (_) { state.lastAfterPrintDiagnostics = null; }
   }
 
   window.addEventListener('beforeprint', hideWebClipUiForPrintRender);
@@ -120,6 +128,17 @@
       if (message.hidden) hideWebClipUiForPrintRender();
       else restoreWebClipUiAfterPrintRender();
       sendResponse({ ok: true });
+      return false;
+    }
+    if (message?.type === 'WEBCLIP_COLLECT_PRINT_DIAGNOSTICS') {
+      sendResponse({
+        ok: true,
+        diagnostics: {
+          beforePrint: state.lastBeforePrintDiagnostics,
+          afterPrint: state.lastAfterPrintDiagnostics,
+          current: capturePageStructureDiagnostics('post-print-rpc')
+        }
+      });
       return false;
     }
     if (message?.type === 'WEBCLIP_PAGE_UPLOAD_PROGRESS') {
@@ -2748,8 +2767,154 @@
     }
   }
 
+  function diagnosticBoundedString(value, maxChars = PAGE_DIAGNOSTICS_MAX_STRING_CHARS) {
+    return String(value == null ? '' : value).slice(0, Math.max(0, Number(maxChars) || 0));
+  }
+
+  function diagnosticNumber(value, max = 100_000_000) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return 0;
+    return Math.max(-max, Math.min(max, Math.round(number * 100) / 100));
+  }
+
+  function diagnosticClasses(element) {
+    try {
+      return [...(element?.classList || [])]
+        .slice(0, PAGE_DIAGNOSTICS_MAX_CLASSES)
+        .map((value) => diagnosticBoundedString(value, 120));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function diagnosticStyleSnapshot(element) {
+    if (!element) return {};
+    let style = null;
+    try { style = (element.ownerDocument?.defaultView || window).getComputedStyle(element); } catch (_) { style = null; }
+    if (!style) return {};
+    const transform = diagnosticBoundedString(style.transform || '', 160);
+    return {
+      display: diagnosticBoundedString(style.display, 80),
+      visibility: diagnosticBoundedString(style.visibility, 80),
+      opacity: diagnosticBoundedString(style.opacity, 40),
+      position: diagnosticBoundedString(style.position, 80),
+      overflowX: diagnosticBoundedString(style.overflowX, 80),
+      overflowY: diagnosticBoundedString(style.overflowY, 80),
+      contentVisibility: diagnosticBoundedString(style.contentVisibility, 80),
+      contain: diagnosticBoundedString(style.contain, 160),
+      transform: !transform || transform === 'none' ? 'none' : 'present'
+    };
+  }
+
+  function diagnosticAncestorSnapshot(element) {
+    const result = [];
+    let current = element?.parentElement || null;
+    while (current && result.length < PAGE_DIAGNOSTICS_MAX_ANCESTORS) {
+      result.push({
+        tag: diagnosticBoundedString(current.localName || '', 80),
+        id: diagnosticBoundedString(current.id || '', 160),
+        classes: diagnosticClasses(current),
+        style: diagnosticStyleSnapshot(current)
+      });
+      current = current.parentElement;
+    }
+    return result;
+  }
+
+  function diagnosticElementSnapshot(element, kind, index) {
+    if (!element || element.nodeType !== 1) return null;
+    const ownerDoc = element.ownerDocument || document;
+    let rect = null;
+    try { rect = element.getBoundingClientRect(); } catch (_) { rect = null; }
+    let frameDepth = 0;
+    try { frameDepth = getFrameChainForDocument(ownerDoc).length; } catch (_) { frameDepth = 0; }
+    let textChars = 0;
+    try { textChars = String(element.innerText || element.textContent || '').length; } catch (_) { textChars = 0; }
+    return {
+      kind: kind === 'exclude' ? 'exclude' : 'include',
+      index: Math.max(0, Number(index) || 0),
+      tag: diagnosticBoundedString(element.localName || '', 80),
+      id: diagnosticBoundedString(element.id || '', 160),
+      classes: diagnosticClasses(element),
+      role: diagnosticBoundedString(element.getAttribute?.('role') || '', 120),
+      topDocument: ownerDoc === document,
+      frameDepth: Math.max(0, Math.min(32, frameDepth)),
+      isBody: element === ownerDoc.body,
+      connected: Boolean(element.isConnected),
+      childElementCount: Math.max(0, Math.min(1_000_000, Number(element.childElementCount) || 0)),
+      textChars: Math.max(0, Math.min(10_000_000, textChars)),
+      rect: rect ? {
+        x: diagnosticNumber(rect.x),
+        y: diagnosticNumber(rect.y),
+        width: diagnosticNumber(rect.width),
+        height: diagnosticNumber(rect.height)
+      } : null,
+      scrollWidth: Math.max(0, Math.min(100_000_000, Number(element.scrollWidth) || 0)),
+      scrollHeight: Math.max(0, Math.min(100_000_000, Number(element.scrollHeight) || 0)),
+      style: diagnosticStyleSnapshot(element),
+      ancestors: diagnosticAncestorSnapshot(element)
+    };
+  }
+
+  function capturePageStructureDiagnostics(phase = 'page') {
+    const body = document.body;
+    const docEl = document.documentElement;
+    let bodyTextChars = 0;
+    try { bodyTextChars = String(body?.innerText || body?.textContent || '').length; } catch (_) { bodyTextChars = 0; }
+    const localIncludes = [...state.includes.values()];
+    const localExcludes = [...state.excludes.values()];
+    const items = [];
+    for (const [kind, source] of [['include', localIncludes], ['exclude', localExcludes]]) {
+      for (const element of source) {
+        if (items.length >= PAGE_DIAGNOSTICS_MAX_SELECTION_ITEMS) break;
+        const snapshot = diagnosticElementSnapshot(element, kind, items.length);
+        if (snapshot) items.push(snapshot);
+      }
+      if (items.length >= PAGE_DIAGNOSTICS_MAX_SELECTION_ITEMS) break;
+    }
+    return {
+      version: 1,
+      phase: diagnosticBoundedString(phase, 80),
+      capturedAt: Date.now(),
+      document: {
+        readyState: diagnosticBoundedString(document.readyState, 40),
+        compatMode: diagnosticBoundedString(document.compatMode, 40),
+        visibilityState: diagnosticBoundedString(document.visibilityState, 40),
+        bodyChildElementCount: Math.max(0, Math.min(1_000_000, Number(body?.childElementCount) || 0)),
+        bodyTextChars: Math.max(0, Math.min(10_000_000, bodyTextChars)),
+        bodyScrollWidth: Math.max(0, Math.min(100_000_000, Number(body?.scrollWidth) || 0)),
+        bodyScrollHeight: Math.max(0, Math.min(100_000_000, Number(body?.scrollHeight) || 0)),
+        documentScrollWidth: Math.max(0, Math.min(100_000_000, Number(docEl?.scrollWidth) || 0)),
+        documentScrollHeight: Math.max(0, Math.min(100_000_000, Number(docEl?.scrollHeight) || 0)),
+        viewportWidth: Math.max(0, Math.min(100_000_000, Number(window.innerWidth) || 0)),
+        viewportHeight: Math.max(0, Math.min(100_000_000, Number(window.innerHeight) || 0))
+      },
+      selection: {
+        includeCount: totalIncludeCount(),
+        excludeCount: totalExcludeCount(),
+        localIncludeCount: localIncludes.length,
+        localExcludeCount: localExcludes.length,
+        remoteIncludeCount: totalRemoteIncludeCount(),
+        remoteExcludeCount: totalRemoteExcludeCount(),
+        bodyIncluded: localIncludes.some((element) => element === document.body),
+        topDocumentIncludeCount: localIncludes.filter((element) => element?.ownerDocument === document).length,
+        frameDocumentCount: Math.max(0, state.frameDocuments.size - 1),
+        items,
+        itemsTruncated: localIncludes.length + localExcludes.length > items.length
+      },
+      print: {
+        headerConnected: Boolean(document.getElementById(PRINT_HEADER_ID)?.isConnected),
+        printStyleDocuments: Math.max(0, state.printStyles.length),
+        uiHidden: Boolean(state.printUiHidden),
+        remotePreparedCount: Math.max(0, state.remotePrintPrepared.size)
+      }
+    };
+  }
+
   async function prepareForPrint(meta) {
     restoreAfterPrint();
+    state.lastBeforePrintDiagnostics = null;
+    state.lastAfterPrintDiagnostics = null;
     await restoreRemoteFramesAfterPrint();
     await syncRemoteFrameAgents();
     refreshFrameDocuments();
@@ -2802,6 +2967,7 @@
     absolutizeLinksInIncludedContent();
     wrapUnlinkedImagesForPdf();
 
+    meta.pageAnalysis = capturePageStructureDiagnostics('prepared');
     state.printHeader = header;
   }
 

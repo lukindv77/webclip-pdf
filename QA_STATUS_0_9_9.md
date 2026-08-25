@@ -545,3 +545,11 @@ Recovery-gap applies: this mounted artifact is not the canonical physical P1-131
 - P1-131: raw debugger attach/detach promises remain in global PDF pending budget through actual settlement; different-tab PDF starts are blocked after local timeout until Chrome settles the original side effect.
 - Dedicated regressions: `test_p1_130_action_deadline_fencing.js`, `test_p1_131_debugger_global_pending_budget.js`.
 - Manifest remains `0.9.8`; real unpacked Chrome Action/debugger timing remains release regression QA.
+
+
+## 2026-08-25 — P1-147 / P1-148 diagnostic logging
+
+- Added bounded page/print structural diagnostics to PDF OperationLog (`page-analysis`, `copy-save`), including exact generated PDF byte size and beforeprint/afterprint snapshots.
+- Added exact `operationId` linkage from newly saved Journal entries to sanitized OperationLog; Journal can show/copy the linked log.
+- Old Journal entries without `operationId` remain supported and are never fuzzily matched to logs.
+- Manifest remains 0.9.8. Real reproduction on `https://its.1c.ru/db/metod8dev/content/2334/hdoc` is intentionally delegated to the diagnostic pre-release/user repro.

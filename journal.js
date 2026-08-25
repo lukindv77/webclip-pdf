@@ -1985,6 +1985,94 @@ function buildJournalComments(entry) {
   return root;
 }
 
+function buildLinkedOperationLog(entry) {
+  const operationId = String(entry?.operationId || '').trim();
+  const root = document.createElement('section');
+  root.className = 'entry-operation-log';
+  const label = document.createElement('div');
+  label.className = 'entry-operation-log-label';
+  const status = document.createElement('div');
+  status.className = 'entry-operation-log-status';
+  const pre = document.createElement('pre');
+  pre.className = 'entry-operation-log-json hidden';
+  root.append(label, status, pre);
+
+  let cachedLog = null;
+  let loading = null;
+
+  const exactOperationId = /^[A-Za-z0-9._:-]{1,160}$/.test(operationId) ? operationId : '';
+  label.textContent = exactOperationId ? `OperationLog: ${exactOperationId}` : 'OperationLog: для этой записи лог не связан.';
+  status.textContent = exactOperationId
+    ? 'Связь по точному operationId. Лог загружается только по запросу.'
+    : 'Старая или импортированная запись без operationId: WebClip не подбирает лог по имени файла или времени.';
+
+  const load = async () => {
+    if (cachedLog) return cachedLog;
+    if (!exactOperationId) throw new Error('Для этой записи журнала OperationLog не связан.');
+    if (!loading) {
+      status.textContent = 'Загружаем связанный OperationLog…';
+      loading = sendReadOnlyRuntimeMessage(
+        { type: 'WEBCLIP_OPERATION_LOG_GET', operationId: exactOperationId },
+        30_000,
+        'Чтение связанного OperationLog'
+      ).then((response) => {
+        requireOk(response);
+        const log = response?.log || null;
+        if (!log || String(log.operationId || '') !== exactOperationId) {
+          throw new Error('Связанный OperationLog не найден. Возможно, истёк срок хранения диагностических логов.');
+        }
+        cachedLog = log;
+        status.textContent = `${log.title || 'OperationLog'} · ${log.status || 'unknown'} · событий: ${Number(log.eventCount || log.events?.length || 0)}`;
+        pre.textContent = JSON.stringify(log, null, 2);
+        return log;
+      }).finally(() => { loading = null; });
+    }
+    return loading;
+  };
+
+  const showButton = makeButton('Показать лог', false, async () => {
+    if (!exactOperationId) return;
+    if (!pre.classList.contains('hidden')) {
+      pre.classList.add('hidden');
+      showButton.textContent = 'Показать лог';
+      return;
+    }
+    showButton.disabled = true;
+    try {
+      await load();
+      pre.classList.remove('hidden');
+      showButton.textContent = 'Скрыть лог';
+    } catch (error) {
+      status.textContent = error?.message || String(error);
+      setStatus(status.textContent, 'error');
+    } finally {
+      showButton.disabled = false;
+    }
+  }, 'entry-log-show');
+
+  const copyButton = makeButton('Копировать лог', false, async () => {
+    if (!exactOperationId) return;
+    copyButton.disabled = true;
+    try {
+      const log = await load();
+      await navigator.clipboard.writeText(JSON.stringify(log, null, 2));
+      setStatus(`OperationLog ${exactOperationId} скопирован.`, 'ok');
+    } catch (error) {
+      status.textContent = error?.message || String(error);
+      setStatus(status.textContent, 'error');
+    } finally {
+      copyButton.disabled = false;
+    }
+  }, 'entry-log-copy');
+
+  if (!exactOperationId) {
+    showButton.disabled = true;
+    copyButton.disabled = true;
+    showButton.title = copyButton.title = 'Для этой записи operationId не сохранён.';
+  }
+  return { root, showButton, copyButton };
+}
+
 function buildEntryCard(entry) {
   const card = document.createElement('article');
   card.className = 'entry';
@@ -2043,10 +2131,12 @@ function buildEntryCard(entry) {
 
   const primaryActions = document.createElement('div');
   primaryActions.className = 'entry-primary-actions';
+  const linkedOperationLog = buildLinkedOperationLog(entry);
   if (entry.url) primaryActions.appendChild(makeButton('Открыть страницу', false, async () => {
     try { await chrome.runtime.sendMessage({ type: 'WEBCLIP_OPEN_URL', url: entry.url }); } catch (_) {}
   }));
   if (later) primaryActions.appendChild(makeButton('Перенести в «Прочитано»', false, () => moveEntryToRead(entry), 'move-read-button'));
+  primaryActions.append(linkedOperationLog.showButton, linkedOperationLog.copyButton);
   primaryActions.appendChild(makeButton('Удалить запись', false, () => deleteEntry(entry), 'danger'));
   siteActionsRow.appendChild(primaryActions);
 
@@ -2116,6 +2206,7 @@ function buildEntryCard(entry) {
   if (fileComment) card.appendChild(fileComment);
   card.append(journalComments);
   if (resourceDetails) card.appendChild(resourceDetails);
+  card.appendChild(linkedOperationLog.root);
   card.append(selectionDetails);
   return card;
 }

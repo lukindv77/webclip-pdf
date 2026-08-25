@@ -2404,6 +2404,9 @@ const MAX_CONTENT_TITLE_CHARS = 4000;
 const MAX_CONTENT_COMMENT_CHARS = 100000;
 const MAX_PDF_RESOURCE_REPORT_FAILURES = 40;
 const MAX_PDF_RESOURCE_REPORT_LABEL_CHARS = 500;
+const MAX_PAGE_ANALYSIS_JSON_CHARS = 48 * 1024;
+const MAX_PAGE_ANALYSIS_ITEMS = 16;
+const MAX_PAGE_ANALYSIS_ANCESTORS = 10;
 
 function normalizeOperationIdInput(value) {
   const id = String(value || '').trim();
@@ -2463,6 +2466,131 @@ function sanitizePdfResourceReport(rawReport) {
   };
 }
 
+function pageDiagnosticString(value, maxChars = 240) {
+  return boundedContentString(value, Math.max(0, Math.min(1000, Number(maxChars) || 0)));
+}
+
+function pageDiagnosticCount(value, max = 100_000_000) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(max, Math.round(number * 100) / 100));
+}
+
+function sanitizePageDiagnosticStyle(raw) {
+  const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  return {
+    display: pageDiagnosticString(source.display, 80),
+    visibility: pageDiagnosticString(source.visibility, 80),
+    opacity: pageDiagnosticString(source.opacity, 40),
+    position: pageDiagnosticString(source.position, 80),
+    overflowX: pageDiagnosticString(source.overflowX, 80),
+    overflowY: pageDiagnosticString(source.overflowY, 80),
+    contentVisibility: pageDiagnosticString(source.contentVisibility, 80),
+    contain: pageDiagnosticString(source.contain, 160),
+    transform: source.transform === 'present' ? 'present' : 'none'
+  };
+}
+
+function sanitizePageDiagnosticNode(raw, { ancestor = false } = {}) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const classes = Array.isArray(raw.classes)
+    ? raw.classes.slice(0, 8).map((value) => pageDiagnosticString(value, 120))
+    : [];
+  const safe = {
+    tag: pageDiagnosticString(raw.tag, 80),
+    id: pageDiagnosticString(raw.id, 160),
+    classes,
+    style: sanitizePageDiagnosticStyle(raw.style)
+  };
+  if (ancestor) return safe;
+  const rect = raw.rect && typeof raw.rect === 'object' && !Array.isArray(raw.rect) ? raw.rect : null;
+  safe.kind = raw.kind === 'exclude' ? 'exclude' : 'include';
+  safe.index = pageDiagnosticCount(raw.index, 1000);
+  safe.role = pageDiagnosticString(raw.role, 120);
+  safe.topDocument = Boolean(raw.topDocument);
+  safe.frameDepth = pageDiagnosticCount(raw.frameDepth, 32);
+  safe.isBody = Boolean(raw.isBody);
+  safe.connected = Boolean(raw.connected);
+  safe.childElementCount = pageDiagnosticCount(raw.childElementCount, 1_000_000);
+  safe.textChars = pageDiagnosticCount(raw.textChars, 10_000_000);
+  safe.rect = rect ? {
+    x: Math.max(-100_000_000, Math.min(100_000_000, Number(rect.x) || 0)),
+    y: Math.max(-100_000_000, Math.min(100_000_000, Number(rect.y) || 0)),
+    width: pageDiagnosticCount(rect.width),
+    height: pageDiagnosticCount(rect.height)
+  } : null;
+  safe.scrollWidth = pageDiagnosticCount(raw.scrollWidth);
+  safe.scrollHeight = pageDiagnosticCount(raw.scrollHeight);
+  safe.ancestors = Array.isArray(raw.ancestors)
+    ? raw.ancestors.slice(0, MAX_PAGE_ANALYSIS_ANCESTORS).map((item) => sanitizePageDiagnosticNode(item, { ancestor: true })).filter(Boolean)
+    : [];
+  return safe;
+}
+
+function sanitizePageStructureDiagnostics(rawDiagnostics) {
+  if (!rawDiagnostics || typeof rawDiagnostics !== 'object' || Array.isArray(rawDiagnostics) || Number(rawDiagnostics.version || 0) < 1) return null;
+  const raw = rawDiagnostics;
+  const doc = raw.document && typeof raw.document === 'object' && !Array.isArray(raw.document) ? raw.document : {};
+  const selection = raw.selection && typeof raw.selection === 'object' && !Array.isArray(raw.selection) ? raw.selection : {};
+  const print = raw.print && typeof raw.print === 'object' && !Array.isArray(raw.print) ? raw.print : {};
+  const safe = {
+    version: 1,
+    phase: pageDiagnosticString(raw.phase, 80),
+    capturedAt: pageDiagnosticCount(raw.capturedAt, Number.MAX_SAFE_INTEGER),
+    document: {
+      readyState: pageDiagnosticString(doc.readyState, 40),
+      compatMode: pageDiagnosticString(doc.compatMode, 40),
+      visibilityState: pageDiagnosticString(doc.visibilityState, 40),
+      bodyChildElementCount: pageDiagnosticCount(doc.bodyChildElementCount, 1_000_000),
+      bodyTextChars: pageDiagnosticCount(doc.bodyTextChars, 10_000_000),
+      bodyScrollWidth: pageDiagnosticCount(doc.bodyScrollWidth),
+      bodyScrollHeight: pageDiagnosticCount(doc.bodyScrollHeight),
+      documentScrollWidth: pageDiagnosticCount(doc.documentScrollWidth),
+      documentScrollHeight: pageDiagnosticCount(doc.documentScrollHeight),
+      viewportWidth: pageDiagnosticCount(doc.viewportWidth),
+      viewportHeight: pageDiagnosticCount(doc.viewportHeight)
+    },
+    selection: {
+      includeCount: pageDiagnosticCount(selection.includeCount, 1000),
+      excludeCount: pageDiagnosticCount(selection.excludeCount, 1000),
+      localIncludeCount: pageDiagnosticCount(selection.localIncludeCount, 1000),
+      localExcludeCount: pageDiagnosticCount(selection.localExcludeCount, 1000),
+      remoteIncludeCount: pageDiagnosticCount(selection.remoteIncludeCount, 1000),
+      remoteExcludeCount: pageDiagnosticCount(selection.remoteExcludeCount, 1000),
+      bodyIncluded: Boolean(selection.bodyIncluded),
+      topDocumentIncludeCount: pageDiagnosticCount(selection.topDocumentIncludeCount, 1000),
+      frameDocumentCount: pageDiagnosticCount(selection.frameDocumentCount, 256),
+      items: Array.isArray(selection.items)
+        ? selection.items.slice(0, MAX_PAGE_ANALYSIS_ITEMS).map((item) => sanitizePageDiagnosticNode(item)).filter(Boolean)
+        : [],
+      itemsTruncated: Boolean(selection.itemsTruncated)
+    },
+    print: {
+      headerConnected: Boolean(print.headerConnected),
+      printStyleDocuments: pageDiagnosticCount(print.printStyleDocuments, 256),
+      uiHidden: Boolean(print.uiHidden),
+      remotePreparedCount: pageDiagnosticCount(print.remotePreparedCount, 256)
+    }
+  };
+  if (jsonSizeChars(safe) > MAX_PAGE_ANALYSIS_JSON_CHARS) {
+    safe.selection.items = safe.selection.items.slice(0, 4);
+    safe.selection.itemsTruncated = true;
+    safe.truncated = true;
+  }
+  return safe;
+}
+
+function sanitizePrintStructureDiagnostics(rawDiagnostics) {
+  const raw = rawDiagnostics && typeof rawDiagnostics === 'object' && !Array.isArray(rawDiagnostics) ? rawDiagnostics : {};
+  return {
+    beforePrint: sanitizePageStructureDiagnostics(raw.beforePrint),
+    afterPrint: sanitizePageStructureDiagnostics(raw.afterPrint),
+    current: sanitizePageStructureDiagnostics(raw.current),
+    unavailable: Boolean(raw.unavailable),
+    error: pageDiagnosticString(raw.error, 1000)
+  };
+}
+
 function sanitizeContentSaveMeta(rawMeta, sender) {
   const raw = rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta) ? rawMeta : {};
   const tabUrl = String(sender?.tab?.url || sender?.url || '');
@@ -2485,7 +2613,8 @@ function sanitizeContentSaveMeta(rawMeta, sender) {
     readingMode: raw.readingMode === 'later' ? 'later' : 'read',
     fileComment: boundedContentString(raw.fileComment, MAX_CONTENT_COMMENT_CHARS),
     selectionSnapshot: sanitizeSelectionSnapshot(raw.selectionSnapshot, { rejectOverflow: true }),
-    resourceReport: sanitizePdfResourceReport(raw.resourceReport)
+    resourceReport: sanitizePdfResourceReport(raw.resourceReport),
+    pageAnalysis: sanitizePageStructureDiagnostics(raw.pageAnalysis)
   };
 }
 
@@ -3462,10 +3591,13 @@ async function generatePdfAndDownload(tabId, meta, operationId = '') {
   meta = { ...meta, readingMode: 'read' };
   const resourceReport = sanitizePdfResourceReport(meta.resourceReport) || { version: 1, limit: 500, deadlineMs: 15_000, attempted: 0, loaded: 0, failed: 0, omittedByLimit: 0, scanTruncated: false, deadlineExceeded: false, elapsedMs: 0, failures: [] };
   meta.resourceReport = resourceReport;
+  const pageAnalysis = sanitizePageStructureDiagnostics(meta.pageAnalysis);
+  meta.pageAnalysis = pageAnalysis;
   await startOperationLog(operationId, 'local-pdf', 'Сохранение PDF в загрузки Chrome', {
-    tabId, url: String(meta.url || ''), title: String(meta.title || ''), readingMode: 'read', resourceReport
+    tabId, url: String(meta.url || ''), title: String(meta.title || ''), readingMode: 'read', resourceReport, pageAnalysis
   });
   try {
+    recordOperationStage(operationId, 'page-analysis', `Анализ структуры страницы перед PDF: Включены ${pageAnalysis?.selection?.includeCount || 0}, Исключены ${pageAnalysis?.selection?.excludeCount || 0}${pageAnalysis?.selection?.bodyIncluded ? '; выбран body' : ''}.`, 6, 'running', { pageAnalysis });
     const resourceState = resourceReport.failed || resourceReport.omittedByLimit || resourceReport.deadlineExceeded || resourceReport.scanTruncated ? 'partial' : 'running';
     recordOperationStage(
       operationId,
@@ -3477,7 +3609,9 @@ async function generatePdfAndDownload(tabId, meta, operationId = '') {
     );
     recordOperationStage(operationId, 'pdf', 'Формируем PDF средствами Chromium…', 20);
     let pdfBlob = await generatePdfBlob(tabId);
+    const printDiagnostics = await collectPrintDiagnosticsForTab(tabId);
     const expectedPdfBytes = pdfBlob.size;
+    recordOperationStage(operationId, 'copy-save', `Chromium сформировал PDF-копию (${expectedPdfBytes} байт). Фиксируем состояние структуры страницы и передаём копию в Chrome Downloads.`, 52, 'running', { pdfBytes: expectedPdfBytes, pageAnalysis, printDiagnostics, destination: 'download' });
     const filename = buildFilename(meta);
     const temporaryCacheKey = `local-download:${operationId}`.slice(0, 240);
     await putCachedPdf({
@@ -3546,14 +3680,16 @@ async function generatePdfAndUploadToYandex(tabId, meta, operationId = '') {
   operationId = String(operationId || '') || makeOperationLogId('yandex-pdf');
   const readingMode = meta?.readingMode === 'later' ? 'later' : 'read';
   const resourceReport = sanitizePdfResourceReport(meta?.resourceReport) || { version: 1, limit: 500, deadlineMs: 15_000, attempted: 0, loaded: 0, failed: 0, omittedByLimit: 0, scanTruncated: false, deadlineExceeded: false, elapsedMs: 0, failures: [] };
-  meta = { ...meta, readingMode, resourceReport };
+  const pageAnalysis = sanitizePageStructureDiagnostics(meta?.pageAnalysis);
+  meta = { ...meta, readingMode, resourceReport, pageAnalysis };
   await startOperationLog(operationId, 'yandex-pdf', readingMode === 'later' ? 'Сохранение «Прочитать позже» на Яндекс Диск' : 'Сохранение «Прочитано» на Яндекс Диск', {
-    tabId, url: String(meta.url || ''), title: String(meta.title || ''), readingMode, fileCommentPresent: Boolean(String(meta.fileComment || '').trim()), resourceReport
+    tabId, url: String(meta.url || ''), title: String(meta.title || ''), readingMode, fileCommentPresent: Boolean(String(meta.fileComment || '').trim()), resourceReport, pageAnalysis
   });
 
   let filename = '';
   let cachedSaved = false;
   try {
+    recordOperationStage(operationId, 'page-analysis', `Анализ структуры страницы перед PDF: Включены ${pageAnalysis?.selection?.includeCount || 0}, Исключены ${pageAnalysis?.selection?.excludeCount || 0}${pageAnalysis?.selection?.bodyIncluded ? '; выбран body' : ''}.`, 12, 'running', { pageAnalysis });
     const resourceState = resourceReport.failed || resourceReport.omittedByLimit || resourceReport.deadlineExceeded || resourceReport.scanTruncated ? 'partial' : 'running';
     recordOperationStage(
       operationId,
@@ -3565,6 +3701,8 @@ async function generatePdfAndUploadToYandex(tabId, meta, operationId = '') {
     );
     emitPageUploadProgress(tabId, operationId, 'pdf', 'Формируем PDF из подготовленных областей страницы…', 32);
     let pdfBlob = await generatePdfBlob(tabId);
+    const printDiagnostics = await collectPrintDiagnosticsForTab(tabId);
+    recordOperationStage(operationId, 'copy-save', `Chromium сформировал PDF-копию (${pdfBlob.size} байт). Фиксируем состояние структуры страницы перед сохранением на Яндекс Диск.`, 40, 'running', { pdfBytes: pdfBlob.size, pageAnalysis, printDiagnostics, destination: 'yandex' });
     filename = buildYandexFilename(meta);
     emitPageUploadProgress(tabId, operationId, 'cache', 'Сохраняем сформированный PDF во временный кэш для безопасного повтора…', 44);
     const cached = {
@@ -4409,6 +4547,7 @@ function normalizePendingJournalAppendData(data = {}) {
     rootPath: normalizeDiskPath(String(data.rootPath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
     journalEntryId,
     journalCreatedAt: createdAt,
+    operationId: String(data.operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
     meta: {
       hostname: String(meta.hostname || '').slice(0, 255),
       siteAddress: String(meta.siteAddress || '').slice(0, MAX_IMPORTED_URL_CHARS),
@@ -4430,7 +4569,7 @@ function normalizePendingJournalAppendData(data = {}) {
 }
 
 async function checkpointPendingJournalAppend(data, operationId = '') {
-  const prepared = normalizePendingJournalAppendData(data);
+  const prepared = normalizePendingJournalAppendData({ ...data, operationId: String(operationId || data?.operationId || '').slice(0, MAX_OPERATION_ID_CHARS) });
   const item = { id: prepared.journalEntryId, createdAt: Date.now(), updatedAt: Date.now(), attemptCount: 0, operationId: String(operationId || '').slice(0, 180), lastError: '', data: prepared };
   if (jsonSizeChars(item) > MAX_PENDING_JOURNAL_APPEND_JSON_CHARS) item.data.meta.selectionSnapshot = { includes: [], excludes: [] };
   const itemChars = jsonSizeChars(item);
@@ -4518,7 +4657,7 @@ async function recoverPendingJournalAppends(trigger = 'maintenance', maxItems = 
 
 
 async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, createPublicLinks = false, operationId = '' } = {}) {
-  const prepared = normalizePendingJournalAppendData({ ...data, destination: 'yandex' });
+  const prepared = normalizePendingJournalAppendData({ ...data, destination: 'yandex', operationId: String(operationId || data?.operationId || '').slice(0, MAX_OPERATION_ID_CHARS) });
   const now = Date.now();
   const item = { id: prepared.journalEntryId, phase: 'prepared', createdAt: now, updatedAt: now, attemptCount: 0, operationId: String(operationId || '').slice(0, 180), lastError: '', expectedPdfBytes: requirePositiveByteSize(expectedPdfBytes, 'Размер PDF в checkpoint удалённого сохранения'), createPublicLinks: Boolean(createPublicLinks), data: prepared };
   if (jsonSizeChars(item) > MAX_PENDING_JOURNAL_APPEND_JSON_CHARS) item.data.meta.selectionSnapshot = { includes: [], excludes: [] };
@@ -4806,7 +4945,7 @@ function makePendingLocalDownloadIntentKey(operationId = '') {
 
 async function checkpointPendingLocalDownloadIntent(data, operationId = '', blobUrl = '', expectedBytes = 0) {
   const key = makePendingLocalDownloadIntentKey(operationId);
-  const prepared = normalizePendingJournalAppendData(data);
+  const prepared = normalizePendingJournalAppendData({ ...data, operationId: String(operationId || data?.operationId || '').slice(0, MAX_OPERATION_ID_CHARS) });
   const now = Date.now();
   const item = { downloadId: key, kind: 'intent', blobUrl: String(blobUrl || '').slice(0, 4096), createdAt: now, updatedAt: now, operationId: String(operationId || '').slice(0, 180), expectedBytes: Math.max(0, Math.floor(Number(expectedBytes) || 0)), data: prepared };
   const db = await openJournalDb();
@@ -5165,7 +5304,7 @@ async function reconcilePendingLocalDownloads(trigger = 'maintenance', maxItems 
   return { trigger, checked: items.length, completed, interrupted, rebound, pending: pendingCount, expired, failed };
 }
 
-async function appendJournalEntry({ destination, filename, remotePath = '', folder = '', publicUrl = '', resourceId = '', accountUid = '', rootPath = '', meta = {}, journalEntryId = '', journalCreatedAt = 0 }, options = {}) {
+async function appendJournalEntry({ destination, filename, remotePath = '', folder = '', publicUrl = '', resourceId = '', accountUid = '', rootPath = '', meta = {}, journalEntryId = '', journalCreatedAt = 0, operationId = '' }, options = {}) {
   const selectionSnapshot = sanitizeSelectionSnapshot(meta.selectionSnapshot);
   const createdAt = Number(journalCreatedAt || 0) > 0 ? Number(journalCreatedAt) : Date.now();
   const id = String(journalEntryId || '').trim()
@@ -5176,6 +5315,7 @@ async function appendJournalEntry({ destination, filename, remotePath = '', fold
     createdAt,
     localDayKey: localDayKey(createdAt),
     operationDateTime: String(meta.localDateTime || ''),
+    operationId: String(operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
     destination: destination === 'yandex' ? 'yandex' : 'download',
     readingMode,
     filename: String(filename || ''),
@@ -6805,11 +6945,14 @@ function normalizeImportedJournalEntry(raw, index, seenIds = null, forcedId = ''
   const snapshot = sanitizeSelectionSnapshot(raw.selectionSnapshot || {}, { rejectOverflow: true });
   const createdAt = Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now();
   const importedDayKey = boundedImportString(raw.localDayKey || '', 32).trim();
+  const importedOperationIdRaw = String(raw.operationId || '').trim();
+  const importedOperationId = importedOperationIdRaw.length <= MAX_OPERATION_ID_CHARS && /^[A-Za-z0-9._:-]+$/.test(importedOperationIdRaw) ? importedOperationIdRaw : '';
   return {
     id,
     createdAt,
     localDayKey: /^\d{4}-\d{2}-\d{2}$/.test(importedDayKey) ? importedDayKey : localDayKey(createdAt),
     operationDateTime: boundedImportString(raw.operationDateTime || '', MAX_IMPORTED_DATETIME_CHARS),
+    operationId: importedOperationId,
     destination: raw.destination === 'yandex' ? 'yandex' : 'download',
     readingMode: raw.destination === 'yandex' && raw.readingMode === 'later' ? 'later' : 'read',
     filename: boundedImportString(raw.filename || '', 512),
@@ -8689,6 +8832,22 @@ function withOperationTimeout(promise, timeoutMs, label) {
       }, timeoutMs);
     })
   ]).finally(() => { if (timer) clearTimeout(timer); });
+}
+
+async function collectPrintDiagnosticsForTab(tabId) {
+  try {
+    const response = await withOperationTimeout(
+      chrome.tabs.sendMessage(Number(tabId), { type: 'WEBCLIP_COLLECT_PRINT_DIAGNOSTICS' }),
+      5_000,
+      'Сбор диагностики структуры страницы после печати'
+    );
+    if (!response?.ok) {
+      return sanitizePrintStructureDiagnostics({ unavailable: true, error: response?.error || 'Content script не вернул диагностику печати.' });
+    }
+    return sanitizePrintStructureDiagnostics(response.diagnostics || {});
+  } catch (error) {
+    return sanitizePrintStructureDiagnostics({ unavailable: true, error: normalizeError(error) });
+  }
 }
 
 const debuggerActiveTabs = new Set();

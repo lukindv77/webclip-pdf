@@ -287,3 +287,9 @@ body.backup-progress-open { overflow: hidden; }
 .text-filter-remove { align-self: start; white-space: nowrap; }
 .text-filter-help { color: #5f6368; font-size: 12px; line-height: 1.4; }
 @media (max-width: 700px) { .text-filter-row { grid-template-columns: 1fr; } .text-filter-remove { justify-self: start; } }
+
+.entry-operation-log { margin: 10px 0 4px; border: 1px solid #dfe5ec; border-radius: 8px; padding: 8px 10px; background: #fafbfd; }
+.entry-operation-log-label { font: 600 12px/1.4 ui-monospace, Consolas, monospace; overflow-wrap: anywhere; color: #3c4043; }
+.entry-operation-log-status { margin-top: 4px; color: #5f6368; font-size: 11px; overflow-wrap: anywhere; }
+.entry-operation-log-json { margin: 8px 0 0; max-height: 420px; overflow: auto; padding: 10px; border-radius: 7px; background: #202124; color: #f1f3f4; font: 11px/1.4 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.entry-operation-log-json.hidden { display: none; }
