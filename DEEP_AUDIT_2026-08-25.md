@@ -188,3 +188,21 @@ Current Yandex documentation explicitly says that for ordinary (non-device) toke
 
 This continuation is audit documentation only. Product deterministic/browser tests were not rerun; the last verified production gate remains unchanged. Release remains blocked on real unmanaged unpacked Chrome and real Yandex OAuth/API/upload/move/backup E2E.
 
+## Continuation at HEAD `9f204576c50b1b7782c7003758985d4ffc7aafd8` — extension-page input and OAuth lifecycle
+
+No production source changed during this continuation.
+
+### Newly confirmed findings
+
+- **P1-176 OPEN — pre-IPC bounds for trusted user inputs.** Worker-side boundaries remain authoritative, but the visible Journal comment editor and several Options inputs accept unbounded strings and send them through `chrome.runtime.sendMessage()` before the worker can reject them. This includes Journal comment text and Yandex client/code/manual-token/root/folder inputs. Match UI/pre-send caps to the existing worker contract so very large pasted values do not allocate a large structured-clone payload first. Sensitive token/code values should be rejected with an explicit message rather than silently truncated.
+- **P1-177 OPEN — disconnect does not pause background backup scheduling.** Disconnect removes session credentials but does not change `journalBackupEnabled`, clear periodic/retry alarms, or otherwise tell the scheduler that authorization is intentionally absent. A background failure while enabled schedules another retry, so a deliberate disconnect can create recurring known-failure wakes. Preserve the user's backup preference but pause alarms while unauthenticated, then reinitialize them after successful authorization. A transfer that already owns a signed upload/download URL remains governed by its durable actual-settlement reconciliation; deleting the OAuth token is not cancellation of that already-started side effect.
+- **P1-178 OPEN — post-exchange OAuth completion is not reconciled as one operation.** The token POST completes before several separately bounded/non-cancellable storage/config steps. A later local timeout can therefore report authorization failure after the remote exchange already succeeded, or a late `storage.session.set` can make the account connected after the UI showed an error while old pending PKCE state remains. Do not blindly rerun the code exchange. Commit auth and pending/consumed state together as far as Chrome Storage allows, expose unknown local settlement as pending, and let status/startup reconciliation repair ancillary config/cleanup.
+
+### External OAuth note
+
+Current Yandex documentation continues to describe confirmation-code exchange as a separate network step that returns `access_token`, `refresh_token` and lifetime information. The project intentionally stores only the access token in `storage.session`; P1-178 concerns crash/timeout consistency **after** a successful exchange response and does not propose persisting the refresh token.
+
+### Test evidence note
+
+Audit documentation only; production tests were not rerun. The last verified production gate remains 88/88 JavaScript syntax + 74/74 deterministic tests from P0-063, and real unpacked Chrome/Yandex E2E remains a release blocker.
+
