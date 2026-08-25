@@ -568,3 +568,9 @@ REGRESSION: selected iframe print height is now remeasured at a conservative A4-
 
 - REGRESSION: same-origin selected-body iframe is flattened into ordinary top-document print flow so Chromium can paginate it across pages.
 - Deterministic source contract added; real its.1c.ru output remains required browser QA.
+
+## 2026-08-25 — P1-152
+
+- REGRESSION: flattened same-origin selected-body proxy mounts under top-document body, outside source iframe ancestor layout constraints.
+- Exact iframe rollback remains P1-149-owned; no scroll-position dependency.
+- Real its.1c.ru PDF remains required browser evidence.

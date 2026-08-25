@@ -473,3 +473,7 @@ Real its.1c.ru retest after P1-149 exposed print-time iframe height clipping: th
 ### Diagnostic WIP — P1-151
 
 Real its.1c.ru retest showed that a correctly sized selected iframe is still clipped as a replaced print element. Same-origin body selections are now flattened into a temporary paginatable top-document proxy with bounded style transfer and exact rollback.
+
+### Audit WIP — P1-152 — top-document flattened iframe proxy mount
+
+Real its.1c.ru P1-151 evidence preserved the complete cloned body but Chromium still produced one clipped page. Flattened same-origin selected-body proxies now mount directly under the top document body, outside the source iframe layout shell, and record the mount in OperationLog.

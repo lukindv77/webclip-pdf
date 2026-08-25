@@ -2948,6 +2948,7 @@
         })),
         flattenedFrames: (state.lastFlattenedFrameDiagnostics || []).slice(0, PAGE_DIAGNOSTICS_MAX_SELECTION_ITEMS).map((item) => ({
           mode: String(item?.mode || '').slice(0, 48),
+          mount: String(item?.mount || '').slice(0, 48),
           depth: Math.max(0, Number(item?.depth) || 0),
           sameOrigin: Boolean(item?.sameOrigin),
           sourceTextChars: Math.max(0, Number(item?.sourceTextChars) || 0),
@@ -3609,7 +3610,7 @@
 
   function createFlattenedBodyFramePrintProxy(frame, sourceBody) {
     const ownerDoc = frame?.ownerDocument;
-    if (!ownerDoc?.createElement || !sourceBody?.cloneNode || !frame?.parentNode) return null;
+    if (!ownerDoc?.createElement || !ownerDoc?.body || !sourceBody?.cloneNode || !frame?.parentNode) return null;
 
     const proxy = ownerDoc.createElement('section');
     proxy.setAttribute(FLATTENED_FRAME_ATTR, '1');
@@ -3662,9 +3663,13 @@
     proxy.style.setProperty('break-inside', 'auto', 'important');
     proxy.style.setProperty('page-break-inside', 'auto', 'important');
 
-    frame.parentNode.insertBefore(proxy, frame);
+    // Mount the flattened copy directly in the top document body rather than
+    // inside the site's iframe shell. Flex/grid/fixed-height/break rules on the
+    // original ancestor chain must not be able to make the proxy atomic or clip
+    // its pagination. The selected-only stylesheet hides the original shell.
+    ownerDoc.body.appendChild(proxy);
     // P1-149 already snapshotted this frame's original inline style. Hide only
-    // the replaced iframe box; the flattened proxy now carries printable flow.
+    // the replaced iframe box; the top-level flattened proxy carries printable flow.
     frame.style.setProperty('display', 'none', 'important');
 
     let sourceTextChars = 0;
@@ -3674,6 +3679,7 @@
       proxy,
       diagnostics: {
         mode: 'same-origin-body-proxy',
+        mount: 'top-document-body',
         depth: frameDepthForPrintProxy(frame),
         sameOrigin: true,
         sourceTextChars: Math.max(0, sourceTextChars),

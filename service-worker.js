@@ -2582,6 +2582,7 @@ function sanitizePageStructureDiagnostics(rawDiagnostics) {
       })),
       flattenedFrames: (Array.isArray(print.flattenedFrames) ? print.flattenedFrames : []).slice(0, MAX_PAGE_ANALYSIS_ITEMS).map((item) => ({
         mode: pageDiagnosticString(item?.mode, 48),
+        mount: pageDiagnosticString(item?.mount, 48),
         depth: pageDiagnosticCount(item?.depth, 32),
         sameOrigin: Boolean(item?.sameOrigin),
         sourceTextChars: pageDiagnosticCount(item?.sourceTextChars, 100000000),
