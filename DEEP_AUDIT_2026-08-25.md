@@ -141,3 +141,32 @@ No production source changed in this continuation. The audit re-read current `se
 
 This synchronization changes audit documentation only. Product tests were not rerun. The last verified product gate remains the P0-063 gate: JavaScript syntax 88/88 PASS and deterministic `project_tools/test_*.js` 74/74 PASS. Real unmanaged unpacked Chrome and real Yandex OAuth/API/upload/move/backup E2E remain release blockers.
 
+## Continuation at HEAD `d72ac2f6c23cf3b529b56643781352c8c489ac99` — live document and PDF output security
+
+No production source changed in this continuation. The audit re-read current `content.js`, `frame-agent.js`, `service-worker.js`, `journal.js`, `options.js`, `options.html` and `offscreen.js`, plus a local headless Chromium print-to-PDF reproduction used only as audit evidence.
+
+### Newly confirmed findings
+
+- **P0-070 OPEN — live print is tab-bound, not document-bound.** Content-originated generate/upload messages expose `MessageSender.documentId`, but current handlers retain only `tabId`. Both local and Yandex generation eventually call `generatePdfBlob(tabId)`, which attaches debugger to the current tab and issues `Page.printToPDF`. A full reload/navigation during the gap can therefore print a replacement document while metadata, selection identity and destination naming remain from the previous one. Introduce a per-tab full-document generation plus exact initiating `documentId`; verify before print and after print before any durable/cache/download/upload/Journal finalization. A changed generation discards the Blob and fails closed.
+- **P0-071 OPEN — unsafe/non-durable URI schemes survive into PDF annotations.** Top content currently absolutizes arbitrary anchors/areas without a scheme allowlist and additionally wraps unlinked images for `http(s)`, `file:`, `data:` and `blob:` sources. A headless Chromium audit repro printed four anchors and the resulting PDF contained URI annotations for `javascript:alert('x')`, `data:text/html,...`, an external file annotation for `/etc/passwd`, and the normal HTTPS link. Because the PDF is a portable durable artifact, strip clickability for active/local/non-durable schemes before print while preserving visible content; bound copied URI lengths. `http/https` remain safe baseline, with `mailto/tel` requiring an explicit product allowlist decision.
+- **P1-171 OPEN — cross-origin frame volatile state survives same-URL document replacement.** The registry records child `documentId`, but tab cleanup occurs only on URL change; LIST does not revalidate records, and `sendFrameAgentCommand` targets only `frameId`. Clean the registry on full-document loading and target exact document identity/generation. The related `executeScriptSingletonBounded` late-success bug belongs to existing P1-125, which is now PARTIAL because its tab-only logical keys can consume a 60-second late-success receipt from the old document after same-URL reload.
+- **P1-172 OPEN — content metadata has no pre-header/pre-IPC bounds.** Raw title/source URL/file comment are put into `meta`; the optional comment textarea has no `maxLength`; `prepareForPrint()` builds the visible PDF header before the service-worker sanitizer applies its 8192/4000/100000-character limits. This creates avoidable large-DOM/message allocation and can make PDF metadata differ from Journal/cache metadata. Normalize client-side first using the same shared schema and P0-066 confidentiality rules, then validate again in the worker.
+- **P2-018 OPEN — dormant text-payload upload capability.** The worker text-payload put/get helpers are definition-only in the reviewed product call graph, while offscreen still advertises/implements `text-payload-upload`. The dormant branch reserves a byte budget from a character limit and creates the UTF-8 Blob before resizing the reservation, so Unicode can exceed the pre-materialization assumption. Removing unused privileged code is preferred; otherwise make it byte-bounded before reintroducing a live caller.
+
+### Existing tasks strengthened
+
+- **P1-154:** enforce a single aggregate local+remote selection count/byte budget before storing remote snapshots or materializing locators; per-frame 250-item limits plus a final top `.slice(0,250)` are not an aggregate bound.
+- **P1-164:** after verified unpublish the Journal entry intentionally becomes path-only. The Yandex badge must still open/download the file through authenticated Yandex API using the saved exact `remotePath`; do not fall back to broad Disk search. If the user manually moves the file afterward, the accepted tradeoff is loss of association.
+- **P1-167:** include frame-agent's false prefetch cap (`querySelectorAll('img')` can enqueue a huge single-root result before the 100 check), bounded href copying, and expensive global print `:has([include])` selectors in the shared selected-content budget/refactor.
+- **P2-017 / P0-034:** current Yandex refresh documentation lists refresh grant `grant_type` + `refresh_token` as mandatory and `client_id/client_secret` as additional fields. The current code comment that refresh categorically requires Client Secret is therefore too strong. Do not persist a refresh token based on documentation alone; instead add a real Yandex public-client E2E experiment. If it succeeds without secret, a refresh token kept only in `storage.session` could improve long-running-session UX while preserving the current no-restart-persistence default.
+
+### Revalidated boundaries
+
+- Journal/content `WEBCLIP_OPEN_JOURNAL_SAVED_FILE` remains HTTPS/Yandex-domain restricted and reads the entry again by ID; the unsafe URI finding is specifically the PDF artifact construction path.
+- External Yandex JSON bodies remain bounded before parsing (`safeJson` uses an 8 MiB bounded text reader), so no new unbounded `response.json()` regression was found.
+- `makeMetaRow()` uses Text nodes, so the raw metadata issue is allocation/confidentiality consistency rather than HTML injection.
+
+### Test evidence note
+
+No product code changed and the deterministic product suite was not rerun. The local Chromium reproduction was an audit-only print-to-PDF experiment confirming annotation preservation for unsafe schemes, not a release regression gate. The last verified product gate remains 88/88 JavaScript syntax PASS + 74/74 deterministic tests PASS from P0-063.
+
