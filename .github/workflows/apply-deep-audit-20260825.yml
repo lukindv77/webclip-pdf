@@ -1,0 +1,67 @@
+name: Apply deep audit findings and optimizations
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-deep-audit-20260825.yml'
+permissions:
+  contents: write
+jobs:
+  audit-remediation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify canonical product baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='cd7ec913e256b820033028e5e876260d65331de2'
+          git merge-base --is-ancestor "$base" HEAD
+          git diff --exit-code "$base" -- content.js frame-agent.js options.js journal.js service-worker.js offscreen.js prepared-save-as.js manifest.json project_docs/PRIORITIES_P0_P1_P2.md README.md QA_STATUS_0_9_9.md
+      - name: Apply audit remediation patch
+        run: python3 project_tools/patch_deep_audit_20260825.py
+      - name: JavaScript syntax gate
+        id: syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -type f -name '*.js' -not -path './.git/*' | sort)
+          for file in "${files[@]}"; do node --check "$file"; done
+          echo "JavaScript syntax PASS: ${#files[@]}/${#files[@]}"
+      - name: Deterministic regression gate
+        id: tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t tests < <(find project_tools -maxdepth 1 -type f -name 'test_*.js' | sort)
+          for test_file in "${tests[@]}"; do
+            echo "==> $test_file"
+            node "$test_file"
+          done
+          echo "Deterministic tests PASS: ${#tests[@]}/${#tests[@]}"
+      - name: Security and manifest invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('fs');
+          const m = require('./manifest.json');
+          if (m.manifest_version !== 3 || m.version !== '0.9.8' || m.minimum_chrome_version !== '118') throw new Error('manifest gate failed');
+          if (!String(m.content_security_policy?.extension_pages || '').includes("script-src 'self'")) throw new Error('self CSP missing');
+          const all = fs.readFileSync('service-worker.js','utf8') + fs.readFileSync('content.js','utf8') + fs.readFileSync('options.js','utf8') + fs.readFileSync('journal.js','utf8');
+          if (/\beval\s*\(|\bnew\s+Function\s*\(/.test(all)) throw new Error('eval-like execution found');
+          console.log('Manifest/security invariants PASS');
+          NODE
+      - name: Commit final audit state and remove one-shot files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/deep-audit-20260825.yml .github/workflows/apply-deep-audit-20260825.yml project_tools/patch_deep_audit_20260825.py
+          git add -A
+          git status --short
+          git commit -m 'audit: register deep findings and optimize bounded UI work (P1-155 P1-159)'
+          git push origin HEAD:main
+          echo "FINAL_HEAD=$(git rev-parse HEAD)"
