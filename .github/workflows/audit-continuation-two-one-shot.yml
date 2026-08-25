@@ -1,0 +1,133 @@
+name: Deep audit continuation two one-shot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-continuation-two-one-shot.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update-audit-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard exact audit baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='3285adac4aa8064eb4bf1f6da20a1bacc3fd30bb'
+          git cat-file -e "$BASE^{commit}"
+          actual="$(git diff --name-only "$BASE"..HEAD | sort)"
+          expected='.github/workflows/audit-continuation-two-one-shot.yml'
+          if [ "$actual" != "$expected" ]; then
+            echo 'Unexpected files changed since audit baseline:'
+            printf '%s\n' "$actual"
+            exit 1
+          fi
+
+      - name: Append confirmed audit findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          priority_path = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          priorities = priority_path.read_text()
+          new_ids = ['P0-066','P0-067','P0-068','P1-166','P1-167','P1-168']
+          for item in new_ids:
+              if item in priorities:
+                  raise SystemExit(f'{item} already exists; refusing duplicate registry write')
+
+          priorities += '''
+
+## Продолжение глубокого аудита 2026-08-25 — URL confidentiality / page side effects / bounded preprocessing
+
+| Код | Приоритет | Статус | Пункт |
+|---|---|---|---|
+| P0-066 | P0 | OPEN | Source URL не имеет единой confidentiality-boundary перед PDF/Journal: live save передаёт `location.href`, PDF header печатает полный URL, service-worker сохраняет `URL.toString()`, а import/Journal normalization в основном снимает только fragment. URL userinfo (`user:password@`) и credential-like query/fragment (`access_token`, OAuth code, token/signature и т.п.) могут попасть в PDF, Journal и backup/export. Нужен единый canonical source-URL sanitizer до durable/display artifact: всегда удалять userinfo и fragment, redact/drop известные secret query keys, сохраняя обычные несекретные query; imported/opened Yandex public URL также должен reject userinfo. |
+| P0-067 | P0 | OPEN | PDF preparation не должна программно активировать host-page controls. `expandSpoilersInIncludedContent()` вызывает реальный `control.click()`; текущий `isSafeDisclosureControl()` допускает в том числе submit-button с `aria-expanded/aria-controls` и semantic-toggle links. Сохранение PDF поэтому может запустить page JS, submit/GET/POST, navigation или другой side effect. Удалить synthetic click из save path: native `<details>` раскрывать состоянием, существующие панели — временным inert visual unlock/rollback; контент, требующий реального user action, просить раскрыть вручную. |
+| P0-068 | P0 | OPEN | Same-origin iframe flattened proxy после `cloneNode(true)` удаляет только `<script>` и Exclude, затем вставляет clone прямо в top-document `body`. Вложенные `iframe/frame/object/embed`, custom elements, duplicate `id/name` и прочая active DOM semantics остаются: insertion может создать новые browsing contexts/network loads, вызвать page-defined custom-element lifecycle и нарушить identity DOM верхней страницы. Flattening должен строить inert/sanitized proxy до live mount: neutralize active embedded/form/custom-element semantics и duplicate identity, сохранив статический печатный контент и точный rollback. |
+| P1-166 | P1 | OPEN | Late-settlement registries `scriptExecutionSettlements` и `tabCreateSettlements` дедуплицируют одинаковые non-cancellable Chrome API операции и правильно удерживают actual Promise после caller timeout, но не имеют global admission cap. Если `chrome.scripting.executeScript()`/`chrome.tabs.create()` никогда не settle, уникальные keys могут неограниченно накапливаться. Нужен cap реально unresolved actual settlements с fail-closed admission, не удаляя запись только из-за локального timeout; late-success receipt/dedupe semantics сохранить. |
+| P1-167 | P1 | OPEN | Bounded resource prefetch (5000 DOM / 500 tasks) не ограничивает другие PDF-preparation scans. `collectIncludedElements()` и `collectDisclosureControls()` делают полный `querySelectorAll` + Set для всех links/images/details/disclosure-controls, затем `changedLinks`/`wrappedImages` удерживают и массово мутируют весь результат до rollback. На очень большой выбранной странице это отдельный O(N) memory/main-thread path. Нужен общий selected-content traversal/time/mutation budget для link absolutization, image wrapping и disclosure preparation с понятной partial/fail-safe диагностикой. |
+| P1-168 | P1 | OPEN | Locator v3 после P1-155 ограничивает число restore-candidates до 5000, но creation/scoring всё ещё материализует полные sibling arrays (`[...parent.children]`, `.filter(...)`) для structural path/fingerprint и для каждого scored candidate; тот же паттерн есть в `frame-agent.js`. Wide-parent DOM способен вернуть O(candidates × siblings) CPU/memory. Считать sibling/same-tag index без полного массива, ввести sibling/time cap и при переполнении опускать positional fingerprint вместо зависания restore. |
+'''
+          priority_path.write_text(priorities)
+
+          audit_path = Path('DEEP_AUDIT_2026-08-25.md')
+          audit = audit_path.read_text()
+          audit += '''
+
+## Continuation at HEAD `3285adac4aa8064eb4bf1f6da20a1bacc3fd30bb` — URL confidentiality and page-side-effect review
+
+No production source changed during this continuation. The audit re-read current `content.js`, `frame-agent.js`, `service-worker.js`, `journal.js`, `popup.js`, `prepared-save-as.js`, and `offscreen.js` from GitHub `main`.
+
+### Newly confirmed findings
+
+- **P0-066 OPEN — durable source-URL confidentiality boundary.** Live metadata uses `location.href`; the PDF header emits it as both text and hyperlink; content metadata sanitization returns the current tab URL with `URL.toString()`. `normalizeJournalUrl()` and imported HTTP URL normalization do not remove URL userinfo and only partly handle fragment. OperationLog already redacts secret query material, but PDF/Journal/backup do not share that sanitizer. Introduce one durable/display URL sanitizer: strip `username/password`, strip fragment, redact/drop known credential query names, preserve ordinary query parameters, and reject userinfo on imported Yandex public URLs.
+- **P0-067 OPEN — synthetic host-page click during PDF preparation.** `expandSpoilersInIncludedContent()` calls `control.click()`. The current safety predicate still accepts semantic-toggle submit buttons and links; programmatic `HTMLElement.click()` fires the element click, and submit controls can submit their form. PDF save must never activate host controls. Keep native `<details>` state mutation and inert visual panel unlocking, but require explicit manual user expansion when real page interaction is needed.
+- **P0-068 OPEN — flattened iframe proxy is live, not inert.** The clone is built with deep `cloneNode(true)`, only scripts and Exclude nodes are removed, and the proxy is appended to the top document. Nested browsing/plugin elements and custom elements remain. Inserting custom elements can run `connectedCallback`; embedded frames/resources can establish new browsing contexts or loads. Duplicate ids/names can also perturb page selectors while the proxy exists. Build an inert sanitized clone before any live insertion.
+- **P1-166 OPEN — unresolved Chrome side-effect registry admission.** `scriptExecutionSettlements` and `tabCreateSettlements` correctly preserve actual settlement after local timeout and dedupe identical requests, but unlike Action/download/PDF pending paths they have no global unresolved-count admission budget. A never-settling Chrome Promise therefore leaves a retained entry and unique operations can accumulate. Add fail-closed global caps while retaining actual-settlement semantics.
+- **P1-167 OPEN — unbounded selected-content PDF preprocessing.** Resource prefetch itself is bounded, but link absolutization, image wrapping and disclosure collection call full-subtree `querySelectorAll` and build Sets/rollback arrays without a shared traversal or time budget. This is a separate large-page availability path from P1-160 discovery and P0-064 iframe clone admission.
+- **P1-168 OPEN — locator sibling enumeration.** Candidate collection is bounded after P1-155, but locator construction and v3 scoring still allocate whole sibling arrays, sometimes for every candidate. Replace full-array sibling indexing/filtering with bounded traversal/index helpers and degrade positional fingerprint when the sibling budget is exceeded.
+
+### Rejected / non-new hypotheses in this pass
+
+- The suspected `joinDiskPath()` `..` escape through filename components did **not** reproduce: `sanitizeDiskName()` strips trailing dots/spaces and dot-only segments collapse to `_`; destructive Yandex moves also revalidate the source through managed-branch containment before mutation. P0-040/P1-090 controls remain effective for the paths reviewed.
+- No new Journal/options DOM-XSS sink was found: dynamic Journal content is built with DOM nodes/`textContent`; Options `innerHTML` uses static extension-owned markup and external errors are inserted as text.
+- `prepared-save-as.js` produced no new finding beyond existing P1-156/P1-157: native `saveAs:true` remains page-owned/unbounded, while listener/release/runtime-message cleanup gaps are already registered.
+
+### Standards check for P0-067/P0-068
+
+Current MDN/HTML documentation confirms that `HTMLElement.click()` simulates a click and fires the element click event; submit buttons can submit their associated form. Custom-element `connectedCallback()` runs when an element is added to the document, and custom-element lifecycle is explicitly allowed to perform initialization/resource work. This supports treating live proxy insertion and synthetic page activation as real side-effect boundaries rather than only visual fidelity concerns.
+
+### Evidence / test note
+
+This audit continuation changes documentation only. Product tests were not rerun. The last product gate remains P0-063: JavaScript syntax 88/88 PASS and deterministic tests 74/74 PASS. Browser-level regressions are required when P0-066/P0-067/P0-068 and the new P1 bounds are implemented.
+'''
+          audit_path.write_text(audit)
+          PY
+
+      - name: Validate docs-only delta and invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' 'DEEP_AUDIT_2026-08-25.md' 'project_docs/PRIORITIES_P0_P1_P2.md' | sort)"
+          if [ "$changed" != "$expected" ]; then
+            echo 'Unexpected working-tree delta:'
+            printf '%s\n' "$changed"
+            exit 1
+          fi
+          node - <<'NODE'
+          const fs = require('fs');
+          const m = JSON.parse(fs.readFileSync('manifest.json','utf8'));
+          if (m.manifest_version !== 3 || m.version !== '0.9.8' || m.minimum_chrome_version !== '118') throw new Error('manifest invariant changed');
+          const p = fs.readFileSync('project_docs/PRIORITIES_P0_P1_P2.md','utf8');
+          for (const id of ['P0-066','P0-067','P0-068','P1-166','P1-167','P1-168']) {
+            if ((p.match(new RegExp(id, 'g')) || []).length !== 1) throw new Error(`${id} registry count != 1`);
+          }
+          const a = fs.readFileSync('DEEP_AUDIT_2026-08-25.md','utf8');
+          for (const id of ['P0-066','P0-067','P0-068','P1-166','P1-167','P1-168']) {
+            if (!a.includes(id)) throw new Error(`${id} missing from audit report`);
+          }
+          console.log('Audit continuation docs invariants: PASS');
+          NODE
+
+      - name: Commit docs and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-continuation-two-one-shot.yml
+          git add DEEP_AUDIT_2026-08-25.md project_docs/PRIORITIES_P0_P1_P2.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: record URL and page-side-effect audit findings'
+          git push origin HEAD:main
+          echo "Audit HEAD: $(git rev-parse HEAD)"
