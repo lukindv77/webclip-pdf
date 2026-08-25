@@ -23,7 +23,11 @@ jobs:
           fetch-depth: 0
 
       - name: Apply diagnostic patch
-        run: python3 project_tools/patch_p1_147_148.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i "s/async function getPendingRemoteSave(/async function removePendingRemoteSave(/" project_tools/patch_p1_147_148.py
+          python3 project_tools/patch_p1_147_148.py
 
       - name: JavaScript syntax gate
         id: syntax
