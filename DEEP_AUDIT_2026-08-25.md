@@ -312,3 +312,24 @@ Source-of-truth baseline: `6252ee799e9b6f6eba43f56a7cc0bba20150bfd5`. This sync 
 ### Required security model
 
 Treat every host-page DOM node/event/attribute as attacker-controlled input. User-authorizing actions must require trusted physical input and extension-owned state, not merely an event listener attached from an isolated world. Sensitive temporary input such as the file comment must not be readable through a page-accessible open shadow tree. Authoritative selection should live in extension memory/overlay structures; if DOM markers are unavoidable for print CSS, materialize them only for the shortest print preparation window with exact rollback and do not use page-mutated marker values as authority.
+
+
+## Continuation at HEAD `2e66a580ebbeb998c337fc4b4f613dfd046662cb` — locator confidentiality and surrounding-text minimization
+
+No production source changed in this continuation. Current source review confirmed two confidentiality extensions and one new privacy finding.
+
+### P0-066 scope expands to every durable URL-bearing field
+
+`sanitizeSelectionSnapshot()` currently copies locator `src` and `href` with length limits only. Those locators originate from selected DOM attributes and are persisted inside Journal entries, exports and Yandex backups. Consequently a page-level signed URL, credential-like query value, URL userinfo, `data:` fragment or `blob:` identifier can bypass a future source-URL-only sanitizer. P0-066 therefore requires one reusable canonical sanitizer at every durable URL boundary, with locator-specific scheme restrictions. The existing resource-report redaction does not protect locator fields.
+
+### P0-075 also includes the print-header disclosure window
+
+The content UI uses an open shadow tree, but closing that tree would not fully solve the confidentiality issue. During PDF preparation `fileComment` is rendered into the WebClip print header and that header is inserted into the host document body. A hostile page can observe light-DOM insertion and read the comment before `Page.printToPDF` completes. Sensitive extension input must remain outside host-page-observable DOM across the entire workflow, including the temporary print representation. Chrome documents that content scripts have an isolated JavaScript world while still reading and modifying the page DOM; isolated-world variable separation is not a DOM confidentiality boundary.
+
+### P1-182: locator robustness currently retains unselected surrounding plaintext
+
+Top-frame locator creation records bounded `parentText`, previous-sibling text and next-sibling text as restore fingerprint material. The worker sanitizer retains those strings and the normal Journal/export pipeline retains the selection snapshot. This means the backup data set can include neighboring content never selected for capture. A replacement fingerprint must remain useful for P1-001 confidence/ambiguity scoring but should not reconstruct the original surrounding text. A versioned one-way representation is preferable to raw text; legacy snapshots remain readable for compatibility but new writes should stop expanding this hidden plaintext corpus.
+
+### Evidence and test note
+
+This is a documentation-only audit sync. Product tests are not rerun by this workflow. The last verified product gate remains the P0-063 gate (88/88 syntax, 74/74 deterministic tests); unmanaged unpacked Chrome and real Yandex E2E remain release blockers.
