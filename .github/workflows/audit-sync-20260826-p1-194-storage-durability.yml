@@ -1,0 +1,63 @@
+name: audit-sync-p1-194-storage-durability
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-sync-20260826-p1-194-storage-durability.yml'
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "a6829b7c93e8372e69a6531d4f48a486a01b7464"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p1-194-storage-durability.yml"
+          ! grep -q '| P1-194 |' project_docs/PRIORITIES_P0_P1_P2.md
+      - name: Sync audit docs
+        shell: python
+        run: |
+          from pathlib import Path
+          row = "| P1-194 | P1 | OPEN | Journal, recovery checkpoints и служебные IndexedDB WebClip живут в web-platform storage extension origin. Chrome прямо допускает eviction такого storage под сильным storage pressure, если origin не получил persistent storage; `unlimitedStorage` также исключает quota/eviction, но текущий manifest его не запрашивает. WebClip умеет показывать `navigator.storage.persisted()` и имеет ручную кнопку `persist()` в Options, однако persistence не является admission/invariant для Journal или irreversible save flows. При этом код возвращает/логирует `recoveryGuaranteed=true`, когда durable checkpoint лишь успешно committed в обычный IndexedDB. Это переоценивает гарантию: при `persisted=false` Browser способен удалить сам Journal/pending store вместе с единственным recovery evidence после уже физически успешного local/Yandex side effect. Нужен явный durability-class contract: выбрать приемлемую стратегию защиты (например, добиться `navigator.storage.persist()` и контролировать результат; рассмотреть `unlimitedStorage` только как осознанное permission/product решение; либо иной durable layer), показывать состояние пользователю и не маркировать recovery как guaranteed, если eviction protection не доказана. Перед необратимым side effect checkpoint admission должен учитывать не только commit/quota, но и требуемый durability class; если продукт допускает best-effort storage, терминология/UX/OperationLog обязаны это честно отражать. External versioned backup остаётся дополнительной защитой и не заменяет локальный Journal source-of-truth. Regression/real Chrome QA: `persisted=false` не выдаёт ложную `recoveryGuaranteed`; выбранный protected mode подтверждается после restart/storage-pressure simulation настолько, насколько позволяет Chrome test environment. P1-043 остаётся про concurrent quota reservation, P2-008 — про расширенный health-report. |"
+          p=Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          with p.open('a',encoding='utf-8') as f:
+              f.write("\n\n## Продолжение глубокого аудита 2026-08-26 — IndexedDB eviction / durability class\n\n")
+              f.write("| Код | Приоритет | Статус | Пункт |\n|---|---|---|---|\n")
+              f.write(row+"\n")
+          a=Path('DEEP_AUDIT_2026-08-25.md')
+          with a.open('a',encoding='utf-8') as f:
+              f.write("\n\n## Continuation 2026-08-26 — IndexedDB eviction / durability class\n\n")
+              f.write("| Code | Priority | Status | Finding |\n|---|---|---|---|\n")
+              f.write(row.replace('| P1-194 | P1 | OPEN |','| P1-194 | P1 | OPEN |',1)+"\n")
+              f.write("\nEvidence: current manifest has no `unlimitedStorage`; Options exposes a user-triggered `navigator.storage.persist()` and health status, but checkpoint creation/finalization does not require persisted storage. Chrome documentation states extension web-platform storage can be evicted under heavy storage pressure and identifies `persist()`/`unlimitedStorage` as protections. Docs-only audit sync; runtime/manifest unchanged and product gate not rerun.\n")
+      - name: Remove temporary workflow and verify scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/audit-sync-20260826-p1-194-storage-durability.yml
+          git add -A
+          printf '%s\n' "$(git diff --cached --name-only)" | sort > /tmp/actual
+          printf '%s\n' ".github/workflows/audit-sync-20260826-p1-194-storage-durability.yml" "DEEP_AUDIT_2026-08-25.md" "project_docs/PRIORITIES_P0_P1_P2.md" | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+          python - <<'PY'
+          import json
+          m=json.load(open('manifest.json', encoding='utf-8'))
+          assert m['manifest_version']==3
+          assert m['version']=='0.9.8'
+          assert m['minimum_chrome_version']=='118'
+          assert 'unlimitedStorage' not in m.get('permissions', [])
+          PY
+      - name: Commit and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'docs: record P1-194 storage durability class'
+          git push origin HEAD:main
