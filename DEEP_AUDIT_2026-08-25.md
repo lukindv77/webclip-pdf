@@ -390,3 +390,20 @@ A per-attempt generation/state identifier is required. Cleanup/consume must comp
 ### Evidence note
 
 No production source changed and no product tests were rerun. Last verified product gate remains P0-063 (88/88 syntax, 74/74 deterministic tests).
+
+
+## Continuation at HEAD `c0e1ed0c30c628e46d969583025711423b507b9c` — Yandex remote object/content proof
+
+No production source changed. This pass compared the normal PDF upload, allow-existing retry, pending remote-save recovery, Journal backup upload/recovery and filename generation.
+
+### P1-184: path plus byte size is not object identity
+
+The normal upload correctly requests a signed target with `overwrite=false`. However, the retry/reconciliation proof is weaker than the upload creation contract. In allow-existing mode WebClip reads the exact target path and, if it is a file whose byte count equals the cached PDF byte count, treats it as the prior successful upload and skips sending the cached PDF. The first durable `resourceId` is captured only after that decision. Background remote-save recovery follows the same path/type/size proof. Journal backup recovery also uses exact path plus exact size.
+
+This can misattribute an unrelated object. PDF filenames include page title/site plus a timestamp only to the second, so two operations can target the same filename within one second; an external Yandex client can also create or replace content at the expected path. Equal byte length is not a content or creation proof. The consequence is a Journal/backup success state referring to a different object than the bytes WebClip intended to persist.
+
+The fix should be implementation-neutral until real Yandex API verification is available. Store a local content digest/immutable expected fingerprint and an operation-scoped transfer receipt before/through the signed transfer; once a remote object is conclusively verified, persist its `resourceId`. If Yandex exposes a trustworthy checksum or immutable creation identity in the actual API account used by WebClip, adopt it only after real E2E confirmation. Otherwise recovery must remain fail-closed instead of accepting a path-size collision. This finding is distinct from P1-179 (account/root namespace identity) and P0-073/P0-074 (auth/account operation fencing).
+
+### Evidence note
+
+Documentation-only audit sync. Product tests are not rerun. Last verified product gate remains P0-063: 88/88 JS syntax and 74/74 deterministic tests; real unpacked Chrome and real Yandex E2E remain release blockers.
