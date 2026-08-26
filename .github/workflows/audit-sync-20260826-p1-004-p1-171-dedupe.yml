@@ -1,0 +1,75 @@
+name: audit-sync-p1-004-p1-171-dedupe
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-audit-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "bee0760251f865761827248ce3c4318837aab7ce"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p1-004-p1-171-dedupe.yml"
+      - name: Reconcile audit docs
+        shell: python
+        run: |
+          from pathlib import Path
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          closure = Path('P1-004_CLOSURE.md')
+          p = priorities.read_text(encoding='utf-8')
+          a = audit.read_text(encoding='utf-8')
+          c = closure.read_text(encoding='utf-8')
+
+          lines = p.splitlines()
+          p1004 = [i for i, line in enumerate(lines) if line.startswith('| P1-004 |')]
+          p1171 = [i for i, line in enumerate(lines) if line.startswith('| P1-171 |')]
+          if len(p1004) != 1 or len(p1171) != 1:
+              raise SystemExit(f'Expected single P1-004/P1-171 rows, got {len(p1004)}/{len(p1171)}')
+          if '| P1 | PARTIAL |' not in lines[p1004[0]] or '| P1 | OPEN |' not in lines[p1171[0]]:
+              raise SystemExit('P1-004/P1-171 status changed; refuse stale sync')
+          lines[p1004[0]] = "| P1-004 | P1 | PARTIAL | Cross-origin iframe поддерживаются через отдельный `frame-agent.js` только после optional host permission, явно выданного пользователем. Popup bounded-запрос (до 16 hosts за действие), service-worker проверяет `frameId > 0` и host permission; top-frame сопоставляет inaccessible iframe по exact URL или единственному origin и при ambiguity fail-closed не активирует frame. Remote-области входят в `SelectionSnapshot v3`, prepare-print/resource stage и высоту iframe; same-origin iframe остаются в P0-003 path. Feature-level пункт снова `PARTIAL`, потому что document-identity/navigation fence остаётся незакрытым; детальный root cause и acceptance criteria ведутся в **P1-171** (не дублировать новым номером). Настоящий optional permission prompt/revoke/unpacked Chrome остаётся release QA. |"
+          p = '\n'.join(lines) + ('\n' if p.endswith('\n') else '')
+
+          marker = '## Continuation 2026-08-26 — P1-004 / P1-171 registry deduplication'
+          if marker not in a:
+              a += "\n\n" + marker + "\n\nAudit baseline: `bee0760251f865761827248ce3c4318837aab7ce`. Documentation-only correction. The child-frame reused-`frameId` / missing exact `documentId` finding was already registered as **P1-171**. P1-004 remains the feature-level cross-origin iframe item and is `PARTIAL`; P1-171 is the single detailed audit item for the document-generation/navigation fence. No new P-number is allocated. Production runtime/manifest are unchanged and no product test gate is rerun by this correction.\n"
+
+          c = c.replace('Status: **REGRESSION**', 'Status: **PARTIAL** — reopened by audit; detailed open root cause is tracked in `P1-171`.', 1)
+          if '## Audit reopening 2026-08-26' not in c:
+              c += "\n\n## Audit reopening 2026-08-26\n\nThe verification above is historical evidence for the earlier implementation gate; it does **not** prove the newly discovered document-identity race is closed. Audit found that the registry stores `documentId`, but outbound commands are addressed by `frameId` only and child-frame navigation/reload can reuse that frame id while the top tab URL remains stable. The authoritative detailed finding and acceptance criteria are maintained in `project_docs/PRIORITIES_P0_P1_P2.md` as **P1-171**. P1-004 therefore remains `PARTIAL` until P1-171 is implemented and verified, plus the real unpacked Chrome permission/revoke QA is completed.\n"
+
+          priorities.write_text(p, encoding='utf-8')
+          audit.write_text(a, encoding='utf-8')
+          closure.write_text(c, encoding='utf-8')
+      - name: Verify docs-only scope and remove workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-p1-004-p1-171-dedupe.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md P1-004_CLOSURE.md
+          mapfile -t changed < <(git diff --cached --name-only | sort)
+          expected=$'.github/workflows/audit-sync-20260826-p1-004-p1-171-dedupe.yml\nDEEP_AUDIT_2026-08-25.md\nP1-004_CLOSURE.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(printf '%s\n' "${changed[@]}")"
+          test "$actual" = "$expected"
+          grep -q '"manifest_version": 3' manifest.json
+          grep -q '"version": "0.9.8"' manifest.json
+          grep -q '"minimum_chrome_version": "118"' manifest.json
+      - name: Commit audit sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: deduplicate P1-004 and P1-171 tracking'
+          git push
