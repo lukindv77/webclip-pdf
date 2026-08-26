@@ -1,0 +1,65 @@
+name: audit-sync-p1-191-manual-auth
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-p1-191:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "febba5c3e5710561cadb1f63dd81792a4f1690e3"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p1-191-manual-auth.yml"
+      - name: Sync P1-191 finding
+        shell: python
+        env:
+          ROW_B64: fCBQMS0xOTEgfCBQMSB8IE9QRU4gfCDQl9Cw0LzQtdC90LAg0LDQstGC0L7RgNC40LfQsNGG0LjQuCDRh9C10YDQtdC3IG1hbnVhbCBPQXV0aCB0b2tlbiDQvdC1IHRyYW5zYWN0aW9uYWwg0Lgg0LzQvtC20LXRgiDRg9C90LjRh9GC0L7QttC40YLRjCDRg9C20LUg0YDQsNCx0L7Rh9GD0Y4gWWFuZGV4LdGB0LXRgdGB0LjRjiDQv9GA0Lgg0L/RgNC+0YHRgtC+0Lkg0L7RiNC40LHQutC1INCy0LLQvtC00LAuIGBzZXRNYW51YWxZYW5kZXhUb2tlbigpYCDRgdC90LDRh9Cw0LvQsCDRgdGC0YDQvtC40YIgY2FuZGlkYXRlIGB5YW5kZXhBdXRoYCDQuCAqKtGB0YDQsNC30YMqKiDQstGL0LfRi9Cy0LDQtdGCIGB3cml0ZVlhbmRleEF1dGgoeWFuZGV4QXV0aClgLCDQv9C+0YHQu9C1INGH0LXQs9C+INC/0YDQvtCy0LXRgNGP0LXRgiDQtdCz0L4g0YfQtdGA0LXQtyBgeWFuZGV4QXBpKCcnKWA7INC10YHQu9C4INC/0YDQvtCy0LXRgNC60LAv0YHQtdGC0Ywg0LfQsNCy0LXRgNGI0LDQtdGC0YHRjyDQvtGI0LjQsdC60L7QuSwgY2F0Y2gg0LLRi9C30YvQstCw0LXRgiBgd3JpdGVZYW5kZXhBdXRoKG51bGwpYC4g0J/QvtGN0YLQvtC80YMg0L/RgNC4INGB0YPRidC10YHRgtCy0YPRjtGJ0LXQuSDQstCw0LvQuNC00L3QvtC5IE9BdXRoL1BLQ0Ut0YHQtdGB0YHQuNC4INC/0L7Qv9GL0YLQutCwINCy0YHRgtCw0LLQuNGC0Ywg0L3QtdCy0LXRgNC90YvQuS/Qv9GA0L7RgdGA0L7Rh9C10L3QvdGL0LkgbWFudWFsIHRva2VuINGB0YLQuNGA0LDQtdGCINC/0YDQtdC20L3QuNC5IGFjY2VzcyB0b2tlbiDQstC80LXRgdGC0L4g0YHQvtGF0YDQsNC90LXQvdC40Y8g0L/QvtGB0LvQtdC00L3QtdCz0L4g0LTQvtC60LDQt9Cw0L3QvdC+INGA0LDQsdC+0YfQtdCz0L4gYXV0aCBzdGF0ZS4g0JTQvtC/0L7Qu9C90LjRgtC10LvRjNC90L4gbWFudWFsLXN1Y2Nlc3MgcGF0aCDQvdC1INGP0LLQu9GP0LXRgtGB0Y8g0YfQsNGB0YLRjNGOINC+0LHRidC10LkgYXV0aC1nZW5lcmF0aW9uIHN0YXRlIG1hY2hpbmU6IGB5YW5kZXhPQXV0aFBlbmRpbmdgINGD0LTQsNC70Y/QtdGC0YHRjyDQsiBkaXNjb25uZWN0L2V4cGlyZWQvZmluaXNoIHBhdGhzLCDQvdC+IG1hbnVhbCByZXBsYWNlbWVudCDQvdC1INC/0L7QutCw0LfQsNC9INC60LDQuiBjb25zdW1lL2ludmFsaWRhdGUg0YHRg9GJ0LXRgdGC0LLRg9GO0YnQtdCz0L4gUEtDRSBhdHRlbXB0LCDQv9C+0Y3RgtC+0LzRgyDQv9C+0LfQtNC90LjQuSBgZmluaXNoWWFuZGV4T0F1dGgoKWAg0YHRgtCw0YDQvtC5INC/0L7Qv9GL0YLQutC4INGB0L/QvtGB0L7QsdC10L0g0YHQvdC+0LLQsCDQt9Cw0LzQtdC90LjRgtGMIG1hbnVhbCBhdXRoOyDRjdGC0L4g0LTQvtC70LbQvdC+INCx0YvRgtGMINGB0L7Qs9C70LDRgdC+0LLQsNC90L4g0YEgUDEtMTc4LiDQndGD0LbQtdC9IGNhbmRpZGF0ZeKGknZhbGlkYXRl4oaSY29tbWl0IGNvbnRyYWN0OiDQv9GA0L7QstC10YDRj9GC0YwgbWFudWFsIHRva2VuINC+0YLQtNC10LvRjNC90YvQvCDQt9Cw0L/RgNC+0YHQvtC8LCDQvdC1INC/0YPQsdC70LjQutGD0Y8g0LXQs9C+INC60LDQuiBjdXJyZW50IGF1dGg7INC/0YDQuCB2YWxpZGF0aW9uL25ldHdvcmsgZmFpbHVyZSDRgdC+0YXRgNCw0L3Rj9GC0Ywg0L/RgNC10LTRi9C00YPRidGD0Y4gYXV0aCDQvdC10LjQt9C80LXQvdC90L7QuTsg0L/RgNC4IHN1Y2Nlc3Mg0L7QtNC90LjQvCBzZXJpYWxpemVkL2dlbmVyYXRpb24tZmVuY2VkIHRyYW5zaXRpb24g0YTQuNC60YHQuNGA0L7QstCw0YLRjCDQvdC+0LLRi9C5IGF1dGgvYWNjb3VudCDQuCDQuNC90LLQsNC70LjQtNC40YDQvtCy0LDRgtGML2NvbnN1bWUg0LHQvtC70LXQtSDRgdGC0LDRgNGL0LUgaW5jb21wYXRpYmxlIFBLQ0UgYXR0ZW1wdHMuINCd0LUg0YHRh9C40YLQsNGC0Ywg0LvQvtC60LDQu9GM0L3Ri9C5IHRpbWVvdXQg0L7RgtC80LXQvdC+0LkgQ2hyb21lIFN0b3JhZ2UvbmV0d29yayBzZXR0bGVtZW50LiBSZWdyZXNzaW9uOiB2YWxpZCBjdXJyZW50IGF1dGggKyBpbnZhbGlkIG1hbnVhbCB0b2tlbiA9PiBjdXJyZW50IGF1dGgg0L7RgdGC0LDQkdGC0YHRjzsgdmFsaWQgbWFudWFsIHJlcGxhY2VtZW50ID0+INC90L7QstGL0LkgYWNjb3VudC9hdXRoINGE0LjQutGB0LjRgNGD0LXRgtGB0Y8g0Lgg0YHRgtCw0YDRi9C5IHBlbmRpbmcgUEtDRSDQvdC1INC80L7QttC10YIg0L/QvtC30LTQvdC10LUgb3ZlcndyaXRlOyB1bmtub3duIHZhbGlkYXRpb24gb3V0Y29tZSDQvdC1INC/0YDQuNCy0L7QtNC40YIg0Logc2lsZW50IGxvZ291dC4gfA==
+          AUDIT_B64: IyMgQ29udGludWF0aW9uIDIwMjYtMDgtMjYg4oCUIFAxLTE5MSB0cmFuc2FjdGlvbmFsIG1hbnVhbC10b2tlbiBhdXRoIHJlcGxhY2VtZW50CgpPQXV0aC9zZXNzaW9uIGF1ZGl0IGNvbmZpcm1lZCBhIHNlcGFyYXRlIGF1dGgtdHJhbnNpdGlvbiByb290IGNhdXNlLiBgc2V0TWFudWFsWWFuZGV4VG9rZW4oKWAgd3JpdGVzIHRoZSBjYW5kaWRhdGUgbWFudWFsIGB5YW5kZXhBdXRoYCBiZWZvcmUgdmFsaWRhdGluZyBpdCB3aXRoIHRoZSBZYW5kZXggQVBJLiBPbiB2YWxpZGF0aW9uL0FQSSBmYWlsdXJlIGl0cyBjYXRjaCBwYXRoIHdyaXRlcyBgbnVsbGAsIHNvIGFuIGFscmVhZHkgdmFsaWQgY3VycmVudCBPQXV0aCBzZXNzaW9uIGlzIGRlc3Ryb3llZCBieSBhIGJhZCBvciBleHBpcmVkIG1hbnVhbCB0b2tlbiBhdHRlbXB0LiBUaGlzIGlzIGluZGVwZW5kZW50IG9mIHRoZSBzdGFsZSBjb21wYXJlL3JlbW92ZSByYWNlcyBhbHJlYWR5IHRyYWNrZWQgaW4gUDEtMTc4LCBhbHRob3VnaCB0aGUgZml4IG11c3Qgc2hhcmUgdGhlIHNhbWUgZ2VuZXJhdGlvbiBjb250cmFjdDogdmFsaWRhdGUgYSBjYW5kaWRhdGUgd2l0aG91dCBwdWJsaXNoaW5nIGl0LCBjb21taXQgb25seSBhZnRlciBwcm9vZiwgcHJlc2VydmUgdGhlIHByZXZpb3VzIHByb3ZlbiBhdXRoIG9uIGZhaWx1cmUvdW5rbm93biBvdXRjb21lLCBhbmQgaW52YWxpZGF0ZSBpbmNvbXBhdGlibGUgb2xkZXIgUEtDRSBhdHRlbXB0cyBvbmx5IHdoZW4gdGhlIG1hbnVhbCByZXBsYWNlbWVudCBhY3R1YWxseSBzdWNjZWVkcy4KCkF1ZGl0IHN5bmMgb25seS4gUHJvZHVjdGlvbiBydW50aW1lL2NvbmZpZ3VyYXRpb24gYW5kIGBtYW5pZmVzdC5qc29uYCBhcmUgdW5jaGFuZ2VkOyB0aGUgcHJldmlvdXNseSBwcm92ZW4gODgvODggc3ludGF4ICsgNzQvNzQgZGV0ZXJtaW5pc3RpYyBwcm9kdWN0IGdhdGUgd2FzIG5vdCByZXJ1biBmb3IgdGhpcyBkb2NzLW9ubHkgY29tbWl0Lgo=
+        run: |
+          import base64, os
+          from pathlib import Path
+          priority=Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          deep=Path('DEEP_AUDIT_2026-08-25.md')
+          p=priority.read_text(encoding='utf-8')
+          if 'P1-191' not in p:
+            row=base64.b64decode(os.environ['ROW_B64']).decode('utf-8')
+            priority.write_text(p.rstrip()+'\n\n## Продолжение глубокого аудита 2026-08-26 — transactional manual auth replacement\n\n| Код | Приоритет | Статус | Пункт |\n|---|---|---|---|\n'+row+'\n',encoding='utf-8')
+          d=deep.read_text(encoding='utf-8')
+          marker='## Continuation 2026-08-26 — P1-191 transactional manual-token auth replacement'
+          if marker not in d:
+            audit=base64.b64decode(os.environ['AUDIT_B64']).decode('utf-8')
+            deep.write_text(d.rstrip()+'\n\n'+audit.rstrip()+'\n',encoding='utf-8')
+      - name: Verify scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-p1-191-manual-auth.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          expected=$'.github/workflows/audit-sync-20260826-p1-191-manual-auth.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(git diff --cached --name-only | sort)"
+          test "$actual" = "$expected"
+          python - <<'PY'
+          import json
+          m=json.load(open('manifest.json',encoding='utf-8'))
+          assert m['manifest_version']==3
+          assert m['version']=='0.9.8'
+          assert m['minimum_chrome_version']=='118'
+          PY
+      - name: Commit docs-only sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: record transactional manual auth finding'
+          git push
