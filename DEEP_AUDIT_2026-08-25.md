@@ -565,3 +565,16 @@ Current product source is unchanged; this is a docs-only audit finding on the cu
 - Acceptance: maintain a durable/current publication-policy generation. Any true→false transition (Options or settings import) invalidates authorization for not-yet-started publish from older generations. Immediately before `resources/publish`, live and recovery paths fresh-check current policy/generation. If publish has already started and its result is unknown, do not call it cancelled and do not blind-retry; keep a durable publication-outcome checkpoint for reconciliation. Already confirmed public links are not automatically unpublished by the global toggle; explicit revoke remains P1-164/P0-069.
 
 Docs-only audit sync: production runtime and `manifest.json` are unchanged. The previously proven product gate (88/88 syntax, 74/74 deterministic tests) was not rerun for this documentation-only finding.
+
+
+## Continuation 2026-08-26 — P1-086 cross-context readonly transaction completion
+
+Current product source is unchanged; this is a docs-only audit refinement on current `main`.
+
+- P1-086's service-worker Journal export fix remains valid: revision/batch readonly paths defer publication until transaction completion.
+- `offscreen.js` still has the same class of early-publication bug in shared IndexedDB reads. `getPdfCacheRecord()` and `getTransferPayload()` call `guard.resolve(resolve, req.result)` directly from `IDBRequest.onsuccess`. `getTransferChunkedBlob()` similarly resolves its collected `values` when the last request succeeds.
+- `timeoutIdbTransaction()` marks the external Promise settled at that point. If the readonly transaction subsequently fires `error`/`abort`, the error handler cannot replace the already-returned record. The caller may already materialize a Blob or start the signed transfer from data that was never transaction-complete.
+- This is not a new P-code: it is the same completion-publication invariant already tracked by P1-086. Status is refined from REGRESSION to PARTIAL.
+- Acceptance: all bounded readonly IDB helpers in worker/offscreen/extension pages must keep request results provisional until `tx.oncomplete`; timeout/error/abort after request success must reject. Add offscreen deterministic regressions for PDF cache, transfer payload and chunk-group reads with request success followed by late transaction abort/error.
+
+Docs-only audit sync: production runtime and `manifest.json` are unchanged. The previously proven product gate (88/88 syntax, 74/74 deterministic tests) was not rerun for this documentation-only refinement.
