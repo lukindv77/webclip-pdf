@@ -369,3 +369,24 @@ The durable checkpoint must be written before the remote side effect and include
 ### Evidence note
 
 Documentation-only audit sync; product tests not rerun. Last verified gate remains P0-063 (88/88 syntax and 74/74 deterministic tests). Real unpacked Chrome and real Yandex E2E remain release blockers.
+
+
+## Continuation at HEAD `e7c4fceebbb5836a0899587f2494fffeea08e0a0` — extension-page settings ordering and PKCE generation
+
+Documentation-only refinement of two existing findings.
+
+### P1-157: direct extension-page writes break the worker mutation ordering domain
+
+The Journal group-by toggle calls `chrome.storage.local.set({webclipJournalGroupByUrl: ...})` directly from `journal.js`. User-settings import writes the same key from the service worker together with Yandex/OperationLog settings and a reconciliation marker. Because the page-side write does not participate in the worker's actual-settlement queue, concurrent operations have no common ordering receipt; a late Chrome settlement can overwrite the value the UI/import believes is authoritative. P1-157 therefore covers mutation consistency in addition to read/RPC deadlines.
+
+The optional iframe permission request remains a separate user-owned prompt case inside P1-157: the popup currently wraps `chrome.permissions.request()` in the generic 10-second read helper. The local timeout is not cancellation and can be followed by a late grant, so retry must remain single-flight until the real browser prompt settles.
+
+### P1-178: pending PKCE cleanup needs compare-and-remove semantics
+
+`runYandexAuthStorageOperation()` serializes individual storage operations, but the semantic sequence `read pending -> decide stale/consumed -> later remove` spans multiple queue turns. Serialization alone does not protect the value between those turns. `getYandexStatus()` can read an old expired attempt, a new START_AUTH can replace the key, and then the status cleanup removes the new attempt. `finishYandexOAuth()` has the same pattern for expired pending and, after a potentially long network token exchange, removes `yandexOAuthPending` without proving that the stored attempt is still the one it exchanged.
+
+A per-attempt generation/state identifier is required. Cleanup/consume must compare exact attempt identity immediately before mutation and no old flow may remove a newer attempt. This integrates with the already-recorded completion-aware post-token state machine rather than adding a duplicate priority.
+
+### Evidence note
+
+No production source changed and no product tests were rerun. Last verified product gate remains P0-063 (88/88 syntax, 74/74 deterministic tests).
