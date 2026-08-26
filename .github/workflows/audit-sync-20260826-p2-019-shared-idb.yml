@@ -1,0 +1,69 @@
+name: audit-sync-p2-019-shared-idb
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-p2-019:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "13d93b7b840a2f3537a9e1c6610c6d523426aa98"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p2-019-shared-idb.yml"
+      - name: Sync P2-019 finding
+        shell: python
+        env:
+          ROW_B64: fCBQMi0wMTkgfCBQMiB8IE9QRU4gfCDQoyBzaGFyZWQgSW5kZXhlZERCINC90LXRgiDQtdC00LjQvdC+0LPQviBhdXRob3JpdGF0aXZlINCy0LvQsNC00LXQu9GM0YbQsCBzY2hlbWEgdXBncmFkZS9kYXRhIG1pZ3JhdGlvbi4g0JTQu9GPIGBXZWJDbGlwSm91cm5hbGAg0Lggc2VydmljZSB3b3JrZXIsINC4IGBqb3VybmFsLmpzOjpvcGVuSm91cm5hbERiRm9yVmlldygpYCDQstGL0LfRi9Cy0LDRjtGCIGBpbmRleGVkREIub3BlbiguLi4sIEpPVVJOQUxfREJfVkVSU0lPTilgINC4INC40LzQtdGO0YIg0YHQvtCx0YHRgtCy0LXQvdC90YvQuSBgb251cGdyYWRlbmVlZGVkYDsg0YHQtdC50YfQsNGBIHY3IGRlZmluaXRpb25zINGB0L7QstC/0LDQtNCw0Y7Rgiwg0L3QviDQtdGB0LvQuCB2aWV3LWNvbnRleHQg0L/QtdGA0LLRi9C8INC/0L7QtNC90LjQvNC10YIg0LHRg9C00YPRidGD0Y4gdmVyc2lvbiDRgdCy0L7QtdC5INGD0L/RgNC+0YnRkdC90L3QvtC5INGB0YXQtdC80L7QuSwgd29ya2VyINGD0LbQtSDQvdC1INC/0L7Qu9GD0YfQuNGCIHVwZ3JhZGUgZXZlbnQg0LTQu9GPINC+0LHRj9C30LDRgtC10LvRjNC90L7QuSBtaWdyYXRpb24uINCU0L7Qv9C+0LvQvdC40YLQtdC70YzQvdGL0Lkg0LDRg9C00LjRgiDQv9C+0LTRgtCy0LXRgNC00LjQuywg0YfRgtC+INGN0YLQviDRg9C20LUg0L3QtSDRgtC+0LvRjNC60L4g0LPQuNC/0L7RgtC10YLQuNGH0LXRgdC60LjQuSBmdXR1cmUtcmlzazogYFdlYkNsaXBQZGZSZXRyeUNhY2hlYCB2ZXJzaW9uIDMg0L7RgtC60YDRi9Cy0LDRjtGCINC4IHNlcnZpY2Ugd29ya2VyLCDQuCBvZmZzY3JlZW4uIFdvcmtlciBgb3BlblBkZkNhY2hlRGIoKWAg0L/RgNC4IGBvbGRWZXJzaW9uIDwgMmAg0LLRi9C/0L7Qu9C90Y/QtdGCINGA0LXQsNC70YzQvdGD0Y4gZGF0YS1taWdyYXRpb24vYmFja2ZpbGwg0YHRgtCw0YDRi9GFIFBERiByZWNvcmRzINCyIGBtZXRhYCwg0YLQvtCz0LTQsCDQutCw0LogYG9mZnNjcmVlbi5qczo6Z2V0UGRmQ2FjaGVSZWNvcmQoKWAg0L/RgNC4INGC0L7QvCDQttC1IHVwZ3JhZGUg0YLQvtC70YzQutC+INGB0L7Qt9C00LDRkdGCIHN0b3JlcyDQuCDQvdC1INCy0YvQv9C+0LvQvdGP0LXRgiDRjdGC0L7RgiBiYWNrZmlsbC4g0JIg0L7QsdGL0YfQvdGL0YUg0YLQtdC60YPRidC40YUgUERGIGZsb3cgd29ya2VyLCDQutCw0Log0L/RgNCw0LLQuNC70L4sINC60LDRgdCw0LXRgtGB0Y8gY2FjaGUg0LTQviBvZmZzY3JlZW4sINC/0L7RjdGC0L7QvNGDINC90L7RgNC80LDQu9GM0L3Ri9C5IGN1cnJlbnQtZmxvdyBjb3JydXB0aW9uINC90LUg0LTQvtC60LDQt9Cw0L0g0Lgg0L/RgNC40L7RgNC40YLQtdGCINC+0YHRgtCw0ZHRgtGB0Y8gUDI7INC+0LTQvdCw0LrQviDQsNGA0YXQuNGC0LXQutGC0YPRgNCwINGD0LbQtSDRgdC+0LTQtdGA0LbQuNGCIGNvbnRleHQtc3BlY2lmaWMgbWlncmF0aW9uLCDQutC+0YLQvtGA0YPRjiDQtNGA0YPQs9C+0Lkg0LLQu9Cw0LTQtdC70LXRhiDRgdC/0L7RgdC+0LHQtdC9INC/0YDQvtC/0YPRgdGC0LjRgtGMINC/0YDQuCDQuNC90L7QvCDQv9C+0YDRj9C00LrQtSDQvtGC0LrRgNGL0YLQuNGPL9Cx0YPQtNGD0YnQtdC8IGJ1bXAuINCd0YPQttC10L0g0LXQtNC40L3Ri9C5IHZlcnNpb25lZCBzY2hlbWEvbWlncmF0aW9uIG93bmVyL3NoYXJlZCBtb2R1bGUg0LTQu9GPICoq0LLRgdC10YUgc2hhcmVkIElEQioqIChgV2ViQ2xpcEpvdXJuYWxgLCBgV2ViQ2xpcFBkZlJldHJ5Q2FjaGVgLCB0cmFuc2ZlciBEQiDQuCDQsdGD0LTRg9GJ0LjRhSDQvtCx0YnQuNGFINCR0JQpOiBub24tb3duZXIgY29udGV4dHMg0L3QtSDQtNC+0LvQttC90Ysg0YHQsNC80L7RgdGC0L7Rj9GC0LXQu9GM0L3QviDQstGL0L/QvtC70L3Rj9GC0YwgYXV0aG9yaXRhdGl2ZSB2ZXJzaW9uIHVwZ3JhZGUg0LvQuNCx0L4g0L7QsdGP0LfQsNC90Ysg0LjRgdC/0L7Qu9GM0LfQvtCy0LDRgtGMINGC0L7RgiDQttC1IGV4YWN0IG1pZ3JhdGlvbiBpbXBsZW1lbnRhdGlvbi4gU2NoZW1hIHRlc3RzINC00L7Qu9C20L3RiyDQv9GA0L7QstC10YDRj9GC0YwgdXBncmFkZSBmcm9tIHByaW9yIHZlcnNpb25zINC/0YDQuCDQutCw0LbQtNC+0Lwg0LLQvtC30LzQvtC20L3QvtC8IG9wZW5lciBvcmRlcjsg0L7RgtC00LXQu9GM0L3Ri9C5IHJlZ3Jlc3Npb24g4oCUINGB0YLQsNGA0LDRjyBQREYtY2FjaGUsINCy0L/QtdGA0LLRi9C1INC+0YLQutGA0YvRgtCw0Y8gb2Zmc2NyZWVuL25vbi1vd25lciBjb250ZXh0LCDQvdC1INC80L7QttC10YIg0L/RgNC+0L/Rg9GB0YLQuNGC0YwgbWV0YWRhdGEgbWlncmF0aW9uLiB8
+          AUDIT_B64: IyMgQ29udGludWF0aW9uIDIwMjYtMDgtMjYg4oCUIHNoYXJlZCBJbmRleGVkREIgbWlncmF0aW9uIG93bmVyc2hpcAoKU3RvcmFnZS9yZXBhaXIgYXVkaXQgZXhwYW5kZWQgZXhpc3RpbmcgKipQMi0wMTkqKiByYXRoZXIgdGhhbiBjcmVhdGluZyBhIG5ldyBJRC4gVGhlIHNoYXJlZC1zY2hlbWEgb3duZXJzaGlwIHByb2JsZW0gaXMgYWxyZWFkeSBjb25jcmV0ZSBvdXRzaWRlIGBXZWJDbGlwSm91cm5hbGA6IGJvdGggdGhlIHNlcnZpY2Ugd29ya2VyIGFuZCBgb2Zmc2NyZWVuLmpzYCBvcGVuIGBXZWJDbGlwUGRmUmV0cnlDYWNoZWAgYXQgdmVyc2lvbiAzLiBUaGUgc2VydmljZS13b3JrZXIgdXBncmFkZXIgcGVyZm9ybXMgYSByZWFsIGBvbGRWZXJzaW9uIDwgMmAgY3Vyc29yIG1pZ3JhdGlvbi9iYWNrZmlsbCBmcm9tIGxlZ2FjeSBQREYgcmVjb3JkcyBpbnRvIHRoZSBgbWV0YWAgc3RvcmU7IHRoZSBvZmZzY3JlZW4gdXBncmFkZXIgb25seSBjcmVhdGVzIG1pc3NpbmcgYHBkZnNgL2BtZXRhYCBzdG9yZXMuIFRoZXJlZm9yZSBzY2hlbWEgYXV0aG9yaXR5IGFuZCBkYXRhLW1pZ3JhdGlvbiBhdXRob3JpdHkgYXJlIGFscmVhZHkgY29udGV4dC1zcGVjaWZpYy4gQ3VycmVudCBub3JtYWwgUERGIGZsb3dzIGdlbmVyYWxseSB0b3VjaCB0aGUgY2FjaGUgaW4gdGhlIHdvcmtlciBiZWZvcmUgYXNraW5nIG9mZnNjcmVlbiB0byBtYXRlcmlhbGl6ZS91cGxvYWQgaXQsIHNvIHRoaXMgYXVkaXQgZG9lcyBub3QgY2xhaW0gYSByZXByb2R1Y2VkIG5vcm1hbC1mbG93IGNvcnJ1cHRpb24gYW5kIFAyLTAxOSByZW1haW5zIFAyIE9QRU4uIFRoZSBhY2NlcHRhbmNlIGNyaXRlcmlvbiBpcyBicm9hZGVuZWQgdG8gb25lIGF1dGhvcml0YXRpdmUvc2hhcmVkIG1pZ3JhdGlvbiBpbXBsZW1lbnRhdGlvbiBhY3Jvc3MgSm91cm5hbCwgUERGIHJldHJ5IGNhY2hlLCB0cmFuc2ZlciBEQiBhbmQgZnV0dXJlIHNoYXJlZCBJbmRleGVkREJzLCB3aXRoIG9wZW5lci1vcmRlciB1cGdyYWRlIHJlZ3Jlc3Npb25zIGZyb20gcHJpb3IgdmVyc2lvbnMuCgpBdWRpdCBzeW5jIG9ubHkuIFByb2R1Y3Rpb24gcnVudGltZS9jb25maWd1cmF0aW9uIGFuZCBgbWFuaWZlc3QuanNvbmAgYXJlIHVuY2hhbmdlZDsgdGhlIHByZXZpb3VzbHkgcHJvdmVuIDg4Lzg4IHN5bnRheCArIDc0Lzc0IGRldGVybWluaXN0aWMgcHJvZHVjdCBnYXRlIHdhcyBub3QgcmVydW4gZm9yIHRoaXMgZG9jcy1vbmx5IGNvbW1pdC4K
+        run: |
+          import base64, os
+          from pathlib import Path
+          priority = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          deep = Path('DEEP_AUDIT_2026-08-25.md')
+          p = priority.read_text(encoding='utf-8')
+          lines = p.splitlines()
+          new_row = base64.b64decode(os.environ['ROW_B64']).decode('utf-8')
+          hits = [i for i, line in enumerate(lines) if line.startswith('| P2-019 |')]
+          if len(hits) != 1:
+              raise SystemExit(f'expected exactly one P2-019 row, got {len(hits)}')
+          lines[hits[0]] = new_row
+          priority.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          d = deep.read_text(encoding='utf-8')
+          marker = '## Continuation 2026-08-26 — shared IndexedDB migration ownership'
+          if marker not in d:
+              audit = base64.b64decode(os.environ['AUDIT_B64']).decode('utf-8')
+              deep.write_text(d.rstrip() + '\n\n' + audit.rstrip() + '\n', encoding='utf-8')
+      - name: Verify scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-p2-019-shared-idb.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          expected=$'.github/workflows/audit-sync-20260826-p2-019-shared-idb.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(git diff --cached --name-only | sort)"
+          test "$actual" = "$expected"
+          python - <<'PY'
+          import json
+          m=json.load(open('manifest.json', encoding='utf-8'))
+          assert m['manifest_version'] == 3
+          assert m['version'] == '0.9.8'
+          assert m['minimum_chrome_version'] == '118'
+          PY
+      - name: Commit docs-only sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: extend P2-019 shared IDB migration ownership'
+          git push
