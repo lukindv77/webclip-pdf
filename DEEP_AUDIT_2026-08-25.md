@@ -454,3 +454,10 @@ Audit baseline: `b44d27f2bd55e2ebe4c40fc052e14cc9fc08d780`. Documentation-only s
 **P1-186.** Imported comment IDs are length-bounded but not uniqueness-bounded. Two valid comment objects can retain the same non-empty ID; Journal edit/delete and editing-state lookup address by ID with first-match semantics, so the restored data model contains ambiguous identities. Entry IDs already avoid this class through collision-aware staging/re-ID.
 
 **P1-187.** Flattened selected iframe bodies are deep-cloned. The clone helper copies resolved href/src/poster state but has no canvas bitmap transfer. `Node.cloneNode()` does not copy a canvas painted image, so the flattening path can replace visible selected graphics with blank canvas output. Add bounded rendered-state capture and real Chromium regression; evaluate video/form live state separately rather than assuming clone fidelity.
+
+
+## Continuation 2026-08-26 — imported locator CSS grammar
+
+Audit baseline: `cfa5fca1c6178e4aaf235399040b46f8a4f3b018`. Documentation-only sync.
+
+**P1-188.** Locator serialization only emits a narrow structural CSS form, but the import sanitizer merely truncates `cssPath`. Both legacy and v3 restore feed this string to `querySelector`; legacy restore may return that element directly after a tag check. This makes untrusted backup data executable as arbitrary selector-engine input and enlarges the restore semantics beyond anything WebClip generates. Restrict imported selector syntax to the canonical generated grammar or discard it and use bounded structural fields; do not execute arbitrary selector text from backup.
