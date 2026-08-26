@@ -1,6 +1,6 @@
 # P1-004 closure — cross-origin iframe with granted host permissions
 
-Status: **REGRESSION**
+Status: **PARTIAL** — reopened by audit; detailed open root cause is tracked in `P1-171`.
 
 ## Problem
 
@@ -30,3 +30,8 @@ Top-frame JavaScript cannot read a cross-origin iframe DOM because of Same-Origi
 ## Remaining release QA
 
 Enterprise policy in the audit environment blocks normal unpacked-extension/local HTTP navigation, so actual Chrome permission prompt + unpacked MV3 + real HTTP(S) cross-origin iframe must still be checked during release QA, including permission deny/revoke, navigation and frame reload. No policy bypass was used.
+
+
+## Audit reopening 2026-08-26
+
+The verification above is historical evidence for the earlier implementation gate; it does **not** prove the newly discovered document-identity race is closed. Audit found that the registry stores `documentId`, but outbound commands are addressed by `frameId` only and child-frame navigation/reload can reuse that frame id while the top tab URL remains stable. The authoritative detailed finding and acceptance criteria are maintained in `project_docs/PRIORITIES_P0_P1_P2.md` as **P1-171**. P1-004 therefore remains `PARTIAL` until P1-171 is implemented and verified, plus the real unpacked Chrome permission/revoke QA is completed.
