@@ -13,14 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 3
+          fetch-depth: 4
 
       - name: Guard exact baseline
         shell: bash
         run: |
           set -euo pipefail
           SOURCE=a57042fe82e9c8659a6241b23728f613ae905531
-          test "$(git rev-parse HEAD~2)" = "$SOURCE"
+          git cat-file -e "$SOURCE^{commit}"
           mapfile -t changed < <(git diff --name-only "$SOURCE" HEAD | sort)
           expected=$'.github/workflows/handoff-20260826-1047.yml\nproject_tools/_build_handoff_20260826_1047.py'
           actual="$(printf '%s\n' "${changed[@]}")"
@@ -36,7 +36,7 @@ jobs:
           set -euo pipefail
           python project_tools/_build_handoff_20260826_1047.py
           python -m zipfile -t handoff/WebClip_Handoff_Audit_2026-08-26_1047_a57042fe.zip
-          sha256sum -c handoff/WebClip_Handoff_Audit_2026-08-26_1047_a57042fe.zip.sha256
+          (cd handoff && sha256sum -c WebClip_Handoff_Audit_2026-08-26_1047_a57042fe.zip.sha256)
 
       - name: Verify scope and clean temporary tooling
         shell: bash
