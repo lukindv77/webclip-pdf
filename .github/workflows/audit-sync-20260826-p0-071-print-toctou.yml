@@ -1,0 +1,67 @@
+name: audit-sync-p0-071-print-toctou
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-p0-071:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "700b36290aa8d469d1f0e2228726c14d9881215c"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p0-071-print-toctou.yml"
+      - name: Sync P0-071 finding
+        shell: python
+        env:
+          ROW_B64: fCBQMC0wNzEgfCBQMCB8IE9QRU4gfCBQREYgb3V0cHV0INC90LUg0LjQvNC10LXRgiBlbmZvcmNlYWJsZSBzYWZlIFVSSS1zY2hlbWUgYm91bmRhcnkg0L3QsCAqKtGE0LDQutGC0LjRh9C10YHQutC4INC/0LXRh9Cw0YLQsNC10LzQvtC8IHJlcHJlc2VudGF0aW9uKiouINCj0LbQtSDQv9C+0LTRgtCy0LXRgNC20LTQtdC90L4sINGH0YLQviBgYWJzb2x1dGl6ZUxpbmtzSW5JbmNsdWRlZENvbnRlbnQoKWAg0L/QtdGA0LXQvdC+0YHQuNGCINC70Y7QsdC+0LkgYGEvYXJlYVtocmVmXWAg0YfQtdGA0LXQtyBgbGluay5ocmVmYCwgV2ViQ2xpcCDRgdCw0Lwg0L7QsdC+0YDQsNGH0LjQstCw0LXRgiDQvdC10LfQsNC70LjQvdC60L7QstCw0L3QvdGL0LUg0LjQt9C+0LHRgNCw0LbQtdC90LjRjyDQuCBDaHJvbWl1bSBwcmludC10by1QREYg0YHQvtGF0YDQsNC90Y/QtdGCIGBqYXZhc2NyaXB0OmAsIGBkYXRhOmAg0LggYGZpbGU6YCDQutCw0LogbGluay9maWxlIGFubm90YXRpb25zLiDQlNC+0L/QvtC70L3QuNGC0LXQu9GM0L3Ri9C5INCw0YPQtNC40YIg0L/QvtC00YLQstC10YDQtNC40LsgVE9DVE9VOiBgcHJlcGFyZUZvclByaW50KClgINCy0YvQv9C+0LvQvdGP0LXRgiBsaW5rIHNhbml0aXphdGlvbi9hYnNvbHV0aXphdGlvbiDQvdCwIGxpdmUgaG9zdCBET00gKirQtNC+KiogYFdFQkNMSVBfR0VORVJBVEVfUERGYCwg0L/QvtGB0LvQtSDRh9C10LPQviB3b3JrZXIg0LLRi9C30YvQstCw0LXRgiBgUGFnZS5wcmludFRvUERGYDsg0YHQsNC8IGBjb250ZW50LmpzYCDRgNCw0YHRgdGH0LjRgtGL0LLQsNC10YIg0L3QsCBgYmVmb3JlcHJpbnQvYWZ0ZXJwcmludGAg0LLQvdGD0YLRgNC4INGN0YLQvtCz0L4gcGlwZWxpbmUuIEhvc3QgcGFnZSDQutC+0L3RgtGA0L7Qu9C40YDRg9C10YIg0YHQvtCx0YHRgtCy0LXQvdC90YvQuSBgYmVmb3JlcHJpbnRgL011dGF0aW9uT2JzZXJ2ZXIg0Lgg0LzQvtC20LXRgiDQv9C+0YHQu9C1IFdlYkNsaXAgcHJlLXNhbml0aXphdGlvbiwg0L3QviDQtNC+INGE0LDQutGC0LjRh9C10YHQutC+0LPQviBwcmludCByZW5kZXIsINCy0YHRgtCw0LLQuNGC0Ywv0LfQsNC80LXQvdC40YLRjCDRgdGB0YvQu9C60YMg0LLQvdGD0YLRgNC4INGD0LbQtSBJbmNsdWRlZCBzdWJ0cmVlINC4INCy0LXRgNC90YPRgtGMIHVuc2FmZSBzY2hlbWUsINC+0LHQvtC50LTRjyDQvtC00L3QvtGA0LDQt9C+0LLRg9GOINC+0YfQuNGB0YLQutGDLiDQn9C10YDQtdC0IHByaW50INGA0LDQt9GA0LXRiNCw0YLRjCDRgtC+0LvRjNC60L4g0Y/QstC90L4g0LHQtdC30L7Qv9Cw0YHQvdGL0LUgZHVyYWJsZSBzY2hlbWVzICjQvNC40L3QuNC80YPQvCBgaHR0cC9odHRwc2AsINC+0YLQtNC10LvRjNC90L4g0YDQtdGI0LjRgtGMIGBtYWlsdG8vdGVsYCksINGD0LTQsNC70Y/RgtGMIGNsaWNrYWJpbGl0eSDQtNC70Y8gYGphdmFzY3JpcHQvZGF0YS9maWxlL2Jsb2IvY2hyb21lKmAg0Lgg0LTRgNGD0LPQuNGFIGFjdGl2ZS9sb2NhbCBzY2hlbWVzLCDQvtCz0YDQsNC90LjRh9C40YLRjCBVUkkgbGVuZ3RoINC4INC90LUg0YHQvtC30LTQsNCy0LDRgtGMIGltYWdlLWxpbmsg0LTQu9GPIG5vbi1kdXJhYmxlIHNjaGVtZXM7ICoq0LjQvdCy0LDRgNC40LDQvdGCINC00L7Qu9C20LXQvSDQv9GA0LjQvNC10L3Rj9GC0YzRgdGPINC6IGluZXJ0L2Zyb3plbiBwcmludCByZXByZXNlbnRhdGlvbiDQu9C40LHQviDQuNC90YvQvCDRgdC/0L7RgdC+0LHQvtC8INCx0YvRgtGMINGD0YHRgtC+0LnRh9C40LLRi9C8INC6IGhvc3QgbXV0YXRpb24g0L/QvtGB0LvQtSBzYW5pdGl6ZXIqKi4gQnJvd3NlciByZWdyZXNzaW9uINC+0LHRj9C30LDQvSDRg9GB0YLQsNC90L7QstC40YLRjCBob3N0aWxlIGBiZWZvcmVwcmludGAsINC60L7RgtC+0YDRi9C5INC/0L7RgdC70LUgcHJlcGFyZSDQv9C+0LTQvNC10L3Rj9C10YIv0LTQvtCx0LDQstC70Y/QtdGCIHVuc2FmZSBocmVmLCDQuCDQtNC+0LrQsNC30LDRgtGMINC+0YLRgdGD0YLRgdGC0LLQuNC1IHVuc2FmZSBQREYgYW5ub3RhdGlvbjsg0LLQuNC00LjQvNGL0Lkg0YLQtdC60YHRgi/QuNC30L7QsdGA0LDQttC10L3QuNC1INC/0YDQuCDRjdGC0L7QvCDRgdC+0YXRgNCw0L3Rj9GO0YLRgdGPLiB8
+          AUDIT_B64: IyMgQ29udGludWF0aW9uIDIwMjYtMDgtMjYg4oCUIFAwLTA3MSBwcmludC10aW1lIFVSSSBUT0NUT1UKClBERi9ET00gdHJ1c3QtYm91bmRhcnkgYXVkaXQgZXhwYW5kZWQgZXhpc3RpbmcgKipQMC0wNzEqKiByYXRoZXIgdGhhbiBhc3NpZ25pbmcgYSBuZXcgUDAuIEN1cnJlbnQgYGNvbnRlbnQuanM6OnByZXBhcmVGb3JQcmludCgpYCBtdXRhdGVzIHRoZSBsaXZlIGhvc3QgRE9NIGFuZCBjYWxscyBgYWJzb2x1dGl6ZUxpbmtzSW5JbmNsdWRlZENvbnRlbnQoKWAgYmVmb3JlIHNlbmRpbmcgYFdFQkNMSVBfR0VORVJBVEVfUERGYC4gVGhlIHNlcnZpY2Ugd29ya2VyIHRoZW4gY2FsbHMgQ0RQIGBQYWdlLnByaW50VG9QREZgLiBUaGUgY29udGVudCBzY3JpcHQgaXRzZWxmIHJlbGllcyBvbiBgYmVmb3JlcHJpbnQvYWZ0ZXJwcmludGAgZmlyaW5nIGluc2lkZSB0aGF0IHByaW50IHBpcGVsaW5lIHRvIGhpZGUvcmVzdG9yZSBXZWJDbGlwIFVJLCBwcm92aW5nIGEgaG9zdC1jb250cm9sbGVkIGBiZWZvcmVwcmludGAgY2FsbGJhY2sgY2FuIGV4ZWN1dGUgYWZ0ZXIgdGhlIG9uZS1zaG90IHByZS1wcmludCBsaW5rIHByb2Nlc3NpbmcuIEEgaG9zdGlsZSBwYWdlIGNhbiB0aGVyZWZvcmUgcmVwbGFjZS9hZGQgYW4gdW5zYWZlIGBqYXZhc2NyaXB0OmAsIGBkYXRhOmAgb3IgYGZpbGU6YCBocmVmIGluc2lkZSBhbiBhbHJlYWR5IEluY2x1ZGVkIHN1YnRyZWUgYWZ0ZXIgdGhlIHNhbml0aXplciBhbmQgYmVmb3JlIENocm9taXVtIHJlbmRlcnMgUERGIGFubm90YXRpb25zLiBUaGUgUDAtMDcxIGFjY2VwdGFuY2UgY3JpdGVyaW9uIGlzIGJyb2FkZW5lZCBmcm9tIOKAnHNhbml0aXplIGJlZm9yZSBwcmludOKAnSB0byBhbiBlbmZvcmNlYWJsZSBzYWZlLXNjaGVtZSBpbnZhcmlhbnQgb24gdGhlIGFjdHVhbCBwcmludGVkIHJlcHJlc2VudGF0aW9uLCBlLmcuIGluZXJ0L2Zyb3plbiBzYW5pdGl6ZWQgcHJpbnQgRE9NIG9yIGFub3RoZXIgZGVzaWduIHRoYXQgY2Fubm90IGJlIHJlY29udGFtaW5hdGVkIGJ5IGhvc3QgbXV0YXRpb24gZHVyaW5nIGBiZWZvcmVwcmludGAuIEFkZCBhIGJyb3dzZXIgcmVncmVzc2lvbiB3aXRoIGhvc3RpbGUgYGJlZm9yZXByaW50YCBtdXRhdGlvbiBhZnRlciBwcmVwYXJlLgoKQXVkaXQgc3luYyBvbmx5LiBQcm9kdWN0aW9uIHJ1bnRpbWUvY29uZmlndXJhdGlvbiBhbmQgYG1hbmlmZXN0Lmpzb25gIGFyZSB1bmNoYW5nZWQ7IHRoZSBwcmV2aW91c2x5IHByb3ZlbiA4OC84OCBzeW50YXggKyA3NC83NCBkZXRlcm1pbmlzdGljIHByb2R1Y3QgZ2F0ZSB3YXMgbm90IHJlcnVuIGZvciB0aGlzIGRvY3Mtb25seSBjb21taXQuCg==
+        run: |
+          import base64, os
+          from pathlib import Path
+          priority=Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          deep=Path('DEEP_AUDIT_2026-08-25.md')
+          lines=priority.read_text(encoding='utf-8').splitlines()
+          row=base64.b64decode(os.environ['ROW_B64']).decode('utf-8')
+          hits=[i for i,line in enumerate(lines) if line.startswith('| P0-071 |')]
+          if len(hits) != 1: raise SystemExit(f'expected exactly one P0-071 row, got {len(hits)}')
+          lines[hits[0]]=row
+          priority.write_text('\n'.join(lines)+'\n',encoding='utf-8')
+          d=deep.read_text(encoding='utf-8')
+          marker='## Continuation 2026-08-26 — P0-071 print-time URI TOCTOU'
+          if marker not in d:
+            audit=base64.b64decode(os.environ['AUDIT_B64']).decode('utf-8')
+            deep.write_text(d.rstrip()+'\n\n'+audit.rstrip()+'\n',encoding='utf-8')
+      - name: Verify scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-p0-071-print-toctou.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          expected=$'.github/workflows/audit-sync-20260826-p0-071-print-toctou.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(git diff --cached --name-only | sort)"
+          test "$actual" = "$expected"
+          python - <<'PY'
+          import json
+          m=json.load(open('manifest.json',encoding='utf-8'))
+          assert m['manifest_version']==3
+          assert m['version']=='0.9.8'
+          assert m['minimum_chrome_version']=='118'
+          PY
+      - name: Commit docs-only sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: extend P0-071 print-time URI boundary'
+          git push
