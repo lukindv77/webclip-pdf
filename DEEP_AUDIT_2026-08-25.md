@@ -626,3 +626,12 @@ This correction is docs-only. Production source and `manifest.json` are unchange
 | P0-039 | P0 | PARTIAL | Full recovery audit confirmed a distinct live-path gap after rejecting the earlier generic `pendingAppends` capacity hypothesis. `reconcilePendingLocalDownloads()` removes both unbound intents and bound numeric `pendingDownloads` after `PENDING_LOCAL_DOWNLOAD_TTL_MS = 24h` when Chrome no longer returns a matching `DownloadItem`, revokes the Blob URL and records that the Journal entry was not created. A missing DownloadItem is not proof that the file never settled: after worker death/unknown `downloads.download()` settlement, the file may exist while the user or Chrome has already cleared download history. The checkpoint still contains the only durable Journal metadata; deleting it converts an uncertain external outcome into permanent metadata loss. Keep unresolved evidence in a bounded dead-letter/manual-resolution state instead of TTL deletion. Exact automatic append still requires the existing own-extension/identity proof; unknown outcome must stay fail-closed rather than fabricate success. |
 
 Docs-only audit sync; production runtime and manifest were not changed and the prior product gate was not rerun.
+
+
+## Continuation 2026-08-26 — P1-178 stale OAuth completion versus newer settings generation
+
+| Code | Priority | Status | Finding |
+|---|---|---|---|
+| P1-178 | P1 | OPEN | A pending PKCE attempt keeps its original clientId while the token exchange can remain in network I/O outside both the yandexConfig settlement chain and settings-import barrier. User-settings import may therefore commit a newer clientId B while old attempt A is still in flight; when A later returns, `finishYandexOAuth()` calls `updateYandexConfig()` and writes clientId A after the import, silently rolling back the newer setting. Existing storage actual-settlement ordering is insufficient because the stale operation has not entered the storage queue yet. Extend the authAttempt generation contract to config/settings generation: a stale finish may not overwrite a newer imported/direct config generation; incompatible newer config can invalidate the old pending attempt or the late finish must fail closed/reconcile without publishing stale auth/config. |
+
+Docs-only audit sync; production runtime and manifest unchanged; product gate not rerun.
