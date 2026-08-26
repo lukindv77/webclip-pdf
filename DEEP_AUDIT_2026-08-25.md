@@ -407,3 +407,16 @@ The fix should be implementation-neutral until real Yandex API verification is a
 ### Evidence note
 
 Documentation-only audit sync. Product tests are not rerun. Last verified product gate remains P0-063: 88/88 JS syntax and 74/74 deterministic tests; real unpacked Chrome and real Yandex E2E remain release blockers.
+
+
+## Continuation 2026-08-26 — self-generated Journal backup must be restorable (P0-077)
+
+Audit source-of-truth baseline: `0b7ae28eb81eb69e3465f571b0edf88a214d15a2`. Documentation-only sync.
+
+### P0-077 OPEN — export envelope is larger than the restore envelope
+
+The current full-Journal exporter tracks two independent ceilings: up to 50 MiB of JavaScript string characters (`MAX_JOURNAL_EXPORT_TEXT_CHARS`) and up to 64 MiB of actual UTF-8 Blob bytes (`MAX_JOURNAL_EXPORT_BYTES`). This means a valid Cyrillic/Unicode export can be larger than 50 MiB on disk while still being accepted and reported as a successful backup. Both restore entry points are narrower: `journal.js` rejects a selected local file when `file.size > 50 MiB`, while service-worker staged import rejects a manifest or accumulated chunks above `MAX_JOURNAL_IMPORT_BYTES = 50 MiB`. A 50–64 MiB self-generated backup is therefore outside the same build's restore contract.
+
+There is a second independent envelope mismatch. Streaming JSON import is configured with `maxEntries: 100000`, while normal Journal append has no global 100k entry admission limit. The exporter batch loop is not capped at 100k entries; a sufficiently compact Journal can remain inside the byte/character ceiling, export successfully with more than 100k entries, and then fail its own import parser.
+
+Backup success is a data-durability promise. Define one versioned restore envelope shared by live admission, local export/import and Yandex backup/import. A successful backup must be provably accepted by the same version's restore path. Existing over-limit profiles must not be truncated or deleted; migration/export handling is required. Boundary regression should include Unicode data where encoded bytes exceed the import ceiling despite legal character count, plus a >100k compact-entry corpus.
