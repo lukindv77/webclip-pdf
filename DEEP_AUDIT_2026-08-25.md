@@ -296,3 +296,19 @@ Source-of-truth baseline tree is the clean product/docs tree at `cb43081c8cb93fb
 
 ### P1-156 native Save As backing Blob lifetime
 `prepared-save-as.js` correctly has no local timeout around native `saveAs:true`. However `offscreen.js` gives every registered Blob URL a 16-minute fallback timer. The Blob exists before native dialog ownership begins, and STARTED notification is only sent after `downloads.download()` resolves. Thus backing storage can expire while the user is legitimately still interacting with the system dialog. The Blob needs an owner lease/heartbeat or equivalent actual-lifecycle pin whose crash reclamation is separate from a fixed dialog-duration timeout.
+
+
+## Continuation 2026-08-26 — P0-075 host-page DOM trust boundary
+
+Source-of-truth baseline: `6252ee799e9b6f6eba43f56a7cc0bba20150bfd5`. This sync changes audit documentation only.
+
+### Source evidence
+
+- `content.js` uses the deterministic host id `webclip-pdf-extension-root`, attaches `shadow = host.attachShadow({ mode: 'open' })`, and creates the file-comment textarea inside that shadow tree. An ordinary page script can discover that host and traverse an open shadow root; the isolated JavaScript world is not a private DOM storage mechanism.
+- Selection ownership is mirrored into the shared page DOM using `element.setAttribute('data-webclip-pdf-include', id)` / `data-webclip-pdf-exclude`; frame-agent uses analogous remote attributes. They remain present throughout live selection and are removed only when selections are cleared. A page MutationObserver can therefore observe the extension interaction.
+- `onPageClick()` consumes page click events while selecting but has no `event.isTrusted` gate. `createUiButton()` registers a click listener that simply stops propagation and invokes the privileged callback, also without checking trusted user input. A host-page script can dispatch/call synthetic clicks. With the open shadow root it can directly reach Save/Yandex controls; selection itself is also steerable through synthetic clicks on host DOM.
+- Chrome's content-script isolated world separates JavaScript environments, not the fact that content scripts read and modify the web page DOM. Chrome security guidance explicitly treats hostile pages as able to manipulate DOM used by content scripts.
+
+### Required security model
+
+Treat every host-page DOM node/event/attribute as attacker-controlled input. User-authorizing actions must require trusted physical input and extension-owned state, not merely an event listener attached from an isolated world. Sensitive temporary input such as the file comment must not be readable through a page-accessible open shadow tree. Authoritative selection should live in extension memory/overlay structures; if DOM markers are unavoidable for print CSS, materialize them only for the shortest print preparation window with exact rollback and do not use page-mutated marker values as authority.
