@@ -593,3 +593,11 @@ This continuation is docs-only. Production source and `manifest.json` are unchan
 
 This continuation is docs-only. Production source and `manifest.json` are unchanged; the previous product test gate was not rerun.
 
+## Continuation 2026-08-26 — P1-193 optional host permission user gesture
+
+- **P1-193 OPEN — asynchronous frame discovery occurs before the gesture-gated permission request.** The current popup click handler awaits active-tab lookup, top content-script injection and a content-script RPC that enumerates cross-origin frame origins before calling `chrome.permissions.request()`. Those steps are individually bounded but can consume much longer than transient user activation. Chrome's current permissions documentation requires `permissions.request()` from a user gesture; Chromium's implementation rejects the extension function when `user_gesture()` is false.
+- This is intentionally separate from P1-157. P1-157 already covers the opposite side of the boundary: once a permission request really starts, its user-owned prompt must not be treated as cancelled by a local `Promise.race` timeout. P1-193 is admission: slow prerequisite work can mean the prompt never starts at all.
+- Required direction: two-phase UI. First discover and display the bounded origin set. Then require a second explicit grant click whose first activation-sensitive operation is `permissions.request()` over a short-lived, source-bound candidate set. Navigation/document replacement invalidates the candidate generation; post-grant frame injection still revalidates current document and granted host permission.
+
+This continuation is docs-only. Production source and `manifest.json` are unchanged; the previous product test gate was not rerun.
+
