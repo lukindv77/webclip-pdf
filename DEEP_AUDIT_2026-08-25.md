@@ -223,3 +223,30 @@ The single-entry privacy invariant applies to both Yandex delete choices. Moving
 
 Audit documentation only; production tests were not rerun and the release gate remains unchanged.
 
+
+
+## Continuation 2026-08-26 — destructive checkpoints and Yandex account fencing
+
+Audit source-of-truth baseline for this continuation: `bbce7543125f3cd58ef6429b868bc8484fe3fc7c`. Production code was inspected only; this sync changes documentation, not runtime behavior.
+
+### P0-072 — destructive Journal reset can erase the only checkpoint while the external side effect is still running
+
+Confirmed flow:
+
+- `uploadCachedRecordToYandex()` persists `pendingRemoteSaves` before starting the signed PDF transfer.
+- A normal full Journal clear clears `entries`, `pendingAppends`, `pendingDownloads` and `pendingRemoteSaves` in the same readwrite transaction. Scope clear prunes matching pending records; replace-import clears all three pending stores before replacing entries.
+- The remote-save path performs the signed transfer, then (when enabled) `ensureYandexPublicUrl(remotePath)`, then metadata verification, and only afterwards `markPendingRemoteSaveVerified()`. That final step explicitly fails if the durable checkpoint disappeared.
+- Therefore clear/import can intentionally prevent stale Journal resurrection yet still race a non-cancellable external side effect. A successful remote file/public link can become an unmanaged orphan. Deleting a durable checkpoint is not equivalent to cancelling `fetch`/Chrome Downloads.
+
+Required direction: destructive Journal operations need a durable side-effect barrier independent from the decision to retain the local Journal entry. User-requested clear/replace may cancel future local append semantics, but must retain enough tombstone/outcome state to reconcile any upload/download that was already started and expose the resulting remote/public state without silently recreating the cleared Journal record.
+
+### P0-073 — remote-save recovery/completion can cross Yandex account identity
+
+Confirmed flow:
+
+- New remote checkpoints already store `accountUid`, `rootPath`, `remotePath`, expected bytes and the eventual Journal data.
+- Live upload captures `accountUid` before obtaining/using the signed upload URL. After the signed transfer, public-link creation and metadata verification call Yandex API with whatever OAuth token is current at that later moment; no exact UID revalidation occurs first.
+- `recoverPendingRemoteSaves()` checks that some valid OAuth token exists, but does not compare the current account UID with the checkpoint UID before reading `remotePath`. Recovery verifies primarily file type and exact byte size, then can publish and persist `resource_id/public_url`.
+- A user can disconnect/re-authorize to account B while an operation from account A is unresolved. If B contains the same managed path and byte size, recovery/completion can act on B and then persist B identifiers into data still tagged with account A. This breaks the identity invariant established for destructive Journal operations and can publish the wrong account's file.
+
+Required direction: all post-signed-transfer and recovery Yandex API calls must be account-fenced by the immutable checkpoint identity. A mismatch is not a retryable 404/error and must not mutate either account. Re-auth to the original account may resume recovery; switching account must leave the checkpoint visibly deferred.
