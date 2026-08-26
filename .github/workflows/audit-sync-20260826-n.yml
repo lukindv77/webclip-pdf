@@ -1,0 +1,69 @@
+name: audit-sync-20260826-n
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-audit-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "e7c4fceebbb5836a0899587f2494fffeea08e0a0"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-n.yml"
+      - name: Refine existing audit findings
+        shell: python
+        run: |
+          from pathlib import Path
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          p = priorities.read_text(encoding='utf-8')
+          a = audit.read_text(encoding='utf-8')
+
+          def replace_row(text, prefix, replacement):
+              lines = text.splitlines()
+              hits = [i for i, line in enumerate(lines) if line.startswith(prefix)]
+              if len(hits) != 1:
+                  raise SystemExit(f'Expected one row {prefix!r}, got {len(hits)}')
+              lines[hits[0]] = replacement
+              return '\n'.join(lines) + ('\n' if text.endswith('\n') else '')
+
+          p = replace_row(p, '| P1-157 |', '| P1-157 | P1 | OPEN | В popup/Journal/Options/content остались прямые Chrome API/runtime RPC вне централизованных deadline/settlement helpers. Reads/idempotent calls должны быть bounded; non-idempotent side effects — operation-id/actual-settlement reconciled без blind retry. Это уже не только hang-risk: `journal.js` напрямую делает `chrome.storage.local.set({webclipJournalGroupByUrl})` вне worker mutation queue, тогда как import user-settings пишет тот же key bundled из service worker. При concurrent import/toggle late settlement любой стороны может дать lost update/stale overwrite без общего ordering receipt. Extension-page writes к общим settings должны идти через один worker-owned serialized mutation contract либо иметь shared version/CAS token. Отдельно `chrome.permissions.request()` нельзя обрывать обычным 10-секундным `Promise.race`: user-owned permission prompt может settle позднее локального timeout; держать request single-flight до actual settlement и не показывать ложную terminal error/не запускать повторный prompt поверх неизвестного результата. |')
+          p = replace_row(p, '| P1-178 |', '| P1-178 | P1 | OPEN | OAuth code exchange и `yandexOAuthPending` не образуют completion-aware **generation-fenced** state machine. `finishYandexOAuth()` сначала получает token по network POST, затем отдельно обновляет config, пишет `yandexAuth` в `storage.session` и удаляет pending. Любой локальный timeout после успешного token response способен вернуть UI ошибку в промежуточном состоянии; token exchange нельзя blind-retry. Дополнительно подтверждён compare-and-remove TOCTOU: `getYandexStatus()` читает pending snapshot, решает что он expired, затем отдельным serialized turn делает `remove`; новая `startYandexOAuth()` может успеть записать свежий pending между read и remove, после чего старый cleanup удалит **новую** попытку. Аналогичное окно есть в expired cleanup `finishYandexOAuth()` и в success cleanup после долгого token exchange — старая finish-операция способна удалить pending более новой auth attempt. Нужен immutable `authAttemptId/state generation`; read/validate/consume/remove должны быть одним serialized read-modify-write logical turn либо fresh compare-before-remove exact attempt identity. После успешного exchange auth + consumed attempt фиксируются одним completion/reconciliation contract; поздний settlement трактуется как pending outcome, status/restart repair не может удалить более новую generation; ancillary config/account-info write не превращает сохранённую OAuth session в ложный terminal failure. |')
+
+          marker = '## Continuation at HEAD `e7c4fceebbb5836a0899587f2494fffeea08e0a0` — extension-page settings ordering and PKCE generation'
+          if marker in a:
+              raise SystemExit('Audit continuation already present')
+          a += f'''\n\n{marker}\n\nDocumentation-only refinement of two existing findings.\n\n### P1-157: direct extension-page writes break the worker mutation ordering domain\n\nThe Journal group-by toggle calls `chrome.storage.local.set({{webclipJournalGroupByUrl: ...}})` directly from `journal.js`. User-settings import writes the same key from the service worker together with Yandex/OperationLog settings and a reconciliation marker. Because the page-side write does not participate in the worker's actual-settlement queue, concurrent operations have no common ordering receipt; a late Chrome settlement can overwrite the value the UI/import believes is authoritative. P1-157 therefore covers mutation consistency in addition to read/RPC deadlines.\n\nThe optional iframe permission request remains a separate user-owned prompt case inside P1-157: the popup currently wraps `chrome.permissions.request()` in the generic 10-second read helper. The local timeout is not cancellation and can be followed by a late grant, so retry must remain single-flight until the real browser prompt settles.\n\n### P1-178: pending PKCE cleanup needs compare-and-remove semantics\n\n`runYandexAuthStorageOperation()` serializes individual storage operations, but the semantic sequence `read pending -> decide stale/consumed -> later remove` spans multiple queue turns. Serialization alone does not protect the value between those turns. `getYandexStatus()` can read an old expired attempt, a new START_AUTH can replace the key, and then the status cleanup removes the new attempt. `finishYandexOAuth()` has the same pattern for expired pending and, after a potentially long network token exchange, removes `yandexOAuthPending` without proving that the stored attempt is still the one it exchanged.\n\nA per-attempt generation/state identifier is required. Cleanup/consume must compare exact attempt identity immediately before mutation and no old flow may remove a newer attempt. This integrates with the already-recorded completion-aware post-token state machine rather than adding a duplicate priority.\n\n### Evidence note\n\nNo production source changed and no product tests were rerun. Last verified product gate remains P0-063 (88/88 syntax, 74/74 deterministic tests).\n'''
+          priorities.write_text(p, encoding='utf-8')
+          audit.write_text(a, encoding='utf-8')
+      - name: Verify docs-only scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-n.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          mapfile -t changed < <(git diff --cached --name-only | sort)
+          expected=$'.github/workflows/audit-sync-20260826-n.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(printf '%s\n' "${changed[@]}")"
+          test "$actual" = "$expected"
+          grep -q '"manifest_version": 3' manifest.json
+          grep -q '"version": "0.9.8"' manifest.json
+          grep -q '"minimum_chrome_version": "118"' manifest.json
+      - name: Commit audit sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: refine extension API ordering and PKCE generation findings'
+          git push
