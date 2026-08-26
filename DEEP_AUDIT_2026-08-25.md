@@ -522,3 +522,8 @@ Confirmed a separate diagnostics/provenance gap after duplicate-check against th
 
 Audit sync only. Production runtime/configuration and `manifest.json` are unchanged; the previously proven 88/88 syntax + 74/74 deterministic product gate was not rerun for this docs-only commit.
 
+## Continuation 2026-08-26 — shared IndexedDB migration ownership
+
+Storage/repair audit expanded existing **P2-019** rather than creating a new ID. The shared-schema ownership problem is already concrete outside `WebClipJournal`: both the service worker and `offscreen.js` open `WebClipPdfRetryCache` at version 3. The service-worker upgrader performs a real `oldVersion < 2` cursor migration/backfill from legacy PDF records into the `meta` store; the offscreen upgrader only creates missing `pdfs`/`meta` stores. Therefore schema authority and data-migration authority are already context-specific. Current normal PDF flows generally touch the cache in the worker before asking offscreen to materialize/upload it, so this audit does not claim a reproduced normal-flow corruption and P2-019 remains P2 OPEN. The acceptance criterion is broadened to one authoritative/shared migration implementation across Journal, PDF retry cache, transfer DB and future shared IndexedDBs, with opener-order upgrade regressions from prior versions.
+
+Audit sync only. Production runtime/configuration and `manifest.json` are unchanged; the previously proven 88/88 syntax + 74/74 deterministic product gate was not rerun for this docs-only commit.
