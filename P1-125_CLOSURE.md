@@ -1,6 +1,8 @@
 # P1-125 closure — bounded scripting.executeScript with singleton-safe late injection
 
-Status: **REGRESSION**. Manifest remains **0.9.8 / Manifest V3**.
+Historical implementation gate: **REGRESSION at the time of this closure**. Current canonical status: **PARTIAL**; manifest remains **0.9.8 / Manifest V3**.
+
+> Later deep audit found a same-URL document-generation gap: scripting settlement keys are tab-scoped and stale late-success receipts are cleared on URL change, but a full-document reload that keeps the same URL can leave an old receipt eligible for a new document generation. The verification below remains historical evidence for timeout/dedup/late-settlement behavior; it does **not** prove the newer same-URL reload/document-generation fence in `P1-125`.
 
 Both service-worker injection paths use `executeScriptSingletonBounded()` with a 10-second caller deadline while the actual non-cancellable Chrome promise stays tracked to settlement. Identical retry cannot start a second injection during unknown settlement. Late success is retained as a bounded 60-second one-use receipt. URL navigation/tab removal clears stale per-tab settlement state, and late settlement cannot resurrect a stale receipt.
 

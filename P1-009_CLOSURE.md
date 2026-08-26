@@ -1,6 +1,8 @@
 # P1-009 closure — universal multiline Journal filter
 
-Status: **REGRESSION**
+Historical implementation gate: **REGRESSION at the time of this closure**. Current canonical status: **PARTIAL**; see `project_docs/PRIORITIES_P0_P1_P2.md`.
+
+> Later deep audit found a valid worst-case CPU/deadline gap in the exact full-Journal filter scan (`P1-009`): with up to 100k entries and multi-megabyte allowed comment payloads, repeated chunked lowercase/matching can still exhaust the 20-second view budget. The verification below proves the implemented filter semantics and bounded UI contracts from the original closure; it does **not** prove the later search-summary/index acceptance criterion.
 
 ## Problem
 

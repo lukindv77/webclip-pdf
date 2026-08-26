@@ -1,6 +1,8 @@
 # P1-090 closure — Yandex identity/locator design
 
-Status: **REGRESSION**.
+Historical implementation gate: **REGRESSION at the time of this closure**. Current canonical status: **PARTIAL**; see `project_docs/PRIORITIES_P0_P1_P2.md`.
+
+> Later deep audit found that the pre-move identity fence documented below is not carried through post-`resources/move` reconciliation: target verification for Trash and ReadmeLater→Upload accepts `type=file` at the target path without proving the same source `resourceId`. The verification below remains historical evidence for account/root/pre-move lookup behavior; it does **not** prove the newer post-move object-identity acceptance criteria.
 
 ## Problem
 Existing locator logic stored `resourceId/publicUrl/remotePath`, but did not bind new Journal entries to Yandex account/root context. Worse, when a stable `resourceId` was known, a direct candidate at the stored path could still be accepted if Yandex omitted `resource_id`, making path alone an accidental identity proof.
