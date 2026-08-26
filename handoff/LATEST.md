@@ -1,16 +1,17 @@
 # Latest WebClip handoff
 
-This is the canonical handoff checkpoint requested on 2026-08-25 16:05 +07:00.
+Canonical handoff checkpoint explicitly requested on **2026-08-26 10:47 +07:00**.
 
 - Repository: `lukindv77/webclip-pdf`
 - Branch: `main`
-- Handoff source commit: `d921dfffa9dabcb99a58cc4f0c8cfc423b63e3ee`
-- Archive: `handoff/WebClip_Handoff_Audit_2026-08-25_1605.zip`
-- Archive SHA-256: `4ad18556ab300a52b9424364af9b8ff79e354f92e989773b6f1392fd5d1356f7`
+- Audit/handoff source HEAD before packaging: `a57042fe82e9c8659a6241b23728f613ae905531`
+- Current-state note: `handoff/CURRENT_STATE_2026-08-26_1047.md`
 - New-chat prompt: `PROMPT_FOR_NEW_CHAT.md`
-- Current-state note: `handoff/CURRENT_STATE_2026-08-25_1605.md`
-- Manifest: MV3 / `0.9.8`
-- Packaging gate: 68/68 JS syntax PASS; 55/55 deterministic tests PASS
-- Published pre-release: `v0.9.8-build-20260825-1442`
+- Archive: `handoff/WebClip_Handoff_Audit_2026-08-26_1047_a57042fe.zip`
+- Archive SHA-256 file: `handoff/WebClip_Handoff_Audit_2026-08-26_1047_a57042fe.zip.sha256`
+- Archive contents manifest: `handoff/ARCHIVE_MANIFEST_2026-08-26_1047.txt`
+- Manifest: MV3 / `0.9.8` / minimum Chrome `118`
+- Last product gate: 88/88 JavaScript syntax PASS; 74/74 deterministic tests PASS
+- Current audit registry at source HEAD reaches P0-077 / P1-188 / P2-019
 
-The source of truth for continued work is the current GitHub `main`; the archive is a synchronized checkpoint for chat/environment recovery.
+**Start every new chat by fetching fresh GitHub `main`.** If it is newer than the source HEAD above, inspect the newer commits and continue from that newer state. Do not reset to the archive.
