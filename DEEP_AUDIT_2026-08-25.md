@@ -539,3 +539,16 @@ Audit sync only. Production runtime/configuration and `manifest.json` are unchan
 OAuth/session audit confirmed a separate auth-transition root cause. `setManualYandexToken()` writes the candidate manual `yandexAuth` before validating it with the Yandex API. On validation/API failure its catch path writes `null`, so an already valid current OAuth session is destroyed by a bad or expired manual token attempt. This is independent of the stale compare/remove races already tracked in P1-178, although the fix must share the same generation contract: validate a candidate without publishing it, commit only after proof, preserve the previous proven auth on failure/unknown outcome, and invalidate incompatible older PKCE attempts only when the manual replacement actually succeeds.
 
 Audit sync only. Production runtime/configuration and `manifest.json` are unchanged; the previously proven 88/88 syntax + 74/74 deterministic product gate was not rerun for this docs-only commit.
+
+
+## Continuation 2026-08-26 — P1-043 concurrent storage quota admission
+
+Current product source is unchanged; this is a docs-only audit refinement. The existing storage preflight was re-read on current `main`.
+
+- `ensureStorageBudget()` computes one `navigator.storage.estimate()` snapshot, compares `free` with `requiredBytes + 32 MiB`, optionally deletes only expired/disposable transfer payloads, expired PDF retry-cache and expired OperationLog records, then re-checks the estimate. Functional Journal entries are explicitly not deleted.
+- Large live writers are not serialized by that check and there is no byte reservation/admission registry tied to actual IndexedDB settlement. `putCachedPdf()` performs its own preflight before the cache transaction; Journal file import first asks `WEBCLIP_STORAGE_PREFLIGHT` from the page and then stages chunks directly in the shared transfer DB; import normalization performs another snapshot preflight; chunked Journal export periodically checks free space while adding Blob chunks.
+- Therefore concurrent writers can all pass against the same free-space snapshot before any of them has committed its bytes. The 32 MiB reserve is not additive across concurrent operations and can be consumed multiple times. A later IndexedDB write may still fail atomically with quota error, but P1-043's stronger claim that preflight protects large staging under concurrency is not proven.
+- This is the same storage-admission root cause as P1-043, so no new P-code is assigned. Status is refined from REGRESSION to PARTIAL.
+- Acceptance: add a worker/owner-level global reservation ledger for anticipated persistent bytes across PDF cache/import/export staging, reserve before materialization/write, count only unreserved free budget plus the one global safety reserve, and release only after actual commit/abort plus cleanup. Concurrent-admission regression should demonstrate that N individually admissible large writers cannot overbook one quota snapshot. Journal entries and durable recovery checkpoints must never be evicted automatically to make room.
+
+Docs-only audit sync: production runtime and `manifest.json` are unchanged. The previously proven product gate (88/88 syntax, 74/74 deterministic tests) was not rerun for this documentation-only refinement.
