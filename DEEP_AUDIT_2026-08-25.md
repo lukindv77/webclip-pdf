@@ -282,3 +282,17 @@ Audit source-of-truth baseline: `aeac5dbc168df6f641ba6db2873d1796c7769df0`. Prod
 `yandexApi()` obtains `getValidYandexAccessToken()` immediately before each network request instead of using an operation-bound auth context. `findYandexFileForJournalEntry()` may compare current UID with a Journal entry at the beginning, but `moveJournalYandexFileToTrash()` and `moveReadLaterEntryToRead()` perform additional folder, target-name, move and verification requests afterwards. Reauthorization in another Options page between these requests changes the bearer token used by later requests without invalidating the in-flight operation. Path equality is insufficient across accounts. Backup chains have the same dynamic-token property and currently lack an account snapshot entirely (also tracked by P1-179).
 
 Required architecture: capture a non-secret auth/config generation plus accountUid/rootPath at operation admission, pass that context through helpers rather than rereading mutable config, and verify generation/identity before every subsequent mutating or identity-sensitive Yandex API request. Changing auth/root should cause an existing operation to become deferred/fail-closed, not continue in the new context. Already-issued signed URLs remain non-cancellable; their eventual settlement must be reconciled against the original durable identity instead of the current UI configuration.
+
+
+## Continuation 2026-08-26 — corrected Journal CPU / startup refresh / Save As lifetime sync
+
+Source-of-truth baseline tree is the clean product/docs tree at `cb43081c8cb93fb3c069d759ad94948c86c03482`; production runtime files are unchanged by this sync.
+
+### P1-009 returned to PARTIAL
+`journal-text-filter.js` bounds filter rows/query length and scans comment strings in 8192-character chunks, but every chunk is sliced and lowercased. Journal view/count cursor paths need exact totals and apply the filter across the candidate population. With admitted 100k records and per-entry comments up to roughly 2 MiB, the implementation is memory-aware but not CPU-scalable to its own valid data envelope. The 20-second deadline is a safety stop, not a scalable search plan. Use rebuildable derived search data or another bounded candidate index; raw Journal remains source of truth.
+
+### P1-181 startup refresh commit ordering
+`reloadOpenExtensionPagesAfterVersionChange()` writes the new runtime version marker first, then calls direct `chrome.tabs.query({})` and best-effort `tabs.reload()` for extension tabs. Query failure returns and individual reload errors are swallowed after the marker has already committed. Future worker starts therefore suppress automatic repair. This is independent crash-consistency work on top of P1-158 timeout coverage.
+
+### P1-156 native Save As backing Blob lifetime
+`prepared-save-as.js` correctly has no local timeout around native `saveAs:true`. However `offscreen.js` gives every registered Blob URL a 16-minute fallback timer. The Blob exists before native dialog ownership begins, and STARTED notification is only sent after `downloads.download()` resolves. Thus backing storage can expire while the user is legitimately still interacting with the system dialog. The Blob needs an owner lease/heartbeat or equivalent actual-lifecycle pin whose crash reclamation is separate from a fixed dialog-duration timeout.
