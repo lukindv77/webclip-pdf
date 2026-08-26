@@ -1,0 +1,79 @@
+name: audit-sync-partial-closure-evidence
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-closure-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "5f3b53394171de0a64e8b4ff6c687c31be28bc34"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-partial-closure-evidence.yml"
+      - name: Reconcile historical closure files
+        shell: python
+        run: |
+          from pathlib import Path
+          updates = {
+            'P1-009_CLOSURE.md': (
+              'Status: **REGRESSION**',
+              'Historical implementation gate: **REGRESSION at the time of this closure**. Current canonical status: **PARTIAL**; see `project_docs/PRIORITIES_P0_P1_P2.md`.\n\n> Later deep audit found a valid worst-case CPU/deadline gap in the exact full-Journal filter scan (`P1-009`): with up to 100k entries and multi-megabyte allowed comment payloads, repeated chunked lowercase/matching can still exhaust the 20-second view budget. The verification below proves the implemented filter semantics and bounded UI contracts from the original closure; it does **not** prove the later search-summary/index acceptance criterion.'
+            ),
+            'P1-090_CLOSURE.md': (
+              'Status: **REGRESSION**.',
+              'Historical implementation gate: **REGRESSION at the time of this closure**. Current canonical status: **PARTIAL**; see `project_docs/PRIORITIES_P0_P1_P2.md`.\n\n> Later deep audit found that the pre-move identity fence documented below is not carried through post-`resources/move` reconciliation: target verification for Trash and ReadmeLater→Upload accepts `type=file` at the target path without proving the same source `resourceId`. The verification below remains historical evidence for account/root/pre-move lookup behavior; it does **not** prove the newer post-move object-identity acceptance criteria.'
+            ),
+            'P1-125_CLOSURE.md': (
+              'Status: **REGRESSION**. Manifest remains **0.9.8 / Manifest V3**.',
+              'Historical implementation gate: **REGRESSION at the time of this closure**. Current canonical status: **PARTIAL**; manifest remains **0.9.8 / Manifest V3**.\n\n> Later deep audit found a same-URL document-generation gap: scripting settlement keys are tab-scoped and stale late-success receipts are cleared on URL change, but a full-document reload that keeps the same URL can leave an old receipt eligible for a new document generation. The verification below remains historical evidence for timeout/dedup/late-settlement behavior; it does **not** prove the newer same-URL reload/document-generation fence in `P1-125`.'
+            ),
+          }
+          for name, (old, new) in updates.items():
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'{name}: expected historical status marker not found')
+              if 'Current canonical status: **PARTIAL**' in text:
+                  raise SystemExit(f'{name}: already reconciled')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          a = audit.read_text(encoding='utf-8')
+          marker = '## Continuation 2026-08-26 — historical closure evidence reconciliation'
+          if marker in a:
+              raise SystemExit('closure evidence marker already present')
+          a += "\n\n" + marker + "\n\nAudit baseline: `5f3b53394171de0a64e8b4ff6c687c31be28bc34`. Documentation-only evidence reconciliation; production runtime and manifest are unchanged and no product tests were rerun.\n\nCanonical registry status wins over historical closure snapshots. `P1-009_CLOSURE.md`, `P1-090_CLOSURE.md`, and `P1-125_CLOSURE.md` still labeled their original implementation gates as current `REGRESSION` even though later deep audit reopened each item as `PARTIAL`. The files now preserve the original PASS evidence verbatim while explicitly stating that it proves only the older implemented scope, not the newer CPU/deadline, post-move object-identity, or same-URL document-generation acceptance criteria. This prevents historical gates from being misread as current closure evidence.\n"
+          audit.write_text(a, encoding='utf-8')
+      - name: Verify scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-partial-closure-evidence.yml
+          git add P1-009_CLOSURE.md P1-090_CLOSURE.md P1-125_CLOSURE.md DEEP_AUDIT_2026-08-25.md
+          expected=$'.github/workflows/audit-sync-20260826-partial-closure-evidence.yml\nDEEP_AUDIT_2026-08-25.md\nP1-009_CLOSURE.md\nP1-090_CLOSURE.md\nP1-125_CLOSURE.md'
+          actual="$(git diff --cached --name-only | sort)"
+          test "$actual" = "$expected"
+          python - <<'PY'
+          import json
+          m = json.load(open('manifest.json', encoding='utf-8'))
+          assert m['manifest_version'] == 3
+          assert m['version'] == '0.9.8'
+          assert m['minimum_chrome_version'] == '118'
+          PY
+      - name: Commit evidence reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: reconcile historical partial closure evidence'
+          git push
