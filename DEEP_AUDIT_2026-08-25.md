@@ -609,3 +609,11 @@ This continuation is docs-only. Production source and `manifest.json` are unchan
 
 This continuation is docs-only. Production source and `manifest.json` are unchanged; the previous product test gate was not rerun.
 
+## Correction 2026-08-26 — P0-039 capacity hypothesis rejected
+
+The immediately preceding P0-039 capacity refinement was re-checked against current live callers and is **retracted**. `safeAppendJournalEntry()` / creation of new generic `pendingAppends` no longer has a live save caller in the current product path; the generic store remains for legacy recovery compatibility. Current irreversible save paths use specialized pre-side-effect checkpoints instead: local downloads persist `pendingDownloads` before `chrome.downloads.download()`, and Yandex saves persist `pendingRemoteSaves` before signed PUT/publication. Therefore a full generic `pendingAppends` queue does not currently cause the claimed 21st live download/upload to complete without durable recovery.
+
+P0-039 is restored to `REGRESSION`. This correction is intentionally preserved in the audit trail rather than deleting the rejected hypothesis, so future readers can see why it was not promoted into the active registry. If a future code change reintroduces a live caller of `safeAppendJournalEntry()`, capacity admission must be re-audited before that caller is accepted.
+
+This correction is docs-only. Production source and `manifest.json` are unchanged; product tests were not rerun.
+
