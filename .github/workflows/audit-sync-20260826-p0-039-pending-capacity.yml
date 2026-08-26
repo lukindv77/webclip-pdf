@@ -1,0 +1,57 @@
+name: audit-sync-p0-039-pending-capacity
+on:
+  push:
+    paths:
+      - '.github/workflows/audit-sync-20260826-p0-039-pending-capacity.yml'
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        run: |
+          test "$(git rev-parse HEAD^)" = "6a214d007ea36c5df18d9a584c17ba3d9e9c3c9a"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p0-039-pending-capacity.yml"
+      - name: Update audit docs
+        shell: python
+        run: |
+          from pathlib import Path
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          text = priorities.read_text(encoding='utf-8')
+          old = "| P0-039 | P0 | REGRESSION | После физически успешного локального/Yandex сохранения сбой append в Journal не должен скрыто терять metadata. `safeAppendJournalEntry` использует idempotent recovery-checkpoint с фиксированными `journalEntryId/createdAt`; пользователь получает статус `partial`. После `P0-041` pending appends находятся в Journal IndexedDB, а не в `storage.local`, и восстанавливаются hourly maintenance. |"
+          new = "| P0-039 | P0 | PARTIAL | После физически успешного локального/Yandex сохранения сбой append в Journal не должен скрыто терять metadata. Основной path уже использует idempotent recovery-checkpoint с фиксированными `journalEntryId/createdAt`, а `pendingAppends` находится в Journal IndexedDB и восстанавливается maintenance. Аудит выявил незакрытую capacity-ветку: очередь ограничена 20 checkpoints и 4 MiB; `markPendingJournalAppendFailure()` лишь увеличивает `attemptCount/lastError`, но у `pendingAppends` нет stale/dead-letter relief или пользовательского resolution. Если 20 старых append checkpoints длительно не могут commit, `checkpointPendingJournalAppend()` для новой уже **физически успешной** local/Yandex операции fail-closed по capacity; `safeAppendJournalEntry()` после этого всё равно пробует обычный append. Если тот падает по той же продолжающейся IDB/quota причине, новая metadata остаётся без durable recovery, что нарушает исходный инвариант P0-039. Нужен fail-safe capacity contract: физический side effect не должен стартовать, если заранее невозможно зарезервировать recovery slot для его будущей metadata, либо используется отдельный durable overflow/dead-letter envelope, который не теряет item; уже существующие unresolved checkpoints нельзя автоматически удалять только ради места. Должен быть bounded diagnostics/UI для permanently failing items и явное recovery/export/resolution, а после actual append checkpoint удаляется атомарно как сейчас. Regression: заполнить 20 checkpoint'ов детерминированными failing appends; 21-я операция не может физически завершить download/upload без гарантированного recovery receipt либо её metadata должна пережить отдельный durable overflow; восстановление одного slot возобновляет admission без потери старых items. |"
+          if old not in text:
+              raise SystemExit('P0-039 source row not found or changed')
+          priorities.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          a = audit.read_text(encoding='utf-8')
+          heading = '## Continuation 2026-08-26 — P0-039 recovery checkpoint capacity'
+          if heading in a:
+              raise SystemExit('audit section already exists')
+          addition = '''\n\n## Continuation 2026-08-26 — P0-039 recovery checkpoint capacity\n\n- **P0-039 PARTIAL — bounded pending append capacity can break the post-side-effect recovery guarantee.** `pendingAppends` has hard limits of 20 records and 4 MiB. A failed recovery attempt only updates `attemptCount/lastError`; unlike remote-save checkpoints there is no stale/dead-letter state that stops an irrecoverable item from occupying active capacity. `checkpointPendingJournalAppend()` refuses a 21st new record without deleting old data.\n- `safeAppendJournalEntry()` catches that checkpoint failure and still attempts the normal Journal append. This is fine while IndexedDB is healthy, but if the same sustained IDB/quota failure that created the backlog also rejects the direct append, a local/Yandex file may already have been physically saved while the new metadata has neither a Journal entry nor durable recovery checkpoint. The user sees a warning, but the invariant that post-side-effect metadata is recoverable is no longer true.\n- Keep the existing safety property that old unresolved items are never evicted merely to make space. Instead reserve recovery capacity before starting a physical side effect or introduce a separate durable overflow/dead-letter envelope with bounded management/export. Permanently failing items need explicit diagnostics/resolution rather than infinite invisible occupancy.\n\nThis continuation is docs-only. Production source and `manifest.json` are unchanged; the previous product test gate was not rerun.\n'''
+          audit.write_text(a.rstrip() + addition + '\n', encoding='utf-8')
+      - name: Remove temporary workflow
+        run: rm .github/workflows/audit-sync-20260826-p0-039-pending-capacity.yml
+      - name: Verify scope and manifest invariants
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('manifest.json').read_text())
+          assert m['manifest_version'] == 3
+          assert m['version'] == '0.9.8'
+          assert m['minimum_chrome_version'] == '118'
+          PY
+          git add -A
+          test "$(git diff --cached --name-only | sort)" = "$(printf '%s\n' '.github/workflows/audit-sync-20260826-p0-039-pending-capacity.yml' 'DEEP_AUDIT_2026-08-25.md' 'project_docs/PRIORITIES_P0_P1_P2.md' | sort)"
+      - name: Commit docs-only sync
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: refine P0-039 recovery capacity guarantee'
+          git push origin HEAD:main
