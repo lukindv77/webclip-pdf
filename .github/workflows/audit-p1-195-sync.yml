@@ -1,23 +1,22 @@
-name: Guarded P1-195 audit sync
+name: One-shot P1-195 audit sync
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/audit-p1-195-sync.yml'
+  issues:
+    types: [opened]
 
 permissions:
   contents: write
 
 jobs:
   sync:
+    if: github.event.issue.title == 'WEBCLIP_AUDIT_P1_195_SYNC_20260826'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-      - name: Freshen main and append P1-195 to both audit docs
+      - name: Freshen main, sync both audit docs, remove this workflow
         shell: bash
         run: |
           set -euo pipefail
@@ -29,44 +28,42 @@ jobs:
           deep_path = Path('DEEP_AUDIT_2026-08-25.md')
           priority = priority_path.read_text(encoding='utf-8')
           deep = deep_path.read_text(encoding='utf-8')
-
           if 'P1-195' in priority or 'P1-195' in deep:
-              raise SystemExit('P1-195 already exists in one of the audit docs; refusing duplicate append')
+              raise SystemExit('P1-195 already exists; refusing duplicate sync')
 
-          priority_append = r'''
+          priority_entry = r'''
 
 ## Продолжение глубокого аудита 2026-08-26 — Yandex OAuth capability/scope validation
 
 | Код | Приоритет | Статус | Пункт |
 |---|---|---|---|
-| P1-195 | P1 | OPEN | Yandex auth/status conflates «access token существует» с доказанной готовностью всех Disk capabilities. Standard PKCE flow запрашивает `cloud_api:disk.read`, `cloud_api:disk.write`, `cloud_api:disk.info` и сохраняет `token.scope`; по текущей документации Яндекс OAuth поле `scope` может отсутствовать при полном запрошенном наборе и возвращается, если токен выдан с меньшим набором. `finishYandexOAuth()` корректно может трактовать отсутствующий `scope` как requested set, но если Яндекс **явно возвращает урезанный scope**, WebClip только сохраняет строку и затем её не валидирует: `getYandexStatus()` сообщает `connected=true` по одному access token и всегда возвращает `scopes: YANDEX_SCOPES`, то есть ожидаемый, а не фактически granted набор. Manual-token path ещё слабее: `setManualYandexToken()` записывает `scope: ''` и валидирует candidate главным образом безвредным `GET /v1/disk`; такой read/status success не доказывает `disk.write`, upload/move/publish, однако Options после success показывает обычное «Подключено» без capability uncertainty. Нужен явный capability contract, отличающий requested/granted/missing/unknown. Для PKCE — нормализовать фактически выданный scope и не представлять full-ready, если обязательных прав нет; для opaque manual token — использовать только документированную надёжную introspection, если она существует, иначе write/mutation capability остаётся `unknown`, а не presumed granted. Не выполнять destructive permission probes только ради проверки токена. UI/status и admission privileged Yandex operations должны честно отражать capability state и fail/degrade до первой необратимой мутации. `Проверить доступ` с существующим root сейчас может создавать служебные папки и потому является отдельной user-invoked write-проверкой, но это не делает сам auth/status доказательством всех прав. Regression: OAuth token response с explicit reduced `scope` не становится full-ready; отсутствие `scope` следует документированной full-request semantics; manual token, проходящий Disk info/read, но не имеющий доказанного write, не объявляется полностью готовым; validation не делает upload/move/publish/unpublish. P1-178 остаётся про auth/config generation и late OAuth completion, P1-191 — про transactional replacement старого auth; этот пункт отдельно про **authority/capability truthfulness** уже выбранного candidate token. |
+| P1-195 | P1 | OPEN | Yandex auth/status смешивает наличие access token с доказанной готовностью требуемых Disk capabilities. Standard PKCE запрашивает `cloud_api:disk.read`, `cloud_api:disk.write`, `cloud_api:disk.info` и сохраняет `token.scope`, но явно возвращённый урезанный scope затем не сравнивается с обязательным набором: `getYandexStatus()` ставит `connected=true` по одному access token и всегда сообщает ожидаемый `YANDEX_SCOPES`. Manual token сохраняется с `scope: ''` и проверяется главным образом безвредным `GET /v1/disk`; такой read/status success не доказывает write/upload/move/publish, однако UI показывает обычное «Подключено». Нужен явный requested/granted/missing/unknown capability contract и централизованный admission для Yandex operations. Для PKCE отсутствующий `scope` можно трактовать по документированной семантике Яндекс как полный запрошенный набор, а explicit reduced scope обязан понижать readiness. Для opaque manual token использовать только надёжную документированную introspection, если она установлена; иначе mutation capability остаётся `unknown`, а не presumed granted. Не делать upload/move/publish/unpublish probes только ради классификации. Пользовательская «Проверить доступ» может отдельно доказать часть write-authority, если создаёт служебные папки, но не превращает basic auth/status в доказательство всех прав. Regression: explicit reduced scope не full-ready; omitted scope следует документированной full-request semantics; manual read/status success с unproven write не full-ready; validation не выполняет destructive probes. P1-178 остаётся auth/config generation fence, P1-191 — transactional manual-auth replacement. |
 
-Docs-only audit sync; production runtime and `manifest.json` unchanged; product gate not rerun.
+Docs-only audit sync; production runtime и `manifest.json` не менялись; product gate не перезапускался.
 '''
 
-          deep_append = r'''
+          deep_entry = r'''
 
 ## Continuation 2026-08-26 — P1-195 Yandex OAuth capability/scope validation
 
 | Code | Priority | Status | Finding |
 |---|---|---|---|
-| P1-195 | P1 | OPEN | Yandex auth/status conflates token presence with proof that all Disk capabilities required by WebClip are granted. `startYandexOAuth()` requests `cloud_api:disk.read`, `cloud_api:disk.write`, `cloud_api:disk.info`. `finishYandexOAuth()` stores the token response `scope` (falling back to the requested set only when the field is absent), but no later readiness/status path compares an explicitly returned reduced scope with the required set. `getYandexStatus()` sets `connected` from access-token presence and always exposes `scopes: YANDEX_SCOPES`, so Options can show a normal green «Подключено» even when the saved OAuth response itself says fewer rights were granted. `setManualYandexToken()` sets `scope: ''`; its candidate validation uses `GET /v1/disk`, which proves a valid token can answer that read/status endpoint but does not prove write/upload/move/publish authority. The manual-token documentation currently exposes the token itself but no exact granted-scope field to WebClip; the audited Yandex OAuth documentation exposes app/client permissions and scope at token issuance, but this audit did not find a documented non-destructive token-introspection endpoint that reliably returns the exact granted Disk scope for an arbitrary pasted token. Therefore unknown write authority must remain explicit rather than being silently promoted to full-ready. Required contract: keep requested, granted, missing and unknown capabilities distinct; honor explicit reduced PKCE scope; treat absent standard-PKCE scope according to Yandex's documented full-request response semantics; for manual tokens use a reliable documented introspection mechanism if one is established, otherwise expose capability `unknown` and gate/degrade privileged mutations before an irreversible side effect. Do not perform destructive upload/move/publish probes merely to classify permissions. Existing user-invoked «Проверить доступ» may create service folders when a root is configured and can therefore prove some write authority only as that explicit operation, not retroactively make basic auth/status truthful. Regressions must cover explicit reduced `scope`, omitted `scope`, manual read/status success with unproven write, and zero destructive validation probes. P1-178 remains the auth/config generation fence; P1-191 remains transactional manual-auth replacement. |
+| P1-195 | P1 | OPEN | Yandex auth/status conflates token presence with proof that all Disk capabilities required by WebClip are granted. `startYandexOAuth()` requests `cloud_api:disk.read`, `cloud_api:disk.write`, `cloud_api:disk.info`; `finishYandexOAuth()` stores the token response `scope` (falling back to the requested set only when the field is absent), but readiness/status never compares an explicitly returned reduced scope with the required set. `getYandexStatus()` sets `connected` from access-token presence and always exposes `scopes: YANDEX_SCOPES`. Manual auth stores `scope: ''` and validates mainly via `GET /v1/disk`, which proves that read/status endpoint but not write/upload/move/publish authority. The audit did not establish a documented non-destructive token-introspection endpoint that reliably returns exact granted Disk scope for an arbitrary pasted token, so unknown manual-token mutation authority must remain explicit rather than being promoted to full-ready. Required contract: requested/granted/missing/unknown capabilities, explicit reduced-PKCE handling, documented omitted-scope semantics, honest UI/status, and centralized admission before privileged Yandex mutations. Do not perform destructive upload/move/publish/unpublish probes merely to classify permissions. Existing user-invoked «Проверить доступ» may create service folders and can prove some write authority only as that explicit operation. Regressions: explicit reduced `scope`; omitted `scope`; manual `GET /v1/disk` success with unproven write; zero destructive validation probes. P1-178 remains auth/config generation fencing; P1-191 remains transactional manual-auth replacement. |
 
-Evidence: current source stores `token.scope` but ignores it in readiness, manual auth stores an empty scope and validates through `GET /v1/disk`, while Options renders any `connected=true` token as fully connected. Yandex OAuth documentation states the token response `scope` field is optional and is returned when OAuth issued a smaller permission set than requested; Yandex documents that an OAuth token contains a permission set. Docs-only audit sync; runtime/manifest unchanged and the previously proven 88/88 syntax + 74/74 deterministic gate was not rerun.
+Evidence: current source stores `token.scope` but ignores it in readiness; manual auth stores an empty scope and validates through `GET /v1/disk`; Options renders any `connected=true` token as fully connected. Yandex OAuth documentation states token-response `scope` is optional and is returned when OAuth issued a smaller permission set than requested. Docs-only audit sync; runtime/manifest unchanged and the previously proven 88/88 syntax + 74/74 deterministic gate was not rerun.
 '''
 
-          priority_path.write_text(priority.rstrip() + priority_append + '\n', encoding='utf-8')
-          deep_path.write_text(deep.rstrip() + deep_append + '\n', encoding='utf-8')
+          priority_path.write_text(priority.rstrip() + priority_entry + '\n', encoding='utf-8')
+          deep_path.write_text(deep.rstrip() + deep_entry + '\n', encoding='utf-8')
           PY
+          rm .github/workflows/audit-p1-195-sync.yml
           git diff --check
-          git diff -- project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
-          test "$(git diff --cached --name-only | wc -l)" -eq 2
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md .github/workflows/audit-p1-195-sync.yml
+          test "$(git diff --cached --name-only | wc -l)" -eq 3
           git diff --cached --name-only | grep -Fx 'project_docs/PRIORITIES_P0_P1_P2.md'
           git diff --cached --name-only | grep -Fx 'DEEP_AUDIT_2026-08-25.md'
+          git diff --cached --name-status | grep -E '^D[[:space:]]+\.github/workflows/audit-p1-195-sync\.yml$'
           git commit -m 'docs: record P1-195 Yandex capability validation'
           git push origin HEAD:main
-
-# trigger: 2026-08-26T23:26+07:00
