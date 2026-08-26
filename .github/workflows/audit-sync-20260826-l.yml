@@ -1,0 +1,63 @@
+name: audit-sync-20260826-l
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-audit-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "363e4b5131033fd892be12c6aa59a4b5f89e9d7d"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-l.yml"
+      - name: Update audit docs
+        shell: python
+        run: |
+          from pathlib import Path
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          p = priorities.read_text(encoding='utf-8')
+          a = audit.read_text(encoding='utf-8')
+          if 'P0-076' in p or 'P0-076' in a:
+              raise SystemExit('P0-076 already exists; refuse duplicate sync')
+
+          p += '''\n\n## Продолжение глубокого аудита 2026-08-26 — stale single-entry mutations across clear/import\n\n| Код | Приоритет | Статус | Пункт |\n|---|---|---|---|\n| P0-076 | P0 | OPEN | Bulk destructive guard защищает только одновременные `clear/import` друг от друга, но не от уже начатых или параллельных single-entry mutations. `deleteJournalEntry()` читает старую entry, может выполнить длительный Yandex move, затем `deleteJournalEntryRecordOnly(id)` снова читает/удаляет **текущий** record с тем же ID. `moveReadLaterEntryToRead()` после remote move вызывает `updateJournalEntryRecord(id, patch)`, который читает текущую entry и накладывает patch, полученный из старой операции. Add/edit/delete комментария аналогично сначала читают entry/строят новый `journalComments`, затем отдельным `updateJournalEntryRecord()` накладывают stale массив на текущий record. Replace/import сохраняет entry IDs из backup, поэтому если clear/import завершится между первоначальным read и поздним commit, старая операция может удалить или испортить уже импортированную новую запись с тем же ID. Нужен Journal mutation generation/immutable per-entry revision fence: bulk replace должен либо дождаться/зафиксировать все активные mutations, либо инвалидировать их commit-generation; каждый late single-entry commit обязан атомарно проверить `expected entry revision/identity + journal generation` в той же IDB transaction и fail-closed при mismatch. Для Yandex side effects после mismatch нельзя blind-retry/rollback неизвестный remote результат: durable operation checkpoint должен сохранить факт remote settlement и потребовать явного reconciliation, не меняя новый imported Journal. Комментарии тоже должны использовать compare-and-swap/transactional read-modify-write, а не stale read → separate update. |\n'''
+
+          marker = '## Continuation at HEAD `363e4b5131033fd892be12c6aa59a4b5f89e9d7d` — Journal mutation generation race'
+          if marker in a:
+              raise SystemExit('Audit continuation already present')
+          a += f'''\n\n{marker}\n\nNo production source changed in this continuation. The audit compared the runtime dispatcher, single-entry Journal helpers and bulk destructive gate.\n\n### P0-076: stale single-entry operations can target a replacement Journal\n\n`runExclusiveJournalDestructiveMutation()` only serializes the two bulk destructive paths (`WEBCLIP_JOURNAL_CLEAR` and staged replace/import). Single-entry delete, mark-read and comment mutations are dispatched outside that exclusive gate. More importantly, a simple busy flag would not close the race for an operation that started before the bulk replace.\n\n`deleteJournalEntry()` captures an old entry and may spend network time moving its Yandex file. Its final local phase calls `deleteJournalEntryRecordOnly(id)`, which re-reads by ID and deletes the current record. A backup import may legitimately recreate the same ID, so the old operation can delete the replacement record. `moveReadLaterEntryToRead()` has the analogous write form: after the old remote move settles, `updateJournalEntryRecord(id, patch)` performs a fresh get by ID and overlays the old operation's reading/path/resource patch onto whatever record now occupies that ID.\n\nComment mutation helpers expose the same optimistic-concurrency gap without a remote call: they read the record, derive an entire comments array, then call a separate `updateJournalEntryRecord()` transaction. A concurrent replace/import can land between those phases and receive the stale comments array.\n\nThe correct boundary is not only UI locking. Every mutation needs an immutable generation/revision receipt captured before work and checked in the exact commit transaction. Bulk replace needs a generation transition that makes every pre-replace receipt stale. Remote side effects that already settled before a generation mismatch require durable reconciliation/diagnostics rather than applying their result to the replacement Journal or blindly reversing the network operation.\n\n### Evidence note\n\nDocumentation-only audit sync. Product tests are not rerun. Last verified product gate remains P0-063 (88/88 JS syntax, 74/74 deterministic tests); unmanaged unpacked Chrome and real Yandex E2E remain release blockers.\n'''
+
+          priorities.write_text(p, encoding='utf-8')
+          audit.write_text(a, encoding='utf-8')
+      - name: Verify docs-only scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-l.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          mapfile -t changed < <(git diff --cached --name-only | sort)
+          expected=$'.github/workflows/audit-sync-20260826-l.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(printf '%s\n' "${changed[@]}")"
+          test "$actual" = "$expected"
+          grep -q '"manifest_version": 3' manifest.json
+          grep -q '"version": "0.9.8"' manifest.json
+          grep -q '"minimum_chrome_version": "118"' manifest.json
+      - name: Commit audit sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: record Journal stale-mutation audit finding'
+          git push
