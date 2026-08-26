@@ -552,3 +552,16 @@ Current product source is unchanged; this is a docs-only audit refinement. The e
 - Acceptance: add a worker/owner-level global reservation ledger for anticipated persistent bytes across PDF cache/import/export staging, reserve before materialization/write, count only unreserved free budget plus the one global safety reserve, and release only after actual commit/abort plus cleanup. Concurrent-admission regression should demonstrate that N individually admissible large writers cannot overbook one quota snapshot. Journal entries and durable recovery checkpoints must never be evicted automatically to make room.
 
 Docs-only audit sync: production runtime and `manifest.json` are unchanged. The previously proven product gate (88/88 syntax, 74/74 deterministic tests) was not rerun for this documentation-only refinement.
+
+## Continuation 2026-08-26 — P0-078 publication policy generation fence
+
+Current product source is unchanged; this is a docs-only audit finding on the current `main`.
+
+- Live Yandex PDF save snapshots `config.createPublicLinks` at operation start. After the signed upload/checkpoint phase it later executes `ensureYandexPublicUrl(remotePath, operationId)` when that old snapshot is true.
+- `checkpointPendingRemoteSaveIntent()` also persists `createPublicLinks` into `pendingRemoteSaves`. `recoverPendingRemoteSaves()` uses the checkpoint value and can execute `ensureYandexPublicUrl()` during later maintenance.
+- Options writes the global setting independently through `WEBCLIP_YANDEX_SAVE_PREFERENCES`; the UI describes the switch as whether WebClip creates a permanent link for successfully uploaded PDFs and explicitly warns that such a link makes the file public. The config write does not fence/revoke pending publication authorization.
+- Therefore a user can switch public-link creation off after an upload becomes pending/unknown but before the actual publish side effect. A live operation in another tab or a later recovery pass can still create a new public link because it follows the older operation/checkpoint snapshot.
+- This is distinct from P0-069 (lifecycle when deleting an already published Journal entry) and P1-164 (explicit per-entry unpublish). P0-078 covers privacy-policy revocation for publication that has not yet been safely settled.
+- Acceptance: maintain a durable/current publication-policy generation. Any true→false transition (Options or settings import) invalidates authorization for not-yet-started publish from older generations. Immediately before `resources/publish`, live and recovery paths fresh-check current policy/generation. If publish has already started and its result is unknown, do not call it cancelled and do not blind-retry; keep a durable publication-outcome checkpoint for reconciliation. Already confirmed public links are not automatically unpublished by the global toggle; explicit revoke remains P1-164/P0-069.
+
+Docs-only audit sync: production runtime and `manifest.json` are unchanged. The previously proven product gate (88/88 syntax, 74/74 deterministic tests) was not rerun for this documentation-only finding.
