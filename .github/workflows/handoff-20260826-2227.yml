@@ -1,3 +1,4 @@
+# Trigger after workflow is registered on main.
 name: handoff-20260826-2227
 
 on:
@@ -55,7 +56,6 @@ jobs:
             handoff/WebClip_Handoff_Audit_2026-08-26_2227_66fd5f82.zip \
             handoff/WebClip_Handoff_Audit_2026-08-26_2227_66fd5f82.zip.sha256
 
-          # Handoff packaging must not modify production or canonical audit docs.
           git diff --exit-code "$SOURCE" -- manifest.json service-worker.js content.js offscreen.js frame-agent.js journal.js options.js popup.js prepared-save-as.js journal-import-stream.js public-suffix.js
           git diff --exit-code "$SOURCE" -- project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
 
