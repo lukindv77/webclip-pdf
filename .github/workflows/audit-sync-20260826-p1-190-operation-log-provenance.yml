@@ -1,13 +1,14 @@
 name: audit-sync-p1-190-operation-log-provenance
+
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/audit-sync-20260826-p1-190-operation-log-provenance.yml'
+
 permissions:
   contents: write
+
 jobs:
-  sync:
+  sync-p1-190:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,45 +18,52 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "fb1e1c790562a3f00c914ae84da46f306a466e7e"
+          test "$(git rev-parse HEAD^)" = "1a29c70f26bed888b1f0fa57afb2eefbd410584d"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p1-190-operation-log-provenance.yml"
       - name: Sync audit finding
         shell: python
         run: |
           from pathlib import Path
-
           priority = Path('project_docs/PRIORITIES_P0_P1_P2.md')
           deep = Path('DEEP_AUDIT_2026-08-25.md')
           p = priority.read_text(encoding='utf-8')
           d = deep.read_text(encoding='utf-8')
+          finding = """
 
-          finding = """\n\n## Продолжение глубокого аудита 2026-08-26 — imported OperationLog provenance\n\n| Код | Приоритет | Статус | Пункт |\n|---|---|---|---|\n| P1-190 | P1 | OPEN | Journal import сохраняет синтаксически корректный `raw.operationId` из неподписанного backup как будто это доказанная локальная provenance-связь. `buildLinkedOperationLog(entry)` затем принимает этот ID по тому же regex и по явному нажатию `Показать лог`/`Копировать лог` читает `WEBCLIP_OPERATION_LOG_GET` exact operationId из **текущей установки**. Crafted/чужой backup может поэтому привязать импортированную запись к существующему несвязанному локальному OperationLog и показать его как «связанный», искажая forensic/диагностическую историю. Это не новый remote privilege и не P0-022: пользователь и так имеет доступ к своим локальным логам, но связь entry→operation становится недостоверной. Нужен versioned provenance contract: imported `operationId` хранить только как исторический/export metadata (`sourceOperationId`) либо помечать `operationLogProvenance=imported-unverified`; UI не должен автоматически связывать его с live OperationLog без локального доказанного receipt/namespace instance identity. Собственные live entries продолжают получать exact operationId по P1-148. Для export→import roundtrip сохранить видимый исторический ID, но не создавать ложную live-ссылку. Добавить regression: crafted import с operationId существующего локального лога не активирует `Показать лог`; live entry с локально выданным receipt активирует; legacy/imported entry остаётся диагностически честной. |\n"""
+## Продолжение глубокого аудита 2026-08-26 — imported OperationLog provenance
+
+| Код | Приоритет | Статус | Пункт |
+|---|---|---|---|
+| P1-190 | P1 | OPEN | Journal import сохраняет синтаксически корректный `raw.operationId` из неподписанного backup как будто это доказанная локальная provenance-связь. `buildLinkedOperationLog(entry)` затем принимает этот ID по тому же regex и по явному нажатию `Показать лог`/`Копировать лог` читает `WEBCLIP_OPERATION_LOG_GET` exact operationId из **текущей установки**. Crafted/чужой backup может поэтому привязать импортированную запись к существующему несвязанному локальному OperationLog и показать его как «связанный», искажая forensic/диагностическую историю. Это не новый remote privilege и не P0-022: пользователь и так имеет доступ к своим локальным логам, но связь entry→operation становится недостоверной. Нужен versioned provenance contract: imported `operationId` хранить только как исторический/export metadata (`sourceOperationId`) либо помечать `operationLogProvenance=imported-unverified`; UI не должен автоматически связывать его с live OperationLog без локального доказанного receipt/namespace instance identity. Собственные live entries продолжают получать exact operationId по P1-148. Для export→import roundtrip сохранить видимый исторический ID, но не создавать ложную live-ссылку. Добавить regression: crafted import с operationId существующего локального лога не активирует `Показать лог`; live entry с локально выданным receipt активирует; legacy/imported entry остаётся диагностически честной. |
+"""
           if 'P1-190' not in p:
               priority.write_text(p.rstrip() + finding + '\n', encoding='utf-8')
+          audit = """
 
-          audit = """\n\n## Continuation 2026-08-26 — imported OperationLog provenance\n\nConfirmed a separate diagnostics/provenance gap after duplicate-check against the current registry. `normalizeImportedJournalEntry()` accepts a syntactically valid `raw.operationId` from an unsigned Journal backup and stores it unchanged. `journal.js::buildLinkedOperationLog()` treats the same exact ID as a live local linkage and, on explicit Show/Copy action, reads `WEBCLIP_OPERATION_LOG_GET` for that ID from the current installation. A crafted or foreign backup can therefore make an imported entry appear linked to an unrelated local log. This does not grant a new remote capability, so it is tracked as P1-190 rather than P0-022. Required direction: preserve imported historical operation IDs without treating them as locally proven live-log authority; add a versioned provenance/instance receipt and deterministic regression for collision with an existing local OperationLog.\n\nAudit sync only. Production runtime/configuration and `manifest.json` are unchanged; the previously proven 88/88 syntax + 74/74 deterministic product gate was not rerun for this docs-only commit.\n"""
-          if 'imported OperationLog provenance' not in d:
+## Continuation 2026-08-26 — imported OperationLog provenance
+
+Confirmed a separate diagnostics/provenance gap after duplicate-check against the current registry. `normalizeImportedJournalEntry()` accepts a syntactically valid `raw.operationId` from an unsigned Journal backup and stores it unchanged. `journal.js::buildLinkedOperationLog()` treats the same exact ID as a live local linkage and, on explicit Show/Copy action, reads `WEBCLIP_OPERATION_LOG_GET` for that ID from the current installation. A crafted or foreign backup can therefore make an imported entry appear linked to an unrelated local log. This does not grant a new remote capability, so it is tracked as P1-190 rather than P0-022. Required direction: preserve imported historical operation IDs without treating them as locally proven live-log authority; add a versioned provenance/instance receipt and deterministic regression for collision with an existing local OperationLog.
+
+Audit sync only. Production runtime/configuration and `manifest.json` are unchanged; the previously proven 88/88 syntax + 74/74 deterministic product gate was not rerun for this docs-only commit.
+"""
+          if '## Continuation 2026-08-26 — imported OperationLog provenance' not in d:
               deep.write_text(d.rstrip() + audit + '\n', encoding='utf-8')
-      - name: Verify manifest and staged scope
+      - name: Verify scope and remove temporary workflow
         shell: bash
         run: |
           set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-p1-190-operation-log-provenance.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          expected=$'.github/workflows/audit-sync-20260826-p1-190-operation-log-provenance.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(git diff --cached --name-only | sort)"
+          test "$actual" = "$expected"
           python - <<'PY'
           import json
-          m=json.load(open('manifest.json', encoding='utf-8'))
+          m = json.load(open('manifest.json', encoding='utf-8'))
           assert m['manifest_version'] == 3
           assert m['version'] == '0.9.8'
           assert m['minimum_chrome_version'] == '118'
           PY
-          rm .github/workflows/audit-sync-20260826-p1-190-operation-log-provenance.yml
-          git add -A
-          printf '%s\n' "$(git diff --cached --name-only | sort)" > /tmp/changed
-          cat >/tmp/expected <<'EOF'
-.github/workflows/audit-sync-20260826-p1-190-operation-log-provenance.yml
-DEEP_AUDIT_2026-08-25.md
-project_docs/PRIORITIES_P0_P1_P2.md
-EOF
-          diff -u /tmp/expected /tmp/changed
       - name: Commit docs-only sync
         shell: bash
         run: |
@@ -63,4 +71,4 @@ EOF
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'docs: record imported OperationLog provenance finding'
-          git push origin HEAD:main
+          git push
