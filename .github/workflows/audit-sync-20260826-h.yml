@@ -1,0 +1,58 @@
+name: audit-sync-20260826-h
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-audit-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "aeac5dbc168df6f641ba6db2873d1796c7769df0"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-h.yml"
+      - name: Append confirmed audit finding
+        shell: python
+        run: |
+          from pathlib import Path
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          p = priorities.read_text(encoding='utf-8')
+          a = audit.read_text(encoding='utf-8')
+          if 'P0-074' in p or 'P0-074' in a:
+              raise SystemExit('P0-074 already exists; refuse duplicate sync')
+          p += '''\n\n## Продолжение глубокого аудита 2026-08-26 — operation-scoped Yandex identity\n\n| Код | Приоритет | Статус | Пункт |\n|---|---|---|---|\n| P0-074 | P0 | OPEN | Длинные Yandex operations не имеют immutable operation-scoped auth/config identity. `yandexApi()` вызывает `getValidYandexAccessToken()` заново на **каждый** HTTP request; initial account check в Journal locate не защищает последующие folder/move/verify calls от параллельного disconnect/reauth A→B. Root config также перечитывается разными helpers. Конкретно `uploadCachedRecordToYandex()` сначала сохраняет `config = getYandexConfig()`, затем `ensureYandexServiceFolders()` повторно читает текущий config и возвращает service path, `remotePath` строится из этого второго snapshot, а checkpoint `rootPath` позже берётся из первого `config.rootPath`. Root change между чтениями способен создать физический файл в root B с durable identity root A. Те же cross-request races затрагивают destructive Trash/ReadLater moves и backup chains. Нужен immutable `YandexOperationContext` при admission (`accountUid`, rootPath/config generation, auth-session generation; без plaintext token в durable logs/checkpoints). Все mutating/identity-sensitive API helpers принимают этот context и перед каждым следующим privileged request fail-closed проверяют, что auth/config generation не изменилась; disconnect/reauth/root change не должны молча переключать уже начатую операцию на другой account/root. Signed transfer после выдачи URL может физически settle, но post-transfer reconciliation обязана использовать исходный durable context по P0-073/P1-179. |\n'''
+          a += '''\n\n## Continuation 2026-08-26 — P0-074 operation-scoped Yandex auth/config fence\n\nAudit source-of-truth baseline: `aeac5dbc168df6f641ba6db2873d1796c7769df0`. Production code unchanged by this documentation sync.\n\n### Confirmed mixed-root path\n\n`uploadCachedRecordToYandex()` reads `config = await getYandexConfig()` at entry. It then calls `ensureYandexServiceFolders(...)`; that helper independently executes another `getYandexConfig()` and builds/creates service branches from that later root. The upload target folder/`remotePath` therefore belongs to the later config snapshot, while the durable remote checkpoint stores `rootPath = normalizeDiskPath(config.rootPath)` from the earlier snapshot. There is no generation comparison between the two reads. A concurrent root change can produce a durable identity that does not describe the path actually used.\n\n### Confirmed mixed-account path\n\n`yandexApi()` obtains `getValidYandexAccessToken()` immediately before each network request instead of using an operation-bound auth context. `findYandexFileForJournalEntry()` may compare current UID with a Journal entry at the beginning, but `moveJournalYandexFileToTrash()` and `moveReadLaterEntryToRead()` perform additional folder, target-name, move and verification requests afterwards. Reauthorization in another Options page between these requests changes the bearer token used by later requests without invalidating the in-flight operation. Path equality is insufficient across accounts. Backup chains have the same dynamic-token property and currently lack an account snapshot entirely (also tracked by P1-179).\n\nRequired architecture: capture a non-secret auth/config generation plus accountUid/rootPath at operation admission, pass that context through helpers rather than rereading mutable config, and verify generation/identity before every subsequent mutating or identity-sensitive Yandex API request. Changing auth/root should cause an existing operation to become deferred/fail-closed, not continue in the new context. Already-issued signed URLs remain non-cancellable; their eventual settlement must be reconciled against the original durable identity instead of the current UI configuration.\n'''
+          priorities.write_text(p, encoding='utf-8')
+          audit.write_text(a, encoding='utf-8')
+      - name: Verify docs-only scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-h.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          mapfile -t changed < <(git diff --cached --name-only | sort)
+          expected=$'.github/workflows/audit-sync-20260826-h.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(printf '%s\n' "${changed[@]}")"
+          printf '%s\n' "${changed[@]}"
+          test "$actual" = "$expected"
+          grep -q '"manifest_version": 3' manifest.json
+          grep -q '"version": "0.9.8"' manifest.json
+          grep -q '"minimum_chrome_version": "118"' manifest.json
+      - name: Commit audit sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: record operation-scoped Yandex identity finding'
+          git push
