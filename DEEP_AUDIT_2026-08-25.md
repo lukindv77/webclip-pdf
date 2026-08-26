@@ -445,3 +445,12 @@ The Journal import normalizer protects strings, URLs, paths, comment counts and 
 Audit baseline: `f92130307efad67946fdaecf36870ea940b4852a`. Documentation-only sync.
 
 **P0-022 is PARTIAL.** The earlier fix correctly fences destructive `resources/move` to the currently configured WebClip service branches, but that does not prove that an imported Journal record actually owns the object it names. Import accepts `remotePath`, `resourceId`, `publicUrl`, `accountUid` and `rootPath`; account/root checks are conditional when stored values are present. In `findYandexFileForJournalEntry()`, if neither stable resource id nor public URL is stored, `matchesKnownIdentity()` accepts any file returned at the stored path. A crafted/modified backup can therefore name another existing file under Upload/ReadmeLater/Trash and later cause that object to be moved when the user chooses the destructive file option on the imported record. The import confirmation code authenticates user intent to import, not remote-reference provenance. New remote references need an extension-generated versioned receipt/provenance marker; imported/path-only references must remain unverified until an explicit, fail-closed re-bind proves the exact remote object. This is independent of managed-path containment and composes with P0-073/P0-074/P1-184.
+
+
+## Continuation 2026-08-26 — imported comment identity and flattened rendered state
+
+Audit baseline: `b44d27f2bd55e2ebe4c40fc052e14cc9fc08d780`. Documentation-only sync.
+
+**P1-186.** Imported comment IDs are length-bounded but not uniqueness-bounded. Two valid comment objects can retain the same non-empty ID; Journal edit/delete and editing-state lookup address by ID with first-match semantics, so the restored data model contains ambiguous identities. Entry IDs already avoid this class through collision-aware staging/re-ID.
+
+**P1-187.** Flattened selected iframe bodies are deep-cloned. The clone helper copies resolved href/src/poster state but has no canvas bitmap transfer. `Node.cloneNode()` does not copy a canvas painted image, so the flattening path can replace visible selected graphics with blank canvas output. Add bounded rendered-state capture and real Chromium regression; evaluate video/form live state separately rather than assuming clone fidelity.
