@@ -473,3 +473,10 @@ Audit baseline: `fa1d9e6f2f68f37ccb2416271fd26021b41f65b7`. Documentation-only s
 ## Continuation 2026-08-26 — P1-004 / P1-171 registry deduplication
 
 Audit baseline: `bee0760251f865761827248ce3c4318837aab7ce`. Documentation-only correction. The child-frame reused-`frameId` / missing exact `documentId` finding was already registered as **P1-171**. P1-004 remains the feature-level cross-origin iframe item and is `PARTIAL`; P1-171 is the single detailed audit item for the document-generation/navigation fence. No new P-number is allocated. Production runtime/manifest are unchanged and no product test gate is rerun by this correction.
+
+
+## Continuation 2026-08-26 — imported site identity controls Yandex routing
+
+Audit baseline: `9490ed82170b4b5489e73e4bd32743b773320732`. Documentation-only sync; production runtime and manifest are unchanged, and the previously recorded product test gate was not rerun for this docs-only finding.
+
+**P1-189.** `normalizeImportedJournalEntry()` accepts an explicit backup `hostname` independently from the normalized `url`. Normal runtime entries derive hostname from sender URL, but imported entries can persist a conflicting pair. Later `moveReadLaterEntryToRead()` prefers `entry.hostname` when deriving the managed Yandex Upload destination, and `findYandexFileForJournalEntry()` prefers it for deterministic Upload/ReadmeLater fallback candidates. Therefore an untrusted backup can influence site routing of a later user-approved remote move even though the URL/siteKey represents another site. Managed-path sanitization contains the result under WebClip folders but does not make the site identity trustworthy. Canonicalize derived site metadata from normalized URL at import and at privileged routing boundaries; inconsistent duplicate hostname/siteAddress fields must not be authoritative. Keep P0-022 remote-object provenance and P0-073/P0-074 account/root fences separate.
