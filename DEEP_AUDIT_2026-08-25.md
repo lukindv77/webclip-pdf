@@ -250,3 +250,20 @@ Confirmed flow:
 - A user can disconnect/re-authorize to account B while an operation from account A is unresolved. If B contains the same managed path and byte size, recovery/completion can act on B and then persist B identifiers into data still tagged with account A. This breaks the identity invariant established for destructive Journal operations and can publish the wrong account's file.
 
 Required direction: all post-signed-transfer and recovery Yandex API calls must be account-fenced by the immutable checkpoint identity. A mismatch is not a retryable 404/error and must not mutate either account. Re-auth to the original account may resume recovery; switching account must leave the checkpoint visibly deferred.
+
+
+## Continuation 2026-08-26 — local-download ambiguity / Save As active lifecycle / remote retry identity
+
+Audit source-of-truth baseline: `4ec500f684e537a62f1e615f04d7e0be217f29fc`. Runtime code was inspected only; this sync changes documentation.
+
+### P0-048 reopened as PARTIAL — ambiguous filename/size fallback can bind two intents to one download
+
+`reconcilePendingLocalDownloads()` correctly filters candidates to `byExtensionId === chrome.runtime.id` and treats exact Blob URL as primary identity. The compatibility fallback is still unsafe under ambiguity: when the browser no longer exposes the original Blob URL it accepts matching basename + exact expected bytes within a short intent age and calls `.find()`. No uniqueness check or per-pass claimed-download set exists. `bindPendingLocalDownloadIntent()` then deletes the string intent and `put()`s the bound object under numeric `downloadId`; a second intent bound to the same id overwrites that durable key. A physically successful download can therefore lose its own Journal recovery metadata. The fallback must require exactly one unclaimed candidate and must never overwrite an existing numeric checkpoint belonging to another intent.
+
+### P0-073 expanded — manual retry can re-bind an unresolved remote save to another Yandex account
+
+The earlier account-fence finding also affects retry admission, not only later recovery. `checkpointPendingRemoteSaveIntent()` preserves an existing `remote-verified` record, but for an existing ordinary `prepared` record it writes the newly constructed item while retaining only the old `createdAt`. A manual retry after account A→B reauthorization therefore replaces checkpoint `accountUid/rootPath` with B for the same `journalEntryId`. Combined with `allowExisting` path+size reuse, this can erase the evidence that the unresolved operation originated in A. Remote checkpoint identity must be immutable once the first external side effect is admitted; retry under another account/root must stop before lookup/upload/publish.
+
+### P1-156 expanded — active prepared Save As checkpoints have no session GC
+
+`prepared-save-as.js` deliberately leaves native `saveAs:true` without a local timeout. Page-owned terminal cleanup listens to `downloads.onChanged` and sends RELEASE. Worker checkpoints add a session id to `webclipPreparedSaveAsIndex` on PREPARE and remove it on RELEASE. The index has a hard cap of 64, but current worker code has no pass that enumerates/reconciles this index after owner-page loss. Closing an extension page after PREPARE but before STARTED/RELEASE can leave the index/key indefinitely for the current browser session even when the underlying Blob is later reclaimed. STARTED operations also need `downloads.search` fallback if terminal events are missed. This is distinct from P1-169, which concerns accumulation of already-released tombstones.
