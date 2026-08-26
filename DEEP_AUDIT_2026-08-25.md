@@ -601,3 +601,11 @@ This continuation is docs-only. Production source and `manifest.json` are unchan
 
 This continuation is docs-only. Production source and `manifest.json` are unchanged; the previous product test gate was not rerun.
 
+## Continuation 2026-08-26 — P0-039 recovery checkpoint capacity
+
+- **P0-039 PARTIAL — bounded pending append capacity can break the post-side-effect recovery guarantee.** `pendingAppends` has hard limits of 20 records and 4 MiB. A failed recovery attempt only updates `attemptCount/lastError`; unlike remote-save checkpoints there is no stale/dead-letter state that stops an irrecoverable item from occupying active capacity. `checkpointPendingJournalAppend()` refuses a 21st new record without deleting old data.
+- `safeAppendJournalEntry()` catches that checkpoint failure and still attempts the normal Journal append. This is fine while IndexedDB is healthy, but if the same sustained IDB/quota failure that created the backlog also rejects the direct append, a local/Yandex file may already have been physically saved while the new metadata has neither a Journal entry nor durable recovery checkpoint. The user sees a warning, but the invariant that post-side-effect metadata is recoverable is no longer true.
+- Keep the existing safety property that old unresolved items are never evicted merely to make space. Instead reserve recovery capacity before starting a physical side effect or introduce a separate durable overflow/dead-letter envelope with bounded management/export. Permanently failing items need explicit diagnostics/resolution rather than infinite invisible occupancy.
+
+This continuation is docs-only. Production source and `manifest.json` are unchanged; the previous product test gate was not rerun.
+
