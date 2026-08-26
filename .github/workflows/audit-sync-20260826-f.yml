@@ -1,0 +1,66 @@
+name: audit-sync-20260826-f
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-audit-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "bbce7543125f3cd58ef6429b868bc8484fe3fc7c"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-f.yml"
+      - name: Append confirmed audit findings
+        shell: python
+        run: |
+          from pathlib import Path
+
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          p = priorities.read_text(encoding='utf-8')
+          a = audit.read_text(encoding='utf-8')
+
+          if 'P0-072' in p or 'P0-073' in p:
+              raise SystemExit('P0-072/P0-073 already present; refuse duplicate sync')
+
+          p += '''\n\n## Продолжение глубокого аудита 2026-08-26 — destructive checkpoint fencing / Yandex account identity\n\n| Код | Приоритет | Статус | Пункт |\n|---|---|---|---|\n| P0-072 | P0 | OPEN | Destructive Journal clear/replace-import атомарно удаляют `pendingDownloads` и `pendingRemoteSaves`, чтобы старые операции не resurrect локальные entries, но не fenced против **реально ещё выполняющихся внешних side effects**. Yandex upload создаёт durable remote checkpoint до signed PUT, затем после фактической передачи может создать public link и лишь после этого требует существующий checkpoint для `remote-verified`/Journal append. Если `Очистить домен/весь журнал` или replace-import удалит checkpoint во время transfer/publish, remote PDF (и при `createPublicLinks` публичная ссылка) может успешно появиться, а финализация упадёт с `Durable checkpoint ... не найден`, оставив orphan без Journal/recovery reference. Аналогично уже стартовавший Chrome download может завершиться после удаления `pendingDownloads`. Перед destructive clear/import нужен global durable-side-effect fence: показать активные операции затрагиваемого scope и либо запретить/отложить replace до actual settlement, либо сохранять cancellation tombstone/remote outcome reconciliation, который не resurrect запись, но гарантированно фиксирует и позволяет управлять физическим результатом/public link. Нельзя считать удаление checkpoint отменой non-cancellable upload/download. |\n| P0-073 | P0 | OPEN | Yandex remote-save completion/recovery не fenced по `accountUid`, хотя checkpoint уже хранит immutable `accountUid + rootPath`. Live upload получает signed URL и `accountUid` в аккаунте A, но после transfer `ensureYandexPublicUrl(remotePath)` и metadata verify используют **текущий** OAuth token без повторной проверки UID. `recoverPendingRemoteSaves()` также только проверяет наличие valid token, затем читает `remotePath` текущего аккаунта и принимает file по path + exact size; `current.data.accountUid/rootPath` перед этим не сравниваются. При reauth A→B во время/после unknown settlement одинаковый path+size в B может быть опубликован/принят как результат операции A; Journal затем смешает accountUid A с resourceId/publicUrl B. Перед каждым post-signed-transfer publish/verify и recovery обязательно получить current account UID и exact-сравнить с checkpoint; mismatch должен `defer/fail-closed` без API mutation в новом аккаунте. Root/path также должны проверяться против immutable checkpoint namespace; никакой cross-account recovery по одному path/size. |\n'''
+
+          if 'P0-072' in a or 'P0-073' in a:
+              raise SystemExit('Audit doc already contains P0-072/P0-073; refuse duplicate sync')
+
+          a += '''\n\n## Continuation 2026-08-26 — destructive checkpoints and Yandex account fencing\n\nAudit source-of-truth baseline for this continuation: `bbce7543125f3cd58ef6429b868bc8484fe3fc7c`. Production code was inspected only; this sync changes documentation, not runtime behavior.\n\n### P0-072 — destructive Journal reset can erase the only checkpoint while the external side effect is still running\n\nConfirmed flow:\n\n- `uploadCachedRecordToYandex()` persists `pendingRemoteSaves` before starting the signed PDF transfer.\n- A normal full Journal clear clears `entries`, `pendingAppends`, `pendingDownloads` and `pendingRemoteSaves` in the same readwrite transaction. Scope clear prunes matching pending records; replace-import clears all three pending stores before replacing entries.\n- The remote-save path performs the signed transfer, then (when enabled) `ensureYandexPublicUrl(remotePath)`, then metadata verification, and only afterwards `markPendingRemoteSaveVerified()`. That final step explicitly fails if the durable checkpoint disappeared.\n- Therefore clear/import can intentionally prevent stale Journal resurrection yet still race a non-cancellable external side effect. A successful remote file/public link can become an unmanaged orphan. Deleting a durable checkpoint is not equivalent to cancelling `fetch`/Chrome Downloads.\n\nRequired direction: destructive Journal operations need a durable side-effect barrier independent from the decision to retain the local Journal entry. User-requested clear/replace may cancel future local append semantics, but must retain enough tombstone/outcome state to reconcile any upload/download that was already started and expose the resulting remote/public state without silently recreating the cleared Journal record.\n\n### P0-073 — remote-save recovery/completion can cross Yandex account identity\n\nConfirmed flow:\n\n- New remote checkpoints already store `accountUid`, `rootPath`, `remotePath`, expected bytes and the eventual Journal data.\n- Live upload captures `accountUid` before obtaining/using the signed upload URL. After the signed transfer, public-link creation and metadata verification call Yandex API with whatever OAuth token is current at that later moment; no exact UID revalidation occurs first.\n- `recoverPendingRemoteSaves()` checks that some valid OAuth token exists, but does not compare the current account UID with the checkpoint UID before reading `remotePath`. Recovery verifies primarily file type and exact byte size, then can publish and persist `resource_id/public_url`.\n- A user can disconnect/re-authorize to account B while an operation from account A is unresolved. If B contains the same managed path and byte size, recovery/completion can act on B and then persist B identifiers into data still tagged with account A. This breaks the identity invariant established for destructive Journal operations and can publish the wrong account's file.\n\nRequired direction: all post-signed-transfer and recovery Yandex API calls must be account-fenced by the immutable checkpoint identity. A mismatch is not a retryable 404/error and must not mutate either account. Re-auth to the original account may resume recovery; switching account must leave the checkpoint visibly deferred.\n'''
+
+          priorities.write_text(p, encoding='utf-8')
+          audit.write_text(a, encoding='utf-8')
+      - name: Verify docs-only scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-f.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          mapfile -t changed < <(git diff --cached --name-only | sort)
+          printf '%s\n' "${changed[@]}"
+          expected=$'.github/workflows/audit-sync-20260826-f.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(printf '%s\n' "${changed[@]}")"
+          test "$actual" = "$expected"
+          grep -q '"manifest_version": 3' manifest.json
+          grep -q '"version": "0.9.8"' manifest.json
+          grep -q '"minimum_chrome_version": "118"' manifest.json
+      - name: Commit audit sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: record destructive checkpoint and account-fence audit findings'
+          git push
