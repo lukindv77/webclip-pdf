@@ -585,3 +585,11 @@ Docs-only audit sync: production runtime and `manifest.json` are unchanged. The 
 
 This continuation is docs-only. Production source and `manifest.json` are unchanged; the previous product test gate was not rerun.
 
+## Continuation 2026-08-26 — P1-192 MV3 background-operation lifecycle ownership
+
+- **P1-192 OPEN — alarm wake-up is not lifecycle ownership of the long Promise.** `chrome.alarms.onAlarm` starts background backup and maintenance with `.catch(...)` and returns immediately. Before an offscreen signed transfer starts, `stageFullJournalExport()` may spend up to five minutes in IndexedDB/JSON staging; maintenance can likewise spend long intervals in pure IndexedDB cleanup or full `urlStats` rebuild. Current Chrome extension-service-worker lifecycle guidance documents a ~30-second inactivity shutdown and explicitly recommends periodic extension API calls only for exceptional long-running service-worker operations; the alarms event callback itself has a `void` callback contract. The signed-transfer heartbeat helps only after offscreen transfer begins, not during the pre-transfer snapshot.
+- Backup scheduling amplifies the impact: the periodic backup alarm is one-shot. If the worker is killed after that alarm fires but before success/failure schedules the next periodic/retry alarm, worker-start self-heal can reconstruct scheduling only after some later event wakes the extension. The hourly maintenance alarm is repeating and eventually provides such a wake under normal browser uptime, but this turns backup timeliness into accidental dependence on another subsystem and does not make the interrupted maintenance pass itself reliable.
+- Required architecture: explicit lifecycle ownership around the actual long operation, or move heavy work into an offscreen/durable context. Keep all existing deadlines/abort semantics and durable backup/recovery checkpoints; lifecycle keepalive must stop on actual settlement and must not turn a hung operation into an immortal worker. Real unpacked Chrome QA should force/observe >30-second snapshot and maintenance cases.
+
+This continuation is docs-only. Production source and `manifest.json` are unchanged; the previous product test gate was not rerun.
+
