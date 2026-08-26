@@ -68,3 +68,5 @@ Evidence: current source stores `token.scope` but ignores it in readiness, manua
           git diff --cached --name-only | grep -Fx 'DEEP_AUDIT_2026-08-25.md'
           git commit -m 'docs: record P1-195 Yandex capability validation'
           git push origin HEAD:main
+
+# trigger: 2026-08-26T23:26+07:00
