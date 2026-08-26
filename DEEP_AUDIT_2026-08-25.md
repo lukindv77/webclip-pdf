@@ -425,3 +425,16 @@ Backup success is a data-durability promise. Define one versioned restore envelo
 ### P0-077 additional evidence — valid single entry can exceed export batch ceiling
 
 The self-restore envelope mismatch is also per-entry, not only global. `JOURNAL_EXPORT_BATCH_MEMORY_CHARS` is 4 MiB and `readJournalEntryBatch()` aborts the complete export when one `JSON.stringify()` result exceeds that value. Yet independent live limits allow roughly 2 MiB of SelectionSnapshot plus up to 2 MiB of journal-comment text, a separate file comment and metadata; import parsing itself admits an 8 MiB source entry before field normalization. A valid stored entry can therefore make the whole full-Journal backup fail even when total Journal size is far below the 50/64 MiB global limits. P0-077 acceptance must include a single-entry exportability invariant, not merely total bytes and entry count.
+
+
+## Continuation 2026-08-26 — imported temporal domain and IndexedDB schema ownership
+
+Audit source-of-truth baseline: `e22d24aef75ff3c669d263ad4010983cf35078c8`. Documentation-only sync.
+
+### P1-185 — imported timestamps are type-converted but not domain-validated
+
+The Journal import normalizer protects strings, URLs, paths, comment counts and SelectionSnapshot size, but numeric time fields have a weaker contract. `createdAt` accepts any finite numeric conversion, including negative or implausibly distant future values. Other persisted timestamps use `Number(...)` without a finite check, so JSON strings such as `"1e309"` become `Infinity`. These values are not merely display metadata: `createdAt` is an IndexedDB sort key and feeds `urlStats.lastSavedAt`; Chrome Action freshness is derived from `Date.now() - lastSavedAt`. `readMovePendingAt` is also a recovery-state signal. Temporal values therefore need the same strict import-domain validation as paths and sizes.
+
+### P2-019 — Journal view can become an accidental migration owner
+
+`journal.js::openJournalDbForView()` is described as a direct view path, yet its `onupgradeneeded` creates the full v7 Journal stores and indexes. The service worker independently owns another copy of the schema definition. The definitions happen to match today. A future version that requires record transformation or migration metadata can fail catastrophically if an already-open/new Journal extension page performs the version bump first: IndexedDB records the new database version, and the service worker's authoritative `onupgradeneeded` for that same version will never run. Avoid two writable migration owners; share one migration module or require the view path to fail/reload until the worker-owned schema is current.
