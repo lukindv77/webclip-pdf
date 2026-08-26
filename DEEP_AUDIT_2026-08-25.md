@@ -267,3 +267,18 @@ The earlier account-fence finding also affects retry admission, not only later r
 ### P1-156 expanded — active prepared Save As checkpoints have no session GC
 
 `prepared-save-as.js` deliberately leaves native `saveAs:true` without a local timeout. Page-owned terminal cleanup listens to `downloads.onChanged` and sends RELEASE. Worker checkpoints add a session id to `webclipPreparedSaveAsIndex` on PREPARE and remove it on RELEASE. The index has a hard cap of 64, but current worker code has no pass that enumerates/reconciles this index after owner-page loss. Closing an extension page after PREPARE but before STARTED/RELEASE can leave the index/key indefinitely for the current browser session even when the underlying Blob is later reclaimed. STARTED operations also need `downloads.search` fallback if terminal events are missed. This is distinct from P1-169, which concerns accumulation of already-released tombstones.
+
+
+## Continuation 2026-08-26 — P0-074 operation-scoped Yandex auth/config fence
+
+Audit source-of-truth baseline: `aeac5dbc168df6f641ba6db2873d1796c7769df0`. Production code unchanged by this documentation sync.
+
+### Confirmed mixed-root path
+
+`uploadCachedRecordToYandex()` reads `config = await getYandexConfig()` at entry. It then calls `ensureYandexServiceFolders(...)`; that helper independently executes another `getYandexConfig()` and builds/creates service branches from that later root. The upload target folder/`remotePath` therefore belongs to the later config snapshot, while the durable remote checkpoint stores `rootPath = normalizeDiskPath(config.rootPath)` from the earlier snapshot. There is no generation comparison between the two reads. A concurrent root change can produce a durable identity that does not describe the path actually used.
+
+### Confirmed mixed-account path
+
+`yandexApi()` obtains `getValidYandexAccessToken()` immediately before each network request instead of using an operation-bound auth context. `findYandexFileForJournalEntry()` may compare current UID with a Journal entry at the beginning, but `moveJournalYandexFileToTrash()` and `moveReadLaterEntryToRead()` perform additional folder, target-name, move and verification requests afterwards. Reauthorization in another Options page between these requests changes the bearer token used by later requests without invalidating the in-flight operation. Path equality is insufficient across accounts. Backup chains have the same dynamic-token property and currently lack an account snapshot entirely (also tracked by P1-179).
+
+Required architecture: capture a non-secret auth/config generation plus accountUid/rootPath at operation admission, pass that context through helpers rather than rereading mutable config, and verify generation/identity before every subsequent mutating or identity-sensitive Yandex API request. Changing auth/root should cause an existing operation to become deferred/fail-closed, not continue in the new context. Already-issued signed URLs remain non-cancellable; their eventual settlement must be reconciled against the original durable identity instead of the current UI configuration.
