@@ -1,0 +1,76 @@
+name: audit-sync-20260826-j
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-audit-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "cb43081c8cb93fb3c069d759ad94948c86c03482"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-j.yml"
+      - name: Apply confirmed audit updates
+        shell: python
+        run: |
+          import re
+          from pathlib import Path
+
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          p = priorities.read_text(encoding='utf-8')
+          a = audit.read_text(encoding='utf-8')
+
+          p1_009 = '| P1-009 | P1 | PARTIAL | Универсальный многострочный Journal filter функционально работает поверх bounded cursor architecture: до 8 строк по 512 символов, поля `Наименование`/`Комментарии`/`Сайт`/`URL`, AND/OR и поиск за первой страницей. Аудит выявил незакрытый CPU/deadline worst case: exact page/count scan проходит весь candidate Journal, а comment matching многократно делает chunked `slice(...).toLocaleLowerCase()` по `fileComment/journalComment/journalComments`. При допустимых 100k entries и до ~2 MiB comment text на entry valid worst-case закономерно упирается в 20-секундный view deadline; последовательные filter refresh повторяют тяжёлый scan. Нужен versioned rebuildable search summary/index либо другая bounded candidate strategy, чтобы стоимость запроса не зависела от полного heavy payload; точность AND/OR/fields и import/update/delete consistency сохранить. |'
+          p, n009 = re.subn(r'^\| P1-009 \|.*$', lambda m: p1_009, p, count=1, flags=re.MULTILINE)
+          if n009 != 1:
+              raise SystemExit(f'P1-009 replacement count={n009}')
+
+          p1_156 = '| P1-156 | P1 | OPEN | Page-owned native Save As сохраняет обязательное отсутствие caller timeout у `chrome.downloads.download({saveAs:true})`, но cleanup/lifetime lifecycle неполон. `downloads.onChanged` listener может остаться при пропущенном terminal event, RELEASE control RPC не bounded/dedup, а active `webclipPreparedSaveAsIndex` (cap=64) не имеет GC для owner-page loss после PREPARE до STARTED/RELEASE. Дополнительно offscreen `registerBlobUrl()` ставит общий `BLOB_URL_FALLBACK_TTL_MS = 16 min` на **все** Blob URL. PREPARED Save As создаёт Blob до открытия native dialog, а `WEBCLIP_PREPARED_SAVE_AS_STARTED` отправляется только после `await downloads.download({saveAs:true})`; пользователь, оставивший системный Save As открытым дольше TTL, может потерять backing Blob — скрытый artificial timeout в обход принятой native-dialog semantics. Нужны owner-liveness/lease pinning Blob на весь actual Save As promise/download lifecycle, crash cleanup отдельно от wall-clock dialog timeout, `downloads.search` reconciliation для STARTED, GC never-started PREPARED, bounded/dedup RELEASE и согласованное удаление active index. Released tombstones остаются P1-169. |'
+          p, n156 = re.subn(r'^\| P1-156 \|.*$', lambda m: p1_156, p, count=1, flags=re.MULTILINE)
+          if n156 != 1:
+              raise SystemExit(f'P1-156 replacement count={n156}')
+
+          if re.search(r'^\| P1-181 \|', p, flags=re.MULTILINE):
+              raise SystemExit('P1-181 already exists')
+          p += '\n\n## Продолжение глубокого аудита 2026-08-26 — startup refresh crash consistency\n\n| Код | Приоритет | Статус | Пункт |\n|---|---|---|---|\n| P1-181 | P1 | OPEN | `reloadOpenExtensionPagesAfterVersionChange()` commit-ит `webclipRuntimeBuildVersion=version` **до** `tabs.query`/`tabs.reload`. Если enumeration/reload после marker write завершается ошибкой, следующий MV3 worker start видит текущую version и больше не повторяет repair; stale Journal/Options page остаётся с invalidated runtime до ручного reload. Calls также direct/unbounded и являются конкретным evidence для P1-158. Нужен durable phase `refresh-pending` → bounded enumeration/per-tab reload receipt → `refresh-complete`, либо version marker только после доказанного прохода; partial failures сохраняют retry state без reload storm. |\n'
+
+          marker = '## Continuation 2026-08-26 — corrected Journal CPU / startup refresh / Save As lifetime sync'
+          if marker in a:
+              raise SystemExit('audit marker already exists')
+          a += '''\n\n## Continuation 2026-08-26 — corrected Journal CPU / startup refresh / Save As lifetime sync\n\nSource-of-truth baseline tree is the clean product/docs tree at `cb43081c8cb93fb3c069d759ad94948c86c03482`; production runtime files are unchanged by this sync.\n\n### P1-009 returned to PARTIAL\n`journal-text-filter.js` bounds filter rows/query length and scans comment strings in 8192-character chunks, but every chunk is sliced and lowercased. Journal view/count cursor paths need exact totals and apply the filter across the candidate population. With admitted 100k records and per-entry comments up to roughly 2 MiB, the implementation is memory-aware but not CPU-scalable to its own valid data envelope. The 20-second deadline is a safety stop, not a scalable search plan. Use rebuildable derived search data or another bounded candidate index; raw Journal remains source of truth.\n\n### P1-181 startup refresh commit ordering\n`reloadOpenExtensionPagesAfterVersionChange()` writes the new runtime version marker first, then calls direct `chrome.tabs.query({})` and best-effort `tabs.reload()` for extension tabs. Query failure returns and individual reload errors are swallowed after the marker has already committed. Future worker starts therefore suppress automatic repair. This is independent crash-consistency work on top of P1-158 timeout coverage.\n\n### P1-156 native Save As backing Blob lifetime\n`prepared-save-as.js` correctly has no local timeout around native `saveAs:true`. However `offscreen.js` gives every registered Blob URL a 16-minute fallback timer. The Blob exists before native dialog ownership begins, and STARTED notification is only sent after `downloads.download()` resolves. Thus backing storage can expire while the user is legitimately still interacting with the system dialog. The Blob needs an owner lease/heartbeat or equivalent actual-lifecycle pin whose crash reclamation is separate from a fixed dialog-duration timeout.\n'''
+
+          priorities.write_text(p, encoding='utf-8')
+          audit.write_text(a, encoding='utf-8')
+      - name: Verify docs-only scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-j.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          mapfile -t changed < <(git diff --cached --name-only | sort)
+          expected=$'.github/workflows/audit-sync-20260826-j.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(printf '%s\n' "${changed[@]}")"
+          printf '%s\n' "${changed[@]}"
+          test "$actual" = "$expected"
+          grep -q '"manifest_version": 3' manifest.json
+          grep -q '"version": "0.9.8"' manifest.json
+          grep -q '"minimum_chrome_version": "118"' manifest.json
+      - name: Commit audit sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: record Journal CPU startup and Save As lifetime findings'
+          git push
