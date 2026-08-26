@@ -1,0 +1,69 @@
+name: audit-sync-p1-184-prepublish-proof
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-audit-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "bc259d93aff40d0995157493d836b461fbd92b2e"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p1-184-prepublish-proof.yml"
+      - name: Update audit docs
+        shell: python
+        run: |
+          from pathlib import Path
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          p = priorities.read_text(encoding='utf-8')
+          a = audit.read_text(encoding='utf-8')
+          lines = p.splitlines()
+          matches = [i for i, line in enumerate(lines) if line.startswith('| P1-184 |')]
+          if len(matches) != 1:
+              raise SystemExit(f'Expected exactly one P1-184 row, got {len(matches)}')
+          old = lines[matches[0]]
+          if '| P1 | OPEN |' not in old:
+              raise SystemExit('P1-184 baseline status changed; refuse stale sync')
+          lines[matches[0]] = "| P1-184 | P1 | OPEN | Unknown-settlement/retry подтверждение Yandex upload использует `remotePath + exact size` как доказательство результата, чего недостаточно для identity конкретного файла. В `uploadCachedRecordToYandex(... allowExisting=true)` WebClip делает GET exact path и при `type=file` + совпавшем `expectedPdfBytes` ставит `existingFileReused=true`, полностью пропуская передачу байтов; `resourceId` впервые узнаётся только после такого принятия/verify. Background `pendingRemoteSaves` recovery аналогично принимает файл по path+size. Дополнительный аудит подтвердил privacy-side-effect того же root cause: при `createPublicLinks=true` live retry после same-size reuse вызывает `ensureYandexPublicUrl(remotePath)` **до** финального metadata verify, а background recovery после type+size проверки также может вызвать `resources/publish` до фиксации `resourceId` в checkpoint. Поэтому unrelated same-size object, появившийся по ожидаемому path из-за collision/внешнего клиента/unknown settlement, может быть не только ошибочно усыновлён, но и опубликован WebClip. Journal backup recovery также подтверждает path+size. `overwrite=false` сохранить, но добавить stronger durable creation/content receipt: checkpoint должен связывать operation/expected bytes с локальным content digest или иным устойчивым fingerprint и с actual signed-transfer settlement receipt; после первого доказанного remote verify фиксировать stable `resourceId`. **Никакой publish/unpublish/другая object-scoped mutation не должна выполняться до доказательства exact object/content identity для этой операции.** Если реальный Yandex API/E2E подтвердит trustworthy remote checksum/immutable creation identity — использовать его; до этого не предполагать наличие такого поля и fail-closed при невозможности доказать identity. Recovery/reuse разрешать только при доказательстве конкретного объекта/содержимого, а не по размеру; если уже был неизвестно завершившийся publish, checkpoint обязан хранить и reconciliate publication outcome, не теряя reference на потенциально опубликованный объект. Охватить PDF retry, `pendingRemoteSaves` и Journal backup recovery. Добавить regression: same-size чужой object на ожидаемом path не вызывает `resources/publish`, не становится remote-verified и сохраняет unresolved checkpoint; доказанный exact object может быть опубликован один раз. P0-069 остаётся отдельным lifecycle contract для destructive delete/unpublish. |"
+          p = '\n'.join(lines) + ('\n' if p.endswith('\n') else '')
+          marker = '## Continuation 2026-08-26 — P1-184 identity proof must precede publish'
+          if marker in a:
+              raise SystemExit('P1-184 pre-publish marker already present')
+          a += "\n\n" + marker + "\n\nAudit baseline: `bc259d93aff40d0995157493d836b461fbd92b2e`. Documentation-only sync; production runtime and manifest are unchanged, and the previously recorded product test gate was not rerun for this docs-only finding.\n\n**P1-184 has a publication side effect, not only a reuse/verification weakness.** In live retry, `allowExisting=true` accepts an existing file by exact path + byte size, then the default `createPublicLinks` flow calls `ensureYandexPublicUrl(remotePath)` before the final metadata GET records `resource_id`. Background `pendingRemoteSaves` recovery performs the same logical sequence: GET path, accept `type=file` + exact size, optionally publish, and only afterward mark the checkpoint verified with the returned resource id. Consequently a same-size unrelated object that occupies the expected path can be made public before WebClip has proved that the object is the result of its own operation. Strong object/content proof must therefore be an admission gate for `resources/publish`, not merely a final Journal field. Publication outcome itself becomes durable reconciliation state when its settlement is unknown. Add mocked-Yandex regressions proving an unrelated same-size target receives no publish request and remains unresolved.\n"
+          priorities.write_text(p, encoding='utf-8')
+          audit.write_text(a, encoding='utf-8')
+      - name: Verify docs-only scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-p1-184-prepublish-proof.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          expected=$'.github/workflows/audit-sync-20260826-p1-184-prepublish-proof.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(git diff --cached --name-only | sort)"
+          test "$actual" = "$expected"
+          python - <<'PY'
+          import json
+          m = json.load(open('manifest.json', encoding='utf-8'))
+          assert m['manifest_version'] == 3
+          assert m['version'] == '0.9.8'
+          assert m['minimum_chrome_version'] == '118'
+          PY
+      - name: Commit audit sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: extend P1-184 pre-publish identity proof'
+          git push
