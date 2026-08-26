@@ -1,0 +1,69 @@
+name: audit-sync-p1-182-locator-url-privacy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-audit-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "f06b60ab7d3f03357736374eea1a66f82787cb7c"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p1-182-locator-url-privacy.yml"
+      - name: Update audit docs
+        shell: python
+        run: |
+          from pathlib import Path
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          p = priorities.read_text(encoding='utf-8')
+          a = audit.read_text(encoding='utf-8')
+          lines = p.splitlines()
+          matches = [i for i, line in enumerate(lines) if line.startswith('| P1-182 |')]
+          if len(matches) != 1:
+              raise SystemExit(f'Expected exactly one P1-182 row, got {len(matches)}')
+          old = lines[matches[0]]
+          if '| P1 | OPEN |' not in old:
+              raise SystemExit('P1-182 baseline status changed; refuse stale sync')
+          lines[matches[0]] = "| P1-182 | P1 | OPEN | `SelectionSnapshot v3` ради устойчивого restore сохраняет durable plaintext/fingerprint context сверх минимально необходимой структуры. Уже подтверждена утечка текста за пределами выбранного элемента: locator creation записывает `parentText`, `previousText`, `nextText` (а также собственный element text/ARIA/name/title), `sanitizeSelectionSnapshot()` сохраняет эти строки, после чего snapshot попадает в Journal и полный export/Yandex backup. Дополнительный аудит подтвердил URL-атрибуты: `createElementLocator()` сохраняет raw `getAttribute('src')` и `getAttribute('href')` до 1000 символов, worker/import sanitizer сохраняет их до 2000. Поэтому query/hash, one-time/signed identifiers, tracking/session parameters, `data:` payload prefix и иные скрытые URL-данные становятся долговечными даже если пользователю они визуально не показаны. Restore-quality сохранить без raw durable content: окружающий plaintext и URL-sensitive attributes заменить versioned privacy-preserving fingerprints/структурными признаками; если для href/src нужен semantic discriminator, хранить минимум безопасной scheme/origin/path-классификации плюс keyed/local hash либо bounded digest canonical value, но не query/hash/userinfo/data/javascript plaintext. Legacy snapshots читать совместимо, не переэкспортируя чувствительные raw fields в новые backups. Нужны regression tests: DOM insertion/ambiguity P1-001 сохраняют confidence, а новый export не содержит neighbor plaintext и секретный marker из `href/src` query/hash/data payload. P0-066 source-URL sanitation остаётся общим confidentiality contract и не заменяет locator-specific очистку. |"
+          p = '\n'.join(lines) + ('\n' if p.endswith('\n') else '')
+          marker = '## Continuation 2026-08-26 — P1-182 locator URL attribute privacy'
+          if marker in a:
+              raise SystemExit('P1-182 locator URL privacy marker already present')
+          a += "\n\n" + marker + "\n\nAudit baseline: `f06b60ab7d3f03357736374eea1a66f82787cb7c`. Documentation-only sync; production runtime and manifest are unchanged, and the previously recorded product test gate was not rerun for this docs-only finding.\n\n**P1-182 also covers hidden URL-attribute retention.** Current `content.js::createElementLocator()` copies raw element `src` and `href` attributes into SelectionSnapshot (bounded to 1000 chars), while the worker/import sanitizer preserves those strings up to 2000 chars. Snapshot is durable Journal state and is included in full local/Yandex backup. A selected anchor/image can therefore persist query/hash tokens, one-time/signed identifiers, tracking/session parameters, or a prefix of a `data:` payload even though those values are not visible in the selected text. This is the same locator-privacy root cause as raw neighbor text: restore should compare privacy-preserving/versioned fingerprints or a minimal sanitized URL classification rather than retaining secret-bearing raw attributes. New exports must not reproduce legacy raw sensitive href/src fields; legacy restore compatibility should consume them only locally as needed for migration. Add regression with a unique secret marker placed only in href/src query/hash/data content and assert it is absent from newly generated Journal export while locator confidence remains acceptable.\n"
+          priorities.write_text(p, encoding='utf-8')
+          audit.write_text(a, encoding='utf-8')
+      - name: Verify docs-only scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-p1-182-locator-url-privacy.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          expected=$'.github/workflows/audit-sync-20260826-p1-182-locator-url-privacy.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(git diff --cached --name-only | sort)"
+          test "$actual" = "$expected"
+          python - <<'PY'
+          import json
+          m = json.load(open('manifest.json', encoding='utf-8'))
+          assert m['manifest_version'] == 3
+          assert m['version'] == '0.9.8'
+          assert m['minimum_chrome_version'] == '118'
+          PY
+      - name: Commit audit sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: extend P1-182 locator URL privacy'
+          git push
