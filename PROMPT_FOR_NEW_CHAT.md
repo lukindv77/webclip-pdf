@@ -2,81 +2,45 @@
 
 Продолжай полный аудит и разработку приватного GitHub-репозитория `lukindv77/webclip-pdf` (Chrome Manifest V3 extension WebClip PDF Prototype).
 
-## Главное правило
+**GitHub `main` — единственный источник истины.** Архив — только recovery checkpoint. Ничего не восстанавливай из памяти и не переписывай проект с нуля.
 
-**GitHub `main` — единственный источник истины.** Ничего не восстанавливай из памяти и не переписывай проект с нуля. Архив handoff — только аварийная копия, а не более новый источник, чем `main`.
-
-В самом начале нового чата:
-
-1. Получи свежий HEAD ветки `main`.
+В начале нового чата:
+1. Получи свежий HEAD `main`.
 2. Прочитай `GITHUB_REPOSITORY_STATE.md`.
-3. Прочитай `handoff/LATEST.md` и указанный там `CURRENT_STATE_2026-08-26_1047.md`.
-4. Прочитай `project_docs/PRIORITIES_P0_P1_P2.md` и хвост `DEEP_AUDIT_2026-08-25.md`.
-5. Прочитай `manifest.json`; должно оставаться MV3 / `0.9.8` / minimum Chrome `118`.
-6. Если текущий HEAD новее handoff source HEAD, сначала изучи новые commits/diff и продолжай **с фактического нового HEAD**. Никогда не reset/revert к handoff без явной причины.
+3. Прочитай `handoff/LATEST.md` и указанный там `handoff/CURRENT_STATE_2026-08-26_2227.md`.
+4. Прочитай `project_docs/PRIORITIES_P0_P1_P2.md` и релевантный хвост `DEEP_AUDIT_2026-08-25.md`.
+5. Прочитай `manifest.json` и подтверди MV3 / `0.9.8` / minimum Chrome `118`.
+6. Сравни HEAD с handoff source `66fd5f828639a9d29f85013fedd4185cd4168e09`. Если `main` новее — сначала изучи новые commits/diff и продолжай с более нового дерева; не reset/revert к handoff.
 
-Handoff source baseline перед упаковкой: `a57042fe82e9c8659a6241b23728f613ae905531`. На этой точке реестр аудита уже дошёл до **P0-077 / P1-188 / P2-019**. Перед присвоением нового номера обязательно проверь актуальный хвост реестра; ориентировочно следующие свободные номера были P0-078 / P1-189 / P2-020.
+Handoff — составной lossless checkpoint: полный base ZIP `handoff/WebClip_Handoff_Audit_2026-08-26_1047_a57042fe.zip` (SHA-256 `b9e1fa364bacc8fa21da29d0c721307cc7aa29051e2178f3123da65d3f46ff14`) + текущий delta ZIP 22:27. Production runtime/config между base snapshot и текущим source HEAD не менялся; новые изменения были audit/handoff docs.
 
-## Состояние production-кода
+Текущий реестр на source HEAD: **P0-078 / P1-194 / P2-019**. Возможные следующие номера: P0-079 / P1-195 / P2-020, но перед присвоением обязательно fresh read + duplicate-check.
 
-Manifest остаётся `0.9.8`; не повышай версию до `0.9.9` и не создавай build/GitHub Release без отдельного явного запроса пользователя после реального release QA.
+Не потерять:
+- P0-039 PARTIAL: absence of DownloadItem after 24h не доказывает отсутствие физического файла; нельзя TTL-drop единственный unknown-outcome recovery checkpoint.
+- P1-171 / P1-004 PARTIAL: frame agents/commands должны быть exact `documentId`/navigation-generation fenced.
+- P1-178 расширен: stale OAuth attempt A не может после network delay откатить более новые settings/config B; нужен общий auth/config generation fence.
+- P1-194 OPEN: обычный IndexedDB commit не должен автоматически давать `recoveryGuaranteed`, пока не доказан требуемый eviction/durability class.
+- P0-078 OPEN: global `createPublicLinks=false` должен запретить ещё не начавшийся publish старых live/recovery generations.
+- P1-189..P1-193: imported hostname authority, imported OperationLog provenance, transactional manual auth replacement, MV3 background lifecycle ownership, user-gesture-safe optional permission request.
+- Критичные прежние кластеры: P0-064..P0-077, P1-184, P2-019; P0-022/P0-023/P0-048 остаются PARTIAL.
 
-Production runtime/config код после P0-063 не менялся: последний product commit `ef0e12bda980d947b8a02da816cf6f64be47ceb8`; между ним и handoff source HEAD менялись только `DEEP_AUDIT_2026-08-25.md` и `project_docs/PRIORITIES_P0_P1_P2.md`. Последний доказанный product gate: **88/88 JS syntax PASS + 74/74 deterministic tests PASS**. Не утверждай, что эти тесты были повторно прогнаны для docs-only audit commits.
+**Точное место продолжения аудита:** Yandex OAuth capability/scope validation.
 
-Release QA по-прежнему BLOCKED до реального unmanaged unpacked Chrome, optional host permission prompt/revoke, реального Yandex OAuth/API/upload/move/backup E2E и оставшегося visual/timing/storage QA.
+Есть сильная гипотеза, но **P1-195 ещё НЕ создан**:
+- standard OAuth сохраняет `token.scope`; проверь, валидирует ли WebClip фактически granted scopes;
+- manual token имеет `scope: ''` и проверяется в основном read/status путём, что может не доказывать write/move/publish;
+- restricted token может выглядеть как полностью подключённый и упасть только на первой мутации;
+- не делай destructive permission probes;
+- если scope manual token нельзя надёжно introspect, честный capability state `unknown` лучше ложной full-ready семантики.
+Только после fresh proof + duplicate-check можно создать P1-195 и синхронизировать оба audit docs.
 
-## Что сейчас делали
+Режим работы пользователя: **продолжать аудит крупными блоками и фиксировать подтверждённые изменения в GitHub во время аудита**. Перед каждым write fetch fresh `main`; не коммить каждую гипотезу; если root cause уже есть — расширяй существующий P-item. Docs-only sync: оба audit docs вместе, production/manifest untouched, temp workflow удалён финальным commit. Product tests не считать перезапущенными без реального запуска.
 
-Мы продолжали **полный аудит** и по ходу аудита синхронизировали подтверждённые findings в GitHub небольшими docs-only пакетами. Продолжай этот режим, если пользователь не поменяет задачу: проверяй security/trust boundaries, внешние I/O, recovery/crash consistency, CPU/memory на больших данных, storage/parser, UX/admin/diagnostics, dead/duplicate code, стандарты и архитектуру.
+Manifest не повышать до 0.9.9 и build/tag/Release не делать без явного запроса после real release QA. Последний доказанный product gate остаётся **88/88 syntax + 74/74 deterministic PASS**; поздние audit commits docs-only.
 
-Новый finding сначала докажи на актуальном коде и проверь на дубль. Если root cause уже покрыт существующим P-item — расширь его acceptance criteria/status, не создавай новый номер. Подтверждённые стабильные пакеты синхронизируй в `project_docs/PRIORITIES_P0_P1_P2.md` + `DEEP_AUDIT_2026-08-25.md` **во время аудита**, а не только в самом конце. Перед каждым write заново fetch fresh `main`. Docs-only sync не должен менять production/manifest; временный workflow/patch должен быть удалён в финальном commit.
+Инварианты: access token только `storage.session`; PKCE S256; no `client_secret`; host DOM attacker-controlled; Incognito fail-closed; timeout != cancellation; no blind retry unknown non-idempotent side effects; native Save As extension-page owned/no artificial timeout; bounded offscreen/Blob/PDF/IDB/runtime; OperationLog v2 сохранять; cross-origin iframe только explicit optional host permission; full PSL; debugger нужен текущему Page.printToPDF.
 
-## Критичные открытые ориентиры
+Перед реализацией каждого P-item сначала дай короткую русскую «Справку»: проблема, подсистема, эффект закрытия/незакрытия, инварианты, тесты/доказательство.
 
-Полный список — только в текущем реестре. Среди наиболее важных незакрытых пунктов на handoff:
-
-- P0-064/065 — memory admission до iframe deep-clone / Blob materialization.
-- P0-066 — единая confidentiality sanitation source URL до PDF/Journal/backup.
-- P0-067/068 — host-page side effects и live iframe clone при PDF preparation.
-- P0-069 — public-link lifecycle при destructive Journal/Yandex действиях.
-- P0-070 — `Page.printToPDF` должен быть document-generation fenced.
-- P0-071 — unsafe PDF URI schemes.
-- P0-072 — clear/import нельзя считать отменой реально живых upload/download side effects.
-- P0-073/074 — immutable Yandex account/root/auth/config operation fencing.
-- P0-075 — hostile host page видит/может синтетически управлять WebClip DOM UI/selection; shared DOM нельзя считать trusted control-plane.
-- P0-076 — stale single-entry mutations после clear/import; нужен Journal generation/per-entry CAS.
-- P0-077 — единый self-restorable backup envelope.
-- P0-022/P0-023/P0-048 — PARTIAL, не считать закрытыми.
-- P1-181…P1-188 — последние новые audit items; особенно locator privacy, delete→Trash recovery, Yandex content proof, temporal import, duplicate comment IDs, canvas fidelity, imported CSS selector grammar.
-- P2-019 — единый owner IndexedDB schema migrations.
-
-## Зафиксированные продуктовые решения
-
-`createPublicLinks` **должен оставаться включённым по умолчанию** — это не дефект.
-
-Нужно добавить точечное снятие публичной ссылки у конкретной Journal entry. Перед **каждым** таким `unpublish` обязательно получить явное подтверждение пользователя. После подтверждённого unpublish запись становится path-only: `publicUrl/resourceId` больше не являются связью, но пока сохранённый `remotePath` существует, Journal должен уметь открыть файл через авторизованный Yandex API. Если пользователь потом вручную переместил файл, потеря связи допустима; не делай скрытый глобальный поиск/автоповтор upload.
-
-## Инварианты, которые нельзя ломать
-
-- OAuth access token — только `chrome.storage.session`; refresh token не хранить plaintext/persistently без отдельного архитектурного решения.
-- PKCE S256; manual verification-code flow сейчас не делает полноценную returned-state validation — P1-165.
-- Не хранить `client_secret` в extension. Шифрование token в `storage.local` ключом, который лежит там же, не считать реальной защитой.
-- Content/page input и host DOM — attacker-controlled. Privileged operations только в trusted extension context с sender/frame/document/account validation.
-- Incognito fail-closed.
-- Yandex paths/account/root/object identity fail-closed; non-idempotent operation timeout не означает cancellation.
-- Никаких blind retry для неизвестно завершившегося upload/move/download/Chrome side effect; только durable checkpoints + actual-settlement reconciliation.
-- `chrome.downloads.download({saveAs:true})` остаётся extension-page owned и без искусственного timeout системного диалога. P1-156 требует также не дать backing Blob истечь скрытым 16-минутным TTL пока диалог реально открыт.
-- Offscreen/Blob/PDF/IDB/runtime payloads bounded; readonly publish только после completion.
-- OperationLog v2 и постоянная структурная диагностика — продуктовая функция, не удалять ради упрощения.
-- Cross-origin iframe только после explicit optional host permission; revoke/stale document fail-closed.
-- Full PSL сохранить. `debugger` сейчас функционально нужен для `Page.printToPDF`.
-
-## Режим GitHub
-
-Пользователь явно потребовал фиксировать изменения в GitHub **во время аудита**. Делай небольшие, но завершённые audit sync commits по подтверждённым findings. Не коммить каждую гипотезу.
-
-Перед каждой новой implementation P-задачей дай короткую русскую **«Справку»**: проблема, подсистема, эффект закрытия/незакрытия, инварианты, тесты/доказательство. Перед write снова fetch fresh `main`. Для крупных `service-worker.js`/`content.js` изменений разрешён guarded one-shot GitHub Actions patch: exact baseline, targeted tests, `node --check`, все `project_tools/test_*.js`, manifest invariants, temp workflow/patch удаляется финальным commit.
-
-Не создавай handoff/archive после каждой задачи. Этот handoff создан только потому, что пользователь специально попросил перейти в новый чат.
-
-Начни новый чат с подтверждения свежего HEAD и краткого резюме того, что ты прочитал из `handoff/LATEST.md`/`CURRENT_STATE` и текущего хвоста реестра. Затем продолжай аудит от фактического GitHub `main`.
+Начни новый чат с фактического свежего HEAD, короткого подтверждения прочитанного LATEST/CURRENT_STATE и live хвоста P0/P1/P2, затем продолжи OAuth capability/scope audit.
