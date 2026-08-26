@@ -578,3 +578,10 @@ Current product source is unchanged; this is a docs-only audit refinement on cur
 - Acceptance: all bounded readonly IDB helpers in worker/offscreen/extension pages must keep request results provisional until `tx.oncomplete`; timeout/error/abort after request success must reject. Add offscreen deterministic regressions for PDF cache, transfer payload and chunk-group reads with request success followed by late transaction abort/error.
 
 Docs-only audit sync: production runtime and `manifest.json` are unchanged. The previously proven product gate (88/88 syntax, 74/74 deterministic tests) was not rerun for this documentation-only refinement.
+
+## Continuation 2026-08-26 — P1-158 auth-critical Chrome config read
+
+- **P1-158 OPEN refined — Yandex prerequisite config read can bypass network deadlines.** Current `readYandexAuthState()` performs three reads in one `Promise.all`: session auth and legacy persistent auth are bounded by `runYandexAuthStorageOperation`, but `chrome.storage.local.get('yandexConfig')` is direct/unbounded. `getValidYandexAccessToken()` calls this before `yandexApi()` creates/uses the network request, so a never-settling Chrome Storage read can hold PDF upload, remote-save recovery, backup and account/status flows indefinitely even though their HTTP requests have timeouts. The fix belongs to existing P1-158: make every prerequisite auth/config read bounded, include it in the operation budget where applicable, and do not let a late read result start a side effect after the caller has already received terminal timeout. P0-074 remains the separate immutable account/root/auth-generation contract.
+
+This continuation is docs-only. Production source and `manifest.json` are unchanged; the previous product test gate was not rerun.
+
