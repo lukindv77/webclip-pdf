@@ -333,3 +333,22 @@ Top-frame locator creation records bounded `parentText`, previous-sibling text a
 ### Evidence and test note
 
 This is a documentation-only audit sync. Product tests are not rerun by this workflow. The last verified product gate remains the P0-063 gate (88/88 syntax, 74/74 deterministic tests); unmanaged unpacked Chrome and real Yandex E2E remain release blockers.
+
+
+## Continuation at HEAD `363e4b5131033fd892be12c6aa59a4b5f89e9d7d` — Journal mutation generation race
+
+No production source changed in this continuation. The audit compared the runtime dispatcher, single-entry Journal helpers and bulk destructive gate.
+
+### P0-076: stale single-entry operations can target a replacement Journal
+
+`runExclusiveJournalDestructiveMutation()` only serializes the two bulk destructive paths (`WEBCLIP_JOURNAL_CLEAR` and staged replace/import). Single-entry delete, mark-read and comment mutations are dispatched outside that exclusive gate. More importantly, a simple busy flag would not close the race for an operation that started before the bulk replace.
+
+`deleteJournalEntry()` captures an old entry and may spend network time moving its Yandex file. Its final local phase calls `deleteJournalEntryRecordOnly(id)`, which re-reads by ID and deletes the current record. A backup import may legitimately recreate the same ID, so the old operation can delete the replacement record. `moveReadLaterEntryToRead()` has the analogous write form: after the old remote move settles, `updateJournalEntryRecord(id, patch)` performs a fresh get by ID and overlays the old operation's reading/path/resource patch onto whatever record now occupies that ID.
+
+Comment mutation helpers expose the same optimistic-concurrency gap without a remote call: they read the record, derive an entire comments array, then call a separate `updateJournalEntryRecord()` transaction. A concurrent replace/import can land between those phases and receive the stale comments array.
+
+The correct boundary is not only UI locking. Every mutation needs an immutable generation/revision receipt captured before work and checked in the exact commit transaction. Bulk replace needs a generation transition that makes every pre-replace receipt stale. Remote side effects that already settled before a generation mismatch require durable reconciliation/diagnostics rather than applying their result to the replacement Journal or blindly reversing the network operation.
+
+### Evidence note
+
+Documentation-only audit sync. Product tests are not rerun. Last verified product gate remains P0-063 (88/88 JS syntax, 74/74 deterministic tests); unmanaged unpacked Chrome and real Yandex E2E remain release blockers.
