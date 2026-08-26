@@ -1,0 +1,60 @@
+name: audit-sync-p1-189-imported-hostname
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-audit-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "9490ed82170b4b5489e73e4bd32743b773320732"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p1-189-imported-hostname.yml"
+      - name: Update audit docs
+        shell: python
+        run: |
+          from pathlib import Path
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          p = priorities.read_text(encoding='utf-8')
+          a = audit.read_text(encoding='utf-8')
+          if 'P1-189' in p or 'P1-189' in a:
+              raise SystemExit('P1-189 already exists; refuse duplicate sync')
+          if '| P1-188 | P1 | OPEN |' not in p:
+              raise SystemExit('Expected P1-188 tail baseline not found')
+          p += "\n\n## Продолжение глубокого аудита 2026-08-26 — imported site identity / Yandex routing\n\n| Код | Приоритет | Статус | Пункт |\n|---|---|---|---|\n| P1-189 | P1 | OPEN | Journal import сохраняет `raw.hostname` как самостоятельное поле, не проверяя его согласованность с уже нормализованным `url`. Это derived metadata затем становится authority для privileged Yandex routing: `moveReadLaterEntryToRead()` строит целевую папку `<root>/Upload/...` через `getSiteFolderSegments(entry.hostname || hostnameFromUrl(entry.url))`, а `findYandexFileForJournalEntry()` использует тот же hostname для fallback-кандидатов в `Upload`/`ReadmeLater`. Crafted backup может поэтому задать `url=https://alpha.example/...`, но `hostname=beta.example`, и после явного `Прочитать позже → Прочитано` реальный файл будет перемещён в managed-папку другого сайта; path sanitizer/managed-root containment предотвращают выход из WebClip root, но не исправляют ложную site identity и последующую locator/recovery семантику. На import boundary `hostname` и `siteAddress` должны канонически вычисляться из нормализованного `url` (либо импорт отклоняется при несовместимости); remote site-dependent routing/fallback lookup не должны доверять дублирующему imported hostname. Для legacy entry без доказуемого http(s) URL site-dependent remote mutation должна fail-closed или пройти явную безопасную миграцию, а не использовать неподписанный hostname как authority. Full PSL сохранить. Добавить regression: backup с `url=alpha`/`hostname=beta` не может создать target/candidate под beta; проверить case/IDN/trailing-dot normalization и export→import roundtrip canonical metadata. P0-022 остаётся отдельным более сильным fence для provenance конкретного remote object, P0-073/P0-074 — для account/root identity. |\n"
+          marker = '## Continuation 2026-08-26 — imported site identity controls Yandex routing'
+          a += "\n\n" + marker + "\n\nAudit baseline: `9490ed82170b4b5489e73e4bd32743b773320732`. Documentation-only sync; production runtime and manifest are unchanged, and the previously recorded product test gate was not rerun for this docs-only finding.\n\n**P1-189.** `normalizeImportedJournalEntry()` accepts an explicit backup `hostname` independently from the normalized `url`. Normal runtime entries derive hostname from sender URL, but imported entries can persist a conflicting pair. Later `moveReadLaterEntryToRead()` prefers `entry.hostname` when deriving the managed Yandex Upload destination, and `findYandexFileForJournalEntry()` prefers it for deterministic Upload/ReadmeLater fallback candidates. Therefore an untrusted backup can influence site routing of a later user-approved remote move even though the URL/siteKey represents another site. Managed-path sanitization contains the result under WebClip folders but does not make the site identity trustworthy. Canonicalize derived site metadata from normalized URL at import and at privileged routing boundaries; inconsistent duplicate hostname/siteAddress fields must not be authoritative. Keep P0-022 remote-object provenance and P0-073/P0-074 account/root fences separate.\n"
+          priorities.write_text(p, encoding='utf-8')
+          audit.write_text(a, encoding='utf-8')
+      - name: Verify docs-only scope and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-p1-189-imported-hostname.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          mapfile -t changed < <(git diff --cached --name-only | sort)
+          expected=$'.github/workflows/audit-sync-20260826-p1-189-imported-hostname.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(printf '%s\n' "${changed[@]}")"
+          test "$actual" = "$expected"
+          grep -q '"manifest_version": 3' manifest.json
+          grep -q '"version": "0.9.8"' manifest.json
+          grep -q '"minimum_chrome_version": "118"' manifest.json
+      - name: Commit audit sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: record imported site identity routing finding'
+          git push
