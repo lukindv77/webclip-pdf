@@ -1,0 +1,64 @@
+name: audit-sync-p0-039-local-download-ttl
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-sync-20260826-p0-039-local-download-ttl.yml'
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "815b4b5c15d670648f3371111c7977d0f8b8aa0a"
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          test "$changed" = ".github/workflows/audit-sync-20260826-p0-039-local-download-ttl.yml"
+      - name: Sync audit docs
+        shell: python
+        run: |
+          from pathlib import Path
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          text = priorities.read_text(encoding='utf-8')
+          old = "| P0-039 | P0 | REGRESSION | После физически успешного локального/Yandex сохранения сбой append в Journal не должен скрыто терять metadata. `safeAppendJournalEntry` использует idempotent recovery-checkpoint с фиксированными `journalEntryId/createdAt`; пользователь получает статус `partial`. После `P0-041` pending appends находятся в Journal IndexedDB, а не в `storage.local`, и восстанавливаются hourly maintenance. |"
+          new = "| P0-039 | P0 | PARTIAL | После физически успешного локального/Yandex сохранения сбой локальной финализации не должен скрыто терять metadata. Современные live-path используют специализированные durable checkpoints до irreversible side effect (`pendingDownloads` до `chrome.downloads.download`, `pendingRemoteSaves` до signed PUT/publication), поэтому ранее проверенная capacity-гипотеза generic `pendingAppends` к текущему live save path не относится. Однако local-download recovery всё ещё необратимо удаляет unresolved `pendingDownloads` после 24 ч, если `DownloadItem` больше не найден. Отсутствие записи Chrome Downloads не доказывает отсутствие физически сохранённого файла: history могла быть очищена пользователем/Chrome после unknown settlement. TTL-drop уничтожает единственную durable metadata/selection identity и прямо пишет «Запись журнала не создана». Не удалять unresolved checkpoint только по wall-clock + отсутствию DownloadItem; переводить в bounded dead-letter/manual-resolution состояние с сохранением metadata/operationId и явной диагностикой. Автоматическая Journal финализация допустима только при доказанном own-extension DownloadItem по P0-048/P1-087; при недоказанном outcome не создавать ложную запись, но и не уничтожать recovery evidence. Regression: physically successful download + потерянный response/worker stop + cleared Chrome download history + >24 ч => checkpoint остаётся управляемым/recoverable, Journal не получает ложный success и metadata не теряется. |"
+          if old not in text:
+              raise SystemExit('P0-039 baseline text not found')
+          priorities.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          with audit.open('a', encoding='utf-8') as f:
+              f.write("\n\n## Continuation 2026-08-26 — unresolved local-download TTL evidence\n\n")
+              f.write("| Code | Priority | Status | Finding |\n|---|---|---|---|\n")
+              f.write("| P0-039 | P0 | PARTIAL | Full recovery audit confirmed a distinct live-path gap after rejecting the earlier generic `pendingAppends` capacity hypothesis. `reconcilePendingLocalDownloads()` removes both unbound intents and bound numeric `pendingDownloads` after `PENDING_LOCAL_DOWNLOAD_TTL_MS = 24h` when Chrome no longer returns a matching `DownloadItem`, revokes the Blob URL and records that the Journal entry was not created. A missing DownloadItem is not proof that the file never settled: after worker death/unknown `downloads.download()` settlement, the file may exist while the user or Chrome has already cleared download history. The checkpoint still contains the only durable Journal metadata; deleting it converts an uncertain external outcome into permanent metadata loss. Keep unresolved evidence in a bounded dead-letter/manual-resolution state instead of TTL deletion. Exact automatic append still requires the existing own-extension/identity proof; unknown outcome must stay fail-closed rather than fabricate success. |\n")
+              f.write("\nDocs-only audit sync; production runtime and manifest were not changed and the prior product gate was not rerun.\n")
+      - name: Remove temporary workflow and verify scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/audit-sync-20260826-p0-039-local-download-ttl.yml
+          git add -A
+          printf '%s\n' "$(git diff --cached --name-only)" | sort > /tmp/actual
+          printf '%s\n' ".github/workflows/audit-sync-20260826-p0-039-local-download-ttl.yml" "DEEP_AUDIT_2026-08-25.md" "project_docs/PRIORITIES_P0_P1_P2.md" | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+          python - <<'PY'
+          import json
+          m=json.load(open('manifest.json', encoding='utf-8'))
+          assert m['manifest_version']==3
+          assert m['version']=='0.9.8'
+          assert m['minimum_chrome_version']=='118'
+          PY
+      - name: Commit and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'docs: refine P0-039 unresolved local download recovery'
+          git push origin HEAD:main
