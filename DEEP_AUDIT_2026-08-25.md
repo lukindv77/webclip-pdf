@@ -352,3 +352,20 @@ The correct boundary is not only UI locking. Every mutation needs an immutable g
 ### Evidence note
 
 Documentation-only audit sync. Product tests are not rerun. Last verified product gate remains P0-063 (88/88 JS syntax, 74/74 deterministic tests); unmanaged unpacked Chrome and real Yandex E2E remain release blockers.
+
+
+## Continuation at HEAD `3f353c9e16a7ec85293e034c0d6c8df6fa9e955f` — delete-to-Trash crash recovery
+
+No production source changed. Audit compared the existing read-move recovery state machine with the ordinary delete-to-Trash path.
+
+### P1-183: Trash move has no durable target receipt
+
+`moveReadLaterEntryToRead()` writes `readMovePendingAt`, exact source and exact target into the Journal entry before issuing `resources/move`; retry can therefore verify where the file actually ended up. Ordinary delete does not have an equivalent pre-move checkpoint.
+
+The existing locator includes a useful fallback for an interrupted deletion: it checks the current and previous month Trash folders using the entry filename. That fallback is not complete. `chooseYandexTrashTarget()` deliberately chooses a unique timestamped `__deleted_...` filename when the plain target name is occupied. If the worker stops after such a move and before the local Journal deletion, the only exact target path lived in transient memory/OperationLog, not in the entry's recovery state. A later retry starts from the old entry and may be unable to identify the already-moved resource safely.
+
+The durable checkpoint must be written before the remote side effect and include original Yandex identity plus exact chosen target. Recovery must verify rather than repeat a move after an unknown settlement. Its local finalization must also obey the P0-076 generation/revision fence so that an old deletion cannot consume a same-ID entry from a later import.
+
+### Evidence note
+
+Documentation-only audit sync; product tests not rerun. Last verified gate remains P0-063 (88/88 syntax and 74/74 deterministic tests). Real unpacked Chrome and real Yandex E2E remain release blockers.
