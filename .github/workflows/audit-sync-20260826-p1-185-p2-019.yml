@@ -1,0 +1,58 @@
+name: audit-sync-20260826-p1-185-p2-019
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-audit-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "e22d24aef75ff3c669d263ad4010983cf35078c8"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p1-185-p2-019.yml"
+      - name: Update audit docs
+        shell: python
+        run: |
+          from pathlib import Path
+          priorities = Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          audit = Path('DEEP_AUDIT_2026-08-25.md')
+          p = priorities.read_text(encoding='utf-8')
+          a = audit.read_text(encoding='utf-8')
+          for code in ('P1-185', 'P2-019'):
+              if code in p or code in a:
+                  raise SystemExit(f'{code} already exists; refuse duplicate sync')
+          p += '''\n\n## Продолжение глубокого аудита 2026-08-26 — import time domain и ownership схемы IndexedDB\n\n| Код | Приоритет | Статус | Пункт |\n|---|---|---|---|\n| P1-185 | P1 | OPEN | Импорт Journal не нормализует **temporal domain**. `normalizeImportedJournalEntry()` принимает `createdAt` как любое finite `Number`, включая отрицательные и аномально далёкие future timestamps; ряд других полей (`journalCommentUpdatedAt`, timestamps элементов `journalComments`, `movedToReadAt`, `readMovePendingAt`) проходит через голый `Number(...)`, поэтому строка JSON вроде `"1e309"` превращается в `Infinity`. `createdAt` затем участвует в IndexedDB ordering и `urlStats.lastSavedAt = max(...)`; future значение может бессрочно держать URL наверху журнала и Chrome Action в состоянии «свежая запись», а некорректные comment/recovery timestamps дают `Invalid Date`/ложные pending flags. `localDayKey` импортируется по regex `YYYY-MM-DD`, но календарная валидность не проверяется. Нужен общий sanitizer для timestamp fields: finite integer milliseconds, разумный нижний предел, допустимый future-skew, согласованный fallback/repair; `localDayKey` должен либо строго соответствовать нормализованному `createdAt`, либо пересчитываться. Добавить import regression на negative/huge/future/string→Infinity timestamps и невозможные даты; импорт не должен искажать ordering, badge и recovery state. |\n| P2-019 | P2 | OPEN | У схемы `WebClipJournal` два независимых владельца upgrade-логики: `service-worker.js` и `journal.js::openJournalDbForView()` оба вызывают `indexedDB.open(..., JOURNAL_DB_VERSION)` и в `onupgradeneeded` создают stores/indexes. Сейчас v7 definitions совпадают и отдельной data-migration нет, поэтому текущая схема не повреждается. Но при будущем version bump Journal page может первой поднять DB version своей упрощённой view-схемой; после этого worker уже не получит `onupgradeneeded` для той версии и обязательная data migration может быть навсегда пропущена. Нужен один versioned schema/migration owner/shared module или read-only Journal open, который никогда не выполняет authoritative upgrade; schema tests должны сравнивать worker/view expectations и проверять upgrade from prior versions. Аналогично централизовать duplicated transfer-DB schema helpers. |\n'''
+          a += '''\n\n## Continuation 2026-08-26 — imported temporal domain and IndexedDB schema ownership\n\nAudit source-of-truth baseline: `e22d24aef75ff3c669d263ad4010983cf35078c8`. Documentation-only sync.\n\n### P1-185 — imported timestamps are type-converted but not domain-validated\n\nThe Journal import normalizer protects strings, URLs, paths, comment counts and SelectionSnapshot size, but numeric time fields have a weaker contract. `createdAt` accepts any finite numeric conversion, including negative or implausibly distant future values. Other persisted timestamps use `Number(...)` without a finite check, so JSON strings such as `"1e309"` become `Infinity`. These values are not merely display metadata: `createdAt` is an IndexedDB sort key and feeds `urlStats.lastSavedAt`; Chrome Action freshness is derived from `Date.now() - lastSavedAt`. `readMovePendingAt` is also a recovery-state signal. Temporal values therefore need the same strict import-domain validation as paths and sizes.\n\n### P2-019 — Journal view can become an accidental migration owner\n\n`journal.js::openJournalDbForView()` is described as a direct view path, yet its `onupgradeneeded` creates the full v7 Journal stores and indexes. The service worker independently owns another copy of the schema definition. The definitions happen to match today. A future version that requires record transformation or migration metadata can fail catastrophically if an already-open/new Journal extension page performs the version bump first: IndexedDB records the new database version, and the service worker's authoritative `onupgradeneeded` for that same version will never run. Avoid two writable migration owners; share one migration module or require the view path to fail/reload until the worker-owned schema is current.\n'''
+          priorities.write_text(p, encoding='utf-8')
+          audit.write_text(a, encoding='utf-8')
+      - name: Verify docs-only scope and remove workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/audit-sync-20260826-p1-185-p2-019.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+          mapfile -t changed < <(git diff --cached --name-only | sort)
+          expected=$'.github/workflows/audit-sync-20260826-p1-185-p2-019.yml\nDEEP_AUDIT_2026-08-25.md\nproject_docs/PRIORITIES_P0_P1_P2.md'
+          actual="$(printf '%s\n' "${changed[@]}")"
+          test "$actual" = "$expected"
+          grep -q '"manifest_version": 3' manifest.json
+          grep -q '"version": "0.9.8"' manifest.json
+          grep -q '"minimum_chrome_version": "118"' manifest.json
+      - name: Commit audit sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: record temporal import and IDB schema audit findings'
+          git push
