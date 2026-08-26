@@ -1,0 +1,83 @@
+name: handoff-20260826-2227
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build-handoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 8
+
+      - name: Guard exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE=66fd5f828639a9d29f85013fedd4185cd4168e09
+          git cat-file -e "$SOURCE^{commit}"
+          mapfile -t changed < <(git diff --name-only "$SOURCE" HEAD | sort)
+          expected=$'.github/workflows/handoff-20260826-2227.yml\nproject_tools/_build_handoff_20260826_2227.py'
+          actual="$(printf '%s\n' "${changed[@]}")"
+          printf '%s\n' "${changed[@]}"
+          test "$actual" = "$expected"
+          grep -q '"manifest_version": 3' manifest.json
+          grep -q '"version": "0.9.8"' manifest.json
+          grep -q '"minimum_chrome_version": "118"' manifest.json
+          grep -q 'P0-078' project_docs/PRIORITIES_P0_P1_P2.md
+          grep -q 'P1-194' project_docs/PRIORITIES_P0_P1_P2.md
+          grep -q 'P2-019' project_docs/PRIORITIES_P0_P1_P2.md
+
+      - name: Build synchronized handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python project_tools/_build_handoff_20260826_2227.py
+          python -m zipfile -t handoff/WebClip_Handoff_Audit_2026-08-26_2227_66fd5f82.zip
+          (cd handoff && sha256sum -c WebClip_Handoff_Audit_2026-08-26_2227_66fd5f82.zip.sha256)
+
+      - name: Verify scope and clean temporary tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE=66fd5f828639a9d29f85013fedd4185cd4168e09
+
+          git rm .github/workflows/handoff-20260826-2227.yml
+          git rm project_tools/_build_handoff_20260826_2227.py
+          git add GITHUB_REPOSITORY_STATE.md PROMPT_FOR_NEW_CHAT.md handoff/LATEST.md \
+            handoff/CURRENT_STATE_2026-08-26_2227.md \
+            handoff/ARCHIVE_MANIFEST_2026-08-26_2227.txt \
+            handoff/WebClip_Handoff_Audit_2026-08-26_2227_66fd5f82.zip \
+            handoff/WebClip_Handoff_Audit_2026-08-26_2227_66fd5f82.zip.sha256
+
+          # Handoff packaging must not modify production or canonical audit docs.
+          git diff --exit-code "$SOURCE" -- manifest.json service-worker.js content.js offscreen.js frame-agent.js journal.js options.js popup.js prepared-save-as.js journal-import-stream.js public-suffix.js
+          git diff --exit-code "$SOURCE" -- project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md
+
+          mapfile -t staged < <(git diff --cached --name-only | sort)
+          printf '%s\n' "${staged[@]}"
+          expected=$'.github/workflows/handoff-20260826-2227.yml\nGITHUB_REPOSITORY_STATE.md\nPROMPT_FOR_NEW_CHAT.md\nhandoff/ARCHIVE_MANIFEST_2026-08-26_2227.txt\nhandoff/CURRENT_STATE_2026-08-26_2227.md\nhandoff/LATEST.md\nhandoff/WebClip_Handoff_Audit_2026-08-26_2227_66fd5f82.zip\nhandoff/WebClip_Handoff_Audit_2026-08-26_2227_66fd5f82.zip.sha256\nproject_tools/_build_handoff_20260826_2227.py'
+          actual="$(printf '%s\n' "${staged[@]}")"
+          test "$actual" = "$expected"
+
+          grep -q '66fd5f828639a9d29f85013fedd4185cd4168e09' handoff/LATEST.md
+          grep -q 'CURRENT_STATE_2026-08-26_2227.md' handoff/LATEST.md
+          grep -q 'P0-078 / P1-194 / P2-019' handoff/LATEST.md
+          grep -q 'P1-195 ещё НЕ создан' PROMPT_FOR_NEW_CHAT.md
+          grep -q 'P0-039' handoff/CURRENT_STATE_2026-08-26_2227.md
+          grep -q 'P1-178' handoff/CURRENT_STATE_2026-08-26_2227.md
+          grep -q 'P1-194' handoff/CURRENT_STATE_2026-08-26_2227.md
+
+      - name: Commit handoff checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'handoff: snapshot audit state for new chat at 20260826-2227'
+          git push
