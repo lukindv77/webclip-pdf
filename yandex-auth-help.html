@@ -155,10 +155,10 @@
       <ul>
         <li><strong>Client ID</strong> и выбранный путь Яндекс Диска — в локальном хранилище расширения.</li>
         <li><strong>code_verifier</strong> — только во временном session storage на время попытки авторизации.</li>
-        <li><strong>OAuth access token</strong> — в <code>chrome.storage.local</code> текущего прототипа.</li>
+        <li><strong>OAuth access token</strong> — только в <code>chrome.storage.session</code>; persistent-копия в <code>chrome.storage.local</code> не используется.</li>
         <li><strong>Client Secret</strong> — не запрашивается и не хранится.</li>
       </ul>
-      <p class="warning">Для публичного распространения расширения модель долговременного хранения токена стоит дополнительно усилить. Текущая реализация рассчитана прежде всего на тестирование и личное использование прототипа.</p>
+      <p class="warning">После полного закрытия Chrome, перезагрузки или обновления расширения session-токен может быть утрачен; для следующих операций с Яндекс Диском потребуется повторное подключение.</p>
     </section>
 
     <section class="panel sources">
