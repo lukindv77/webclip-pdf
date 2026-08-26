@@ -1,0 +1,47 @@
+name: audit-sync-p1-043-quota-admission
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-sync-20260826-p1-043-quota-admission.yml'
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard baseline and patch audit docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "06ad6944b6e8b0d3855d58b67baa0dcf51d0a81d"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-sync-20260826-p1-043-quota-admission.yml"
+          python3 - <<'PY'
+          import base64, json, pathlib
+          p = pathlib.Path('project_docs/PRIORITIES_P0_P1_P2.md')
+          d = pathlib.Path('DEEP_AUDIT_2026-08-25.md')
+          old = base64.b64decode('fCBQMS0wNDMgfCBQMSB8IFJFR1JFU1NJT04gfCBTdG9yYWdlIHByZWZsaWdodCDRh9C10YDQtdC3IGBuYXZpZ2F0b3Iuc3RvcmFnZS5lc3RpbWF0ZSgpYCDQt9Cw0YnQuNGJ0LDQtdGCINC60YDRg9C/0L3Ri9C1IFBERi9pbXBvcnQvZXhwb3J0IHN0YWdpbmc7INC/0YDQuCDQvdC40LfQutC+0Lwg0LHRjtC00LbQtdGC0LUg0L7Rh9C40YnQsNGO0YLRgdGPINGC0L7Qu9GM0LrQviBkaXNwb3NhYmxlIHRyYW5zZmVyL1BERiBjYWNoZSDQuCDRgdGC0LDRgNGL0LUgb3BlcmF0aW9uIGxvZ3MsINGA0LDQsdC+0YfQuNC5IEpvdXJuYWwg0LDQstGC0L7QvNCw0YLQuNGH0LXRgdC60Lgg0L3QtSDRg9C00LDQu9GP0LXRgtGB0Y8uINCSIE9wdGlvbnMg0LTQvtCx0LDQstC70LXQvSBoZWFsdGgtcmVwb3J0IHF1b3RhL2ZyZWUvcmVzZXJ2ZSArINGC0LXQutGD0YnQuNC5IGBwZXJzaXN0ZWQoKWAgc3RhdHVzINC4INGP0LLQvdCw0Y8g0L/QvtC70YzQt9C+0LLQsNGC0LXQu9GM0YHQutCw0Y8g0LrQvtC80LDQvdC00LAgYG5hdmlnYXRvci5zdG9yYWdlLnBlcnNpc3QoKWAg0LHQtdC3IGB1bmxpbWl0ZWRTdG9yYWdlYC/QvdC+0LLRi9GFIHBlcm1pc3Npb25zLiDQoNCw0YHRiNC40YDQtdC90L3Ri9C5IHBlci1zdG9yZSB0ZWxlbWV0cnkg0L7RgdGC0LDRkdGC0YHRjyDQvtGC0LTQtdC70YzQvdC+INCyIGBQMi0wMDhgLiB8').decode()
+          new = base64.b64decode('fCBQMS0wNDMgfCBQMSB8IFBBUlRJQUwgfCBTdG9yYWdlIHByZWZsaWdodCDRh9C10YDQtdC3IGBuYXZpZ2F0b3Iuc3RvcmFnZS5lc3RpbWF0ZSgpYCDQt9Cw0YnQuNGJ0LDQtdGCINC+0YLQtNC10LvRjNC90YPRjiDQutGA0YPQv9C90YPRjiBQREYvaW1wb3J0L2V4cG9ydCBzdGFnaW5nLdC+0L/QtdGA0LDRhtC40Y47INC/0YDQuCDQvdC40LfQutC+0Lwg0LHRjtC00LbQtdGC0LUg0L7Rh9C40YnQsNGO0YLRgdGPINGC0L7Qu9GM0LrQviDQv9GA0L7RgdGA0L7Rh9C10L3QvdGL0LUgZGlzcG9zYWJsZSB0cmFuc2Zlci9QREYgY2FjaGUg0Lgg0YHRgtCw0YDRi9C1IG9wZXJhdGlvbiBsb2dzLCDRgNCw0LHQvtGH0LjQuSBKb3VybmFsINCw0LLRgtC+0LzQsNGC0LjRh9C10YHQutC4INC90LUg0YPQtNCw0LvRj9C10YLRgdGPLiDQntC00L3QsNC60L4gYWRtaXNzaW9uINC+0YHRgtCw0ZHRgtGB0Y8gc25hcHNob3Qtb25seTogYGVuc3VyZVN0b3JhZ2VCdWRnZXQoKWAg0L3QtSDRgNC10LfQtdGA0LLQuNGA0YPQtdGCINC+0LHQtdGJ0LDQvdC90YvQtSDQsdCw0LnRgtGLL3NhZmV0eSByZXNlcnZlINC80LXQttC00YMgcHJlZmxpZ2h0INC4INGE0LDQutGC0LjRh9C10YHQutC+0LkgSW5kZXhlZERCINC30LDQv9C40YHRjNGOLiDQmtGA0YPQv9C90YvQtSB3cml0ZXJzINC40Lcg0YDQsNC30L3Ri9GFINCy0LrQu9Cw0LTQvtC6L2V4dGVuc2lvbiBwYWdlcyAoYHB1dENhY2hlZFBkZigpYCwgc3RhZ2VkIEpvdXJuYWwgaW1wb3J0INC4IGNodW5rZWQgZXhwb3J0L2JhY2t1cCkg0LzQvtCz0YPRgiDQv9Cw0YDQsNC70LvQtdC70YzQvdC+INGD0LLQuNC00LXRgtGMINC+0LTQuNC9INC4INGC0L7RgiDQttC1IGBmcmVlYCwg0LrQsNC20LTRi9C5INC/0YDQvtC50YLQuCDQv9GA0L7QstC10YDQutGDINC4INGB0YPQvNC80LDRgNC90L4g0L/RgNC10LLRi9GB0LjRgtGMINCx0LXQt9C+0L/QsNGB0L3Ri9C5IGJ1ZGdldC/QutCy0L7RgtGDLiDQndGD0LbQtdC9IGdsb2JhbCBxdW90YS1hZG1pc3Npb24vcmVzZXJ2YXRpb24gY29udHJhY3Qg0LTQu9GPINGA0LXQsNC70YzQvdC+INC90LXQt9Cw0LLQtdGA0YjRkdC90L3Ri9GFIGxhcmdlIHN0b3JhZ2Ugd3JpdGVyczogcmVzZXJ2ZSBhbnRpY2lwYXRlZCBieXRlcyDQtNC+INC/0LXRgNCy0L7QuSBtYXRlcmlhbGl6aW5nIHdyaXRlLCDRg9GH0LjRgtGL0LLQsNGC0Ywgc2hhcmVkIG9yaWdpbiBxdW90YSDQuCBzYWZldHkgcmVzZXJ2ZSwgZmFpbC1jbG9zZWQg0L3QtSDQtNC+0L/Rg9GB0LrQsNGC0Ywg0L3QvtCy0YPRjiDQvtC/0LXRgNCw0YbQuNGOINC/0YDQuCDQvdC10LTQvtGB0YLQsNGC0LrQtSB1bnJlc2VydmVkIGJ1ZGdldCwg0LAgcmVsZWFzZSDQstGL0L/QvtC70L3Rj9GC0Ywg0YLQvtC70YzQutC+INC/0L7RgdC70LUg0YTQsNC60YLQuNGH0LXRgdC60L7Qs9C+IGNvbW1pdC9hYm9ydC9jbGVhbnVwLiBgUXVvdGFFeGNlZWRlZEVycm9yYCDQvtGB0YLQsNGR0YLRgdGPINC+0LHRj9C30LDRgtC10LvRjNC90YvQvCDQstGC0L7RgNGL0LwgZmFpbC1zYWZlOyDQvdC40LrQsNC60LjRhSDQsNCy0YLQvtC80LDRgtC40YfQtdGB0LrQuNGFINGD0LTQsNC70LXQvdC40LkgSm91cm5hbCBlbnRyaWVzL2NoZWNrcG9pbnRzINGA0LDQtNC4IGFkbWlzc2lvbi4gT3B0aW9ucyBoZWFsdGgtcmVwb3J0L3BlcnNpc3QgcmVxdWVzdCDRgdC+0YXRgNCw0L3Rj9GO0YLRgdGPOyBwZXItc3RvcmUgdGVsZW1ldHJ5INC+0YHRgtCw0ZHRgtGB0Y8gYFAyLTAwOGAuIHw=').decode()
+          ap = base64.b64decode('CgojIyBDb250aW51YXRpb24gMjAyNi0wOC0yNiDigJQgUDEtMDQzIGNvbmN1cnJlbnQgc3RvcmFnZSBxdW90YSBhZG1pc3Npb24KCkN1cnJlbnQgcHJvZHVjdCBzb3VyY2UgaXMgdW5jaGFuZ2VkOyB0aGlzIGlzIGEgZG9jcy1vbmx5IGF1ZGl0IHJlZmluZW1lbnQuIFRoZSBleGlzdGluZyBzdG9yYWdlIHByZWZsaWdodCB3YXMgcmUtcmVhZCBvbiBjdXJyZW50IGBtYWluYC4KCi0gYGVuc3VyZVN0b3JhZ2VCdWRnZXQoKWAgY29tcHV0ZXMgb25lIGBuYXZpZ2F0b3Iuc3RvcmFnZS5lc3RpbWF0ZSgpYCBzbmFwc2hvdCwgY29tcGFyZXMgYGZyZWVgIHdpdGggYHJlcXVpcmVkQnl0ZXMgKyAzMiBNaUJgLCBvcHRpb25hbGx5IGRlbGV0ZXMgb25seSBleHBpcmVkL2Rpc3Bvc2FibGUgdHJhbnNmZXIgcGF5bG9hZHMsIGV4cGlyZWQgUERGIHJldHJ5LWNhY2hlIGFuZCBleHBpcmVkIE9wZXJhdGlvbkxvZyByZWNvcmRzLCB0aGVuIHJlLWNoZWNrcyB0aGUgZXN0aW1hdGUuIEZ1bmN0aW9uYWwgSm91cm5hbCBlbnRyaWVzIGFyZSBleHBsaWNpdGx5IG5vdCBkZWxldGVkLgotIExhcmdlIGxpdmUgd3JpdGVycyBhcmUgbm90IHNlcmlhbGl6ZWQgYnkgdGhhdCBjaGVjayBhbmQgdGhlcmUgaXMgbm8gYnl0ZSByZXNlcnZhdGlvbi9hZG1pc3Npb24gcmVnaXN0cnkgdGllZCB0byBhY3R1YWwgSW5kZXhlZERCIHNldHRsZW1lbnQuIGBwdXRDYWNoZWRQZGYoKWAgcGVyZm9ybXMgaXRzIG93biBwcmVmbGlnaHQgYmVmb3JlIHRoZSBjYWNoZSB0cmFuc2FjdGlvbjsgSm91cm5hbCBmaWxlIGltcG9ydCBmaXJzdCBhc2tzIGBXRUJDTElQX1NUT1JBR0VfUFJFRkxJR0hUYCBmcm9tIHRoZSBwYWdlIGFuZCB0aGVuIHN0YWdlcyBjaHVua3MgZGlyZWN0bHkgaW4gdGhlIHNoYXJlZCB0cmFuc2ZlciBEQjsgaW1wb3J0IG5vcm1hbGl6YXRpb24gcGVyZm9ybXMgYW5vdGhlciBzbmFwc2hvdCBwcmVmbGlnaHQ7IGNodW5rZWQgSm91cm5hbCBleHBvcnQgcGVyaW9kaWNhbGx5IGNoZWNrcyBmcmVlIHNwYWNlIHdoaWxlIGFkZGluZyBCbG9iIGNodW5rcy4KLSBUaGVyZWZvcmUgY29uY3VycmVudCB3cml0ZXJzIGNhbiBhbGwgcGFzcyBhZ2FpbnN0IHRoZSBzYW1lIGZyZWUtc3BhY2Ugc25hcHNob3QgYmVmb3JlIGFueSBvZiB0aGVtIGhhcyBjb21taXR0ZWQgaXRzIGJ5dGVzLiBUaGUgMzIgTWlCIHJlc2VydmUgaXMgbm90IGFkZGl0aXZlIGFjcm9zcyBjb25jdXJyZW50IG9wZXJhdGlvbnMgYW5kIGNhbiBiZSBjb25zdW1lZCBtdWx0aXBsZSB0aW1lcy4gQSBsYXRlciBJbmRleGVkREIgd3JpdGUgbWF5IHN0aWxsIGZhaWwgYXRvbWljYWxseSB3aXRoIHF1b3RhIGVycm9yLCBidXQgUDEtMDQzJ3Mgc3Ryb25nZXIgY2xhaW0gdGhhdCBwcmVmbGlnaHQgcHJvdGVjdHMgbGFyZ2Ugc3RhZ2luZyB1bmRlciBjb25jdXJyZW5jeSBpcyBub3QgcHJvdmVuLgotIFRoaXMgaXMgdGhlIHNhbWUgc3RvcmFnZS1hZG1pc3Npb24gcm9vdCBjYXVzZSBhcyBQMS0wNDMsIHNvIG5vIG5ldyBQLWNvZGUgaXMgYXNzaWduZWQuIFN0YXR1cyBpcyByZWZpbmVkIGZyb20gUkVHUkVTU0lPTiB0byBQQVJUSUFMLgotIEFjY2VwdGFuY2U6IGFkZCBhIHdvcmtlci9vd25lci1sZXZlbCBnbG9iYWwgcmVzZXJ2YXRpb24gbGVkZ2VyIGZvciBhbnRpY2lwYXRlZCBwZXJzaXN0ZW50IGJ5dGVzIGFjcm9zcyBQREYgY2FjaGUvaW1wb3J0L2V4cG9ydCBzdGFnaW5nLCByZXNlcnZlIGJlZm9yZSBtYXRlcmlhbGl6YXRpb24vd3JpdGUsIGNvdW50IG9ubHkgdW5yZXNlcnZlZCBmcmVlIGJ1ZGdldCBwbHVzIHRoZSBvbmUgZ2xvYmFsIHNhZmV0eSByZXNlcnZlLCBhbmQgcmVsZWFzZSBvbmx5IGFmdGVyIGFjdHVhbCBjb21taXQvYWJvcnQgcGx1cyBjbGVhbnVwLiBDb25jdXJyZW50LWFkbWlzc2lvbiByZWdyZXNzaW9uIHNob3VsZCBkZW1vbnN0cmF0ZSB0aGF0IE4gaW5kaXZpZHVhbGx5IGFkbWlzc2libGUgbGFyZ2Ugd3JpdGVycyBjYW5ub3Qgb3ZlcmJvb2sgb25lIHF1b3RhIHNuYXBzaG90LiBKb3VybmFsIGVudHJpZXMgYW5kIGR1cmFibGUgcmVjb3ZlcnkgY2hlY2twb2ludHMgbXVzdCBuZXZlciBiZSBldmljdGVkIGF1dG9tYXRpY2FsbHkgdG8gbWFrZSByb29tLgoKRG9jcy1vbmx5IGF1ZGl0IHN5bmM6IHByb2R1Y3Rpb24gcnVudGltZSBhbmQgYG1hbmlmZXN0Lmpzb25gIGFyZSB1bmNoYW5nZWQuIFRoZSBwcmV2aW91c2x5IHByb3ZlbiBwcm9kdWN0IGdhdGUgKDg4Lzg4IHN5bnRheCwgNzQvNzQgZGV0ZXJtaW5pc3RpYyB0ZXN0cykgd2FzIG5vdCByZXJ1biBmb3IgdGhpcyBkb2N1bWVudGF0aW9uLW9ubHkgcmVmaW5lbWVudC4K').decode()
+          text = p.read_text()
+          if old not in text: raise SystemExit('P1-043 baseline text not found')
+          if new in text: raise SystemExit('P1-043 already patched')
+          p.write_text(text.replace(old, new, 1))
+          dt = d.read_text()
+          if '## Continuation 2026-08-26 — P1-043 concurrent storage quota admission' in dt: raise SystemExit('audit section already exists')
+          d.write_text(dt + ap)
+          m = json.loads(pathlib.Path('manifest.json').read_text())
+          assert m['manifest_version'] == 3
+          assert m['version'] == '0.9.8'
+          assert m['minimum_chrome_version'] == '118'
+          PY
+          rm .github/workflows/audit-sync-20260826-p1-043-quota-admission.yml
+          git add project_docs/PRIORITIES_P0_P1_P2.md DEEP_AUDIT_2026-08-25.md .github/workflows/audit-sync-20260826-p1-043-quota-admission.yml
+          test "$(git diff --cached --name-only | sort)" = "$(printf '%s\n' '.github/workflows/audit-sync-20260826-p1-043-quota-admission.yml' 'DEEP_AUDIT_2026-08-25.md' 'project_docs/PRIORITIES_P0_P1_P2.md' | sort)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: refine P1-043 concurrent quota admission'
+          git push
