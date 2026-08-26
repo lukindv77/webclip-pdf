@@ -515,3 +515,10 @@ Audit baseline: `bc259d93aff40d0995157493d836b461fbd92b2e`. Documentation-only s
 Audit baseline: `5f3b53394171de0a64e8b4ff6c687c31be28bc34`. Documentation-only evidence reconciliation; production runtime and manifest are unchanged and no product tests were rerun.
 
 Canonical registry status wins over historical closure snapshots. `P1-009_CLOSURE.md`, `P1-090_CLOSURE.md`, and `P1-125_CLOSURE.md` still labeled their original implementation gates as current `REGRESSION` even though later deep audit reopened each item as `PARTIAL`. The files now preserve the original PASS evidence verbatim while explicitly stating that it proves only the older implemented scope, not the newer CPU/deadline, post-move object-identity, or same-URL document-generation acceptance criteria. This prevents historical gates from being misread as current closure evidence.
+
+## Continuation 2026-08-26 — imported OperationLog provenance
+
+Confirmed a separate diagnostics/provenance gap after duplicate-check against the current registry. `normalizeImportedJournalEntry()` accepts a syntactically valid `raw.operationId` from an unsigned Journal backup and stores it unchanged. `journal.js::buildLinkedOperationLog()` treats the same exact ID as a live local linkage and, on explicit Show/Copy action, reads `WEBCLIP_OPERATION_LOG_GET` for that ID from the current installation. A crafted or foreign backup can therefore make an imported entry appear linked to an unrelated local log. This does not grant a new remote capability, so it is tracked as P1-190 rather than P0-022. Required direction: preserve imported historical operation IDs without treating them as locally proven live-log authority; add a versioned provenance/instance receipt and deterministic regression for collision with an existing local OperationLog.
+
+Audit sync only. Production runtime/configuration and `manifest.json` are unchanged; the previously proven 88/88 syntax + 74/74 deterministic product gate was not rerun for this docs-only commit.
+
