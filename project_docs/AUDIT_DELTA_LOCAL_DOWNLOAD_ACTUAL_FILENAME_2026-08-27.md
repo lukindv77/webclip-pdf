@@ -1,22 +1,25 @@
 # Audit delta — actual local-download filename / recovery receipt — 2026-08-27
 
-Source-of-truth `main` immediately before this write: `850542b130cf4abf27e94015cb7ae115b39c4883`.
+Initial source-of-truth `main` before this checkpoint: `850542b130cf4abf27e94015cb7ae115b39c4883`.
+Numbering correction baseline: `812bf5f09d9b7aab421602f8d3c4d16765745b4e`.
 
 Docs-only audit checkpoint. Production runtime, tests, configuration and `manifest.json` are unchanged. Canonical large-table synchronization is not claimed by this file.
 
-## New confirmed item: P1-199 — local Journal/recovery never captures Chrome-resolved filename
+## Correction — no new P-number
 
-**Classification:** P1 / evidence-reserved / confirmed by fresh runtime audit.
+The initial version of this checkpoint incorrectly assigned **P1-199** to the local resolved-filename finding. That assignment is invalid and is withdrawn.
 
-This root cause is distinct from:
+Repository-wide duplicate/number review confirms that the stable numbers were already occupied before this checkpoint:
 
-- `P0-039` — preserving unresolved local-save recovery evidence instead of destructive TTL-drop on unknown outcome;
-- `P0-048` — ambiguous fallback matching / numeric `downloadId` no-overwrite;
-- `P1-146` — actual settlement of non-cancellable `chrome.downloads.download()` start;
-- `P1-198` — worker-issued operation identity;
-- `P0-079` — immutable PDF byte generation/consumer ownership.
+- **P1-199** — cross-origin iframe print `prepare-print` / `restore-print` operation-generation fencing (`AUDIT_DELTA_CROSS_ORIGIN_PRINT_GENERATION_2026-08-27.md`);
+- **P1-200** — remote frame selection/control session-generation and ordering (`AUDIT_DELTA_REMOTE_FRAME_CONTROL_GENERATION_2026-08-27.md`);
+- **P1-201** — optional host-permission revocation lifecycle (`AUDIT_DELTA_FRAME_PERMISSION_REVOCATION_LIFECYCLE_2026-08-27.md`).
 
-The missing invariant is **physical local filename truth**: WebClip requests one filename, explicitly allows Chrome to uniquify it, but never writes the Chrome-resolved target basename back into the durable checkpoint or Journal entry.
+In addition, the earlier `AUDIT_DELTA_FILENAME_COLLISION_RECOVERY_2026-08-27.md` already proved that Chrome `conflictAction:'uniquify'` can make the fallback filename check fail and explicitly classified that mechanism under existing **P0-048 / P0-039**, with no new number.
+
+Therefore this checkpoint is a **refinement of P0-048/P0-039**, with adjacent dependencies on P1-146/P1-198/P0-079. It does not allocate P1-199, P1-200, P1-201 or a new P1-202.
+
+The fresh evidence below is retained because it adds a user-visible metadata-truth consequence that was not stated as explicitly in the earlier filename-collision checkpoint: even on the normal fast completion path, Journal can retain the requested basename rather than Chrome's resolved physical basename.
 
 ## Fresh source proof
 
@@ -29,162 +32,116 @@ The missing invariant is **physical local filename truth**: WebClip requests one
 - `saveAs: false`;
 - `conflictAction: 'uniquify'`.
 
-Current Chrome Extensions downloads documentation defines `uniquify` to modify the filename by adding a counter before the extension when the requested name already exists.
+Thus `targetFilename` is a requested filename, not proof of the final physical target name. WebClip's generated timestamp has whole-second precision, so same-title/site saves in one second or a pre-existing same-name file are normal collision cases.
 
-Therefore `targetFilename` is only a **requested** filename. It is not proof of the final physical filename.
-
-This is a normal supported outcome, not an exceptional API failure.
-
-### 2. Filename collisions are plausible in normal WebClip use
-
-WebClip's generated filename timestamp has one-second granularity:
-
-`YYYY-MM-DD_HH-MM-SS`.
-
-Two saves of the same title/domain inside the same second can therefore request the same filename. A pre-existing file with the same generated name can also trigger Chrome's conflict policy.
-
-The physical outcome can consequently be e.g.:
+Example:
 
 - requested: `Title__site__2026-08-27_18-30-00.pdf`;
-- actual: `Title__site__2026-08-27_18-30-00 (1).pdf`.
+- Chrome-resolved: `Title__site__2026-08-27_18-30-00 (1).pdf`.
 
-### 3. Durable intent stores only requested filename
+### 2. Durable intent stores only the requested filename
 
-Before the irreversible Chrome start, `checkpointPendingLocalDownloadIntent()` persists `pendingData`, whose `filename` is the requested WebClip filename.
+Before the irreversible Chrome start, `checkpointPendingLocalDownloadIntent()` persists `pendingData.filename` as the requested WebClip filename, plus Blob URL, expected bytes, operationId and Journal metadata.
 
-The durable item also stores Blob URL, expected bytes, operationId and Journal metadata, but has no separate fields such as:
+There is no separate durable field for:
 
-- `requestedFilename`;
-- `resolvedFilename` / `savedFilename`;
-- filename resolution state.
+- requested filename vs resolved/saved filename;
+- filename-resolution state.
 
-After `chrome.downloads.download()` returns a numeric `downloadId`, `bindPendingLocalDownloadIntent()` rekeys the existing intent under that id. It does not read the corresponding `DownloadItem` and does not update filename metadata.
+After `chrome.downloads.download()` returns a numeric `downloadId`, `bindPendingLocalDownloadIntent()` rekeys the existing intent under that id. It does not read the exact `DownloadItem` and does not enrich the checkpoint with Chrome's resolved basename.
 
-### 4. Fast-path completion appends Journal directly from stale requested metadata
+### 3. Fast-path completion can write stale requested filename to Journal
 
-`chrome.downloads.onChanged` reacts to terminal `state.current` and calls:
+`chrome.downloads.onChanged` handles terminal `state.current` and calls `finalizePendingLocalDownload(downloadId, state, error)`.
 
-`finalizePendingLocalDownload(downloadId, state, error)`.
+For `complete`, the finalizer reads the bound durable checkpoint and immediately calls `appendJournalEntryFromDurableCheckpoint(pending.data, ...)`.
 
-On `complete`, that function loads the durable checkpoint and immediately calls:
+It does not first perform an exact-id `chrome.downloads.search({id: downloadId})` to prove the current own-extension DownloadItem and capture its resolved filename/size/state. Filename-only `onChanged` deltas are also ignored because the listener requires a terminal state delta.
 
-`appendJournalEntryFromDurableCheckpoint(pending.data, ...)`.
+Therefore a physically successful uniquified file can be journaled under the pre-conflict requested basename. This is a metadata-truth refinement of P0-039/P0-048 even when recovery itself is not needed.
 
-It does not first read `chrome.downloads.search({id: downloadId})` to obtain the actual `DownloadItem.filename`.
+### 4. Recovery fallback already has the known `uniquify` false-negative
 
-The onChanged listener also ignores filename-only deltas because it returns unless `delta.state.current` is present.
+For an unbound intent, background reconciliation uses exact Blob URL as primary identity. Its fallback then requires:
 
-Therefore a successful uniquified physical file can be journaled under the original requested name.
+- exact requested basename;
+- exact expected byte size;
+- short age window.
 
-### 5. Recovery fallback uses exact requested basename
+When Chrome legitimately uniquifies the filename, exact basename equality is false. If Blob URL evidence is unavailable, the correct physical own-extension download can therefore remain unprovable.
 
-For an unbound intent, background reconciliation first tries exact Blob URL identity. The code explicitly supports a fallback for browsers/history states where the original Blob URL is no longer exposed.
+This mechanism was already documented in `AUDIT_DELTA_FILENAME_COLLISION_RECOVERY_2026-08-27.md` and remains owned by P0-048/P0-039.
 
-That fallback:
+### 5. Do not repair by guessing `(1)`, `(2)`, ...
 
-1. extracts the basename from `candidate.filename` (the Chrome DownloadItem target);
-2. requires it to equal `expectedFilename` from the durable intent exactly;
-3. also requires exact expected bytes and a short time window.
+Broadening fallback to accept a syntactic Chrome conflict suffix would weaken P0-048. Multiple own-extension downloads may have the same requested basename, same byte length and nearby start times while receiving different conflict counters.
 
-When Chrome has legitimately uniquified the filename, exact equality is false by design.
+The correct direction is exact DownloadItem receipt binding, not filename heuristics.
 
-Thus if the Blob URL is unavailable, a valid own-extension physical download can become undiscoverable specifically because WebClip intentionally requested `conflictAction:'uniquify'` but retained only the pre-conflict name.
+## Required P0-048 / P0-039 refinement
 
-### 6. Do not "fix" this by accepting `(1)`, `(2)` heuristically
+### Exact bound DownloadItem receipt
 
-Broadening fallback to accept any basename that looks like a uniquified derivative would weaken P0-048.
+Once a valid numeric `downloadId` is known, the durable local-save receipt should be enriched from that exact own-extension DownloadItem before Journal finalization where safely possible. The receipt should distinguish at least:
 
-Several own-extension downloads may legitimately have:
+- requested filename;
+- exact resolved physical basename, or explicit unresolved/unknown state;
+- exact numeric `downloadId`;
+- own-extension proof;
+- expected/observed byte evidence;
+- terminal state;
+- immutable download intent/start generation from P1-198/P1-146;
+- immutable PDF generation/content receipt from P0-079.
 
-- the same requested base;
-- the same byte length;
-- nearby timestamps;
-- different Chrome conflict counters.
-
-The correct solution is to capture the exact resolved target for the already-known numeric DownloadItem, not to make later discovery more heuristic.
-
-## User-visible / recovery impact
-
-### Journal truth
-
-For a completed automatic local save, the Journal can show a filename that does not exist on disk under that name. The user may search the download folder for WebClip's displayed filename and fail to find it although the file was saved correctly under Chrome's uniquified name.
-
-### Recovery completeness
-
-When the fast terminal event/finalization was missed and the intent remains unbound/needs discovery, loss of Blob URL plus filename uniquification makes the current fallback miss the correct DownloadItem deterministically.
-
-Current P0-039 then compounds this because old unresolved evidence is eventually TTL-dropped. P0-039 already owns the destructive evidence-loss bug; P1-199 owns the reason the successful physical file cannot be rediscovered/truthfully named even with otherwise healthy Chrome history.
-
-After P0-039 is fixed, P1-199 would still matter: the checkpoint would safely remain unresolved/dead-lettered rather than being falsely finalized, but automatic recovery could not prove the correct DownloadItem from the data it retained.
-
-## Required P1-199 contract
-
-### Separate requested and resolved names
-
-Model at least:
-
-- `requestedFilename` — WebClip's deterministic generated proposal;
-- `resolvedFilename` / `savedFilename` — exact basename reported for the own-extension Chrome DownloadItem;
-- resolution state (`requested-only`, `resolved`, `unknown`) if useful.
-
-Do not overwrite history in a way that loses which filename WebClip originally requested; both values are useful for diagnostics.
-
-### Capture resolved target from exact numeric downloadId
-
-Once `chrome.downloads.download()` returns a valid numeric id, all future filename truth should be attached to that exact id.
-
-Use a bounded exact-id read and/or terminal DownloadItem observation to obtain the current resolved filename. Never infer it from a directory scan.
-
-Because Chrome may finalize filename selection asynchronously, the implementation may update the durable checkpoint when the exact id's target becomes known and must re-read exact id before Journal finalization if necessary.
-
-### Privacy boundary
-
-`DownloadItem.filename` can be an absolute local filesystem path. WebClip does not need to persist or expose the user's full local directory merely to solve this bug.
-
-Normalize to the exact final **basename** for Journal/display/recovery matching unless a separately justified feature requires more. Do not add full local path to export/OperationLog by accident.
+Do not persist the full local filesystem path merely to obtain filename truth. `DownloadItem.filename` can expose an absolute local path; WebClip should retain only the exact final basename unless a separately justified feature requires more.
 
 ### Journal finalization
 
 For a proven completed own-extension DownloadItem:
 
-- Journal `filename` should represent the actual saved basename if available;
-- requested filename may remain as separate diagnostic/recovery metadata;
-- if exact resolved basename cannot currently be read, do not falsely claim that the requested basename is the physical one. Preserve explicit unknown/resolution-pending state or defer exact-name finalization according to the chosen data model.
+- Journal filename should represent the actual resolved basename when available;
+- the originally requested filename may remain separate diagnostic metadata;
+- if the resolved basename cannot be proved, do not silently label the requested basename as the physical name. Preserve explicit unknown/resolution-pending evidence or defer exact-name finalization according to the recovery design.
+
+This must compose with P0-039: failure to prove final filename/outcome must not destroy the sole durable recovery evidence.
 
 ### Recovery fallback
 
-Once an intent has ever been bound to numeric downloadId, recovery must prefer exact id and capture its actual basename.
+- bound numeric `downloadId` remains authoritative and should use exact-id lookup;
+- unbound unknown-start intents keep Blob URL as the primary identity;
+- P0-048 uniqueness/no-overwrite rules remain mandatory;
+- do not loosen fallback to guess Chrome's conflict counter;
+- unresolved outcome remains bounded dead-letter/manual-resolution evidence under P0-039 instead of being TTL-erased.
 
-For genuinely unbound unknown-start intents, keep Blob URL as the primary identity and P0-048's fail-closed ambiguity rules. Do not loosen fallback matching merely to guess Chrome's conflict counter.
-
-P1-146 late-success binding should opportunistically enrich the same exact durable intent with the resolved basename when safely available.
+P1-146 late-success binding should enrich the same exact intent when the resolved basename can be safely read. P1-198/P0-079 remain separate prerequisites for collision-safe intent/PDF ownership.
 
 ## Required deterministic regressions
 
-1. Pre-create a file with the exact requested WebClip name; automatic download uses `uniquify` and Chrome resolves a different basename.
-2. After successful completion, Journal records the actual resolved basename, not the stale requested name.
-3. Requested filename remains available separately for diagnostics if the model retains it.
-4. Two same-page saves inside one filename-timestamp second produce distinct Chrome physical basenames and two truthful Journal entries.
-5. Known numeric downloadId + missed terminal event: maintenance exact-id reconciliation learns the same resolved basename and finalizes correctly.
-6. Blob URL unavailable + uniquified physical file: do not silently accept an unproven `(N)` candidate through heuristic broadening.
-7. Multiple plausible uniquified candidates still fail closed under P0-048 when there is no exact downloadId/Blob identity.
+1. Pre-create the exact requested WebClip filename; automatic download uses `uniquify` and Chrome resolves another basename.
+2. Successful completion records the actual resolved basename in Journal, not a false claim that the requested basename is physical truth.
+3. Requested filename remains separately available if diagnostics retain it.
+4. Two same-page saves inside one filename-timestamp second produce distinct physical basenames and truthful separate Journal entries.
+5. Known numeric downloadId + missed terminal event: maintenance exact-id reconciliation obtains the same resolved basename and finalizes the exact checkpoint.
+6. Blob URL unavailable + uniquified physical file: no heuristic `(N)` guess is accepted as proof.
+7. Multiple plausible uniquified candidates fail closed under P0-048 when exact downloadId/Blob identity is absent.
 8. Full local filesystem path is not leaked into Journal export/OperationLog when only basename is required.
 9. Interrupted download may retain requested/resolved-name diagnostics but does not create a false completed Journal entry.
 10. P1-198 operation-id collision tests remain independent: two physical operations cannot corrupt one another's intent before filename resolution.
-11. P0-039 unknown-outcome checkpoint is preserved even if resolved filename is still unknown.
-12. Normal no-conflict save preserves the same visible filename as today.
+11. P0-039 preserves unknown-outcome checkpoint even when resolved filename remains unknown.
+12. Normal no-conflict save keeps the same visible filename behavior as today.
 
-## Duplicate check / numbering
+## Numbering / duplicate-check result
 
-`P1-199` is assigned by this audit block.
+No new P-number is assigned by this checkpoint.
 
-- Not P0-039: that item decides whether unresolved evidence may be destroyed; P1-199 decides whether the physical target name is truthfully captured and recoverable.
-- Not P0-048: that item owns ambiguous candidate matching and no-overwrite downloadId claims; P1-199 should reduce dependence on fallback by recording the exact resolved name from a known id.
-- Not P1-146: native-start actual settlement can be perfectly reconciled while the bound metadata still contains the wrong requested filename.
-- Not P1-198/P0-079: this bug occurs with perfectly distinct operation/cache identities; normal Chrome conflict resolution alone is sufficient.
+- **P1-199 remains cross-origin print generation.**
+- **P1-200 remains remote frame selection/control generation.**
+- **P1-201 remains optional-permission revocation lifecycle.**
+- Local `uniquify` recovery/metadata truth refines **P0-048 / P0-039**.
+- P1-146, P1-198 and P0-079 remain adjacent dependencies, not replacement owners.
 
-`P1-200` remains free after this assignment.
+This correction is a forward docs commit; no reset/revert is performed.
 
 ## Test / release state
 
-No product tests were rerun for this docs-only checkpoint. The last proven product gate remains the historical **88/88 JavaScript syntax + 74/74 deterministic tests PASS**. No runtime/config/manifest change was made. No build, tag or Release was created.
+No product tests were rerun for this docs-only correction. The last proven product gate remains the historical **88/88 JavaScript syntax + 74/74 deterministic tests PASS**. No runtime/config/manifest change was made. No build, tag or Release was created.
