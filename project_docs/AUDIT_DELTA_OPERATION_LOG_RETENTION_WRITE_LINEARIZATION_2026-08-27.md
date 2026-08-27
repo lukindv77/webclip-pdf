@@ -93,6 +93,24 @@ Otherwise a post-prune queued write can recreate/expand state after the cleanup'
 
 P1-205 should therefore be fixed as an OperationLog delete/write policy, not as a one-line wait added only to one TTL cursor.
 
+### 6a. Follow-up source confirmation — the 64 MiB size-cap is a second destructive pass in the same function
+
+Fresh re-audit at source-of-truth `main` `8ce179d638b31fec9972056814bc8f434b2a77d6` confirmed the size-cap path concretely rather than only conceptually.
+
+After the TTL pass, the same `cleanupExpiredOperationLogs()` performs a second readonly/readwrite accounting-and-prune flow for `MAX_OPERATION_LOG_TOTAL_JSON_CHARS`:
+
+- it enumerates operation headers through the `updatedAt` index newest-first (`openCursor(null, 'prev')`);
+- for each operation it incorporates header/event approximate JSON size into the retained-size decision;
+- newest records are preferentially retained until the configured global budget is reached;
+- older operations selected beyond that budget have their operation header and associated event rows deleted;
+- `deleted`, `sizeDeleted` and `retainedApproxChars` are updated from that cleanup decision.
+
+The newest-first policy itself is a useful positive control: the defect is **not** the choice of which diagnostics to retain. The defect is that this second destructive pass is subject to the same write-ordering gap as TTL cleanup.
+
+It does not drain/recheck `operationLogWriteChains` before deciding/deleting. A writer already admitted in the JS queue but not yet in an IndexedDB transaction can therefore run after the size-prune commit, recreate/expand the just-pruned operation and invalidate both the 64 MiB convergence and the cleanup accounting snapshot.
+
+Required acceptance is therefore explicit: **TTL expiry and global size pruning must share the same delete-generation/write-linearization mechanism.** A fix applied only to the cutoff cursor leaves P1-205 open.
+
 ## Why worker restart does not eliminate this bug
 
 The strongest deterministic repro is within one worker generation; no restart is required.
