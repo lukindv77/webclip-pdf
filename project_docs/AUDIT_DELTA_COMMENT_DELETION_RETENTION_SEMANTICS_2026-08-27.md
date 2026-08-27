@@ -76,7 +76,25 @@ Because Yandex Journal backup is built from the same full staged export represen
 
 Import likewise accepts/preserves `text + deletedAt`, so a deleted comment body survives export/import round trips.
 
-### 6. Existing backup versions are a separate retention question
+### 6. Deleted bodies also consume the live comment quota indefinitely
+
+`addJournalComment()` first calls `normalizeJournalComments(current)` and then applies both live admission checks to that complete array:
+
+- `comments.length >= MAX_IMPORTED_COMMENTS_PER_ENTRY`;
+- `assertJournalCommentBudget([...comments, { text }])`.
+
+Neither check excludes `deletedAt > 0` comments. Because delete preserves every tombstoned body, a deleted comment continues consuming both:
+
+- one slot in the per-entry comment-count limit;
+- its complete text length in the aggregate comment-text budget.
+
+This makes the semantic mismatch operational, not merely archival. A user can repeatedly add and delete comments and eventually be unable to add a new comment to the entry even though the UI describes the old comments as deleted and non-restorable.
+
+Under the preferred privacy-delete model, a minimal tombstone may intentionally consume a bounded identity slot if the product needs stable history, but erased body text must not keep consuming the live text quota. The count policy must also be explicit: either deleted tombstones have a separate bounded history cap/GC policy, or ordinary active-comment capacity must not be permanently exhausted by tombstones.
+
+Under an intentional audit-history model, retaining deleted bodies/count slots is still possible, but the UI and limits must disclose that archived history consumes storage/capacity and provide a bounded history policy so a finite sequence of deletes cannot permanently disable future commenting.
+
+### 7. Existing backup versions are a separate retention question
 
 Even if future runtime is changed to redact a deleted body in the active Journal, historical backup files that were already created may still contain earlier comment text. P1-202 must not falsely promise retroactive erasure from immutable/previous backup versions unless the product explicitly implements such a remote destructive policy.
 
@@ -121,6 +139,8 @@ Under this model:
 - text filter cannot match the old body;
 - future full exports/Yandex backups do not contain the old body;
 - re-import cannot restore the body from a post-delete export;
+- erased body text no longer consumes the live aggregate comment-text quota;
+- deleted tombstone count has an explicit bounded history/GC policy and cannot permanently exhaust ordinary active-comment capacity;
 - historical backups created before deletion are explicitly outside this active-record guarantee unless a separate user-selected purge feature exists.
 
 A tombstone can therefore preserve identity without preserving content.
@@ -136,6 +156,7 @@ At minimum:
 - ordinary UI should distinguish historical retained text from active comment content;
 - search behavior must be deliberate (for example an explicit include-deleted-history option), not accidental because every comment is scanned;
 - export schema/documentation must state that tombstoned bodies are retained;
+- retained-history count/text capacity and bounded GC/retention must be explicit so history cannot silently make the entry unable to accept future comments;
 - privacy-sensitive purge, if offered, must be a distinct irreversible action with accurate historical-backup limitations.
 
 Do not describe a retained body as unrecoverable while simultaneously rendering it verbatim.
@@ -157,6 +178,7 @@ Current comment mutations use stale read -> separate update and therefore alread
 - **P1-009**: universal filter/indexing must follow the chosen deleted-content policy; an optimized search index cannot retain stale deleted text after active-record redaction.
 - **P0-010/P0-012**: full export/backup fidelity means faithfully exporting the chosen current Journal state, not resurrecting pre-delete content from a cache/index.
 - **P0-050/P0-026/P1-057**: derived stats/search repair must not treat deletion tombstone content as live data if privacy-delete is chosen.
+- **P0-055**: comment-count/text budgets remain hard safety boundaries, but their active-vs-deleted accounting must match the chosen P1-202 retention semantics.
 
 ## Required deterministic/browser regressions
 
@@ -172,6 +194,9 @@ Current comment mutations use stale read -> separate update and therefore alread
 10. If audit-history model is intentionally selected instead, UI confirmation explicitly states retained/searchable/exported backup semantics and deterministic tests verify that disclosure text is present before the mutation.
 11. Search/index rebuild after delete cannot continue matching body text from a stale derived index under privacy-delete.
 12. Journal card lazy-loading work from P1-174 cannot fetch/display an erased body from an old cached summary after a deletion generation commits.
+13. Fill an entry near the aggregate text budget, delete a large comment, then add a new comment: privacy-delete frees the erased body's text budget and the new comment is admitted when otherwise valid.
+14. Repeated add/delete cycles cannot permanently exhaust active-comment capacity solely through invisible/non-restorable tombstones; chosen tombstone count/history policy is deterministically bounded.
+15. Import of legacy tombstones containing retained text follows an explicit migration policy: either preserve them as disclosed audit history or redact their bodies when upgrading to privacy-delete, without silently changing semantics per opener/context.
 
 ## Duplicate check / numbering
 
