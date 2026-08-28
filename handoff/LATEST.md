@@ -1,25 +1,35 @@
-# Latest WebClip handoff
+# Latest WebClip handoff — 2026-08-28
 
-Canonical checkpoint requested on **2026-08-27 16:53 +07:00**.
+**GitHub `main` is the only source of truth. Fresh-fetch it before using any handoff file.**
 
-- Repository: `lukindv77/webclip-pdf`
-- Branch: `main`
-- Pre-handoff source HEAD: `e836b86f322713bf960626a6733bfaeafaf99411`
-- Pre-handoff tree: `61e92fca5d8f0d6b6ff35e0e26f5bab498de7d89`
-- Current state: `handoff/CURRENT_STATE_2026-08-27_1653.md`
-- Machine state: `handoff/CURRENT_STATE_2026-08-27_1653.json`
-- New-chat prompt: `PROMPT_FOR_NEW_CHAT.md`
-- Dated prompt copy: `handoff/NEW_CHAT_PROMPT_2026-08-27_1653.md`
-- Audit index: `handoff/AUDIT_INDEX_2026-08-27_1653.md`
-- Full base source snapshot: `handoff/WebClip_Handoff_Audit_2026-08-26_1047_a57042fe.zip`
-- Full base SHA-256: `b9e1fa364bacc8fa21da29d0c721307cc7aa29051e2178f3123da65d3f46ff14`
-- Current context/audit delta: `handoff/WebClip_Handoff_Audit_Delta_2026-08-27_1653_e836b86f.zip`
-- Delta SHA-256: `2b5badfe603580313c244cb019712f1d286ea5f9e8f7392e84c27b225302bc2c`
-- Delta checksum file: same path + `.sha256`
-- Composition manifest: `handoff/ARCHIVE_MANIFEST_2026-08-27_1653.txt`
-- Manifest invariant: MV3 / `0.9.8` / Chrome >=118
-- Product gate reference: 88/88 syntax + 74/74 deterministic PASS; not rerun for recent docs-only audit/handoff
+Pre-handoff source HEAD: `bcdf3e5235b0c1bd3df3b36ac3d46c88a40762a6`
+Pre-handoff source tree: `d430775b544fbaa23fae4d1c5b0cea1643e4ad7e`
 
-Fresh evidence-reserved highlights that may not yet be synchronized into both canonical audit docs: **P0-079; P1-195, P1-196, P1-197, P1-198, P1-199, P1-200**. Search all audit-delta files before assigning any new number.
+Read:
+1. `GITHUB_REPOSITORY_STATE.md`
+2. `handoff/CURRENT_STATE_2026-08-28.md`
+3. `handoff/CURRENT_STATE_2026-08-28.json`
+4. `handoff/AUDIT_INDEX_2026-08-28.md`
+5. `PROMPT_FOR_NEW_CHAT.md`
+6. `handoff/NEW_CHAT_PROMPT_2026-08-28.md`
+7. `handoff/SOURCE_POINTER_2026-08-28.txt`
+8. `handoff/AUDIT_FILES_2026-08-28.txt`
+9. all `project_docs/AUDIT_DELTA_*.md`
 
-**Always fetch fresh GitHub `main` first.** If it is newer than the pre-handoff source HEAD, inspect newer commits and continue from the newer tree. Do not reset to the archive.
+Context/audit delta archive:
+`handoff/WebClip_Handoff_Audit_Delta_2026-08-28_bcdf3e52.zip`
+
+SHA-256:
+`0ff5cb8cb83610c4252d359501a38c94706ba9ffa57edca100b0b31512345abb`
+
+Checksum:
+`handoff/WebClip_Handoff_Audit_Delta_2026-08-28_bcdf3e52.zip.sha256`
+
+Manifest:
+`handoff/ARCHIVE_MANIFEST_2026-08-28.txt`
+
+Old full source snapshot retained:
+`handoff/WebClip_Handoff_Audit_2026-08-26_1047_a57042fe.zip`
+SHA-256 `b9e1fa364bacc8fa21da29d0c721307cc7aa29051e2178f3123da65d3f46ff14`.
+
+This handoff is composite. The ZIP is context/audit recovery material, not an alternative source tree. If current `main` is newer, inspect new commits and continue from the newer tree.

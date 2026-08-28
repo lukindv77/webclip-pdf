@@ -1,0 +1,10 @@
+repository=lukindv77/webclip-pdf
+branch=main
+pre_handoff_source_head=bcdf3e5235b0c1bd3df3b36ac3d46c88a40762a6
+pre_handoff_source_tree=d430775b544fbaa23fae4d1c5b0cea1643e4ad7e
+runtime_baseline=e836b86f322713bf960626a6733bfaeafaf99411
+service-worker.js_blob=9c81d080051ee14d468b78c575dcd9f21ecda803
+content.js_blob=f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e
+journal.js_blob=05cb89db3c322d547faf17b2359e92161d0bcbe7
+manifest.json_blob=259a7c3706e78c1a22021db7dc4769e8accdfb3e
+rule=Fresh GitHub main always wins over this pointer and every archive.

@@ -1,0 +1,38 @@
+{
+  "handoff_date": "2026-08-28",
+  "repository": "lukindv77/webclip-pdf",
+  "branch": "main",
+  "authority": "GitHub main",
+  "pre_handoff_source_head": "bcdf3e5235b0c1bd3df3b36ac3d46c88a40762a6",
+  "pre_handoff_source_tree": "d430775b544fbaa23fae4d1c5b0cea1643e4ad7e",
+  "last_known_runtime_baseline": "e836b86f322713bf960626a6733bfaeafaf99411",
+  "runtime_blobs": {
+    "service-worker.js": "9c81d080051ee14d468b78c575dcd9f21ecda803",
+    "content.js": "f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e",
+    "journal.js": "05cb89db3c322d547faf17b2359e92161d0bcbe7",
+    "manifest.json": "259a7c3706e78c1a22021db7dc4769e8accdfb3e"
+  },
+  "manifest": {
+    "manifest_version": 3,
+    "version": "0.9.8",
+    "minimum_chrome_version": "118"
+  },
+  "last_proven_tests": {
+    "js_syntax": "88/88 PASS",
+    "deterministic": "74/74 PASS",
+    "rerun_after_docs_audit": false
+  },
+  "recent_docs_commits": [
+    "29aea17e760b9af395a5c1fa43ac800c7cfa0e3f",
+    "47b5f615ff170f399d3dd53004ea54af680e50f3",
+    "78d199c37b270c944a73ffb69517a9bbe62ab697",
+    "bcdf3e5235b0c1bd3df3b36ac3d46c88a40762a6"
+  ],
+  "latest_new_item": "P1-210",
+  "fresh_items": ["P1-208", "P1-209", "P1-210"],
+  "latest_refinements": ["P1-124", "P1-167", "P1-035", "P1-043", "P1-141", "P1-206", "P0-033"],
+  "numbering_warning": "P1-201 through P1-210 must not be assumed free; read all audit deltas and search whole repo.",
+  "release_allowed": false,
+  "next_mode": "large-block audit with GitHub synchronization",
+  "unfinished_audit": "native Save As lifecycle; no new P confirmed"
+}
