@@ -24,6 +24,10 @@ No standalone audit delta is a current status authority. New audit findings must
 
   26-block capture-admission/responsive-fidelity/renderer-resource-readiness audit tranche. Registered status change: P1-003 reopened ACTIVE because bounded preparation does not yet cover the actual selected visual resource graph (pseudo/CSS visual resources and frame parity), while `Page.printToPDF` is not a readiness barrier. Supporting refinements/controls cover P0-004, P0-070, P0-071, P0-075, P1-004, P1-187 and P2-007 without additional status transitions.
 
+- `AUDIT_COMPLEX_LAYOUT_FRAME_PROXY_FIDELITY_EVIDENCE_2026-08-29.md`
+
+  38-block complex selected-layout / same-origin flattened-frame representation audit tranche. No new P-number or status transition: source and managed-Chromium evidence refines P0-004 for layout/compositing/fixed-pagination fidelity, P1-187 for frame-local rendered state/resource provenance and style-budget truth, P1-160 for boxless semantic auto-content candidates, P1-003 for additional CSS visual resources, and P2-007 for explicit current-view versus complete-static capture semantics.
+
 ## Families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
