@@ -1,25 +1,16 @@
 # Audit delta navigation index
 
-Baseline for this index: `bbaf7b1202daa056371211f6d1db0f698acee8db`.
-
-This file is **navigation only**. It is not an independent status registry and it does not allocate P-numbers. Current status/ownership comes from `AUDIT_REGISTRY.md`; unique corrections and retired positive controls are preserved in `AUDIT_HISTORY_INDEX.md`, `AUDIT_EVIDENCE.md`, `AUDIT_RETIRED_DELTA_EVIDENCE.md`, `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md`, `TEST_EVIDENCE.md` and Git history.
+This file is **navigation only**. It is not an independent status registry and it does not allocate P-numbers. Current status/ownership comes from `AUDIT_REGISTRY.md`; unique corrections and retired positive controls are preserved in `AUDIT_HISTORY_INDEX.md`, `AUDIT_EVIDENCE.md`, `AUDIT_RETIRED_DELTA_EVIDENCE.md`, `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md`, family evidence files, `TEST_EVIDENCE.md` and Git history.
 
 ## Retirement gate
 
-A remaining `AUDIT_DELTA_*` file stays in `main` until all of its unique material is represented elsewhere:
-
-1. owner/status and root cause;
-2. acceptance/invariants;
-3. source proof or deterministic race schedule that matters for future implementation;
-4. correction/retraction/duplicate decision;
-5. positive control that prevents a false future finding;
-6. test/release interpretation.
+A remaining `AUDIT_DELTA_*` file stays in `main` until all of its unique material is represented elsewhere: owner/status and root cause; acceptance/invariants; source proof or deterministic race schedule; correction/retraction/duplicate decision; positive control; and test/release interpretation.
 
 A family may be compacted only after comparing **every file in that family**, because later refinements often supersede only part of an earlier delta.
 
 ## 1. Backup / scheduler / remote recovery generation
 
-Primary owners commonly composed here: P1-076, P1-077, P1-117, P1-177, P1-184, P1-194, P1-207, P1-208, P1-210, P0-074.
+Primary owners: P1-076, P1-077, P1-117, P1-177, P1-184, P1-194, P1-207, P1-208, P1-210, P0-074.
 
 - `AUDIT_DELTA_BACKUP_PENDING_ACCOUNT_OBJECT_IDENTITY_2026-08-28.md`
 - `AUDIT_DELTA_BACKUP_PENDING_CONTEXT_SWITCH_EVIDENCE_RETENTION_2026-08-28.md`
@@ -47,11 +38,11 @@ Primary owners commonly composed here: P1-076, P1-077, P1-117, P1-177, P1-184, P
 - `AUDIT_DELTA_USER_SETTINGS_SCHEDULER_RECONCILIATION_GENERATION_2026-08-28.md`
 - `AUDIT_DELTA_YANDEX_REMOTE_CHECKPOINT_GENERATION_2026-08-27.md`
 
-The P1-076 remote-phase correction pair has already been losslessly retired into `AUDIT_RETIRED_DELTA_EVIDENCE.md`; do not reintroduce the rejected deep-root proof.
+P1-076 remote-phase correction evidence is consolidated in `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
 
 ## 2. Yandex auth / config / immutable operation context / Settings UI
 
-Primary owners commonly composed here: P0-074, P0-078, P1-157, P1-158, P1-165, P1-175, P1-178, P1-184, P1-195, P1-196, P1-210, P1-222, P1-223.
+Primary owners: P0-074, P0-078, P1-157, P1-158, P1-165, P1-175, P1-178, P1-184, P1-195, P1-196, P1-210, P1-222, P1-223.
 
 - `AUDIT_DELTA_OAUTH_COMPLETION_PARTIAL_COMMIT_RESULT_2026-08-28.md`
 - `AUDIT_DELTA_OAUTH_PRETAB_PENDING_ABORT_2026-08-28.md`
@@ -80,7 +71,7 @@ Primary owners commonly composed here: P0-074, P0-078, P1-157, P1-158, P1-165, P
 
 ## 3. Yandex remote object identity / move / publication / destructive lifecycle
 
-Primary owners commonly composed here: P0-022, P0-040, P0-069, P0-073, P0-074, P0-078, P1-090, P1-164, P1-175, P1-184, P1-210.
+Primary owners: P0-022, P0-040, P0-069, P0-073, P0-074, P0-078, P1-090, P1-164, P1-175, P1-184, P1-210.
 
 - `AUDIT_DELTA_DELETE_FALLBACK_UNKNOWN_MOVE_2026-08-27.md`
 - `AUDIT_DELTA_DELETE_RETRY_UI_OPERATION_SAGA_DISCONTINUITY_2026-08-28.md`
@@ -104,18 +95,18 @@ Primary owners commonly composed here: P0-022, P0-040, P0-069, P0-073, P0-074, P
 
 ## 4. Backup restore/import from Yandex
 
-Primary owners commonly composed here: P0-013, P0-022, P0-073, P0-074, P1-035, P1-069, P1-184, P1-210, P1-215.
+Primary owners: P0-013, P0-022, P0-073, P0-074, P1-035, P1-069, P1-184, P1-210, P1-215.
 
 - `AUDIT_DELTA_YANDEX_BACKUP_IMPORT_2026-08-27.md`
 - `AUDIT_DELTA_YANDEX_BACKUP_SELECTION_IDENTITY_2026-08-27.md`
 - `AUDIT_DELTA_YANDEX_RESTORE_LIST_READ_CAPABILITY_2026-08-28.md`
 - `AUDIT_DELTA_YANDEX_RESTORE_SELECTED_OBJECT_RECEIPT_2026-08-28.md`
 
-The encoded-byte download-bound revalidation has already been retired into `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
+Encoded-byte restore-limit evidence is consolidated in `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
 
 ## 5. Journal import / provenance / portable schema / legacy identity
 
-Primary owners commonly composed here: P0-013, P0-022, P0-073, P0-076, P1-030, P1-035, P1-042, P1-069, P1-206, P1-211, P1-215, P1-216.
+Primary owners: P0-013, P0-022, P0-073, P0-076, P1-030, P1-035, P1-042, P1-069, P1-206, P1-211, P1-215, P1-216.
 
 - `AUDIT_DELTA_IMPORTED_COMMENT_ID_AMBIGUITY_2026-08-28.md`
 - `AUDIT_DELTA_IMPORTED_EMPTY_IDENTITY_CURRENT_NAMESPACE_ADOPTION_2026-08-28.md`
@@ -132,11 +123,11 @@ Primary owners commonly composed here: P0-013, P0-022, P0-073, P0-076, P1-030, P
 - `AUDIT_DELTA_LEGACY_URLKEY_TEMPLATE_LIST_PARITY_2026-08-28.md`
 - `AUDIT_DELTA_STORAGE_PRESSURE_IMPORT_STAGING_RECLAIM_2026-08-28.md`
 
-Imported URL-derived `urlKey/siteKey` recomputation positive control has already been retired into `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
+Imported URL-derived scope-key positive control is consolidated in `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
 
 ## 6. Journal read/view revision / pagination / open/apply authority
 
-Primary owners commonly composed here: P0-076, P0-080, P1-001, P1-009, P1-175, P1-206.
+Primary owners: P0-076, P0-080, P1-001, P1-009, P1-175, P1-206.
 
 - `AUDIT_DELTA_DIRECT_START_BYPASSES_UPLOAD_GENERATION_LOCK_2026-08-28.md`
 - `AUDIT_DELTA_JOURNAL_APPLY_BYPASSES_UPLOAD_GENERATION_LOCK_2026-08-28.md`
@@ -155,7 +146,7 @@ Primary owners commonly composed here: P0-076, P0-080, P1-001, P1-009, P1-175, P
 - `AUDIT_DELTA_JOURNAL_VIEW_FANOUT_2026-08-27.md`
 - `AUDIT_DELTA_JOURNAL_VIEW_REVISION_COHERENCE_2026-08-27.md`
 
-Current Journal source-writer revision coverage positive control has already been retired into `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
+Journal source-writer revision coverage positive control is consolidated in `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
 
 ## 7. Journal comments / tombstones / edit generations
 
@@ -169,7 +160,7 @@ Primary owners: P0-076, P1-202, P1-211, P1-225.
 
 ## 8. Operation receipt / OperationLog / user reconciliation
 
-Primary owners commonly composed here: P1-145, P1-197, P1-198, P1-205, P1-210 and durability/maintenance owners.
+Primary owners: P1-145, P1-197, P1-198, P1-205, P1-210 and durability/maintenance owners.
 
 - `AUDIT_DELTA_COMPACT_DETACHED_RECEIPT_RETENTION_2026-08-28.md`
 - `AUDIT_DELTA_DURABILITY_CLASS_2026-08-27.md`
@@ -187,11 +178,11 @@ Primary owners commonly composed here: P1-145, P1-197, P1-198, P1-205, P1-210 an
 - `AUDIT_DELTA_USER_OPERATION_RECONCILIATION_SURFACE_2026-08-28.md`
 - `AUDIT_DELTA_USER_OPERATION_TRANSPORT_LOSS_RECONCILIATION_2026-08-28.md`
 
-OperationLog detail one-transaction snapshot positive control has already been retired into `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
+OperationLog transactional snapshot positive control is consolidated in `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
 
 ## 9. Local download / native Save As / file settlement
 
-Primary owners commonly composed here: P0-039, P1-079, P1-080, P1-087, P1-129, P1-146, P1-156, P1-169, P1-210.
+Primary owners: P0-039, P1-079, P1-080, P1-087, P1-129, P1-146, P1-156, P1-169, P1-210.
 
 - `AUDIT_DELTA_FILENAME_COLLISION_RECOVERY_2026-08-27.md`
 - `AUDIT_DELTA_LOCAL_DOWNLOAD_ACTUAL_FILENAME_2026-08-27.md`
@@ -208,7 +199,7 @@ Primary owners commonly composed here: P0-039, P1-079, P1-080, P1-087, P1-129, P
 
 ## 10. Chrome/MV3 APIs / browser-owned state / extension-page transport
 
-Primary owners commonly composed here: P1-123…P1-131, P1-157, P1-158, P1-166, P1-170, P1-173, P1-203, P1-204, P1-209, P1-210, P1-217.
+Primary owners: P1-123…P1-131, P1-157, P1-158, P1-166, P1-170, P1-173, P1-203, P1-204, P1-209, P1-210, P1-217.
 
 - `AUDIT_DELTA_ACTION_DEGRADED_READ_STALE_URL_STATE_2026-08-28.md`
 - `AUDIT_DELTA_CHROME_ACTION_ADMISSION_REPAIR_2026-08-27.md`
@@ -228,11 +219,11 @@ Primary owners commonly composed here: P1-123…P1-131, P1-157, P1-158, P1-166, 
 - `AUDIT_DELTA_SERIALIZED_QUEUE_ADMISSION_COVERAGE_2026-08-27.md`
 - `AUDIT_DELTA_TAB_CREATE_MV3_RECEIPT_2026-08-28.md`
 
-Broad worker-generation/runtime-ACL/Chrome-API inventory revalidations were already consolidated into `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` and removed from current `main`.
+Broad worker-generation/runtime-ACL/Chrome-API inventories are consolidated in `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md`.
 
 ## 11. Frame permission / cross-origin frame-agent identity and command generation
 
-Primary owners commonly composed here: P1-004, P1-157, P1-171, P1-193, P1-199…P1-203, P1-214.
+Primary owners: P1-004, P1-157, P1-171, P1-193, P1-199…P1-203, P1-214.
 
 - `AUDIT_DELTA_CROSS_ORIGIN_PRINT_GENERATION_2026-08-27.md`
 - `AUDIT_DELTA_FRAME_AGENT_IDENTITY_2026-08-27.md`
@@ -249,7 +240,7 @@ Primary owners commonly composed here: P1-004, P1-157, P1-171, P1-193, P1-199…
 
 ## 12. PDF/print representation / live-DOM mutation rollback / source generation
 
-Primary owners commonly composed here: P0-003, P0-023, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, P1-149…P1-153, P1-167, P1-199, P1-212…P1-214, P1-218…P1-224.
+Primary owners: P0-003, P0-023, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, P1-149…P1-153, P1-167, P1-199, P1-212…P1-214, P1-218…P1-224.
 
 - `AUDIT_DELTA_CONTENT_SOURCE_TAB_BINDING_2026-08-27.md`
 - `AUDIT_DELTA_CONTENT_TEMPLATE_DISCLOSURE_2026-08-27.md`
@@ -276,34 +267,35 @@ Primary owners commonly composed here: P0-003, P0-023, P0-067, P0-068, P0-070, P
 - `AUDIT_DELTA_SPA_SAME_DOCUMENT_SELECTION_GENERATION_2026-08-28.md`
 - `AUDIT_DELTA_SPA_SAVE_CONFIRMATION_GENERATION_2026-08-28.md`
 
-## 13. Incognito / trust boundaries / redaction
+## 13. Incognito / trust boundaries / signed-link redaction — consolidated
 
-Primary owners commonly composed here: P0-033, P0-045, P0-066 and runtime sender/identity owners.
+This family has passed its lossless retirement gate. Current family evidence is `AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md`.
 
-- `AUDIT_DELTA_INCOGNITO_ACTION_DISCLOSURE_2026-08-27.md`
-- `AUDIT_DELTA_INCOGNITO_POPUP_PERSISTENT_STATE_2026-08-27.md`
-- `AUDIT_DELTA_SIGNED_URL_OPERATION_LOG_REDACTION_REGRESSION_2026-08-28.md`
+It preserves two separate active owners:
+
+- P0-045 — Incognito Action/popup/optional-permission privacy boundary;
+- P0-033 — opaque signed Yandex transport href redaction in OperationLog.
+
+The three former source deltas are removed from current `main`; exact originals remain in Git history.
 
 ## 14. Derived URL stats / view indexes
 
-Primary owners commonly composed here: P0-050, P1-083, P1-206, P1-216.
+Primary owners: P0-050, P1-083, P1-206, P1-216.
 
 - `AUDIT_DELTA_URLSTATS_DIRTY_CONSUMER_FAILOPEN_2026-08-28.md`
 - `AUDIT_DELTA_URLSTATS_REBUILD_ISOLATION_2026-08-27.md`
 
 ## 15. Retired broad revalidation / cross-cutting inventories
 
-The broad multi-block, worker-generation, runtime-ACL and direct-Chrome-API inventory deltas have already passed lossless retirement comparison. Their durable positive/negative controls and taxonomy are now in `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` and `AUDIT_RETIRED_DELTA_EVIDENCE.md`; exact originals remain in Git history. They are intentionally **not** listed as current delta files here.
+Broad multi-block, worker-generation, runtime-ACL and direct-Chrome-API inventory deltas have already passed lossless retirement comparison. Durable controls/taxonomy are in `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` and `AUDIT_RETIRED_DELTA_EVIDENCE.md`; exact originals remain in Git history.
 
 ## Practical consolidation order
-
-The remaining safe order is:
 
 1. Chrome/MV3 browser-owned state family;
 2. PDF/print generation + live-DOM rollback family;
 3. Journal view/import/comment families;
 4. local-download/Save-As receipts;
 5. Yandex auth/context and destructive-object identity;
-6. backup/scheduler/recovery last, because it composes the highest number of generation/receipt owners.
+6. backup/scheduler/recovery last.
 
-The purpose is not to minimize file count as quickly as possible. The purpose is to make every surviving file have a clear reason to exist while Git history becomes the archive for superseded proof.
+The purpose is not to minimize file count quickly. Every surviving file must have a clear reason to exist while Git history becomes the archive for superseded proof.
