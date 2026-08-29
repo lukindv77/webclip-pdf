@@ -1,31 +1,57 @@
-# Готовый prompt для восстановления проекта в новом чате
+# Восстановление контекста проекта WebClip PDF
 
-Актуальный основной remote проекта: приватный GitHub-репозиторий `lukindv77/webclip-pdf`, ветка `main`.
-Если новый чат получил handoff ZIP, распаковать его и использовать `current_recovery_snapshot/current_wip/` как точный physical WIP той же ревизии, что синхронизирована в GitHub.
+Актуальный проект находится в приватном GitHub-репозитории `lukindv77/webclip-pdf`, ветка `main`.
+
+**Свежий GitHub `main` — единственный источник истины.** Не восстанавливать более старый snapshot поверх более нового `main` и не считать handoff/recovery архив альтернативным исходным деревом.
 
 ## Обязательный порядок начала работы
 
-1. Прочитать `README_FIRST.md`, `CURRENT_STATE.md`, `AUDIT_STATUS.md`, `PENDING_WORK.md`, `STATIC_CHECKS.md` из handoff, если они приложены.
-2. Затем прочитать `REGISTRY_CONFLICTS_AND_GAPS.md` и `AUDIT_HISTORY_RESERVED_CODES.md`.
-3. В physical WIP прочитать `PROJECT_RECOVERY.md`, `README.md`, `project_docs/USER_REQUIREMENTS.md`, `ARCHITECTURE.md`, `DATA_MODELS.md`, `TEST_PLAN.md`, `PRIORITIES_P0_P1_P2.md`.
-4. Перед новым P-кодом обязательно сверять registry/history. Не переиспользовать занятые номера.
+1. Получить свежий HEAD `main` и фактическое дерево репозитория.
+2. Прочитать `GITHUB_REPOSITORY_STATE.md`.
+3. Прочитать текущие реестры аудита:
+   - `project_docs/PRIORITIES_P0_P1_P2.md` — исторический canonical range до P1-194;
+   - `project_docs/AUDIT_CONSOLIDATION_INDEX.md` — canonical supplement P1-195…P1-225;
+   - `project_docs/AUDIT_HISTORY_INDEX.md` — corrections/retractions/dedup/negative findings, нужные для duplicate-check.
+4. Для фактического состояния тестов прочитать:
+   - `project_docs/TEST_STATUS.md`;
+   - при необходимости historical proof — `project_docs/TEST_EVIDENCE.md`.
+5. Для historical implementation/browser proof существующих P-item читать `project_docs/AUDIT_EVIDENCE.md`.
+6. Для детального root cause/acceptance/refinement читать релевантные `project_docs/AUDIT_DELTA_*.md`; они пока остаются подробным evidence-слоем и не считаются устаревшими только потому, что номер уже внесён в registry.
+7. Для архитектуры/требований по теме читать текущие `project_docs/ARCHITECTURE.md`, `DATA_MODELS.md`, `DECISIONS_AND_RATIONALE.md`, `USER_REQUIREMENTS.md`, `TEST_PLAN.md` и актуальный runtime source.
+8. Если нужен краткий контекст предыдущей audit-сессии, использовать только текущий `project_docs/HANDOFF_2026-08-29/`, но свежий `main` и текущие registry/evidence документы всегда имеют приоритет.
+
+## Правило новых P-кодов
+
+- Стабильные P-коды не переиспользовать.
+- P1-195…P1-225 уже заняты.
+- Не считать следующий числовой код свободным только по последовательности.
+- Перед новым номером проверить текущие registry, relevant `AUDIT_DELTA_*`, `AUDIT_HISTORY_INDEX.md`, текущий source и при необходимости Git history.
+- Если root cause уже принадлежит существующему owner, расширять/reopen его, а не создавать дубликат.
 
 ## Критические правила текущей ветки
 
-- Manifest намеренно остаётся **`0.9.8` / Manifest V3** до закрытия audit gate и реального Chrome/Yandex release QA. Не повышать версию только из-за очередной задачи или commit.
-- Не переписывать проект с нуля и не заменять current WIP более старым recovery snapshot.
-- Не считать разговорный progress доказательством наличия кода: статус закрывается только physical code + tests/evidence.
-- Handoff/recovery ZIP для перехода между чатами создаётся **только по прямому запросу пользователя**. Исключение: versioned release/recovery archive, обязательный при реальной смене версии согласно `BUILD_AND_RECOVERY_RULES.md`.
-- Не обходить enterprise browser policy ради unpacked tests. Full unpacked MV3 + real Yandex остаётся release QA.
-- Shared Journal+Yandex destructive flow не менять без нового repro/OperationLog.
+- Manifest намеренно остаётся **`0.9.8` / Manifest V3 / Chrome >=118** до реального release QA и отдельного решения о релизе.
+- `0.9.9` в документации означает WIP, а не выпущенную версию.
+- Исторический gate **88/88 syntax + 74/74 deterministic** не является текущим rerun; точная формулировка находится в `TEST_STATUS.md`.
+- Real unpacked Chrome QA и real Yandex OAuth/API/E2E остаются release requirements.
+- Не обходить enterprise browser policy ради получения фиктивного unpacked PASS.
+- Не делать build/tag/GitHub Release без отдельного явного запроса после применимого QA gate.
+- Timeout/AbortController caller-side не равен cancellation/rollback внешнего side effect.
+- `not-admitted`, `unknown settlement`, `verified`, `superseded` — разные состояния.
+- Текущая архитектура требует exact generation / immutable receipt / CAS для stale async и irreversible side effects.
 
-## Архитектурные инварианты
+## Архитектурные инварианты высокого уровня
 
-1. Области `Включены/Исключены` и frame-aware `SelectionSnapshot v3`.
-2. Same-origin iframe — обычные selection scopes; cross-origin iframe — только через `frame-agent.js` после explicit optional host permission.
-3. PDF создаётся Chromium `Page.printToPDF`; automatic local download имеет durable checkpoint/actual-settlement reconciliation.
-4. Native `Save As` для полного Journal и OperationLog принадлежит visible extension page, не MV3 worker.
-5. Yandex OAuth access token session-only; refresh token не хранится; PKCE S256; legacy persistent token cleanup awaited/fail-closed.
-6. Journal source of truth — IndexedDB; large import/export/backup bounded и crash-consistent.
-7. Yandex identity новых Journal entries: `accountUid + rootPath + resourceId + publicUrl + remotePath`; ambiguous/mismatched destructive locate fail-closed.
-8. OperationLog v2 — локальный append-only диагностический журнал с bounded retention/redaction.
+1. Области `Включены/Исключены` и frame-aware SelectionSnapshot должны быть привязаны к exact document/application/session generation.
+2. Same-origin iframe и cross-origin optional-permission flow не должны смешивать child document identity, permission generation и selection/print generations.
+3. PDF создаётся Chromium `Page.printToPDF`; caller timeout не доказывает прекращение browser-owned операции.
+4. Native `Save As` принадлежит visible extension page; его пользовательский диалог не получает искусственного timeout/retry.
+5. Yandex OAuth access token session-only; PKCE S256; auth/account/root/config/publication/object identity должны быть exact и immutable для одной операции.
+6. Journal source of truth — IndexedDB; portable schema отделена от internal recovery/capability fields.
+7. Durable correctness receipt не подменяется OperationLog/diagnostics.
+8. Свежий lookup по textual id/path/URL сам по себе не является CAS и не должен ретаргетить stale action.
+9. Stale asynchronous generation не имеет права переписывать более новый пользовательский intent/UI state.
+
+## Исторические файлы
+
+Старые handoff ZIP/snapshots уже намеренно удалены из текущего дерева; их содержимое остаётся в Git history. Старые closure/static/deep/QA narratives постепенно заменяются compact registry/evidence документами и могут удаляться из текущего `main` только после lossless retirement comparison.
