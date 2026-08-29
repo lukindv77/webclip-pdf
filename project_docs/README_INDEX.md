@@ -5,18 +5,20 @@
 1. `RESTORE_PROMPT.md` — восстановление контекста только из свежего GitHub `main`.
 2. `AUDIT_REGISTRY.md` — **единый current registry P-кодов, owners и статусов**.
 3. `AUDIT_DELTA_INDEX.md` — навигация по полностью консолидированным audit families.
-4. `TEST_STATUS.md` — текущая правда о тестах/release gate; historical PASS не является current rerun.
-5. `PROJECT_OVERVIEW.md` — назначение проекта и основные инварианты.
-6. `USER_REQUIREMENTS.md` — актуальные требования и явно отмеченные superseded правила.
-7. `ARCHITECTURE.md` — компоненты, current implemented behavior и явно обозначенные open audit boundaries.
-8. `DECISIONS_AND_RATIONALE.md` — архитектурные решения, включая помеченные superseded historical decisions.
-9. `DATA_MODELS.md` — IndexedDB/storage/snapshot/receipt models.
-10. `TEST_PLAN.md` — regression plan и Git-first recovery gate.
-11. `BUILD_AND_RECOVERY_RULES.md` — release/recovery/provenance architecture.
-12. `GITHUB_WORKFLOW.md` — PR-first working policy, integrity gate и main-branch safety target.
-13. `RELEASE_HISTORY_INDEX.md` — inventory и retention policy исторических evidence-bearing GitHub Releases/tags.
-14. `CHANGELOG_AND_RATIONALE.md` — история функциональных изменений.
-15. `ASSISTANT_NOTES_AND_LIMITATIONS.md` — технические ограничения.
+4. `AUDIT_CHANGE_WORKFLOW.md` — жизненный цикл нового finding / P-owner / implementation / evidence / PR / status transition.
+5. `TEST_STATUS.md` — текущая правда о тестах/release gate; historical PASS не является current rerun.
+6. `RELEASE_READINESS.md` — machine-readable current release-readiness declaration; `NOT READY` является нормальным WIP-состоянием.
+7. `PROJECT_OVERVIEW.md` — назначение проекта и основные инварианты.
+8. `USER_REQUIREMENTS.md` — актуальные требования и явно отмеченные superseded правила.
+9. `ARCHITECTURE.md` — компоненты, current implemented behavior и явно обозначенные open audit boundaries.
+10. `DECISIONS_AND_RATIONALE.md` — архитектурные решения, включая помеченные superseded historical decisions.
+11. `DATA_MODELS.md` — IndexedDB/storage/snapshot/receipt models.
+12. `TEST_PLAN.md` — regression plan и Git-first recovery gate.
+13. `BUILD_AND_RECOVERY_RULES.md` — release/recovery/provenance architecture.
+14. `GITHUB_WORKFLOW.md` — PR-first working policy, accepted `protected=false` posture, integrity/release gates.
+15. `RELEASE_HISTORY_INDEX.md` — inventory и retention policy исторических evidence-bearing GitHub Releases/tags.
+16. `CHANGELOG_AND_RATIONALE.md` — история функциональных изменений.
+17. `ASSISTANT_NOTES_AND_LIMITATIONS.md` — технические ограничения.
 
 ## Audit evidence
 
@@ -33,5 +35,7 @@ Standalone `AUDIT_DELTA_*.md` больше не являются рабочим 
 
 `AUDIT_DELTA_INDEX.md` — только навигация по consolidated families, не status registry.
 `PRIORITIES_P0_P1_P2.md` — compatibility pointer на `AUDIT_REGISTRY.md`.
-`GITHUB_WORKFLOW.md` — canonical private remote, PR-first process, automated integrity gate и release provenance rules.
+`AUDIT_CHANGE_WORKFLOW.md` — process contract; Issue/PR не заменяют registry/evidence.
+`GITHUB_WORKFLOW.md` — canonical private remote, PR-first process, automated integrity gate и manual release gate.
+`RELEASE_READINESS.md` — fail-closed release declaration, проверяемая `project_tools/check_release_readiness.py`.
 `RELEASE_HISTORY_INDEX.md` — retention authority for existing historical pre-release artifacts; it does not promote them to current releases.

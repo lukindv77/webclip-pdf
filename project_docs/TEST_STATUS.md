@@ -14,20 +14,17 @@ The project documentation may refer to `0.9.9 WIP`; that is not the manifest ver
 
 ## Current automated repository gate
 
-GitHub Actions workflow `Repository integrity` completed **PASS** on commit:
-
-`0025fde7106546d8cf9e03cc7929a2b7b9434658`
-
-The run completed these checks successfully:
+GitHub Actions workflow `Repository integrity` is the current automated gate for an exact commit/PR head. It runs:
 
 - repository/audit consistency checker;
+- release-readiness schema/status validation (`NOT READY` is valid WIP state);
 - JavaScript syntax for every tracked `.js` file via `node --check`;
 - all current `project_tools/test_*.js` deterministic JavaScript test files;
 - Git-first recovery artifact provenance self-test, including clean-clone build/hash/source-commit validation and dirty-tree refusal.
 
-This is a real current-SHA automated gate for those exact checks. It does **not** imply unmanaged/unpacked Chrome execution or real Yandex E2E.
+**Do not use a SHA embedded in this document as current CI authority.** CI truth is commit-scoped: before merge/release, query GitHub Actions for the exact candidate/head SHA and require that exact run to be successful.
 
-The immediately preceding diagnostic run identified one stale test-harness assertion in `test_p0_014_backup_progress_ux.js`: it still expected the retired large `PRIORITIES_P0_P1_P2.md` table to contain an explicit `P0-014 | REGRESSION` row. Runtime/UI source had not failed that assertion; the test was updated to consume the canonical `AUDIT_REGISTRY.md` default `IMPLEMENTED / RELEASE-REGRESSION` model. The subsequent full gate above passed.
+The repository-hygiene PR immediately preceding this policy change demonstrated the intended process: exact PR head CI PASS, expected-head merge, then a separate post-merge PASS on resulting `main`. That is process evidence, not a permanent current-SHA claim.
 
 ## Historical product gate
 
@@ -36,7 +33,7 @@ Before the later audit/consolidation stream, the historical documented checkpoin
 - **88/88 JavaScript syntax PASS**
 - **74/74 deterministic tests PASS**
 
-Those counts remain historical evidence. They must not be confused with the current Actions gate above because the present workflow discovers the current tracked JavaScript/test files rather than claiming the historical 88/74 cardinalities.
+Those counts remain historical evidence. They must not be confused with a current Actions run because the present workflow discovers the current tracked JavaScript/test files rather than claiming historical cardinalities.
 
 ## Browser evidence
 
@@ -46,7 +43,11 @@ One specific real Chrome problem-page result is also preserved: the original `it
 
 None of these substitutes for the final release browser/service gate below.
 
-## Release blockers / checks still required
+## Release readiness
+
+`project_docs/RELEASE_READINESS.md` is the machine-readable current declaration. Current state is intentionally **NOT READY**.
+
+`.github/workflows/release-gate.yml` is a separate manual, read-only, fail-closed pre-release gate. It evaluates an exact candidate SHA/version and does not create a build/tag/GitHub Release.
 
 Before claiming a `0.9.9` release or raising the manifest version, the project still requires at minimum:
 
@@ -56,7 +57,8 @@ Before claiming a `0.9.9` release or raising the manifest version, the project s
 4. real Chrome automatic download / native Save As / terminal DownloadItem behavior and relevant late-settlement/recovery scenarios;
 5. real Yandex OAuth/API E2E for the currently required account/auth/root/capability identity contract;
 6. real Yandex upload/move/publish/unpublish/delete/backup/restore behavior, including failure/timeout/unknown-settlement and account/root switching scenarios required by open audit owners;
-7. focused regression verification for open P0/P1 owners that affect the release-critical flow.
+7. focused review/regression verification for open P0/P1 owners that affect the release-critical flow;
+8. explicit release decision with durable evidence reference.
 
 Enterprise policy in the historical audit environment blocked normal unpacked-extension loading; the project intentionally did not bypass that policy and therefore did not count it as a PASS. Exact historical environment details are retained in `TEST_EVIDENCE.md` rather than here.
 
@@ -64,10 +66,11 @@ Enterprise policy in the historical audit environment blocked normal unpacked-ex
 
 Until the applicable real release QA is completed and an explicit release decision is made:
 
-- do not bump `manifest.json` from `0.9.8` to `0.9.9`;
+- do not bump `manifest.json` from `0.9.8` to `0.9.9` merely because audit/docs advanced;
 - do not describe `0.9.9` as released;
-- do not create a release build/tag/GitHub Release merely because documentation/audit work advanced;
-- do not reinterpret historical gate counts as current reruns.
+- do not create a release build/tag/GitHub Release merely because deterministic CI is green;
+- do not reinterpret historical gate counts as current reruns;
+- `Release gate` must remain manual/read-only and fail closed when readiness evidence is incomplete.
 
 ## Retired QA narrative
 
