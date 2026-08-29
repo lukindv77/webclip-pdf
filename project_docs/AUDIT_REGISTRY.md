@@ -23,7 +23,7 @@ Important preserved reservations:
 
 - late `P0-079` and `P0-080` are occupied;
 - historical recovery explicitly reserved `P1-072…P1-131` even where an old physical snapshot omitted rows;
-- every `P1-195…P1-227` is occupied;
+- every `P1-195…P1-228` is occupied;
 - `P2-009` and `P2-010` are explicitly history-reserved;
 - all other codes ever present in the legacy priority registry/history remain permanently reserved.
 
@@ -76,6 +76,7 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 
 | Code | Status | Single current owner / root cause |
 |---|---|---|
+| P1-001 | ACTIVE | SelectionSnapshot v3 restore must apply a truthful current rendered-target admission contract after structural matching; high locator score plus nonzero bbox cannot report success for hidden/fully transparent/otherwise non-admissible current nodes. |
 | P1-003 | ACTIVE | PDF renderer-resource preparation must cover the actual selected visual resource graph under bounded deadlines, including pseudo/CSS visual resources and frame parity; `Page.printToPDF` completion is not resource-readiness proof, and bounded omissions must be truthful. |
 | P1-004 | ACTIVE | Cross-origin iframe feature umbrella remains partial until exact child document/permission/session lifecycle owners are closed. |
 | P1-008 | ACTIVE | User-settings import reconciliation marker needs immutable import generation/compare-and-remove; older reconciliation cannot consume a newer marker. |
@@ -91,11 +92,11 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 | P1-130 | ACTIVE | Chrome Action mutation admission/repair must remain bounded and converge after skipped/stale/late operations; later degraded truth is P1-217. |
 | P1-138 | ACTIVE | Read-like Yandex list/fetch/status flows must not hide provisioning/mutation authority; pure observation must be separated from ensure/create side effects while keeping bounded UI reads. |
 | P1-146 | ACTIVE | Automatic local-download start is non-cancellable browser side effect: exact durable intent/actual settlement/restart reconciliation must survive unknown response without duplicate start. |
-| P1-154 | ACTIVE | Aggregate live Include/Exclude count/byte budget must apply before local+remote selection materialization, not after collecting thousands of locators. |
+| P1-154 | ACTIVE | Aggregate live Include/Exclude count/byte budget must apply before local+remote materialization **and** portable snapshot serialization; UI/PDF/Journal scope cannot silently diverge through post-hoc 250-item slicing. |
 | P1-156 | ACTIVE | Native Save As keeps user-owned unbounded dialog semantics while PREPARED/STARTED/RELEASE lifecycle, Blob pinning, exact DownloadItem reconciliation and owner-page/worker restart cleanup become durable/generation-exact. |
 | P1-157 | ACTIVE | Extension/content Chrome calls need class-correct lifetime semantics; shared Settings writers need one ordering contract; user-owned permission prompt cannot be treated as cancelled by caller timeout. |
 | P1-158 | ACTIVE | Pure Chrome/config/auth prerequisite reads need bounded deadlines included in parent operation; broad `getYandexConfig()` direct reads remain concrete coverage. |
-| P1-160 | ACTIVE | Auto-content/page/frame discovery needs shared visited-node/time budget with graceful manual fallback. |
+| P1-160 | ACTIVE | Auto-content/page/frame/ad-suggestion discovery needs shared node/time/candidate budgets, bounded/coalesced interactive resolution and graceful manual fallback; discovery must not become quadratic or per-pointer unbounded work. |
 | P1-161 | ACTIVE | Reauthorization needs bounded non-secret return-to-origin context and explicit manual resume; no automatic upload replay. |
 | P1-162 | ACTIVE | Large Journal domain tree needs generation-fenced incremental rendering rather than one synchronous DOM construction. |
 | P1-163 | ACTIVE | Streaming JSON parser should await only on chunk refill, not per character, while preserving all security/size/deadline limits. |
@@ -136,7 +137,7 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 |---|---|---|
 | P1-181 | MERGED → P1-209 | Both describe the same extension-page version-refresh root cause: success/version marker is committed before enumeration/reload/ack repair actually succeeds. P1-209 is the single current owner; P1-181 remains permanently reserved as historical duplicate. |
 
-## P1 — late current ACTIVE owners P1-195…P1-227
+## P1 — late current ACTIVE owners P1-195…P1-228
 
 Every code in this range is occupied and ACTIVE.
 
@@ -175,8 +176,9 @@ Every code in this range is occupied and ACTIVE.
 | P1-225 | ACTIVE | Journal comment editor must freeze or preserve newer draft after save admission; late success cannot silently destroy text typed while request was pending. |
 | P1-226 | ACTIVE | Same-origin iframe selection geometry must compose content-box offsets and CSS transforms/zoom across every ancestor frame; simple child-rect plus frame-rect addition cannot drive outlines, usability, or overlap authority. |
 | P1-227 | ACTIVE | Active manual selection must track bounded/coalesced same-origin frame topology changes: newly inserted/replaced/nested accessible frame documents become selectable without restart/auto-content, detached listeners are cleaned, and stale discovery cannot cross selection-session generation. |
+| P1-228 | ACTIVE | Manual selection candidate/geometry authority must represent user-observable rendered intent rather than raw `event.target` plus one axis-aligned bbox: invisible interceptors/click-suppressed regions cannot decide commit, and fragmented/transformed/clipped/SVG geometry cannot create false outline/overlap authority; bounded candidate traversal is required. |
 
-P1-195's historical reconstruction source is Git commit `b2d9ec47833f00fc4b0b42923d1671ae20286f31`; detailed evidence for P1-196…227 is indexed in `AUDIT_DELTA_INDEX.md` and remaining owner-specific deltas.
+P1-195's historical reconstruction source is Git commit `b2d9ec47833f00fc4b0b42923d1671ae20286f31`; detailed evidence for P1-196…228 is indexed in `AUDIT_DELTA_INDEX.md` and remaining owner-specific deltas.
 
 ## DONE items explicitly retained
 
@@ -196,7 +198,7 @@ P2 items are not silently treated as current release blockers unless another ACT
 | P2-004 | BACKLOG | Tags/categories/notes/extended metadata. |
 | P2-005 | BACKLOG | Full-text local material search. |
 | P2-006 | BACKLOG | Shadow DOM as explicit selection scope. |
-| P2-007 | BACKLOG | Multiple snapshot modes: Reader PDF / Print PDF / HTML. |
+| P2-007 | BACKLOG | Multiple explicit capture/output modes: faithful semantic selection, visual Region/Screenshot fallback, Reader PDF / Print PDF / HTML. |
 | P2-008 | BACKLOG | Expanded local health telemetry/report for quota/cache/log/DB repair. |
 | P2-014 | BACKLOG | Decompose oversized runtime modules by trust/subsystem boundaries; measure cold-start/maintenance impact. |
 | P2-015 | BACKLOG | Investigate streaming signed-upload bodies to reduce large Blob peak memory after admission correctness. |
