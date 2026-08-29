@@ -21,7 +21,7 @@ Chrome Manifest V3 extension для сохранения выбранного с
 - опциональная загрузка PDF и резервных копий Journal на Яндекс Диск;
 - OperationLog/receipts и recovery/reconciliation механизмы для асинхронных операций.
 
-Часть архитектурных границ остаётся открытым audit backlog. `AUDIT_REGISTRY.md`, а не этот README, является authority по их статусам.
+Часть архитектурных границ остаётся open audit backlog. `AUDIT_REGISTRY.md`, а не этот README, является authority по их статусам.
 
 ## Установка для разработки/QA
 
@@ -38,11 +38,12 @@ Release QA отдельно требует реальное unpacked MV3 пов�
 GitHub Actions workflow `Repository integrity` запускает:
 
 - `project_tools/check_repository_consistency.py`;
+- `project_tools/check_release_readiness.py status` — проверка структуры readiness, при этом `NOT READY` допустим;
 - `node --check` для tracked JavaScript;
 - все `project_tools/test_*.js`;
 - `project_tools/test_recovery_archive.py`.
 
-Workflow имеет read-only доступ к repository contents. Build/tag/GitHub Release создаются только после применимого QA gate и явного release decision.
+Отдельный ручной workflow `Release gate` повторяет deterministic/recovery проверки для exact candidate SHA/version и затем fail-closed требует текущий real Chrome/Yandex/release-decision evidence. Он **не** строит и не публикует Release.
 
 ## Документация и аудит
 
@@ -51,13 +52,16 @@ Workflow имеет read-only доступ к repository contents. Build/tag/Git
 Ключевые документы:
 
 - `project_docs/AUDIT_REGISTRY.md` — единый current P-code/status/owner registry;
+- `project_docs/AUDIT_CHANGE_WORKFLOW.md` — жизненный цикл finding/P-owner/implementation/evidence/PR;
 - `project_docs/AUDIT_DELTA_INDEX.md` — навигация по consolidated audit families;
 - `project_docs/AUDIT_FAMILY_*_EVIDENCE.md` — подробные family evidence;
 - `project_docs/ARCHITECTURE.md` — архитектура;
 - `project_docs/USER_REQUIREMENTS.md` — требования;
 - `project_docs/TEST_STATUS.md` — current test/release truth;
+- `project_docs/RELEASE_READINESS.md` — current fail-closed release readiness;
 - `project_docs/TEST_PLAN.md` — regression plan;
 - `project_docs/BUILD_AND_RECOVERY_RULES.md` — Git-first recovery/release provenance;
+- `project_docs/GITHUB_WORKFLOW.md` — PR-first policy и accepted private `protected=false` posture;
 - `project_docs/RESTORE_PROMPT.md` — восстановление проектного контекста из свежего `main`.
 
 Исторические closure/static-check/delta документы не дублируются в working tree после lossless consolidation: их доказательства сохранены в evidence-файлах, а точные предыдущие состояния — в Git history.
@@ -65,3 +69,5 @@ Workflow имеет read-only доступ к repository contents. Build/tag/Git
 ## Source-of-truth policy
 
 `lukindv77/webclip-pdf` / `main` — canonical working source. Перед анализом или записью нужно fresh-fetch `main`. Exact commit SHA идентифицирует WIP snapshot; release source должен быть привязан к exact tested commit и annotated release tag.
+
+Репозиторий намеренно остаётся private, а `main` — `protected=false`; обычные изменения поэтому проходят PR-first с exact-head CI и повторной TOCTOU-проверкой непосредственно перед merge.
