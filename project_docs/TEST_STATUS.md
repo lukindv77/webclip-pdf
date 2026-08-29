@@ -12,16 +12,31 @@ Current source manifest:
 
 The project documentation may refer to `0.9.9 WIP`; that is not the manifest version and is not a released product version.
 
-## Last documented product gate
+## Current automated repository gate
 
-The latest documented completed product gate before the subsequent docs-only audit stream is:
+GitHub Actions workflow `Repository integrity` completed **PASS** on commit:
+
+`0025fde7106546d8cf9e03cc7929a2b7b9434658`
+
+The run completed these checks successfully:
+
+- repository/audit consistency checker;
+- JavaScript syntax for every tracked `.js` file via `node --check`;
+- all current `project_tools/test_*.js` deterministic JavaScript test files;
+- Git-first recovery artifact provenance self-test, including clean-clone build/hash/source-commit validation and dirty-tree refusal.
+
+This is a real current-SHA automated gate for those exact checks. It does **not** imply unmanaged/unpacked Chrome execution or real Yandex E2E.
+
+The immediately preceding diagnostic run identified one stale test-harness assertion in `test_p0_014_backup_progress_ux.js`: it still expected the retired large `PRIORITIES_P0_P1_P2.md` table to contain an explicit `P0-014 | REGRESSION` row. Runtime/UI source had not failed that assertion; the test was updated to consume the canonical `AUDIT_REGISTRY.md` default `IMPLEMENTED / RELEASE-REGRESSION` model. The subsequent full gate above passed.
+
+## Historical product gate
+
+Before the later audit/consolidation stream, the historical documented checkpoint was:
 
 - **88/88 JavaScript syntax PASS**
 - **74/74 deterministic tests PASS**
 
-These are **historical proven results, not a test rerun on the current GitHub HEAD**.
-
-The large audit/consolidation stream after that gate has been documentation-only with respect to production runtime in the audited commits, but that fact must not be used to claim the tests were rerun. If a current-head gate is required, the suites must actually be executed again.
+Those counts remain historical evidence. They must not be confused with the current Actions gate above because the present workflow discovers the current tracked JavaScript/test files rather than claiming the historical 88/74 cardinalities.
 
 ## Browser evidence
 
