@@ -24,6 +24,7 @@ CHECKED = r"\[[xX]\]"
 AUDIT_NONE = re.compile(rf"^\s*-\s*{CHECKED}\s*`?audit-impact:\s*none`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
 AUDIT_OWNER = re.compile(rf"^\s*-\s*{CHECKED}\s*`?audit-impact:\s*owner`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
 TEST_EXTERNAL_ONLY = re.compile(rf"^\s*-\s*{CHECKED}\s*`?test-impact:\s*external-only`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
+AUDIT_RATIONALE = re.compile(r"^\s*`?audit-rationale:\s*(.*?)`?\s*$", re.MULTILINE | re.IGNORECASE)
 
 RUNTIME_SUFFIXES = {".js", ".html", ".css", ".png", ".svg", ".ico", ".webp"}
 RUNTIME_DIRS = {"assets", "icons"}
@@ -33,6 +34,7 @@ TEST_STATUS = "project_docs/TEST_STATUS.md"
 TEMPLATE_MARKERS = (
     "audit-impact: none",
     "audit-impact: owner",
+    "audit-rationale:",
     "test-impact: external-only",
     "P-owner(s) affected",
     "PR change-contract validation",
@@ -81,6 +83,26 @@ def selected(pattern: re.Pattern[str], body: str) -> bool:
     return bool(pattern.search(body or ""))
 
 
+def audit_rationale(body: str) -> str:
+    match = AUDIT_RATIONALE.search(body or "")
+    if not match:
+        return ""
+    return match.group(1).strip().strip("`").strip()
+
+
+def concrete_rationale(value: str) -> bool:
+    normalized = value.strip().lower()
+    if not normalized:
+        return False
+    if normalized in {"none", "n/a", "na", "not applicable", "not-applicable"}:
+        return False
+    if "replace with concrete rationale" in normalized:
+        return False
+    if re.fullmatch(r"[_<>.\-\s]+", value):
+        return False
+    return len(re.sub(r"\s+", " ", value).strip()) >= 12
+
+
 def validate_template(text: str) -> list[str]:
     return [f"PR template missing machine-readable contract marker: {marker}" for marker in TEMPLATE_MARKERS if marker not in text]
 
@@ -111,6 +133,7 @@ def evaluate(changed: Sequence[str], body: str, texts: Mapping[str, str] | None 
     impact_none = selected(AUDIT_NONE, body)
     impact_owner = selected(AUDIT_OWNER, body)
     external_only = selected(TEST_EXTERNAL_ONLY, body)
+    rationale = audit_rationale(body)
 
     if impact_none and impact_owner:
         errors.append("select exactly one audit-impact declaration; both none and owner are checked")
@@ -118,6 +141,9 @@ def evaluate(changed: Sequence[str], body: str, texts: Mapping[str, str] | None 
     requires_audit_declaration = bool(runtime or audit_files)
     if requires_audit_declaration and not (impact_none or impact_owner):
         errors.append("runtime/audit change requires one checked declaration: audit-impact: none OR audit-impact: owner")
+
+    if runtime and not concrete_rationale(rationale):
+        errors.append("every runtime change requires a concrete non-placeholder audit-rationale")
 
     if audit_files and impact_none:
         errors.append("audit-impact: none is inconsistent with changed canonical audit registry/evidence files")
@@ -139,11 +165,22 @@ def evaluate(changed: Sequence[str], body: str, texts: Mapping[str, str] | None 
     if registry_changed and len(audit_files) < 2:
         errors.append("AUDIT_REGISTRY.md change requires a second durable audit evidence/history file in the same PR")
 
-    if runtime and impact_owner and not deterministic_tests and not external_only:
-        errors.append(
-            "runtime + audit-impact: owner requires a changed deterministic project_tools/test_*.js "
-            "or checked test-impact: external-only"
-        )
+    if runtime and impact_owner:
+        if deterministic_tests and external_only:
+            errors.append("test-impact: external-only cannot be checked when deterministic tests are changed in the same PR")
+        if not deterministic_tests and not external_only:
+            errors.append(
+                "runtime + audit-impact: owner requires a changed deterministic project_tools/test_*.js "
+                "or checked test-impact: external-only"
+            )
+        if deterministic_tests and not external_only and codes:
+            test_text = "\n".join(texts.get(path, "") for path in deterministic_tests)
+            missing_codes = [code for code in codes if code not in test_text]
+            if missing_codes:
+                errors.append(
+                    "declared P-code(s) missing from changed deterministic test source: "
+                    + ", ".join(missing_codes)
+                )
 
     if external_only and not impact_owner:
         errors.append("test-impact: external-only is valid only with audit-impact: owner")

@@ -72,15 +72,18 @@ Issue может существовать до присвоения P-кода. 
 - `audit-impact: none` — P-owner/status/acceptance contract не меняется;
 - `audit-impact: owner` — перечислены затронутые P-коды и durable evidence меняется в том же PR.
 
+Для **любого runtime change** дополнительно обязателен конкретный `audit-rationale:`. Он должен объяснять либо почему существующие P-owner/invariants действительно не затронуты, либо каким образом затронуты объявленные owner. Пустой, placeholder, `none` или `n/a` rationale не принимается.
+
 Для `audit-impact: owner` действуют дополнительные инварианты:
 
-1. затронутый P-code указывается явно в PR body;
+1. затронутые P-code указываются явно в PR body;
 2. изменяется соответствующий family/history/registry evidence;
 3. хотя бы один объявленный P-code присутствует в изменённом durable evidence;
 4. runtime change сопровождается deterministic `project_tools/test_*.js`, если дефект можно проверить детерминированно;
-5. если deterministic test неприменим и acceptance реально требует внешней границы, допускается только явный `test-impact: external-only` с сохранением Chrome/Yandex/другого external requirement в durable evidence.
+5. каждый объявленный P-code должен присутствовать в исходном тексте изменённого deterministic test, чтобы тест нельзя было формально заменить несвязанным файлом;
+6. если deterministic test неприменим и acceptance реально требует внешней границы, допускается только явный `test-impact: external-only` с сохранением Chrome/Yandex/другого external requirement в durable evidence.
 
-`test-impact: external-only` не является освобождением от тестирования и не должен использоваться для обхода легко воспроизводимого deterministic regression.
+`test-impact: external-only` взаимоисключается с добавлением/изменением deterministic test в том же PR: это escape hatch только для действительно внешней проверки, а не способ обойти regression test.
 
 Изменение `AUDIT_REGISTRY.md` требует в том же PR второго durable family/history evidence файла. Это не позволяет registry стать единственным местом, где существует новая acceptance-деталь.
 

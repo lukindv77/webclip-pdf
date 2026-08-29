@@ -50,7 +50,7 @@ Core rule:
 
 A GitHub Issue/PR is working context, not a substitute for the registry/evidence layer. Any durable acceptance detail must end up in project documentation/evidence and exact Git history.
 
-PRs that change runtime or canonical audit evidence are additionally checked by `project_tools/check_pr_change_contract.py` against the exact base/head diff. The PR must explicitly declare `audit-impact: none` or `audit-impact: owner`; owner-impact runtime changes require durable audit evidence plus a deterministic test or explicit `test-impact: external-only` for genuinely external acceptance boundaries.
+PRs that change runtime or canonical audit evidence are checked by `project_tools/check_pr_change_contract.py` against the exact base/head diff. The PR must explicitly declare `audit-impact: none` or `audit-impact: owner`. Every runtime change requires a concrete `audit-rationale:`. Owner-impact runtime changes require durable audit evidence plus a deterministic test whose source mentions every declared P-code, or explicit `test-impact: external-only` when acceptance is genuinely external.
 
 ## Retired historical narratives
 
@@ -71,17 +71,19 @@ See `project_docs/BUILD_AND_RECOVERY_RULES.md` and `project_docs/GITHUB_WORKFLOW
 
 ## Repository integrity automation
 
-`.github/workflows/repository-integrity.yml` is read-only with respect to repository contents except for posting a diagnostic commit status. On push/PR it runs:
+`.github/workflows/repository-integrity.yml` is **read-only** with respect to GitHub repository state. It uses only `contents: read`; no commit-status write permission or mutating GitHub API call is required. On push/PR it runs:
 
 - repository consistency;
-- immutable GitHub Actions pin validation + self-test;
+- immutable GitHub Actions pin/read-only workflow/Dependabot-scope validation + self-test;
 - exact PR runtime/audit change-contract validation on pull requests + self-test;
 - release-readiness schema/status validation + self-test;
 - JavaScript syntax validation;
 - all deterministic JavaScript tests;
 - recovery provenance self-test.
 
-External `uses:` refs in workflows are pinned to full 40-character action commit SHAs; `ubuntu-latest` is not used. Current workflow runtime inputs are pinned to `ubuntu-24.04`, Python `3.12.14` and Node.js `22.23.2`. Pin drift is checked by `project_tools/check_ci_pins.py`.
+External `uses:` refs in workflows are pinned to full 40-character action commit SHAs; `ubuntu-latest` is not used. Current workflow runtime inputs are pinned to `ubuntu-24.04`, Python `3.12.14` and Node.js `22.23.2`. Pin/permission drift is checked by `project_tools/check_ci_pins.py`.
+
+`.github/dependabot.yml` monitors only GitHub Actions, checks monthly, groups all updates and limits version-update noise to one open PR. Dependabot does not broaden dependency management to npm/pip/other ecosystems without an explicit project decision.
 
 `NOT READY` release state is valid in ordinary CI. Malformed/missing release-readiness structure is not.
 
@@ -106,7 +108,7 @@ Explicit project decision:
 
 This is therefore not an open cleanup defect. Safety relies on PR-first discipline, exact-head CI and re-check before merge, no normal direct writes/force updates to `main`, exact Git history and recovery provenance.
 
-Obsolete auxiliary branch refs are non-authoritative. If the integration cannot delete them, they may be aligned to current `main` only after proving no unique useful runtime/audit state remains and recording the former exact head SHA.
+GitHub repository setting `delete_branch_on_merge` is currently `false`. The connected GitHub interface available to this workflow does not expose a repository-settings write action, so this setting is not represented as enabled. Until it is changed manually, merged work-branch refs are non-authoritative and are deleted when possible or aligned to current `main` only after proving no unique useful runtime/audit state remains and preserving the former exact head in PR/Git history.
 
 ## Build artifacts and historical Releases
 
