@@ -20,9 +20,9 @@ from collections.abc import Mapping, Sequence
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 P_CODE = re.compile(r"\bP[012]-\d{3}\b")
 CHECKED = r"\[[xX]\]"
-AUDIT_NONE = re.compile(rf"^\s*-\s*{CHECKED}\s*`?audit-impact:\s*none`?\b", re.MULTILINE | re.IGNORECASE)
-AUDIT_OWNER = re.compile(rf"^\s*-\s*{CHECKED}\s*`?audit-impact:\s*owner`?\b", re.MULTILINE | re.IGNORECASE)
-TEST_EXTERNAL_ONLY = re.compile(rf"^\s*-\s*{CHECKED}\s*`?test-impact:\s*external-only`?\b", re.MULTILINE | re.IGNORECASE)
+AUDIT_NONE = re.compile(rf"^\s*-\s*{CHECKED}\s*`?audit-impact:\s*none`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
+AUDIT_OWNER = re.compile(rf"^\s*-\s*{CHECKED}\s*`?audit-impact:\s*owner`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
+TEST_EXTERNAL_ONLY = re.compile(rf"^\s*-\s*{CHECKED}\s*`?test-impact:\s*external-only`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
 
 RUNTIME_SUFFIXES = {".js", ".html", ".css", ".png", ".svg", ".ico", ".webp"}
 RUNTIME_DIRS = {"assets", "icons"}
