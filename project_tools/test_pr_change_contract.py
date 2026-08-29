@@ -48,14 +48,35 @@ def main() -> None:
         "requires one checked declaration",
     )
 
+    expect_fail(
+        "runtime-needs-rationale",
+        ["content.js"],
+        "- [x] `audit-impact: none`\n",
+        "concrete non-placeholder audit-rationale",
+    )
+
+    expect_fail(
+        "runtime-placeholder-rationale",
+        ["content.js"],
+        "- [x] `audit-impact: none`\n`audit-rationale: <replace with concrete rationale>`\n",
+        "concrete non-placeholder audit-rationale",
+    )
+
     expect_pass(
         "runtime-no-audit-impact",
         ["content.js"],
-        "- [x] `audit-impact: none`\n",
+        "- [x] `audit-impact: none`\n`audit-rationale: CSS-only rendering cleanup does not alter any P-owner invariant.`\n",
     )
 
-    owner_body = "- [x] `audit-impact: owner`\nP-owner(s): P0-070\n"
-    owner_evidence = {"project_docs/AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md": "P0-070 exact generation evidence"}
+    owner_body = (
+        "- [x] `audit-impact: owner`\n"
+        "P-owner(s): P0-070\n"
+        "`audit-rationale: Runtime generation handling changes the P0-070 acceptance path.`\n"
+    )
+    owner_evidence = {
+        "project_docs/AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md": "P0-070 exact generation evidence",
+        "project_tools/test_p0_070_generation.js": "// Regression owner: P0-070\n",
+    }
     expect_pass(
         "runtime-owner-with-test",
         [
@@ -68,17 +89,44 @@ def main() -> None:
     )
 
     expect_fail(
+        "runtime-owner-test-missing-code",
+        [
+            "content.js",
+            "project_tools/test_generation.js",
+            "project_docs/AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md",
+        ],
+        owner_body,
+        {
+            "project_docs/AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md": "P0-070 exact generation evidence",
+            "project_tools/test_generation.js": "// generation regression without owner marker\n",
+        },
+        "missing from changed deterministic test source",
+    )
+
+    expect_fail(
         "runtime-owner-needs-test",
         ["content.js", "project_docs/AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md"],
         owner_body,
         "requires a changed deterministic",
-        owner_evidence,
+        {"project_docs/AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md": "P0-070 exact generation evidence"},
     )
 
     expect_pass(
         "runtime-owner-external-only",
         ["content.js", "project_docs/AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md"],
         owner_body + "- [x] `test-impact: external-only`\n",
+        {"project_docs/AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md": "P0-070 exact generation evidence"},
+    )
+
+    expect_fail(
+        "external-only-cannot-hide-test",
+        [
+            "content.js",
+            "project_tools/test_p0_070_generation.js",
+            "project_docs/AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md",
+        ],
+        owner_body + "- [x] `test-impact: external-only`\n",
+        "cannot be checked when deterministic tests are changed",
         owner_evidence,
     )
 
@@ -111,14 +159,14 @@ def main() -> None:
     expect_fail(
         "manifest-needs-release-truth",
         ["manifest.json"],
-        "- [x] `audit-impact: none`\n",
+        "- [x] `audit-impact: none`\n`audit-rationale: Version metadata change does not alter a P-owner contract.`\n",
         "requires synchronized release/test truth",
     )
 
     expect_pass(
         "manifest-with-release-truth",
         ["manifest.json", "project_docs/RELEASE_READINESS.md", "project_docs/TEST_STATUS.md"],
-        "- [x] `audit-impact: none`\n",
+        "- [x] `audit-impact: none`\n`audit-rationale: Version metadata change does not alter a P-owner contract.`\n",
     )
 
     print("PR change contract self-test PASS")
