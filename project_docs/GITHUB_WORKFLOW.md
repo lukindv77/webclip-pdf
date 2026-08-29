@@ -42,11 +42,15 @@ When a PR changes product runtime (`manifest.json`, root extension JS/HTML/CSS/a
 - `audit-impact: none` — runtime change does not change any P-owner/status/acceptance contract;
 - `audit-impact: owner` — one or more P-owners are affected and are listed explicitly.
 
+Every runtime change also requires a concrete `audit-rationale:`. Placeholder/empty/`none`/`n/a` explanations fail closed.
+
 For `audit-impact: owner`:
 
 - durable family/history/registry evidence must change in the same PR;
 - declared P-code must occur in the changed durable evidence;
-- runtime changes also require a changed deterministic `project_tools/test_*.js`, unless the PR explicitly selects `test-impact: external-only` because acceptance genuinely requires real Chrome/Yandex/another external boundary.
+- runtime changes also require a changed deterministic `project_tools/test_*.js`, unless the PR explicitly selects `test-impact: external-only` because acceptance genuinely requires real Chrome/Yandex/another external boundary;
+- every declared P-code must occur in the source of the changed deterministic test;
+- `test-impact: external-only` is incompatible with changing a deterministic test in the same PR.
 
 If `AUDIT_REGISTRY.md` changes, a second durable audit evidence/history file is mandatory in the same PR.
 
@@ -62,7 +66,7 @@ The `external-only` marker is an explicit audited exception, not a generic waive
 - `.gitignore` является частью security boundary и проверяется consistency gate.
 - Manifest `0.9.8` сохраняется до release QA; Git commit сам по себе не является релизом и не требует повышения version.
 
-## Immutable CI supply chain
+## Immutable and low-noise CI supply chain
 
 External GitHub Actions are referenced only by exact 40-character commit SHA. Mutable refs such as `@v4`, `@v5`, `@main` or branch names are forbidden by `project_tools/check_ci_pins.py`.
 
@@ -74,6 +78,10 @@ Current reviewed pins:
 
 Hosted runner family is fixed to `ubuntu-24.04`; setup inputs are fixed to Python `3.12.14` and Node.js `22.23.2`.
 
+Permanent workflows must remain read-only with respect to the repository: `contents: read`, no `*: write` permission and no mutating `gh api --method POST/PUT/PATCH/DELETE` command. Job/check result itself is the CI status; separate mutable commit-status publication is intentionally not used.
+
+`.github/dependabot.yml` monitors **only** `github-actions`, checks monthly, groups all action updates, and allows at most one open version-update PR. This keeps immutable action SHAs maintainable without creating a stream of unrelated dependency PRs. Dependabot PRs go through the same exact-head CI and review process as any other maintenance PR.
+
 This does not make GitHub-hosted infrastructure mathematically immutable: GitHub can update the `ubuntu-24.04` runner image. It does ensure that action source revisions and language runtime versions cannot silently drift through mutable workflow refs. Updating a pin/version is a normal reviewed PR with full integrity checks.
 
 ## Automated integrity gate
@@ -81,7 +89,7 @@ This does not make GitHub-hosted infrastructure mathematically immutable: GitHub
 `.github/workflows/repository-integrity.yml` запускается на push/PR в `main` и вручную. Он подтверждает:
 
 1. repository/audit organization через `project_tools/check_repository_consistency.py`;
-2. immutable GitHub Actions pins через `check_ci_pins.py` + self-test;
+2. immutable GitHub Actions pins, read-only workflow permissions and low-noise Dependabot scope через `check_ci_pins.py` + self-test;
 3. exact PR runtime/audit contract через `check_pr_change_contract.py` + self-test на PR;
 4. корректность структуры `RELEASE_READINESS.md` через `check_release_readiness.py status` — статус `NOT READY` здесь допустим;
 5. JavaScript syntax для tracked `.js`;
@@ -99,7 +107,7 @@ Inputs:
 - exact candidate commit SHA;
 - exact expected manifest version.
 
-Workflow checkout-ит именно candidate SHA, требует clean tree, повторяет repository consistency, immutable CI pin check/self-test, PR-contract self-test, JS syntax, deterministic suite и recovery provenance, затем запускает:
+Workflow checkout-ит именно candidate SHA, требует clean tree, повторяет repository consistency, immutable/read-only CI hygiene check/self-test, PR-contract self-test, JS syntax, deterministic suite и recovery provenance, затем запускает:
 
 `project_tools/check_release_readiness.py gate`
 
