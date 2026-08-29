@@ -5,13 +5,15 @@
 ## Working policy
 
 - Always fresh-fetch `main` before analysis or write operations.
-- Normal changes are PR-first: fresh `main` -> short-lived branch -> PR -> exact-head CI -> reviewed merge.
+- Normal changes are PR-first: fresh `main` -> work branch -> PR -> exact-head CI -> reviewed merge.
+- `main` intentionally remains `protected=false`; repository stays private and the project does not move to GitHub Pro/public solely for branch protection.
 - Current runtime remains Manifest V3 / `0.9.8` / Chrome >=118 until real release QA and an explicit release decision.
 - Stable P-numbers are never reused, including DONE/MERGED/SUPERSEDED codes.
 - Before allocating a new number, check `project_docs/AUDIT_REGISTRY.md`, `project_docs/AUDIT_DELTA_INDEX.md`, relevant family/history evidence and Git history.
-- Historical test results are evidence only. Do not claim tests were rerun unless actually executed on the current runtime tree.
+- New/refined findings follow `project_docs/AUDIT_CHANGE_WORKFLOW.md`.
+- Historical test results are evidence only. Do not claim tests were rerun unless actually executed on the relevant exact runtime tree.
 - Real unpacked Chrome QA and real Yandex E2E remain release requirements.
-- Builds, tags and GitHub Releases are created only on explicit request after the applicable QA gate.
+- Builds, tags and GitHub Releases are created only on explicit request after the applicable QA/release gate.
 
 ## Current audit authority
 
@@ -34,22 +36,23 @@ Use current evidence by role:
 - `project_docs/AUDIT_EVIDENCE.md` — historical implementation/browser proof;
 - `project_docs/AUDIT_RETIRED_DELTA_EVIDENCE.md` — earlier retired correction/positive-control evidence;
 - `project_docs/AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` — cross-cutting revalidation/implementation taxonomy;
-- `project_docs/TEST_STATUS.md` — compact current test/release truth;
+- `project_docs/TEST_STATUS.md` — compact test/release truth;
 - `project_docs/TEST_EVIDENCE.md` — historical test/browser checkpoints;
 - current runtime/source files — final authority over stale descriptive text.
 
+## Audit change lifecycle
+
+`project_docs/AUDIT_CHANGE_WORKFLOW.md` is the process contract for future audit work.
+
+Core rule:
+
+`finding -> duplicate/root-cause decision -> registry owner -> implementation/evidence -> PR exact-head CI -> merge -> required direct verification -> status transition`
+
+A GitHub Issue/PR is working context, not a substitute for the registry/evidence layer. Any durable acceptance detail must end up in project documentation/evidence and exact Git history.
+
 ## Retired historical narratives
 
-Current `main` intentionally does not carry separate working copies of:
-
-- root `P*_CLOSURE.md` reports;
-- root `STATIC_CHECKS_*.md` reports;
-- `DEEP_AUDIT_2026-08-25.md`;
-- `QA_STATUS_0_9_9.md`;
-- `PROJECT_RECOVERY.md`;
-- `AUDIT_CONSOLIDATION_INDEX.md`;
-- dated handoff folders;
-- standalone historical `AUDIT_DELTA_*.md` after lossless family consolidation.
+Current `main` intentionally does not carry separate working copies of root `P*_CLOSURE.md`, `STATIC_CHECKS_*.md`, `DEEP_AUDIT_2026-08-25.md`, `QA_STATUS_0_9_9.md`, `PROJECT_RECOVERY.md`, `AUDIT_CONSOLIDATION_INDEX.md`, dated handoff folders or standalone historical `AUDIT_DELTA_*.md` after lossless family consolidation.
 
 Their exact history remains recoverable through Git.
 
@@ -66,29 +69,38 @@ See `project_docs/BUILD_AND_RECOVERY_RULES.md` and `project_docs/GITHUB_WORKFLOW
 
 ## Repository integrity automation
 
-`.github/workflows/repository-integrity.yml` is read-only with respect to repository contents. On push/PR it runs the repository consistency checker, JavaScript syntax validation, all deterministic JavaScript tests and the recovery provenance self-test. The temporary audit-source artifact and one-shot write permission used during consolidation have been removed.
+`.github/workflows/repository-integrity.yml` is read-only with respect to repository contents except for posting a diagnostic commit status. On push/PR it runs:
 
-`.github/pull_request_template.md` records the exact-head/runtime/audit/release checklist for PR review. This is procedural protection and does not claim GitHub server-side branch enforcement.
+- repository consistency;
+- release-readiness schema/status validation;
+- JavaScript syntax validation;
+- all deterministic JavaScript tests;
+- recovery provenance self-test.
 
-## GitHub administrative hardening state
+`NOT READY` release state is valid in ordinary CI. Malformed/missing release-readiness structure is not.
 
-Checkpoint 2026-08-29:
+`.github/pull_request_template.md` records exact-head/runtime/audit/release checks. `.github/ISSUE_TEMPLATE/audit_finding.md` structures new audit admission.
 
-- repository is private and the authenticated owner has GitHub admin permission;
-- `main` reports `protected=false`;
-- repository rulesets API reports that this feature requires GitHub Pro or a public repository for the current private repository;
-- branch-protection read endpoint is not accessible to the current integration;
-- therefore force-push/delete prevention and required-status enforcement are **not yet server-enforced**.
+## Release readiness gate
 
-Until GitHub protection becomes available, the safety substitute is PR-first workflow + exact-head `repository-integrity` + no force updates of `main`.
+`project_docs/RELEASE_READINESS.md` is the machine-readable current release-readiness declaration.
 
-Branch inventory at the same checkpoint:
+`.github/workflows/release-gate.yml` is a separate **manual, read-only, fail-closed** gate. It requires exact candidate SHA/version, repeats deterministic/recovery checks and rejects the candidate until required real Chrome/Yandex evidence, release-blocker review and explicit release decision are all recorded.
 
-- `main` — canonical branch;
-- `cleanup-stage1-safety` — old cleanup branch with no unique source state; it is reused only as the temporary PR head for repository-hygiene changes and should be deleted after merge when branch deletion is available;
-- `work/p0-063-offscreen-budget` — diverged historical branch whose only unique change relative to current `main` is the obsolete `.github/workflows/p0-063-one-shot.yml`; no unique runtime source remains there. It is safe to delete when branch deletion is available.
+The release gate does not build, tag, publish or modify GitHub Releases.
 
-Do not force-move these branches merely to simulate deletion. Their historical commits are already recoverable through Git history.
+## Accepted GitHub administrative posture
+
+Explicit project decision:
+
+- repository remains private;
+- GitHub Pro is not adopted for branch protection;
+- repository is not made public for branch protection;
+- `main` remains `protected=false`.
+
+This is therefore not an open cleanup defect. Safety relies on PR-first discipline, exact-head CI and re-check before merge, no normal direct writes/force updates to `main`, exact Git history and recovery provenance.
+
+Obsolete auxiliary branch refs are non-authoritative. If the integration cannot delete them, they may be aligned to current `main` only after proving no unique useful runtime/audit state remains and recording the former exact head SHA.
 
 ## Build artifacts and historical Releases
 
