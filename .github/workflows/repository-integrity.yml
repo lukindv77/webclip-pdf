@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: repository-integrity-${{ github.ref }}
@@ -48,22 +49,40 @@ jobs:
 
       - name: Deterministic JavaScript tests
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
           count=0
-          failures=0
+          failures=()
           for test in project_tools/test_*.js; do
             echo "==> $test"
             count=$((count + 1))
             if ! node "$test"; then
               echo "::error file=$test,title=Deterministic test failed::$test failed on commit $GITHUB_SHA"
-              failures=$((failures + 1))
+              failures+=("$(basename "$test")")
             fi
           done
-          echo "Executed $count deterministic test files; failures=$failures."
-          if [ "$failures" -ne 0 ]; then
-            exit 1
+
+          if [ "${#failures[@]}" -eq 0 ]; then
+            description="all $count deterministic JS test files passed"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+              -f state=success \
+              -f context=deterministic-tests-detail \
+              -f description="$description" >/dev/null
+            echo "Executed $count deterministic test files; failures=0."
+            exit 0
           fi
+
+          joined=$(IFS=,; echo "${failures[*]}")
+          description="${#failures[@]} fail: $joined"
+          description="${description:0:140}"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state=failure \
+            -f context=deterministic-tests-detail \
+            -f description="$description" >/dev/null
+          echo "Executed $count deterministic test files; failures=${#failures[@]}."
+          exit 1
 
       - name: Recovery artifact provenance self-test
         if: ${{ always() }}
