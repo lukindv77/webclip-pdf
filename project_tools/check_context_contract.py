@@ -12,7 +12,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCS = ROOT / "project_docs"
 MANIFEST = DOCS / "CONTEXT_MANIFEST.json"
 RESTORE = DOCS / "RESTORE_PROMPT.md"
-WORKFLOW = DOCS / "GITHUB_WORKFLOW.md"
+POLICY = DOCS / "CONTEXT_AUTOMATION_POLICY.md"
 
 EXPECTED_SCHEMA = "WEBCLIP_CONTEXT_MANIFEST_V1"
 EXPECTED_TRIGGER = "Подготовь переход в новый чат"
@@ -75,6 +75,8 @@ def validate_manifest(data: Mapping, root: pathlib.Path = ROOT) -> list[str]:
     handoff = data.get("handoff") or {}
     if handoff.get("trigger_phrase") != EXPECTED_TRIGGER:
         errors.append("handoff trigger phrase changed")
+    if handoff.get("protocol_document") != "project_docs/CONTEXT_AUTOMATION_POLICY.md":
+        errors.append("handoff protocol must remain CONTEXT_AUTOMATION_POLICY.md")
     if handoff.get("always_allowed_with_unfinished_work") is not True:
         errors.append("handoff must remain allowed with unfinished work")
     if handoff.get("never_infer_completion") is not True or handoff.get("never_auto_close_p_owner") is not True:
@@ -93,7 +95,7 @@ def validate_manifest(data: Mapping, root: pathlib.Path = ROOT) -> list[str]:
     return errors
 
 
-def validate_restore_and_policy(restore_text: str, workflow_text: str) -> list[str]:
+def validate_restore_and_policy(restore_text: str, policy_text: str) -> list[str]:
     errors: list[str] = []
     for marker in (
         "CONTEXT_MANIFEST.json",
@@ -115,15 +117,21 @@ def validate_restore_and_policy(restore_text: str, workflow_text: str) -> list[s
         "open Issue",
         "не закрывать P-owner",
         "CONTEXT_MANIFEST.json",
+        "14 постоянных правил автоматизации",
+        "P work index",
+        "Differential audit",
+        "Seeded race",
+        "Post-merge review automation",
+        "Regular GitHub health review",
     ):
-        if marker not in workflow_text:
-            errors.append(f"GITHUB_WORKFLOW.md missing permanent handoff marker: {marker}")
+        if marker not in policy_text:
+            errors.append(f"CONTEXT_AUTOMATION_POLICY.md missing permanent policy marker: {marker}")
     return errors
 
 
 def validate_current_tree() -> list[str]:
     errors: list[str] = []
-    for path in (MANIFEST, RESTORE, WORKFLOW):
+    for path in (MANIFEST, RESTORE, POLICY):
         if not path.is_file():
             errors.append(f"required context file missing: {path.relative_to(ROOT)}")
     if errors:
@@ -135,7 +143,7 @@ def validate_current_tree() -> list[str]:
         return [f"cannot parse CONTEXT_MANIFEST.json: {exc}"]
 
     errors.extend(validate_manifest(data))
-    errors.extend(validate_restore_and_policy(read_text(RESTORE), read_text(WORKFLOW)))
+    errors.extend(validate_restore_and_policy(read_text(RESTORE), read_text(POLICY)))
     return errors
 
 
@@ -146,7 +154,7 @@ def main() -> int:
             print(f"ERROR: {error}", file=sys.stderr)
         print(f"Context contract FAILED: {len(errors)} error(s).", file=sys.stderr)
         return 1
-    print("Context contract PASS: canonical bootstrap, handoff trigger and authority paths are coherent.")
+    print("Context contract PASS: canonical bootstrap, handoff trigger and automation policy are coherent.")
     return 0
 
 
