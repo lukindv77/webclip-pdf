@@ -3,48 +3,70 @@
 `lukindv77/webclip-pdf` / `main` is the canonical working repository and the only source of truth for the current WebClip PDF project state.
 
 ## Working policy
+
 - Always fresh-fetch `main` before analysis or write operations.
 - Current runtime remains Manifest V3 / `0.9.8` / Chrome >=118 until real release QA and an explicit release decision.
-- Stable P-numbers are never reused. Before allocating a new number, check the canonical registry ranges, all relevant `project_docs/AUDIT_DELTA_*.md`, history evidence and current source.
-- Historical test results are evidence only. Do not claim tests were rerun unless they were actually rerun on the current runtime tree.
+- Stable P-numbers are never reused, including DONE/MERGED/SUPERSEDED codes.
+- Before allocating a new number, check `AUDIT_REGISTRY.md`, relevant `AUDIT_DELTA_INDEX.md` family/deltas, history evidence and Git history.
+- Historical test results are evidence only. Do not claim tests were rerun unless actually executed on the current runtime tree.
 - Real unpacked Chrome QA and real Yandex E2E remain release requirements.
 - Builds, tags and GitHub Releases are created only on explicit request after the applicable QA gate.
 
 ## Current audit registry
-The P-number registry is intentionally partitioned into two non-overlapping ranges until a full lossless merge is performed:
 
-1. `project_docs/PRIORITIES_P0_P1_P2.md` — historical canonical registry through **P1-194**.
-2. `project_docs/AUDIT_CONSOLIDATION_INDEX.md` — canonical late-number supplement for **P1-195 through P1-225**, plus evidence-retention and migration rules.
+`project_docs/AUDIT_REGISTRY.md` is the **single canonical current P-code owner/status registry**.
 
-**P1-195…P1-225 are occupied.** Do not infer that any later integer is free without repository-wide semantic/history duplicate-check.
+`project_docs/PRIORITIES_P0_P1_P2.md` is now only a compatibility pointer; the exact pre-consolidation table is preserved in Git history at `745207cb7886bbc6d9369bac7c527218e1aaf4ab`.
+
+The former `AUDIT_CONSOLIDATION_INDEX.md` late supplement has been merged into `AUDIT_REGISTRY.md` and removed from current `main`.
+
+Important permanent reservations include P0-079/P0-080, P1-195…P1-225, explicit historical P1-072…P1-131 reservations and P2-009/P2-010. Absence from a compact current table does not make a number free.
 
 ## Evidence layers
-Use these compact current evidence documents before going to Git history:
 
-- `project_docs/AUDIT_EVIDENCE.md` — historical implementation/browser proof migrated from root closure reports;
-- `project_docs/TEST_EVIDENCE.md` — historical test/browser checkpoints migrated from root static-check reports;
-- `project_docs/TEST_STATUS.md` — compact current test/release truth; historical 88/88 syntax + 74/74 deterministic is not a current rerun;
-- `project_docs/AUDIT_HISTORY_INDEX.md` — corrections, retractions, dedup decisions and negative findings needed for future duplicate-checks;
-- current `project_docs/AUDIT_DELTA_*.md` — detailed source proof, refinements, invariants and regression requirements;
+Use these current documents by role:
+
+- `project_docs/AUDIT_REGISTRY.md` — current owner/status authority;
+- `project_docs/AUDIT_DELTA_INDEX.md` — root-cause family navigation for remaining detailed deltas;
+- remaining `project_docs/AUDIT_DELTA_*.md` — detailed source proof, acceptance and deterministic schedules until individually consolidated;
+- `project_docs/AUDIT_HISTORY_INDEX.md` — corrections, retractions, dedup decisions and negative findings;
+- `project_docs/AUDIT_EVIDENCE.md` — historical implementation/browser proof;
+- `project_docs/AUDIT_RETIRED_DELTA_EVIDENCE.md` — proof migrated from retired correction/positive-control deltas;
+- `project_docs/AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` — cross-cutting revalidation/implementation taxonomy;
+- `project_docs/TEST_STATUS.md` — compact current test/release truth;
+- `project_docs/TEST_EVIDENCE.md` — historical test/browser checkpoints;
 - current runtime/source files — final authority over stale descriptive text.
 
-The verbose root `P*_CLOSURE.md` and `STATIC_CHECKS_*.md` reports have been migrated into the compact evidence ledgers and are intentionally retired from the current working tree. Their exact originals remain available through Git history.
+## Retired historical narratives
 
-`DEEP_AUDIT_2026-08-25.md`, `QA_STATUS_0_9_9.md` and `PROJECT_RECOVERY.md` are still present pending their own retirement comparisons. Do not delete or ignore them merely because the first evidence migration is complete.
+The following classes/files were retirement-compared, had unique information migrated and were removed from current `main`; exact originals remain in Git history:
+
+- all root `P*_CLOSURE.md` reports;
+- all root `STATIC_CHECKS_*.md` reports;
+- `DEEP_AUDIT_2026-08-25.md`;
+- `QA_STATUS_0_9_9.md`;
+- `PROJECT_RECOVERY.md`;
+- `AUDIT_CONSOLIDATION_INDEX.md` after unified registry merge;
+- 13 broad/correction/positive-control `AUDIT_DELTA_*` files already consolidated into current evidence documents.
+
+Owner-specific audit deltas are **not** bulk-deleted. They stay until their family passes the lossless retirement gate defined in `AUDIT_DELTA_INDEX.md`.
+
+## Recovery / release architecture
+
+- Exact Git commit SHA is the canonical WIP source snapshot.
+- Annotated release tag is the immutable pointer to the exact tested/released commit.
+- User-facing extension ZIP is derived from that commit/tag and does not require a nested full source/recovery ZIP.
+- Optional recovery ZIP is a separate offline/disaster artifact built only from a clean exact commit; metadata records source commit/tags and file hashes.
+- Generated recovery/build/handoff archives are not source of truth and are not committed as working state.
+
+See `project_docs/BUILD_AND_RECOVERY_RULES.md` and `project_docs/GITHUB_WORKFLOW.md`.
 
 ## Current handoff
-The only current handoff checkpoint in the working tree is:
-`project_docs/HANDOFF_2026-08-29/`
 
-Read its four text files when restoring audit context:
-- `START_PROMPT.md`
-- `HANDOFF_CONTEXT.md`
-- `RECENT_COMMITS.md`
-- `RESTORE_ARCHIVE.md`
-
-Fresh `main`, the current audit registries and the evidence documents above always override stale handoff statements. Older handoff folders and embedded handoff ZIP snapshots are intentionally not kept in the current tree; their historical contents remain available through Git history.
+`project_docs/HANDOFF_2026-08-29/` remains only as historical conversational convenience. Fresh `main`, `AUDIT_REGISTRY.md`, current evidence and source always override it. Future handoff archives are created only on explicit request.
 
 ## Build artifacts
+
 Published binary builds belong in GitHub Releases rather than the working tree. Exact source state is identified by commit/tag; release assets carry their own checksums and metadata.
 
-The published `0.9.8` artifact remains available from its GitHub Release. Its former duplicate under `builds/0.9.8/` is intentionally not part of the current working tree.
+The published `0.9.8` artifact remains a historical release artifact; current audit/docs progress does not imply a new build or release.
