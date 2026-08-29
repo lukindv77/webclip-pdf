@@ -1,0 +1,3 @@
+WebClip_Handoff_2026-08-29.zip SHA256  bd02d59fef525287b020f5d9eaf252920da49326446ec995e08d37bf720642a2
+WebClip_Handoff_2026-08-29.zip.b64 SHA256  52a66e4e579bed4aa9650a71ba01484421724bb54fc4374c74cc2e64f1a7d3a3
+Baseline before handoff commits  e42e4bbb08f00b6717b59e3ec94693e03eb1cda6
