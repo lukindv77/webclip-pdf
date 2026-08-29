@@ -1,18 +1,16 @@
-# RESTORE HANDOFF ARCHIVE
+# RESTORE HANDOFF CONTEXT
 
 Canonical readable handoff files are stored directly in `project_docs/HANDOFF_2026-08-29/`.
 
-A text-safe base64 copy of the ZIP is stored as:
-`project_docs/HANDOFF_2026-08-29/WebClip_Handoff_2026-08-29.zip.b64`
+The working repository does not embed a duplicate ZIP/base64 copy of this handoff. GitHub `main` at a fresh HEAD is the canonical source for runtime, project documentation and audit deltas; Git history preserves older handoff states.
 
-Restore locally:
+For context restoration read these files directly:
+- `START_PROMPT.md`
+- `HANDOFF_CONTEXT.md`
+- `RECENT_COMMITS.md`
+- `RESTORE_ARCHIVE.md`
 
-```bash
-base64 -d WebClip_Handoff_2026-08-29.zip.b64 > WebClip_Handoff_2026-08-29.zip
-unzip WebClip_Handoff_2026-08-29.zip
-```
-
-The ZIP contains readable handoff files, not a duplicate of the whole repository. The repository `main` at a fresh HEAD is the canonical source archive for code/runtime/project docs.
-
-Control baseline before handoff commits:
+Control baseline before the 2026-08-29 handoff commits:
 `e42e4bbb08f00b6717b59e3ec94693e03eb1cda6`
+
+Always fetch the current `main` first. A newer `main` supersedes this handoff checkpoint.
