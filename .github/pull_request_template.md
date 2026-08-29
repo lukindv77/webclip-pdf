@@ -7,7 +7,7 @@ Describe the exact purpose of this change and the intended files/subsystems.
 - [ ] I started from a fresh fetch of current `main`.
 - [ ] I know the exact PR head SHA being reviewed.
 - [ ] Runtime/source files changed are listed explicitly, or this is docs/tooling-only.
-- [ ] `manifest.json` is unchanged, or a version/release decision is explicitly justified.
+- [ ] `manifest.json` is unchanged, or release/test truth is synchronized in the same PR.
 - [ ] No generated ZIP/CRX, recovery archive, token, secret, browser profile or private key is being committed.
 
 ## Audit / P-owner safety
@@ -19,13 +19,27 @@ Describe the exact purpose of this change and the intended files/subsystems.
 - [ ] Historical PASS evidence is not described as a current rerun unless it actually ran on the relevant exact SHA.
 - [ ] Requirements/architecture/test documentation was updated where the implementation contract changed, or no contract changed.
 
+### Machine-readable audit impact
+
+For any runtime or canonical audit/evidence change, select **exactly one**:
+
+- [ ] `audit-impact: none` — no P-owner/status/acceptance contract is affected.
+- [ ] `audit-impact: owner` — one or more P-owners are affected; list them below and update durable audit evidence in this PR.
+
 P-owner(s) affected, or `none`:
 
 `______________________________`
 
+If `audit-impact: owner` changes runtime and no deterministic regression test is appropriate, select this explicit escape hatch and keep the required real boundary in durable evidence:
+
+- [ ] `test-impact: external-only` — acceptance requires real Chrome/Yandex/other external verification; no suitable deterministic test is being added by this PR.
+
+The PR gate validates these markers against the actual changed-file set. Do not check `external-only` merely to avoid writing a deterministic test.
+
 ## Validation
 
 - [ ] `repository-integrity` is green for the exact PR head SHA.
+- [ ] PR change-contract validation passed for the exact base/head diff.
 - [ ] JavaScript syntax and deterministic tests relevant to the changed tree passed through CI.
 - [ ] Release-readiness schema/status validation passed; `NOT READY` is acceptable unless this PR explicitly prepares a release candidate.
 - [ ] Real unpacked Chrome QA is completed if the owner/transition requires it, otherwise it remains explicit pending evidence.
@@ -34,6 +48,7 @@ P-owner(s) affected, or `none`:
 ## Release impact
 
 - [ ] No build/tag/Release is implied by this PR unless an explicit release request/decision exists.
+- [ ] If `manifest.json` changes, `project_docs/RELEASE_READINESS.md` and `project_docs/TEST_STATUS.md` change in the same PR.
 - [ ] If release readiness changes, `project_docs/RELEASE_READINESS.md` contains concrete evidence references and will be checked by manual `Release gate`.
 - [ ] Historical Releases/tags are not deleted or rewritten without a separate lossless retirement comparison.
 
@@ -48,4 +63,4 @@ Immediately before merge:
 - [ ] PR is mergeable;
 - [ ] expected-head protection is used by the merge operation where supported.
 
-`main` is intentionally `protected=false`; this checklist and exact-head verification are compensating controls, not optional ceremony.
+`main` is intentionally `protected=false`; this checklist, exact-head verification and automated PR change contract are compensating controls, not optional ceremony.
