@@ -1,0 +1,61 @@
+{
+  "schema": "WEBCLIP_CONTEXT_MANIFEST_V1",
+  "repository": "lukindv77/webclip-pdf",
+  "canonical_branch": "main",
+  "fresh_main_required": true,
+  "authorities": {
+    "source": "fresh_main_head",
+    "audit_status": "project_docs/AUDIT_REGISTRY.md",
+    "audit_navigation": "project_docs/AUDIT_DELTA_INDEX.md",
+    "test_status": "project_docs/TEST_STATUS.md",
+    "release_readiness": "project_docs/RELEASE_READINESS.md"
+  },
+  "bootstrap": [
+    "GITHUB_REPOSITORY_STATE.md",
+    "project_docs/AUDIT_REGISTRY.md",
+    "project_docs/AUDIT_DELTA_INDEX.md",
+    "project_docs/TEST_STATUS.md"
+  ],
+  "profiles": {
+    "restore": [
+      "project_docs/RESTORE_PROMPT.md",
+      "project_docs/GITHUB_WORKFLOW.md"
+    ],
+    "audit": [
+      "project_docs/AUDIT_HISTORY_INDEX.md",
+      "project_docs/AUDIT_EVIDENCE.md",
+      "project_docs/TEST_EVIDENCE.md"
+    ],
+    "development": [
+      "project_docs/ARCHITECTURE.md",
+      "project_docs/DATA_MODELS.md",
+      "project_docs/DECISIONS_AND_RATIONALE.md",
+      "project_docs/USER_REQUIREMENTS.md",
+      "project_docs/TEST_PLAN.md"
+    ],
+    "release": [
+      "project_docs/RELEASE_READINESS.md",
+      "project_docs/RELEASE_HISTORY_INDEX.md",
+      "project_docs/BUILD_AND_RECOVERY_RULES.md"
+    ]
+  },
+  "audit_evidence_discovery": {
+    "family_index": "project_docs/AUDIT_DELTA_INDEX.md",
+    "family_pattern": "project_docs/AUDIT_FAMILY_*_EVIDENCE.md",
+    "crosscutting": "project_docs/AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md",
+    "retired_history": "project_docs/AUDIT_RETIRED_DELTA_EVIDENCE.md"
+  },
+  "handoff": {
+    "trigger_phrase": "Подготовь переход в новый чат",
+    "always_allowed_with_unfinished_work": true,
+    "protocol_document": "project_docs/GITHUB_WORKFLOW.md",
+    "restore_prompt": "project_docs/RESTORE_PROMPT.md",
+    "unfinished_work_lookup_order": [
+      "open_pull_request",
+      "open_issue",
+      "git_history"
+    ],
+    "never_infer_completion": true,
+    "never_auto_close_p_owner": true
+  }
+}
