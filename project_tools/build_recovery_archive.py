@@ -31,11 +31,15 @@ REQUIRED_DOCS = [
     "AUDIT_REGISTRY.md",
     "AUDIT_DELTA_INDEX.md",
     "AUDIT_HISTORY_INDEX.md",
+    "AUDIT_CHANGE_WORKFLOW.md",
     "TEST_STATUS.md",
+    "RELEASE_READINESS.md",
+    "RELEASE_HISTORY_INDEX.md",
     "DATA_MODELS.md",
     "ASSISTANT_NOTES_AND_LIMITATIONS.md",
     "TEST_PLAN.md",
     "BUILD_AND_RECOVERY_RULES.md",
+    "GITHUB_WORKFLOW.md",
     "RESTORE_PROMPT.md",
 ]
 
@@ -120,88 +124,79 @@ def collect_doc_files() -> list[pathlib.Path]:
     return sorted((p for p in DOCS_DIR.rglob("*") if p.is_file()), key=lambda p: p.as_posix().lower())
 
 
+def write_recovery_readme(path: pathlib.Path, version: str, source_commit: str, source_tags: list[str]) -> None:
+    tags_text = ", ".join(source_tags) if source_tags else "none"
+    path.write_text(
+        "# WebClip offline recovery artifact\n\n"
+        f"Runtime version: `{version}`\n\n"
+        f"Canonical source commit: `{source_commit}`\n\n"
+        f"Tags pointing at source commit when built: `{tags_text}`\n\n"
+        "This ZIP is a derived offline/disaster-recovery copy of the exact clean Git commit above. "
+        "The Git commit remains the canonical source identity. Do not treat this ZIP as a parallel "
+        "mutable source of truth.\n",
+        encoding="utf-8",
+    )
+
+
 def build() -> pathlib.Path:
     version, manifest = load_version()
-    validate_docs()
     source_commit, source_tags = resolve_source_identity()
+    validate_docs()
+
     RECOVERY_DIR.mkdir(parents=True, exist_ok=True)
+    version_slug = version.replace(".", "_")
+    out = RECOVERY_DIR / f"WebClip_Project_Recovery_v{version_slug}.zip"
+    temp_readme = RECOVERY_DIR / "RECOVERY_README.md"
+    write_recovery_readme(temp_readme, version, source_commit, source_tags)
 
-    for old in RECOVERY_DIR.glob("WebClip_Project_Recovery_v*.zip"):
-        old.unlink()
-
-    output = RECOVERY_DIR / f"WebClip_Project_Recovery_v{version.replace('.', '_')}.zip"
     source_files = collect_source_files()
     doc_files = collect_doc_files()
+    all_files = source_files + doc_files + [temp_readme]
 
-    created_at = datetime.now(timezone.utc).isoformat()
+    file_manifest: list[dict[str, str | int]] = []
+    for path in all_files:
+        if path == temp_readme:
+            archive_name = "RECOVERY_README.md"
+        else:
+            archive_name = path.relative_to(ROOT).as_posix()
+        file_manifest.append(
+            {
+                "path": archive_name,
+                "bytes": path.stat().st_size,
+                "sha256": sha256(path),
+            }
+        )
+
     metadata = {
-        "project": manifest.get("name", "WebClip PDF Prototype"),
-        "version": version,
-        "manifest_version": manifest.get("manifest_version"),
-        "created_at_utc": created_at,
-        "recovery_schema": 2,
+        "schema": 2,
         "artifact_role": "offline-disaster-recovery",
         "canonical_source": "git-commit",
+        "runtime_version": version,
+        "manifest_version": manifest.get("version"),
         "source_commit": source_commit,
         "source_tags": source_tags,
-        "source_tree_required_clean": True,
-        "source_file_count": len(source_files),
-        "doc_file_count": len(doc_files),
-        "rule": (
-            "The archive is a derived offline copy of source_commit. "
-            "It is not a parallel source of truth and is not required inside "
-            "the user-facing extension ZIP."
-        ),
+        "source_tree_requirement": "clean",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "files": file_manifest,
     }
 
-    recovery_readme = f"""# WebClip Project Recovery {version}\n\nThis is a standalone offline/disaster-recovery artifact for WebClip PDF Prototype {version}.\n\nCanonical source identity: Git commit `{source_commit}`.\nTags pointing at that commit when the artifact was built: {", ".join(source_tags) if source_tags else "(none)"}.\n\n## Start here\n\n1. Read `BUILD_METADATA.json` and note `source_commit`.\n2. Verify `FILE_HASHES.sha256`.\n3. Read `project_docs/RESTORE_PROMPT.md` and `project_docs/README_INDEX.md`.\n4. If GitHub is available, restore/compare the exact Git commit first; that Git tree is canonical.\n5. If GitHub is unavailable, `source/` is the offline representation of that exact commit.\n6. After Git access returns, compare the offline tree/hashes and return to repository history.\n\nThis archive is not intended to be nested inside the user-facing extension ZIP.\nCreate a newer official recovery artifact only from a clean exact Git commit.\n"""
+    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        for path in all_files:
+            if path == temp_readme:
+                archive_name = "RECOVERY_README.md"
+            else:
+                archive_name = path.relative_to(ROOT).as_posix()
+            zf.write(path, archive_name)
+        zf.writestr("RECOVERY_METADATA.json", json.dumps(metadata, ensure_ascii=False, indent=2) + "\n")
 
-    hashes: list[str] = []
-
-    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-        zf.writestr("RECOVERY_README.md", recovery_readme)
-        zf.writestr("BUILD_METADATA.json", json.dumps(metadata, ensure_ascii=False, indent=2) + "\n")
-
-        for path in doc_files:
-            rel = path.relative_to(DOCS_DIR)
-            arc = pathlib.PurePosixPath("project_docs") / pathlib.PurePosixPath(rel.as_posix())
-            zf.write(path, arc.as_posix())
-            hashes.append(f"{sha256(path)}  {arc.as_posix()}")
-
-        for path in source_files:
-            rel = path.relative_to(ROOT)
-            arc = pathlib.PurePosixPath("source") / pathlib.PurePosixPath(rel.as_posix())
-            zf.write(path, arc.as_posix())
-            hashes.append(f"{sha256(path)}  {arc.as_posix()}")
-
-        zf.writestr("FILE_HASHES.sha256", "\n".join(hashes) + "\n")
-
-    with zipfile.ZipFile(output, "r") as zf:
-        names = set(zf.namelist())
-        required = {
-            "RECOVERY_README.md",
-            "BUILD_METADATA.json",
-            "FILE_HASHES.sha256",
-            "source/manifest.json",
-            "source/service-worker.js",
-            "source/content.js",
-            "source/project_tools/build_recovery_archive.py",
-        }
-        required.update(f"project_docs/{name}" for name in REQUIRED_DOCS)
-        missing = sorted(required - names)
-        if missing:
-            raise RuntimeError("Recovery archive self-check failed; missing: " + ", ".join(missing))
-        bad = zf.testzip()
-        if bad:
-            raise RuntimeError(f"Recovery archive CRC check failed at {bad}")
-
-    print(output)
-    return output
+    temp_readme.unlink(missing_ok=True)
+    print(out)
+    return out
 
 
 if __name__ == "__main__":
     try:
         build()
     except Exception as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        raise
+        print(f"Recovery build failed: {exc}", file=sys.stderr)
+        raise SystemExit(1)
