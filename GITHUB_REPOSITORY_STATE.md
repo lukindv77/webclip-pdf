@@ -21,8 +21,8 @@ The P-number registry is intentionally partitioned into two non-overlapping rang
 ## Evidence layers
 Use these compact current evidence documents before going to Git history:
 
-- `project_docs/AUDIT_EVIDENCE.md` — historical implementation/browser proof formerly scattered across root `P*_CLOSURE.md` reports;
-- `project_docs/TEST_EVIDENCE.md` — historical test/browser checkpoints formerly scattered across root `STATIC_CHECKS_*.md` reports;
+- `project_docs/AUDIT_EVIDENCE.md` — historical implementation/browser proof migrated from root closure reports;
+- `project_docs/TEST_EVIDENCE.md` — historical test/browser checkpoints migrated from root static-check reports;
 - `project_docs/TEST_STATUS.md` — compact current test/release truth; historical 88/88 syntax + 74/74 deterministic is not a current rerun;
 - `project_docs/AUDIT_HISTORY_INDEX.md` — corrections, retractions, dedup decisions and negative findings needed for future duplicate-checks;
 - current `project_docs/AUDIT_DELTA_*.md` — detailed source proof, refinements, invariants and regression requirements;
