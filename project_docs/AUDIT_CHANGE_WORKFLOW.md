@@ -63,7 +63,30 @@ Issue может существовать до присвоения P-кода. 
 
 Прямое изменение `main` допускается только как явно документированное аварийное восстановление после отдельного решения пользователя. Оно не является обычным workflow.
 
-## 5. Implementation и tests
+## 5. Machine-readable audit impact
+
+`project_tools/check_pr_change_contract.py` проверяет actual base/head diff PR, а не доверяет только описанию автора.
+
+Если PR меняет runtime или canonical audit/evidence, в PR body выбирается ровно одно:
+
+- `audit-impact: none` — P-owner/status/acceptance contract не меняется;
+- `audit-impact: owner` — перечислены затронутые P-коды и durable evidence меняется в том же PR.
+
+Для `audit-impact: owner` действуют дополнительные инварианты:
+
+1. затронутый P-code указывается явно в PR body;
+2. изменяется соответствующий family/history/registry evidence;
+3. хотя бы один объявленный P-code присутствует в изменённом durable evidence;
+4. runtime change сопровождается deterministic `project_tools/test_*.js`, если дефект можно проверить детерминированно;
+5. если deterministic test неприменим и acceptance реально требует внешней границы, допускается только явный `test-impact: external-only` с сохранением Chrome/Yandex/другого external requirement в durable evidence.
+
+`test-impact: external-only` не является освобождением от тестирования и не должен использоваться для обхода легко воспроизводимого deterministic regression.
+
+Изменение `AUDIT_REGISTRY.md` требует в том же PR второго durable family/history evidence файла. Это не позволяет registry стать единственным местом, где существует новая acceptance-деталь.
+
+Изменение `manifest.json` отдельно требует синхронного изменения `RELEASE_READINESS.md` и `TEST_STATUS.md`.
+
+## 6. Implementation и tests
 
 Изменение runtime для P-owner должно сопровождаться минимально необходимыми слоями:
 
@@ -74,7 +97,7 @@ Issue может существовать до присвоения P-кода. 
 
 `PASS` deterministic test не переводит finding в DONE, если acceptance требует real Chrome, permission UI, native Save As, реальный Yandex API или другой внешний boundary.
 
-## 6. Status transitions
+## 7. Status transitions
 
 - `ACTIVE` -> implementation может быть добавлена, но owner остаётся ACTIVE до требуемой direct verification.
 - `ACTIVE` -> `DONE` только после выполнения полного acceptance contract.
@@ -82,7 +105,7 @@ Issue может существовать до присвоения P-кода. 
 - `ACTIVE` -> `SUPERSEDED` только при явном архитектурном/product решении, заменяющем старое требование.
 - Historical PASS никогда автоматически не закрывает later-reopened owner.
 
-## 7. Evidence после merge
+## 8. Evidence после merge
 
 После merge current truth должен быть восстанавливаем из:
 
@@ -94,7 +117,7 @@ Issue может существовать до присвоения P-кода. 
 
 Нельзя оставлять единственную существенную acceptance-деталь только в тексте Issue/PR или чате.
 
-## 8. Release boundary
+## 9. Release boundary
 
 Audit implementation и release readiness — разные состояния. Release-кандидат дополнительно проходит `.github/workflows/release-gate.yml` и правила `RELEASE_READINESS.md`.
 

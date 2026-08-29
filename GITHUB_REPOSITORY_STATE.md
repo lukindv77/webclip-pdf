@@ -50,6 +50,8 @@ Core rule:
 
 A GitHub Issue/PR is working context, not a substitute for the registry/evidence layer. Any durable acceptance detail must end up in project documentation/evidence and exact Git history.
 
+PRs that change runtime or canonical audit evidence are additionally checked by `project_tools/check_pr_change_contract.py` against the exact base/head diff. The PR must explicitly declare `audit-impact: none` or `audit-impact: owner`; owner-impact runtime changes require durable audit evidence plus a deterministic test or explicit `test-impact: external-only` for genuinely external acceptance boundaries.
+
 ## Retired historical narratives
 
 Current `main` intentionally does not carry separate working copies of root `P*_CLOSURE.md`, `STATIC_CHECKS_*.md`, `DEEP_AUDIT_2026-08-25.md`, `QA_STATUS_0_9_9.md`, `PROJECT_RECOVERY.md`, `AUDIT_CONSOLIDATION_INDEX.md`, dated handoff folders or standalone historical `AUDIT_DELTA_*.md` after lossless family consolidation.
@@ -72,20 +74,24 @@ See `project_docs/BUILD_AND_RECOVERY_RULES.md` and `project_docs/GITHUB_WORKFLOW
 `.github/workflows/repository-integrity.yml` is read-only with respect to repository contents except for posting a diagnostic commit status. On push/PR it runs:
 
 - repository consistency;
-- release-readiness schema/status validation;
+- immutable GitHub Actions pin validation + self-test;
+- exact PR runtime/audit change-contract validation on pull requests + self-test;
+- release-readiness schema/status validation + self-test;
 - JavaScript syntax validation;
 - all deterministic JavaScript tests;
 - recovery provenance self-test.
 
+External `uses:` refs in workflows are pinned to full 40-character action commit SHAs; `ubuntu-latest` is not used. Current workflow runtime inputs are pinned to `ubuntu-24.04`, Python `3.12.14` and Node.js `22.23.2`. Pin drift is checked by `project_tools/check_ci_pins.py`.
+
 `NOT READY` release state is valid in ordinary CI. Malformed/missing release-readiness structure is not.
 
-`.github/pull_request_template.md` records exact-head/runtime/audit/release checks. `.github/ISSUE_TEMPLATE/audit_finding.md` structures new audit admission.
+`.github/pull_request_template.md` records exact-head/runtime/audit/release checks and machine-readable impact markers. `.github/ISSUE_TEMPLATE/audit_finding.md` structures new audit admission.
 
 ## Release readiness gate
 
 `project_docs/RELEASE_READINESS.md` is the machine-readable current release-readiness declaration.
 
-`.github/workflows/release-gate.yml` is a separate **manual, read-only, fail-closed** gate. It requires exact candidate SHA/version, repeats deterministic/recovery checks and rejects the candidate until required real Chrome/Yandex evidence, release-blocker review and explicit release decision are all recorded.
+`.github/workflows/release-gate.yml` is a separate **manual, read-only, fail-closed** gate. It requires exact candidate SHA/version, repeats repository/pin/test/recovery checks and rejects the candidate until required real Chrome/Yandex evidence, release-blocker review and explicit release decision are all recorded.
 
 The release gate does not build, tag, publish or modify GitHub Releases.
 

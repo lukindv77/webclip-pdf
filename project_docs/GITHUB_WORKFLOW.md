@@ -33,6 +33,27 @@ Direct modification of `main` is reserved for explicitly documented emergency re
 
 The detailed P-owner lifecycle is defined in `AUDIT_CHANGE_WORKFLOW.md`.
 
+## Machine-readable PR change contract
+
+`project_tools/check_pr_change_contract.py` compares the exact PR base/head diff and the PR body.
+
+When a PR changes product runtime (`manifest.json`, root extension JS/HTML/CSS/assets) or canonical audit registry/evidence, the PR must select exactly one machine marker:
+
+- `audit-impact: none` — runtime change does not change any P-owner/status/acceptance contract;
+- `audit-impact: owner` — one or more P-owners are affected and are listed explicitly.
+
+For `audit-impact: owner`:
+
+- durable family/history/registry evidence must change in the same PR;
+- declared P-code must occur in the changed durable evidence;
+- runtime changes also require a changed deterministic `project_tools/test_*.js`, unless the PR explicitly selects `test-impact: external-only` because acceptance genuinely requires real Chrome/Yandex/another external boundary.
+
+If `AUDIT_REGISTRY.md` changes, a second durable audit evidence/history file is mandatory in the same PR.
+
+If `manifest.json` changes, `RELEASE_READINESS.md` and `TEST_STATUS.md` must change in the same PR.
+
+The `external-only` marker is an explicit audited exception, not a generic waiver from deterministic testing.
+
 ## Правила синхронизации
 
 - В GitHub отправляются production code, current project docs, active audit evidence/indexes and `project_tools`.
@@ -41,15 +62,31 @@ The detailed P-owner lifecycle is defined in `AUDIT_CHANGE_WORKFLOW.md`.
 - `.gitignore` является частью security boundary и проверяется consistency gate.
 - Manifest `0.9.8` сохраняется до release QA; Git commit сам по себе не является релизом и не требует повышения version.
 
+## Immutable CI supply chain
+
+External GitHub Actions are referenced only by exact 40-character commit SHA. Mutable refs such as `@v4`, `@v5`, `@main` or branch names are forbidden by `project_tools/check_ci_pins.py`.
+
+Current reviewed pins:
+
+- `actions/checkout@11d5960a326750d5838078e36cf38b85af677262` (`v4` line);
+- `actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065` (`v5` line);
+- `actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020` (`v4` line).
+
+Hosted runner family is fixed to `ubuntu-24.04`; setup inputs are fixed to Python `3.12.14` and Node.js `22.23.2`.
+
+This does not make GitHub-hosted infrastructure mathematically immutable: GitHub can update the `ubuntu-24.04` runner image. It does ensure that action source revisions and language runtime versions cannot silently drift through mutable workflow refs. Updating a pin/version is a normal reviewed PR with full integrity checks.
+
 ## Automated integrity gate
 
 `.github/workflows/repository-integrity.yml` запускается на push/PR в `main` и вручную. Он подтверждает:
 
 1. repository/audit organization через `project_tools/check_repository_consistency.py`;
-2. корректность структуры `RELEASE_READINESS.md` через `check_release_readiness.py status` — статус `NOT READY` здесь допустим;
-3. JavaScript syntax для tracked `.js`;
-4. deterministic `project_tools/test_*.js`;
-5. Git-first recovery builder через `project_tools/test_recovery_archive.py`.
+2. immutable GitHub Actions pins через `check_ci_pins.py` + self-test;
+3. exact PR runtime/audit contract через `check_pr_change_contract.py` + self-test на PR;
+4. корректность структуры `RELEASE_READINESS.md` через `check_release_readiness.py status` — статус `NOT READY` здесь допустим;
+5. JavaScript syntax для tracked `.js`;
+6. deterministic `project_tools/test_*.js`;
+7. Git-first recovery builder через `project_tools/test_recovery_archive.py`.
 
 CI PASS на конкретном SHA означает только реально выполненные им checks. Он не заменяет real unpacked Chrome и real Yandex E2E.
 
@@ -62,7 +99,7 @@ Inputs:
 - exact candidate commit SHA;
 - exact expected manifest version.
 
-Workflow checkout-ит именно candidate SHA, требует clean tree, повторяет repository consistency, JS syntax, deterministic suite и recovery provenance, затем запускает:
+Workflow checkout-ит именно candidate SHA, требует clean tree, повторяет repository consistency, immutable CI pin check/self-test, PR-contract self-test, JS syntax, deterministic suite и recovery provenance, затем запускает:
 
 `project_tools/check_release_readiness.py gate`
 
