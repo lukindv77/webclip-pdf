@@ -35,13 +35,8 @@ FORBIDDEN_CURRENT_PATHS = {
     ROOT / "PROJECT_RECOVERY.md",
     DOCS / "AUDIT_CONSOLIDATION_INDEX.md",
 }
-
-FORBIDDEN_TRACKED_SUFFIXES = {
-    ".zip", ".crx", ".pem", ".p12", ".pfx", ".key",
-}
-FORBIDDEN_TRACKED_NAMES = {
-    ".env", "id_rsa", "id_ed25519",
-}
+FORBIDDEN_TRACKED_SUFFIXES = {".zip", ".crx", ".pem", ".p12", ".pfx", ".key"}
+FORBIDDEN_TRACKED_NAMES = {".env", "id_rsa", "id_ed25519"}
 
 P_CODE = re.compile(r"\bP([012])-(\d{3})\b")
 REGISTRY_ROW = re.compile(r"^\|\s*(P[012]-\d{3})\s*\|", re.MULTILINE)
@@ -66,12 +61,7 @@ def read(path: pathlib.Path) -> str:
 
 
 def git_ls_files() -> list[str]:
-    proc = subprocess.run(
-        ["git", "ls-files", "-z"],
-        cwd=ROOT,
-        check=True,
-        stdout=subprocess.PIPE,
-    )
+    proc = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, stdout=subprocess.PIPE)
     return [p.decode("utf-8") for p in proc.stdout.split(b"\0") if p]
 
 
@@ -81,6 +71,12 @@ def check_required_structure(result: CheckResult) -> None:
         DELTA_INDEX,
         DOCS / "AUDIT_EVIDENCE.md",
         DOCS / "AUDIT_HISTORY_INDEX.md",
+        DOCS / "AUDIT_RETIRED_DELTA_EVIDENCE.md",
+        DOCS / "AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md",
+        DOCS / "AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md",
+        DOCS / "AUDIT_FAMILY_URLSTATS_EVIDENCE.md",
+        DOCS / "AUDIT_FAMILY_JOURNAL_COMMENTS_EVIDENCE.md",
+        DOCS / "DOCUMENTATION_CONSISTENCY_AUDIT.md",
         DOCS / "TEST_EVIDENCE.md",
         DOCS / "TEST_STATUS.md",
         DOCS / "BUILD_AND_RECOVERY_RULES.md",
@@ -96,10 +92,8 @@ def check_required_structure(result: CheckResult) -> None:
         if path.exists():
             result.error(f"retired competing source returned to current tree: {path.relative_to(ROOT)}")
 
-    if CANONICAL_REGISTRY.is_file():
-        text = read(CANONICAL_REGISTRY)
-        if "single current authority" not in text:
-            result.error("AUDIT_REGISTRY.md no longer declares single current authority")
+    if CANONICAL_REGISTRY.is_file() and "single current authority" not in read(CANONICAL_REGISTRY):
+        result.error("AUDIT_REGISTRY.md no longer declares single current authority")
 
     compatibility = DOCS / "PRIORITIES_P0_P1_P2.md"
     if compatibility.is_file():
@@ -137,24 +131,19 @@ def check_registry_numbering(result: CheckResult) -> None:
 def check_delta_index(result: CheckResult) -> None:
     if not DELTA_INDEX.is_file():
         return
-    text = read(DELTA_INDEX)
-    indexed = set(INDEX_DELTA_ROW.findall(text))
-    actual = {
-        path.name
-        for path in DOCS.glob("AUDIT_DELTA_*.md")
-        if path.name != "AUDIT_DELTA_INDEX.md"
-    }
+    index_text = read(DELTA_INDEX)
+    indexed = set(INDEX_DELTA_ROW.findall(index_text))
+    actual = {p.name for p in DOCS.glob("AUDIT_DELTA_*.md") if p.name != "AUDIT_DELTA_INDEX.md"}
 
     missing_from_index = sorted(actual - indexed)
     missing_from_tree = sorted(indexed - actual)
     if missing_from_index:
-        result.warn("current audit deltas not yet indexed during consolidation: " + ", ".join(missing_from_index))
+        result.error("current audit deltas missing from AUDIT_DELTA_INDEX.md: " + ", ".join(missing_from_index))
     if missing_from_tree:
         result.error("AUDIT_DELTA_INDEX.md references non-current delta files: " + ", ".join(missing_from_tree))
 
     for name in sorted(actual):
-        text = read(DOCS / name)
-        if not P_CODE.search(text):
+        if not P_CODE.search(read(DOCS / name)):
             result.error(f"audit delta has no P-code owner/reference: project_docs/{name}")
 
 
@@ -171,7 +160,7 @@ def check_tracked_artifacts(result: CheckResult) -> None:
         name = path.name.lower()
         if suffix in FORBIDDEN_TRACKED_SUFFIXES or name in FORBIDDEN_TRACKED_NAMES:
             result.error(f"forbidden binary/secret-like artifact is tracked: {rel}")
-        if name.endswith(".zip.b64") or "handoff" in name and name.endswith(".b64"):
+        if name.endswith(".zip.b64") or ("handoff" in name and name.endswith(".b64")):
             result.error(f"embedded base64 archive is tracked: {rel}")
 
 
@@ -196,9 +185,7 @@ def check_release_truth(result: CheckResult) -> None:
         result.error(f"GITHUB_REPOSITORY_STATE.md does not mention manifest version {version}")
     if version not in test_status:
         result.error(f"TEST_STATUS.md does not mention manifest version {version}")
-
-    historical_gate = "88/88"
-    if historical_gate in test_status and "histor" not in test_status.lower():
+    if "88/88" in test_status and "histor" not in test_status.lower():
         result.error("TEST_STATUS.md mentions 88/88 without clearly classifying it as historical evidence")
 
 
@@ -228,7 +215,7 @@ def check_canonical_references(result: CheckResult) -> None:
     required_refs = {
         ROOT / "GITHUB_REPOSITORY_STATE.md": ["project_docs/AUDIT_REGISTRY.md", "project_docs/TEST_STATUS.md"],
         DOCS / "RESTORE_PROMPT.md": ["AUDIT_REGISTRY.md", "TEST_STATUS.md"],
-        DOCS / "README_INDEX.md": ["AUDIT_REGISTRY.md", "BUILD_AND_RECOVERY_RULES.md"],
+        DOCS / "README_INDEX.md": ["AUDIT_REGISTRY.md", "BUILD_AND_RECOVERY_RULES.md", "DOCUMENTATION_CONSISTENCY_AUDIT.md"],
     }
     for path, refs in required_refs.items():
         if not path.is_file():
