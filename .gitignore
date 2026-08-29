@@ -14,6 +14,8 @@ project_recovery/*.zip
 project_recovery/*.sha256
 WebClip_Handoff_*.zip
 WebClip_Handoff_*.zip.sha256
+handoff/
+project_docs/HANDOFF_*/
 
 # Python / Node caches
 __pycache__/
@@ -46,8 +48,3 @@ coverage/
 Thumbs.db
 .idea/
 .vscode/
-
-# Canonical handoff checkpoint is intentionally versioned under handoff/
-!handoff/
-!handoff/WebClip_Handoff_*.zip
-!handoff/WebClip_Handoff_*.zip.sha256
