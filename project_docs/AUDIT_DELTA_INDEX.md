@@ -71,8 +71,10 @@ Primary owners: P0-074, P0-078, P1-157, P1-158, P1-165, P1-175, P1-178, P1-184, 
 
 ## 3. Yandex remote object identity / move / publication / destructive lifecycle
 
-Primary owners: P0-022, P0-040, P0-069, P0-073, P0-074, P0-078, P1-090, P1-164, P1-175, P1-184, P1-210.
+Primary owners: P0-022, P0-040, P0-069, P0-072, P0-073, P0-074, P0-078, P1-090, P1-164, P1-175, P1-184, P1-210.
 
+- `AUDIT_DELTA_BULK_DESTRUCTIVE_FENCING_2026-08-27.md`
+- `AUDIT_DELTA_CONCURRENT_READ_MOVE_LATE_ERROR_RESURRECTS_PENDING_STATE_2026-08-28.md`
 - `AUDIT_DELTA_DELETE_FALLBACK_UNKNOWN_MOVE_2026-08-27.md`
 - `AUDIT_DELTA_DELETE_RETRY_UI_OPERATION_SAGA_DISCONTINUITY_2026-08-28.md`
 - `AUDIT_DELTA_DESTRUCTIVE_CONFIRMATION_RECEIPT_LIFETIME_2026-08-28.md`
@@ -106,7 +108,7 @@ Encoded-byte restore-limit evidence is consolidated in `AUDIT_RETIRED_DELTA_EVID
 
 ## 5. Journal import / provenance / portable schema / legacy identity
 
-Primary owners: P0-013, P0-022, P0-073, P0-076, P1-030, P1-035, P1-042, P1-069, P1-206, P1-211, P1-215, P1-216.
+Primary owners: P0-013, P0-022, P0-073, P0-076, P0-077, P1-030, P1-035, P1-042, P1-069, P1-206, P1-211, P1-215, P1-216.
 
 - `AUDIT_DELTA_IMPORTED_COMMENT_ID_AMBIGUITY_2026-08-28.md`
 - `AUDIT_DELTA_IMPORTED_EMPTY_IDENTITY_CURRENT_NAMESPACE_ADOPTION_2026-08-28.md`
@@ -121,17 +123,20 @@ Primary owners: P0-013, P0-022, P0-073, P0-076, P1-030, P1-035, P1-042, P1-069, 
 - `AUDIT_DELTA_LEGACY_URLKEY_DELETE_STATS_GHOST_2026-08-28.md`
 - `AUDIT_DELTA_LEGACY_URLKEY_SCOPED_CLEAR_PARITY_2026-08-28.md`
 - `AUDIT_DELTA_LEGACY_URLKEY_TEMPLATE_LIST_PARITY_2026-08-28.md`
+- `AUDIT_DELTA_RESTORE_ENVELOPE_2026-08-27.md`
 - `AUDIT_DELTA_STORAGE_PRESSURE_IMPORT_STAGING_RECLAIM_2026-08-28.md`
 
 Imported URL-derived scope-key positive control is consolidated in `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
 
-## 6. Journal read/view revision / pagination / open/apply authority
+## 6. Journal read/view revision / pagination / open/apply / bulk authority
 
-Primary owners: P0-076, P0-080, P1-001, P1-009, P1-175, P1-206.
+Primary owners: P0-076, P0-080, P1-001, P1-009, P1-175, P1-206, P1-210.
 
 - `AUDIT_DELTA_DIRECT_START_BYPASSES_UPLOAD_GENERATION_LOCK_2026-08-28.md`
 - `AUDIT_DELTA_JOURNAL_APPLY_BYPASSES_UPLOAD_GENERATION_LOCK_2026-08-28.md`
 - `AUDIT_DELTA_JOURNAL_APPLY_SPA_APPLICATION_GENERATION_2026-08-28.md`
+- `AUDIT_DELTA_JOURNAL_BULK_CONFIRMATION_REVISION_AUTHORITY_2026-08-28.md`
+- `AUDIT_DELTA_JOURNAL_BULK_DESTRUCTIVE_TRANSPORT_LOSS_RECONCILIATION_2026-08-28.md`
 - `AUDIT_DELTA_JOURNAL_CONTEXT_REPLAY_SEMANTICS_2026-08-28.md`
 - `AUDIT_DELTA_JOURNAL_DOCUMENT_AND_OPEN_TRANSPORT_AUTHORITY_2026-08-28.md`
 - `AUDIT_DELTA_JOURNAL_ENTRY_ID_WIDTH_COHERENCE_2026-08-28.md`
@@ -148,15 +153,11 @@ Primary owners: P0-076, P0-080, P1-001, P1-009, P1-175, P1-206.
 
 Journal source-writer revision coverage positive control is consolidated in `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
 
-## 7. Journal comments / tombstones / edit generations
+## 7. Journal comments / tombstones / edit generations — consolidated
 
-Primary owners: P0-076, P1-202, P1-211, P1-225.
+This family passed its lossless retirement gate. Current family evidence is `AUDIT_FAMILY_JOURNAL_COMMENTS_EVIDENCE.md`.
 
-- `AUDIT_DELTA_COMMENT_DELETION_RETENTION_SEMANTICS_2026-08-27.md`
-- `AUDIT_DELTA_DELETED_COMMENT_TOMBSTONE_PORTABLE_CAPACITY_2026-08-28.md`
-- `AUDIT_DELTA_JOURNAL_COMMENT_PENDING_SAVE_DRAFT_2026-08-29.md`
-- `AUDIT_DELTA_JOURNAL_COMMENT_TOMBSTONE_LIFECYCLE_2026-08-28.md`
-- `AUDIT_DELTA_JOURNAL_CONCURRENCY_SETTLEMENT_2026-08-27.md`
+It preserves P1-202 deletion semantics, P1-211 portable tombstone lifecycle/capacity, P1-225 local pending-draft loss, P0-076 cross-tab comment CAS and the incidental P1-173 OperationLog queued-turn refinement. The five source deltas are removed from current `main`; exact originals remain in Git history.
 
 ## 8. Operation receipt / OperationLog / user reconciliation
 
@@ -238,9 +239,9 @@ Primary owners: P1-004, P1-157, P1-171, P1-193, P1-199…P1-203, P1-214.
 - `AUDIT_DELTA_REMOTE_FRAME_PRINT_PARTIAL_PREPARE_ROLLBACK_2026-08-28.md`
 - `AUDIT_DELTA_REMOTE_FRAME_RESTORE_RECEIPT_SETTLEMENT_2026-08-28.md`
 
-## 12. PDF/print representation / live-DOM mutation rollback / source generation
+## 12. PDF/print / offscreen resource lifetime / live-DOM rollback / source generation
 
-Primary owners: P0-003, P0-023, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, P1-149…P1-153, P1-167, P1-199, P1-212…P1-214, P1-218…P1-224.
+Primary owners: P0-003, P0-023, P0-063, P0-065, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, P1-069, P1-149…P1-153, P1-167, P1-199, P1-212…P1-214, P1-218…P1-224.
 
 - `AUDIT_DELTA_CONTENT_SOURCE_TAB_BINDING_2026-08-27.md`
 - `AUDIT_DELTA_CONTENT_TEMPLATE_DISCLOSURE_2026-08-27.md`
@@ -251,6 +252,8 @@ Primary owners: P0-003, P0-023, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, 
 - `AUDIT_DELTA_HOSTILE_SELECTION_MARKER_CAPABILITY_2026-08-28.md`
 - `AUDIT_DELTA_HOST_CONTROL_PRINT_2026-08-27.md`
 - `AUDIT_DELTA_LINK_NORMALIZATION_ROLLBACK_AUTHORITY_2026-08-29.md`
+- `AUDIT_DELTA_OFFSCREEN_MEMORY_LIFETIME_2026-08-27.md`
+- `AUDIT_DELTA_OFFSCREEN_RESOURCE_IDB_2026-08-27.md`
 - `AUDIT_DELTA_PDF_CACHE_CONSUMER_LIFECYCLE_2026-08-27.md`
 - `AUDIT_DELTA_PDF_CACHE_OPERATION_ISOLATION_2026-08-27.md`
 - `AUDIT_DELTA_PDF_END_TO_END_PROVENANCE_2026-08-27.md`
@@ -269,21 +272,15 @@ Primary owners: P0-003, P0-023, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, 
 
 ## 13. Incognito / trust boundaries / signed-link redaction — consolidated
 
-This family has passed its lossless retirement gate. Current family evidence is `AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md`.
+This family passed its lossless retirement gate. Current family evidence is `AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md`.
 
-It preserves two separate active owners:
+It preserves two separate active owners: P0-045 for Incognito Action/popup/optional-permission privacy and P0-033 for opaque signed Yandex transport href redaction in OperationLog. The three former source deltas are removed from current `main`; exact originals remain in Git history.
 
-- P0-045 — Incognito Action/popup/optional-permission privacy boundary;
-- P0-033 — opaque signed Yandex transport href redaction in OperationLog.
+## 14. Derived URL stats / view indexes — consolidated
 
-The three former source deltas are removed from current `main`; exact originals remain in Git history.
+This family passed its lossless retirement gate. Current family evidence is `AUDIT_FAMILY_URLSTATS_EVIDENCE.md`.
 
-## 14. Derived URL stats / view indexes
-
-Primary owners: P0-050, P1-083, P1-206, P1-216.
-
-- `AUDIT_DELTA_URLSTATS_DIRTY_CONSUMER_FAILOPEN_2026-08-28.md`
-- `AUDIT_DELTA_URLSTATS_REBUILD_ISOLATION_2026-08-27.md`
+It preserves P0-050 global derived-generation isolation plus the dirty-consumer fail-closed rule. Both former source deltas are removed from current `main`; exact originals remain in Git history.
 
 ## 15. Retired broad revalidation / cross-cutting inventories
 
@@ -293,7 +290,7 @@ Broad multi-block, worker-generation, runtime-ACL and direct-Chrome-API inventor
 
 1. Chrome/MV3 browser-owned state family;
 2. PDF/print generation + live-DOM rollback family;
-3. Journal view/import/comment families;
+3. Journal read/import families;
 4. local-download/Save-As receipts;
 5. Yandex auth/context and destructive-object identity;
 6. backup/scheduler/recovery last.
