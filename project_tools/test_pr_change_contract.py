@@ -96,11 +96,11 @@ def main() -> None:
             "project_docs/AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md",
         ],
         owner_body,
+        "missing from changed deterministic test source",
         {
             "project_docs/AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md": "P0-070 exact generation evidence",
             "project_tools/test_generation.js": "// generation regression without owner marker\n",
         },
-        "missing from changed deterministic test source",
     )
 
     expect_fail(
