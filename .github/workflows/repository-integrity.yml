@@ -49,14 +49,22 @@ jobs:
       - name: Deterministic JavaScript tests
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           count=0
+          failures=0
           for test in project_tools/test_*.js; do
             echo "==> $test"
-            node "$test"
             count=$((count + 1))
+            if ! node "$test"; then
+              echo "::error file=$test,title=Deterministic test failed::$test failed on commit $GITHUB_SHA"
+              failures=$((failures + 1))
+            fi
           done
-          echo "Executed $count deterministic test files."
+          echo "Executed $count deterministic test files; failures=$failures."
+          if [ "$failures" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Recovery artifact provenance self-test
+        if: ${{ always() }}
         run: python project_tools/test_recovery_archive.py
