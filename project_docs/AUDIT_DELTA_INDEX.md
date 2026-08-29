@@ -40,6 +40,10 @@ No standalone audit delta is a current status authority. New audit findings must
 
   28-block selection-intent/rendered-admission/gesture/remote-ordering convergence tranche from fresh `main`. No new P-number or status transition: source and managed-Chromium evidence refines P1-228 for preview→commit coherence, multi-click, keyboard candidate traversal, zero-box/visible-overflow geometry and local/remote overlap parity; P1-001 for transparent filter/mask restore admission and shared rendered-scope semantics; P0-075 for hostile listener ordering/pointer mutation and forgeable helper-id candidate suppression; P1-200 for exact remote clear/start/set-mode session ordering; P1-154, P2-006 and P2-007 remain supporting owner boundaries.
 
+- `AUDIT_SELECTION_RESTORE_SOUNDNESS_2026-08-30_EVIDENCE.md`
+
+  36-block SelectionSnapshot restore-soundness / remote-settlement / bounded-locator-work tranche from fresh `main`. No new P-number or status transition: P1-001 gains end-to-end restore truth for sound candidate/confidence sets, idempotent local/remote application and final report/state reconciliation; P1-200 covers failed/late remote clear/start/restore session ordering; P1-171 covers exact frame/document boundary and conservative cross-frame confidence; P1-154 preserves aggregate count/cap truth; P1-168/P1-160 retain bounded locator/snapshot/outline computation. Managed Chromium reproduces duplicate remote restores toggling state off while returning success, 251st remote selections refused while returning success, and an exact target at tag-candidate position 5001 losing to an in-window decoy with score 99 / high confidence. Existing positive controls for in-window exact match and ambiguity fail-closed remain valid.
+
 ## Families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
