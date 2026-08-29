@@ -19,8 +19,8 @@ function fastTimer(fn, ms, ...args) {
 
 function offscreenRaceTimer(fn, ms, ...args) {
   const requested = Number(ms) || 0;
-  // Keep the 10s local deadline very short, but preserve a visible
-  // ordering gap before the simulated 80ms non-cancellable close.
+  // Keep local deadlines short. The underlying close promise in the race test
+  // is manually settled, so timeout-vs-close ordering never depends on wall clock.
   return setTimeout(fn, requested >= 1000 ? 3 : Math.min(requested, 30), ...args);
 }
 
@@ -106,6 +106,7 @@ async function testLateOffscreenCloseBlocksRecreate() {
   const events = [];
   let createCount = 0;
   let offscreenPresent = true;
+  let resolveClose = null;
   const chrome = {
     runtime: {
       getURL: (value) => `chrome-extension://test/${value}`,
@@ -123,11 +124,14 @@ async function testLateOffscreenCloseBlocksRecreate() {
     },
     offscreen: {
       closeDocument() {
-        return new Promise((resolve) => setTimeout(() => {
-          offscreenPresent = false;
-          events.push('late-close-resolved');
-          resolve();
-        }, 80));
+        events.push('close-started');
+        return new Promise((resolve) => {
+          resolveClose = () => {
+            offscreenPresent = false;
+            events.push('late-close-resolved');
+            resolve();
+          };
+        });
       },
       createDocument() {
         createCount += 1;
@@ -157,13 +161,19 @@ async function testLateOffscreenCloseBlocksRecreate() {
 
   const closeResult = await context.closeForTest(1);
   assert.strictEqual(closeResult.reason, 'close-pending');
+  assert.strictEqual(typeof resolveClose, 'function', 'test must hold the exact unresolved closeDocument settlement');
+  assert(events.includes('close-started'));
+
   await assert.rejects(
     context.ensureForTest(),
     (error) => error && error.code === 'WEBCLIP_TIMEOUT'
   );
   assert.strictEqual(createCount, 0, 'must not recreate offscreen while the original closeDocument promise is unresolved');
+  assert(!events.includes('late-close-resolved'), 'close must remain unresolved until the test explicitly settles it');
 
-  await delay(100);
+  resolveClose();
+  await Promise.resolve();
+  await Promise.resolve();
   assert(events.includes('late-close-resolved'));
   await context.ensureForTest();
   assert.strictEqual(createCount, 1, 'offscreen can be recreated after the original close settles');
