@@ -76,6 +76,7 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 
 | Code | Status | Single current owner / root cause |
 |---|---|---|
+| P1-003 | ACTIVE | PDF renderer-resource preparation must cover the actual selected visual resource graph under bounded deadlines, including pseudo/CSS visual resources and frame parity; `Page.printToPDF` completion is not resource-readiness proof, and bounded omissions must be truthful. |
 | P1-004 | ACTIVE | Cross-origin iframe feature umbrella remains partial until exact child document/permission/session lifecycle owners are closed. |
 | P1-008 | ACTIVE | User-settings import reconciliation marker needs immutable import generation/compare-and-remove; older reconciliation cannot consume a newer marker. |
 | P1-009 | ACTIVE | Journal filter semantics work, but worst-case search over heavy payload is not bounded enough; needs scalable indexed/summary candidate strategy. |
