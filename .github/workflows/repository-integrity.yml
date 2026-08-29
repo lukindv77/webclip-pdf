@@ -18,7 +18,7 @@ jobs:
   repository-integrity:
     name: repository-integrity
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v4
@@ -57,3 +57,6 @@ jobs:
             count=$((count + 1))
           done
           echo "Executed $count deterministic test files."
+
+      - name: Recovery artifact provenance self-test
+        run: python project_tools/test_recovery_archive.py
