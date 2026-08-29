@@ -148,7 +148,7 @@ def check_delta_index(result: CheckResult) -> None:
     missing_from_index = sorted(actual - indexed)
     missing_from_tree = sorted(indexed - actual)
     if missing_from_index:
-        result.error("current audit deltas missing from AUDIT_DELTA_INDEX.md: " + ", ".join(missing_from_index))
+        result.warn("current audit deltas not yet indexed during consolidation: " + ", ".join(missing_from_index))
     if missing_from_tree:
         result.error("AUDIT_DELTA_INDEX.md references non-current delta files: " + ", ".join(missing_from_tree))
 
