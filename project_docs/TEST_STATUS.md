@@ -43,7 +43,7 @@ Before claiming a `0.9.9` release or raising the manifest version, the project s
 6. real Yandex upload/move/publish/unpublish/delete/backup/restore behavior, including failure/timeout/unknown-settlement and account/root switching scenarios required by open audit owners;
 7. focused regression verification for open P0/P1 owners that affect the release-critical flow.
 
-Enterprise policy in the historical audit environment blocked normal unpacked-extension loading; the project intentionally did not bypass that policy and therefore did not count it as a PASS.
+Enterprise policy in the historical audit environment blocked normal unpacked-extension loading; the project intentionally did not bypass that policy and therefore did not count it as a PASS. Exact historical environment details are retained in `TEST_EVIDENCE.md` rather than here.
 
 ## Release policy
 
@@ -54,8 +54,8 @@ Until the applicable real release QA is completed and an explicit release decisi
 - do not create a release build/tag/GitHub Release merely because documentation/audit work advanced;
 - do not reinterpret historical gate counts as current reruns.
 
-## Relationship to old QA files
+## Retired QA narrative
 
-`QA_STATUS_0_9_9.md` is an accumulated historical narrative, not the compact current status. It remains in the repository temporarily because unique details still need a retirement comparison against this file and `TEST_EVIDENCE.md`.
+The former root `QA_STATUS_0_9_9.md` accumulated many sequential WIP notes and duplicated implementation/test history. It was retirement-compared on 2026-08-29 against this document and `TEST_EVIDENCE.md`.
 
-After that comparison proves no unique QA fact would be lost, the old accumulated QA narrative can be retired from current `main` and remain available through Git history.
+Unique browser/environment observations were copied into `TEST_EVIDENCE.md`; durable current release constraints remain above. The old narrative was then removed from current `main` and remains recoverable from Git history.
