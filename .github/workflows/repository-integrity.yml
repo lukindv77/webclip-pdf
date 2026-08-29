@@ -39,6 +39,9 @@ jobs:
       - name: Repository consistency
         run: python project_tools/check_repository_consistency.py
 
+      - name: Release readiness schema/status
+        run: python project_tools/check_release_readiness.py status
+
       - name: JavaScript syntax
         shell: bash
         run: |
