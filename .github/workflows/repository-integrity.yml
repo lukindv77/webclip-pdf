@@ -45,6 +45,9 @@ jobs:
       - name: CI pinning self-test
         run: python project_tools/test_ci_pins.py
 
+      - name: PR change contract structure
+        run: python project_tools/check_pr_change_contract.py
+
       - name: PR change contract
         if: github.event_name == 'pull_request'
         env:
