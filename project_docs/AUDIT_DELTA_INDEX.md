@@ -32,7 +32,7 @@ No standalone audit delta is a current status authority. New audit findings must
 
   34-block capture-representation dependency-closure audit tranche. No new P-number or status transition: P0-004 gains sibling/reference/anchor/counter/rendering-dependency acceptance; P0-075 gains page-CSS/helper-DOM isolation evidence; P1-187 gains transform/box/text/SVG/fragmentation/top-layer/browser-owned state cases; P1-003 retains three non-reproducing resource controls; P2-007 remains the composed format-neutral capture architecture owner.
 
-- `AUDIT_MANUAL_PICKER_HITTEST_GEOMETRY_EVIDENCE_2026-08-29.md`
+- `AUDIT_MANUAL_PICKER_HITTEST_GEOMETRY_2026-08-29_EVIDENCE.md`
 
   34-block manual-picker hit-test/rendered-geometry/restore-admission audit tranche. Navigation scope: P1-228 owns truthful rendered candidate/geometry authority for manual and remote-frame picker parity; P1-001 is reopened for post-match rendered-target admission. Supporting refinements/controls cover P0-075, P1-004, P1-154, P1-160, P1-226, P2-006 and P2-007. This index records evidence scope only; current status remains authoritative exclusively in `AUDIT_REGISTRY.md`.
 
