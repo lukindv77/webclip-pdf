@@ -14,6 +14,12 @@ No standalone audit delta is a current status authority. New audit findings must
 
   PDF/print + frame selection fidelity. Registered scope: P0-004 ACTIVE refinement; new P1-226 ACTIVE. Durable supporting summary: `AUDIT_SELECTION_CAPTURE_FIDELITY_EVIDENCE.md`. Supporting dedup/refinement evidence also covers P0-067/P1-212, P1-003, P1-187, P2-006 and P2-007.
 
+## Supplemental durable audit evidence
+
+- `AUDIT_INTERACTIVE_CAPTURE_FRAME_TOPOLOGY_EVIDENCE.md`
+
+  24-block interactive-capture/live-frame-topology/renderer-state audit tranche. Registered scope: new P1-227 ACTIVE for bounded live same-origin frame topology during manual selection. Supporting refinements/controls cover P0-004, P0-066, P0-068, P0-071, P0-075, P1-160, P1-187, P1-213, P2-006 and P2-007; cross-origin topology remains with the existing frame lifecycle owners.
+
 ## Families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
@@ -29,7 +35,7 @@ No standalone audit delta is a current status authority. New audit findings must
 | 9 | Local download / native Save As / file settlement | `AUDIT_FAMILY_LOCAL_DOWNLOAD_SAVEAS_EVIDENCE.md` | P0-039, P1-079, P1-080, P1-087, P1-129, P1-146, P1-156, P1-169, P1-210. | 12 |
 | 10 | Chrome/MV3 APIs / browser-owned state / extension-page transport | `AUDIT_FAMILY_CHROME_MV3_SETTLEMENT_EVIDENCE.md` | P1-123…P1-131, P1-157, P1-158, P1-166, P1-170, P1-173, P1-203, P1-204, P1-209, P1-210, P1-217. | 17 |
 | 11 | Frame permission / cross-origin frame-agent identity and command generation | `AUDIT_FAMILY_FRAME_PERMISSION_IDENTITY_EVIDENCE.md` | P1-004, P1-157, P1-171, P1-193, P1-199…P1-203, P1-214. | 12 |
-| 12 | PDF/print / offscreen resource lifetime / live-DOM rollback / source generation | `AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md` | P0-004, P0-003, P0-023, P0-063, P0-065, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, P1-003, P1-069, P1-149…P1-153, P1-167, P1-187, P1-199, P1-212…P1-214, P1-218…P1-224, P1-226. | 26 |
+| 12 | PDF/print / offscreen resource lifetime / live-DOM rollback / source generation | `AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md` | P0-004, P0-003, P0-023, P0-063, P0-065, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, P1-003, P1-069, P1-149…P1-153, P1-160, P1-167, P1-187, P1-199, P1-212…P1-214, P1-218…P1-224, P1-226, P1-227. | 26 |
 | 13 | Incognito / trust boundaries / signed-link redaction | `AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md` | P0-033, P0-045 | previously consolidated |
 | 14 | Derived URL stats / view indexes | `AUDIT_FAMILY_URLSTATS_EVIDENCE.md` | P0-050 | previously consolidated |
 | 15 | Retired broad revalidation / cross-cutting inventories | `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` | cross-cutting historical controls | previously consolidated |
@@ -37,6 +43,6 @@ No standalone audit delta is a current status authority. New audit findings must
 ## Current reading rule
 
 1. Read `AUDIT_REGISTRY.md` for current status and ownership.
-2. Use the family evidence above for detailed source proof, deterministic schedules, corrections, positive controls and acceptance boundaries.
+2. Use the family evidence above and supplemental durable evidence for detailed source proof, deterministic schedules, corrections, positive controls and acceptance boundaries.
 3. Use `AUDIT_HISTORY_INDEX.md`, `AUDIT_EVIDENCE.md`, `AUDIT_RETIRED_DELTA_EVIDENCE.md`, `TEST_EVIDENCE.md` and Git history for historical implementation/test context.
 4. Never infer that a P-number is free from absence in one family document; permanent numbering rules in `AUDIT_REGISTRY.md` control allocation.
