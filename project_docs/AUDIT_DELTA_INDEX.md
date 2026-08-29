@@ -36,6 +36,10 @@ No standalone audit delta is a current status authority. New audit findings must
 
   34-block manual-picker hit-test/rendered-geometry/restore-admission audit tranche. Navigation scope: P1-228 owns truthful rendered candidate/geometry authority for manual and remote-frame picker parity; P1-001 is reopened for post-match rendered-target admission. Supporting refinements/controls cover P0-075, P1-004, P1-154, P1-160, P1-226, P2-006 and P2-007. This index records evidence scope only; current status remains authoritative exclusively in `AUDIT_REGISTRY.md`.
 
+- `AUDIT_SELECTION_INTENT_ADMISSION_CONVERGENCE_2026-08-30_EVIDENCE.md`
+
+  28-block selection-intent/rendered-admission/gesture/remote-ordering convergence tranche from fresh `main`. No new P-number or status transition: source and managed-Chromium evidence refines P1-228 for preview→commit coherence, multi-click, keyboard candidate traversal, zero-box/visible-overflow geometry and local/remote overlap parity; P1-001 for transparent filter/mask restore admission and shared rendered-scope semantics; P0-075 for hostile listener ordering/pointer mutation and forgeable helper-id candidate suppression; P1-200 for exact remote clear/start/set-mode session ordering; P1-154, P2-006 and P2-007 remain supporting owner boundaries.
+
 ## Families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
