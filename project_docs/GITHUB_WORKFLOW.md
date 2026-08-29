@@ -132,6 +132,23 @@ Gate fail-closed проверяет `RELEASE_READINESS.md`: real unpacked Chrome
 - Одноразовый handoff создаётся только по прямому запросу пользователя как disposable export exact commit.
 - Для восстановления рабочего контекста используется `RESTORE_PROMPT.md` + current registry/evidence + Git history.
 
+## Steady-state operating policy
+
+Утверждённый постоянный порядок поддержания устойчивого состояния GitHub без излишнего роста repository noise:
+
+1. **Одно смысловое изменение — один рабочий PR.** Перед началом работы выполняется fresh-fetch `main`. В обычном режиме одновременно ведётся не более одного активного проектного PR; единственное штатное исключение — один автоматический Dependabot PR.
+2. **Для runtime обязателен audit-contract.** Любое изменение runtime получает `audit-impact` и конкретный `audit-rationale`. При затронутом owner указываются P-код, durable evidence и deterministic regression test либо обоснованный `test-impact: external-only`.
+3. **После каждого merge обязателен push-run canonical `main`.** Green PR-head сам по себе недостаточен. Если post-merge `repository-integrity` красный, новая разработка не начинается до возврата `main` в green state.
+4. **Рабочие ветки одноразовые и не являются источниками истины после merge.** При доступном автоматическом удалении merged branches они удаляются. Пока `delete_branch_on_merge=false`, прежний exact head сохраняется в PR/Git history, а оставшийся obsolete ref допустимо выровнять с canonical `main` после проверки отсутствия уникального полезного состояния.
+5. **Dependabot остаётся месячным и только для GitHub Actions.** Auto-merge не используется. Каждый grouped update проходит exact diff review, оценку major-version implications и полный CI. Exact Action SHA хранится только в executable workflow source, а не дублируется в narrative docs.
+6. **Issues создаются только для реальной незавершённой работы или нового finding.** Исторический `AUDIT_REGISTRY` не переносится задним числом в сотни Issues; registry остаётся authority по P-owner/status.
+7. **Периодический health review выполняется редко и по порогу:** после каждых **12 merged project PR** либо раз в **3 месяца**, что наступит раньше. Проверяются branches, open PR/Issues, workflow/pins, Releases/tags, broken documentation references и registry/evidence consistency. При отсутствии drift cleanup commits не создаются.
+8. **Исторические evidence не удаляются по календарю.** Git history не переписывается через BFG/filter-repo ради уборки. Retirement отдельного evidence/artifact допускается только после доказанного lossless переноса уникального содержания и фиксации retirement evidence.
+9. **Release остаётся отдельным явно санкционированным событием.** Требуются explicit release decision, актуальный `RELEASE_READINESS.md`, real unpacked Chrome QA, real Yandex E2E, review release-critical owners и ручной release gate; build/tag/Release выполняются только после этого отдельным действием.
+10. **Repository infrastructure не наращивается без наблюдаемой необходимости.** CODEOWNERS, Projects, milestones, новые governance-файлы, дополнительные workflows или более сложная CI/container infrastructure добавляются только когда закрывают конкретно доказанный риск или повторяющуюся операционную проблему.
+
+Эти десять пунктов являются постоянным steady-state регламентом проекта. Изменение самого регламента требует отдельного явного согласования; routine project work не должно порождать новые policy-файлы или дублирующие tracking-сущности.
+
 ## Accepted main branch posture
 
 Зафиксированное решение проекта:
