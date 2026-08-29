@@ -80,7 +80,7 @@ Issue может существовать до присвоения P-кода. 
 - `ACTIVE` -> `DONE` только после выполнения полного acceptance contract.
 - `ACTIVE` -> `MERGED -> Px-nnn` только при доказанном совпадении root cause; старый номер остаётся permanently reserved.
 - `ACTIVE` -> `SUPERSEDED` только при явном архитектурном/product решении, заменяющем старое требование.
-- historical PASS никогда автоматически не закрывает later-reopened owner.
+- Historical PASS никогда автоматически не закрывает later-reopened owner.
 
 ## 7. Evidence после merge
 
