@@ -28,6 +28,10 @@ No standalone audit delta is a current status authority. New audit findings must
 
   38-block complex selected-layout / same-origin flattened-frame representation audit tranche. No new P-number or status transition: source and managed-Chromium evidence refines P0-004 for layout/compositing/fixed-pagination fidelity, P1-187 for frame-local rendered state/resource provenance and style-budget truth, P1-160 for boxless semantic auto-content candidates, P1-003 for additional CSS visual resources, and P2-007 for explicit current-view versus complete-static capture semantics.
 
+- `AUDIT_CAPTURE_REPRESENTATION_DEPENDENCY_EVIDENCE.md`
+
+  34-block capture-representation dependency-closure audit tranche. No new P-number or status transition: P0-004 gains sibling/reference/anchor/counter/rendering-dependency acceptance; P0-075 gains page-CSS/helper-DOM isolation evidence; P1-187 gains transform/box/text/SVG/fragmentation/top-layer/browser-owned state cases; P1-003 retains three non-reproducing resource controls; P2-007 remains the composed format-neutral capture architecture owner.
+
 ## Families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
