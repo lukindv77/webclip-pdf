@@ -20,6 +20,8 @@ DOCS = ROOT / "project_docs"
 
 CANONICAL_REGISTRY = DOCS / "AUDIT_REGISTRY.md"
 DELTA_INDEX = DOCS / "AUDIT_DELTA_INDEX.md"
+RELEASE_INDEX = DOCS / "RELEASE_HISTORY_INDEX.md"
+PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 CONTROL_DOCS = [
     ROOT / "GITHUB_REPOSITORY_STATE.md",
     ROOT / "README.md",
@@ -28,6 +30,7 @@ CONTROL_DOCS = [
     DOCS / "BUILD_AND_RECOVERY_RULES.md",
     DOCS / "GITHUB_WORKFLOW.md",
     DOCS / "TEST_STATUS.md",
+    RELEASE_INDEX,
 ]
 
 FORBIDDEN_CURRENT_PATHS = {
@@ -41,6 +44,16 @@ FORBIDDEN_CURRENT_PATHS = {
 }
 FORBIDDEN_TRACKED_SUFFIXES = {".zip", ".crx", ".pem", ".p12", ".pfx", ".key"}
 FORBIDDEN_TRACKED_NAMES = {".env", "id_rsa", "id_ed25519"}
+
+HISTORICAL_RELEASE_TAGS = {
+    "v0.9.8-build-20260825-1442",
+    "v0.9.8-build-20260825-1810-diag",
+    "v0.9.8-build-20260825-1825-p1-149-diag",
+    "v0.9.8-build-20260825-1837-p1-150-diag",
+    "v0.9.8-build-20260825-1848-p1-151-diag",
+    "v0.9.8-build-20260825-1912-p1-152-diag",
+    "v0.9.8-build-20260825-1935-p1-153-diag",
+}
 
 P_CODE = re.compile(r"\bP([012])-(\d{3})\b")
 REGISTRY_ROW = re.compile(r"^\|\s*(P[012]-\d{3})\s*\|", re.MULTILINE)
@@ -95,6 +108,9 @@ def check_required_structure(result: CheckResult) -> None:
         DOCS / "TEST_STATUS.md",
         DOCS / "BUILD_AND_RECOVERY_RULES.md",
         DOCS / "RESTORE_PROMPT.md",
+        DOCS / "GITHUB_WORKFLOW.md",
+        RELEASE_INDEX,
+        PR_TEMPLATE,
         ROOT / "GITHUB_REPOSITORY_STATE.md",
         ROOT / "README.md",
         ROOT / "manifest.json",
@@ -216,6 +232,23 @@ def check_root_readme(result: CheckResult) -> None:
             result.error(f"README.md missing current navigation/runtime marker: {marker}")
 
 
+def check_process_controls(result: CheckResult) -> None:
+    if PR_TEMPLATE.is_file():
+        text = read(PR_TEMPLATE)
+        for marker in ("repository-integrity", "Exact reviewed head SHA", "manifest.json", "AUDIT_REGISTRY.md"):
+            if marker not in text:
+                result.error(f"pull request template missing safety marker: {marker}")
+
+    if RELEASE_INDEX.is_file():
+        text = read(RELEASE_INDEX)
+        missing = sorted(tag for tag in HISTORICAL_RELEASE_TAGS if tag not in text)
+        if missing:
+            result.error("release history index lost retained historical tags: " + ", ".join(missing))
+        for marker in ("RETAIN", "TEST_STATUS.md", "AUDIT_EVIDENCE.md"):
+            if marker not in text:
+                result.error(f"release history index missing retention/evidence marker: {marker}")
+
+
 def check_control_doc_links(result: CheckResult) -> None:
     for doc in CONTROL_DOCS:
         if not doc.is_file():
@@ -240,10 +273,11 @@ def check_control_doc_links(result: CheckResult) -> None:
 
 def check_canonical_references(result: CheckResult) -> None:
     required_refs = {
-        ROOT / "GITHUB_REPOSITORY_STATE.md": ["project_docs/AUDIT_REGISTRY.md", "project_docs/TEST_STATUS.md"],
+        ROOT / "GITHUB_REPOSITORY_STATE.md": ["project_docs/AUDIT_REGISTRY.md", "project_docs/TEST_STATUS.md", "project_docs/RELEASE_HISTORY_INDEX.md"],
         ROOT / "README.md": ["project_docs/AUDIT_REGISTRY.md", "project_docs/TEST_STATUS.md", "project_docs/BUILD_AND_RECOVERY_RULES.md"],
         DOCS / "RESTORE_PROMPT.md": ["AUDIT_REGISTRY.md", "TEST_STATUS.md"],
-        DOCS / "README_INDEX.md": ["AUDIT_REGISTRY.md", "BUILD_AND_RECOVERY_RULES.md"],
+        DOCS / "README_INDEX.md": ["AUDIT_REGISTRY.md", "BUILD_AND_RECOVERY_RULES.md", "RELEASE_HISTORY_INDEX.md", "GITHUB_WORKFLOW.md"],
+        DOCS / "GITHUB_WORKFLOW.md": ["RELEASE_HISTORY_INDEX.md", ".github/pull_request_template.md"],
     }
     for path, refs in required_refs.items():
         if not path.is_file():
@@ -262,6 +296,7 @@ def main() -> int:
     check_tracked_artifacts(result)
     check_release_truth(result)
     check_root_readme(result)
+    check_process_controls(result)
     check_control_doc_links(result)
     check_canonical_references(result)
 

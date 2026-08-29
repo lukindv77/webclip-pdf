@@ -5,6 +5,7 @@
 ## Working policy
 
 - Always fresh-fetch `main` before analysis or write operations.
+- Normal changes are PR-first: fresh `main` -> short-lived branch -> PR -> exact-head CI -> reviewed merge.
 - Current runtime remains Manifest V3 / `0.9.8` / Chrome >=118 until real release QA and an explicit release decision.
 - Stable P-numbers are never reused, including DONE/MERGED/SUPERSEDED codes.
 - Before allocating a new number, check `project_docs/AUDIT_REGISTRY.md`, `project_docs/AUDIT_DELTA_INDEX.md`, relevant family/history evidence and Git history.
@@ -67,8 +68,32 @@ See `project_docs/BUILD_AND_RECOVERY_RULES.md` and `project_docs/GITHUB_WORKFLOW
 
 `.github/workflows/repository-integrity.yml` is read-only with respect to repository contents. On push/PR it runs the repository consistency checker, JavaScript syntax validation, all deterministic JavaScript tests and the recovery provenance self-test. The temporary audit-source artifact and one-shot write permission used during consolidation have been removed.
 
-## Build artifacts
+`.github/pull_request_template.md` records the exact-head/runtime/audit/release checklist for PR review. This is procedural protection and does not claim GitHub server-side branch enforcement.
+
+## GitHub administrative hardening state
+
+Checkpoint 2026-08-29:
+
+- repository is private and the authenticated owner has GitHub admin permission;
+- `main` reports `protected=false`;
+- repository rulesets API reports that this feature requires GitHub Pro or a public repository for the current private repository;
+- branch-protection read endpoint is not accessible to the current integration;
+- therefore force-push/delete prevention and required-status enforcement are **not yet server-enforced**.
+
+Until GitHub protection becomes available, the safety substitute is PR-first workflow + exact-head `repository-integrity` + no force updates of `main`.
+
+Branch inventory at the same checkpoint:
+
+- `main` — canonical branch;
+- `cleanup-stage1-safety` — old cleanup branch with no unique source state; it is reused only as the temporary PR head for repository-hygiene changes and should be deleted after merge when branch deletion is available;
+- `work/p0-063-offscreen-budget` — diverged historical branch whose only unique change relative to current `main` is the obsolete `.github/workflows/p0-063-one-shot.yml`; no unique runtime source remains there. It is safe to delete when branch deletion is available.
+
+Do not force-move these branches merely to simulate deletion. Their historical commits are already recoverable through Git history.
+
+## Build artifacts and historical Releases
 
 Published binary builds belong in GitHub Releases rather than the working tree. Exact source state is identified by commit/tag; release assets carry their own checksums and metadata.
 
-The published `0.9.8` artifact remains a historical release artifact; current audit/docs progress does not imply a new build or release.
+The current GitHub Release inventory contains seven historical `0.9.8` pre-releases. They are intentionally **retained** because each holds an external binary snapshot, exact historical source SHA and SHA-256, and the P1-149…P1-153 sequence is reproducibility evidence for the real `its.1c.ru` clipping investigation. See `project_docs/RELEASE_HISTORY_INDEX.md`.
+
+Current audit/docs progress does not imply a new build or release.
