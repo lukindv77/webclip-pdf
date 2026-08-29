@@ -18,7 +18,7 @@
    - `project_docs/TEST_STATUS.md`;
    - при необходимости historical proof — `project_docs/TEST_EVIDENCE.md`.
 7. Для архитектуры/требований по теме читать текущие `project_docs/ARCHITECTURE.md`, `DATA_MODELS.md`, `DECISIONS_AND_RATIONALE.md`, `USER_REQUIREMENTS.md`, `TEST_PLAN.md` и актуальный runtime source.
-8. Если нужен краткий разговорный контекст старой audit-сессии, текущий `project_docs/HANDOFF_2026-08-29/` можно использовать только как historical convenience; свежий `main` + current registry/evidence всегда имеют приоритет.
+8. Если нужен старый разговорный checkpoint, искать его только в Git history; dated handoff folders не являются current repository authority.
 
 `project_docs/PRIORITIES_P0_P1_P2.md` теперь только compatibility pointer. Он **не** является вторым реестром статусов.
 
@@ -60,10 +60,12 @@
 - Annotated release tag — immutable pointer на exact tested/released commit.
 - Пользовательский extension ZIP не обязан содержать вторую полную копию исходников/recovery ZIP.
 - Отдельный recovery ZIP — только optional offline/disaster artifact одного clean exact commit; его metadata содержит source commit/tags/hashes.
-- Handoff создаётся только по прямому запросу и не становится параллельным source of truth.
+- Handoff создаётся только как disposable export по прямому запросу и не сохраняется в working tree как параллельный source of truth.
 
 ## Исторические файлы
 
 Root `P*_CLOSURE.md`, `STATIC_CHECKS_*.md`, `DEEP_AUDIT_2026-08-25.md`, `QA_STATUS_0_9_9.md` и `PROJECT_RECOVERY.md` уже прошли retirement comparison и удалены из current tree; их exact originals остаются в Git history.
+
+`project_docs/HANDOFF_2026-08-29/` также retirement-compared и удалён; mapping сохранён в `HANDOFF_RETIREMENT_2026-08-29.md`, exact originals — в Git history.
 
 Часть broad/correction/positive-control `AUDIT_DELTA_*` также уже lossless-консолидирована и удалена. Owner-specific deltas остаются до индивидуального retirement gate; уменьшать их количество ценой потери source proof/acceptance запрещено.
