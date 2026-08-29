@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Build the mandatory WebClip project recovery archive.
+"""Build a standalone WebClip offline recovery artifact.
 
-Run this AFTER all source/docs changes and BEFORE creating the user-facing build ZIP.
-The generated archive intentionally excludes itself to avoid recursion.
+The Git commit is the canonical source identity. This archive is an optional
+offline/disaster-recovery representation of one clean commit and is not meant
+to be nested inside the user-facing extension ZIP.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import pathlib
+import subprocess
 import sys
 import zipfile
 from datetime import datetime, timezone
@@ -54,6 +56,40 @@ def load_version() -> tuple[str, dict]:
     return version, manifest
 
 
+def run_git(*args: str) -> str:
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return proc.stdout.strip()
+
+
+def resolve_source_identity() -> tuple[str, list[str]]:
+    try:
+        commit = run_git("rev-parse", "HEAD")
+        status = run_git("status", "--porcelain", "--untracked-files=normal")
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise RuntimeError(
+            "Official recovery artifact requires a Git checkout so exact source "
+            "commit identity can be proven."
+        ) from exc
+
+    if len(commit) != 40 or any(ch not in "0123456789abcdefABCDEF" for ch in commit):
+        raise RuntimeError(f"Unexpected Git commit identity: {commit!r}")
+    if status:
+        raise RuntimeError(
+            "Refusing to build an official recovery artifact from a dirty Git tree. "
+            "Commit/stash/remove all changes first."
+        )
+
+    tags = [line.strip() for line in run_git("tag", "--points-at", "HEAD").splitlines() if line.strip()]
+    return commit.lower(), tags
+
+
 def validate_docs() -> None:
     missing = [name for name in REQUIRED_DOCS if not (DOCS_DIR / name).is_file()]
     if missing:
@@ -63,7 +99,6 @@ def validate_docs() -> None:
 def collect_source_files() -> list[pathlib.Path]:
     files: list[pathlib.Path] = []
 
-    # Runtime/top-level project files. Do not include packaged artifacts.
     for path in ROOT.iterdir():
         if not path.is_file():
             continue
@@ -71,7 +106,6 @@ def collect_source_files() -> list[pathlib.Path]:
             continue
         files.append(path)
 
-    # Build/recovery tooling is part of the restorable project source.
     tools = ROOT / "project_tools"
     if tools.is_dir():
         files.extend(p for p in tools.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
@@ -86,9 +120,9 @@ def collect_doc_files() -> list[pathlib.Path]:
 def build() -> pathlib.Path:
     version, manifest = load_version()
     validate_docs()
+    source_commit, source_tags = resolve_source_identity()
     RECOVERY_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Only one current recovery archive should remain in the build tree.
     for old in RECOVERY_DIR.glob("WebClip_Project_Recovery_v*.zip"):
         old.unlink()
 
@@ -102,13 +136,22 @@ def build() -> pathlib.Path:
         "version": version,
         "manifest_version": manifest.get("manifest_version"),
         "created_at_utc": created_at,
-        "recovery_schema": 1,
+        "recovery_schema": 2,
+        "artifact_role": "offline-disaster-recovery",
+        "canonical_source": "git-commit",
+        "source_commit": source_commit,
+        "source_tags": source_tags,
+        "source_tree_required_clean": True,
         "source_file_count": len(source_files),
         "doc_file_count": len(doc_files),
-        "rule": "Every user-facing build must include a recovery archive matching manifest.json version.",
+        "rule": (
+            "The archive is a derived offline copy of source_commit. "
+            "It is not a parallel source of truth and is not required inside "
+            "the user-facing extension ZIP."
+        ),
     }
 
-    recovery_readme = f"""# WebClip Project Recovery {version}\n\nThis archive is the self-contained recovery snapshot for WebClip PDF Prototype {version}.\n\n## Start here\n\n1. Read `project_docs/README_INDEX.md`.\n2. Read `project_docs/USER_REQUIREMENTS.md` and `project_docs/PROJECT_OVERVIEW.md`.\n3. Read `project_docs/ARCHITECTURE.md`, `project_docs/CHANGELOG_AND_RATIONALE.md`, and `project_docs/PRIORITIES_P0_P1_P2.md`.\n4. Treat files under `source/` as the source-of-truth code snapshot for version {version}.\n5. Before producing a newer build, follow `project_docs/BUILD_AND_RECOVERY_RULES.md`.\n\nThe archive intentionally does not contain itself. Recreate the next recovery zip with `source/project_tools/build_recovery_archive.py`.\n"""
+    recovery_readme = f"""# WebClip Project Recovery {version}\n\nThis is a standalone offline/disaster-recovery artifact for WebClip PDF Prototype {version}.\n\nCanonical source identity: Git commit `{source_commit}`.\nTags pointing at that commit when the artifact was built: {", ".join(source_tags) if source_tags else "(none)"}.\n\n## Start here\n\n1. Read `BUILD_METADATA.json` and note `source_commit`.\n2. Verify `FILE_HASHES.sha256`.\n3. Read `project_docs/RESTORE_PROMPT.md` and `project_docs/README_INDEX.md`.\n4. If GitHub is available, restore/compare the exact Git commit first; that Git tree is canonical.\n5. If GitHub is unavailable, `source/` is the offline representation of that exact commit.\n6. After Git access returns, compare the offline tree/hashes and return to repository history.\n\nThis archive is not intended to be nested inside the user-facing extension ZIP.\nCreate a newer official recovery artifact only from a clean exact Git commit.\n"""
 
     hashes: list[str] = []
 
@@ -130,7 +173,6 @@ def build() -> pathlib.Path:
 
         zf.writestr("FILE_HASHES.sha256", "\n".join(hashes) + "\n")
 
-    # Integrity/self-check.
     with zipfile.ZipFile(output, "r") as zf:
         names = set(zf.namelist())
         required = {
