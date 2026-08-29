@@ -4,16 +4,16 @@ Baseline canonical `main`: `cef798f693ce5a7d4573484baf819389ace079af`.
 
 This is audit evidence, not an implementation checkpoint. Production runtime, `manifest.json`, release state and historical product-test claims are unchanged.
 
-Canonical current status remains in `AUDIT_REGISTRY.md`. This delta records source proof, policy-safe browser reproductions, dedup decisions, positive controls and external web-clipping research from a 12-block deep-audit tranche.
+Canonical current status remains in `AUDIT_REGISTRY.md`. This delta records source proof, policy-safe browser reproductions, dedup decisions, positive controls and external web-clipping research from a 16-block deep-audit tranche.
 
 ## Executive result
 
 Two audit-status changes are justified:
 
-1. **P0-004 is ACTIVE again with a broader selected-PDF fidelity contract.** The exact historical P1-153 `its.1c.ru` root-document pagination bug stays DONE; this is a different root cause. Current selected-only print CSS keeps ordinary ancestors of an Include alive without normalizing their clipping/layout/visual effects. Those ancestors can truncate selected descendants or inject unselected presentation into the PDF.
+1. **P0-004 is ACTIVE again with a broader selected-PDF fidelity contract.** The exact historical P1-153 `its.1c.ru` root-document pagination bug stays DONE; this is a different root cause. Current selected-only print CSS keeps ordinary ancestors of an Include alive without normalizing their clipping/layout/visual effects, and does not neutralize clipping on the Include root itself. Those constraints can truncate selected descendants or inject unselected presentation into the PDF.
 2. **New P1-226 is ACTIVE.** Same-origin iframe selection geometry is projected to the top viewport by simple rectangle addition, which is wrong for iframe border/content-box offsets and CSS transform/scale/zoom. The same geometry drives hover/selected outlines, candidate usability and independent-selection overlap rejection.
 
-No new owner is assigned for Shadow DOM, flattened-frame rendered state, disclosure activation, general deferred-content strategy, or Reader-mode extraction: those observations refine or confirm P2-006, P1-187, P0-067/P1-212, P1-003/P2-007 and P1-160/P2-007 respectively.
+No new owner is assigned for Shadow DOM, flattened-frame rendered state, disclosure activation, general deferred-content strategy, Reader-mode extraction, ordinary flex/grid/multicol/table pagination or the tested content-visibility/SVG cases: those observations either refine existing owners or are retained as negative controls.
 
 ## Block 1 — same-origin iframe geometry: new P1-226
 
@@ -224,16 +224,53 @@ snapDOM documents a frozen-capture approach that traverses Shadow DOM, snapshots
 
 **Transferable lesson:** WebClip's existing P0-075 direction toward an isolated/frozen print representation is technically sound. In particular, P1-226 geometry and P1-187 live rendered state are known capture-engine concerns rather than exotic edge cases.
 
+## Block 13 — clipping on the Include root itself: P0-004 refinement
+
+The previous ancestor reproduction is not the full boundary. Current print CSS only gives `[INCLUDE] { break-inside:auto; }`; it does not neutralize `height + overflow` on the selected root itself.
+
+Chromium 144 policy-safe probes with the Include carrying `height:180px` showed:
+
+- `overflow:auto` -> TOP present, BOTTOM missing;
+- `overflow:hidden` -> TOP present, BOTTOM missing.
+
+Therefore the P0-004 contract must cover **both the Include root and structural ancestor chain**. A user selecting a scrollable article/card/document viewport is authorizing the contained selected content, but current print semantics can preserve only the viewport slice.
+
+## Block 14 — paged-layout negative controls
+
+The audit must not infer “all non-block layout is unsafe” from the clipping reproductions. Long Include roots were tested with ordinary:
+
+- `display:flex; flex-direction:column`;
+- `display:grid`;
+- `column-count:2`;
+- table-like flow.
+
+In these probes both TOP and BOTTOM markers survived pagination. No independent flex/grid/multicol/table root cause is registered from this tranche.
+
+This matters for implementation: the P0-004 fix should target proven clipping/selection-boundary constraints rather than flattening every selected layout into generic block flow.
+
+## Block 15 — content-visibility negative control
+
+A long Include using `content-visibility:auto; contain-intrinsic-size:2000px` retained both TOP and BOTTOM markers in the tested Chromium PDF path. Current `html/body` print normalization also forces root `content-visibility:visible`, but this probe shows no basis for a generic “content-visibility always loses selected content” owner.
+
+Site-specific virtualized DOM can still be incomplete before print and remains part of the explicit deferred-content strategy boundary from Block 9.
+
+## Block 16 — SVG print positive control and rendered-state boundary
+
+Top-document selected SVG text and a same-document SVG `<use href="#...">` control both appeared in generated PDF text under the selected-only print stylesheet. No generic SVG-loss owner is registered from this pass.
+
+This contrasts usefully with Block 7: live browser-native print preserves ordinary top-document rendered state better than `cloneNode(true)`-based iframe flattening. The architectural problem is not “PDF cannot represent these primitives”; it is the fidelity gap introduced when WebClip builds a secondary cloned representation without explicitly freezing renderer-owned state.
+
 ## Consolidated acceptance impact
 
 ### P0-004
 
-1. Included content inside `overflow:hidden|auto|clip`, paint containment, fixed/sticky and equivalent clipping ancestors remains complete in the actual PDF.
+1. Included content inside `overflow:hidden|auto|clip`, paint containment, fixed/sticky and equivalent clipping **on the Include root or its structural ancestors** remains complete in the actual PDF.
 2. Structural ancestors needed to preserve layout do not contribute unselected pseudo/generated/background/border/mask presentation unless the user selected that presentation by the defined mode.
 3. The same completeness/selection-bound contract holds in granted cross-origin frame-agent printing.
 4. Selecting the ancestor itself can still preserve its intended appearance; the solution must distinguish structural scaffolding from selected presentation.
-5. The solution composes with P0-075 isolated/frozen representation and does not rely on unsafe permanent host DOM mutation.
-6. Historical P1-153 root-document pagination remains a regression control but is not treated as blanket proof of selected-subtree fidelity.
+5. Ordinary flex/grid/multicol/table layouts that already paginate correctly must not be needlessly flattened or degraded by the fix.
+6. The solution composes with P0-075 isolated/frozen representation and does not rely on unsafe permanent host DOM mutation.
+7. Historical P1-153 root-document pagination remains a regression control but is not treated as blanket proof of selected-subtree fidelity.
 
 ### P1-187
 
