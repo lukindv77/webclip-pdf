@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed if GitHub Actions workflows use mutable external action refs."""
+"""Fail closed on mutable CI dependencies, write-capable workflows, or noisy Dependabot scope."""
 
 from __future__ import annotations
 
@@ -10,13 +10,25 @@ from collections.abc import Mapping
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
+DEPENDABOT = ROOT / ".github" / "dependabot.yml"
 USES = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)", re.MULTILINE)
 FULL_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
+WRITE_PERMISSION = re.compile(r"^\s+[A-Za-z0-9_-]+:\s*write\s*$", re.MULTILINE)
+MUTATING_GH_API = re.compile(r"\bgh\s+api\b[^\n]*--method\s+(POST|PUT|PATCH|DELETE)\b", re.IGNORECASE)
 
 EXPECTED_TOOL_VERSIONS = {
     "python-version": "3.12.14",
     "node-version": "22.23.2",
 }
+
+DEPENDABOT_MARKERS = (
+    'package-ecosystem: "github-actions"',
+    'directory: "/"',
+    'interval: "monthly"',
+    'open-pull-requests-limit: 1',
+    "github-actions:",
+    '- "*"',
+)
 
 
 def evaluate(workflows: Mapping[str, str]) -> list[str]:
@@ -24,6 +36,11 @@ def evaluate(workflows: Mapping[str, str]) -> list[str]:
     for name, text in sorted(workflows.items()):
         if "runs-on: ubuntu-latest" in text:
             errors.append(f"{name}: mutable runner alias ubuntu-latest is forbidden; pin ubuntu-24.04")
+
+        if WRITE_PERMISSION.search(text):
+            errors.append(f"{name}: workflow permissions must remain read-only; '*: write' detected")
+        if MUTATING_GH_API.search(text):
+            errors.append(f"{name}: mutating 'gh api --method ...' command is forbidden in permanent workflows")
 
         for use in USES.findall(text):
             if use.startswith("./"):
@@ -43,6 +60,23 @@ def evaluate(workflows: Mapping[str, str]) -> list[str]:
     return errors
 
 
+def evaluate_dependabot(text: str) -> list[str]:
+    errors: list[str] = []
+    for marker in DEPENDABOT_MARKERS:
+        if marker not in text:
+            errors.append(f"dependabot.yml missing low-noise GitHub Actions marker: {marker}")
+
+    ecosystems = re.findall(r"package-ecosystem:\s*[\"']?([^\"'\s]+)", text)
+    unexpected = sorted(set(ecosystems) - {"github-actions"})
+    if unexpected:
+        errors.append("dependabot.yml must monitor only github-actions; unexpected ecosystem(s): " + ", ".join(unexpected))
+
+    if text.count("package-ecosystem:") != 1:
+        errors.append("dependabot.yml must contain exactly one update ecosystem to avoid dependency-PR sprawl")
+
+    return errors
+
+
 def load_workflows() -> dict[str, str]:
     if not WORKFLOWS.is_dir():
         return {}
@@ -58,13 +92,24 @@ def main() -> int:
     if not workflows:
         print("ERROR: no GitHub Actions workflows found", file=sys.stderr)
         return 1
+
     errors = evaluate(workflows)
+
+    if not DEPENDABOT.is_file():
+        errors.append(".github/dependabot.yml is missing")
+    else:
+        errors.extend(evaluate_dependabot(DEPENDABOT.read_text(encoding="utf-8")))
+
     if errors:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
-        print(f"CI pin check FAILED: {len(errors)} error(s).", file=sys.stderr)
+        print(f"CI/supply-chain hygiene FAILED: {len(errors)} error(s).", file=sys.stderr)
         return 1
-    print(f"CI pin check PASS: {len(workflows)} workflow(s), all external actions immutable.")
+
+    print(
+        f"CI/supply-chain hygiene PASS: {len(workflows)} workflow(s), "
+        "external actions immutable, permissions read-only, Dependabot low-noise."
+    )
     return 0
 
 
