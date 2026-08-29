@@ -23,7 +23,7 @@ Important preserved reservations:
 
 - late `P0-079` and `P0-080` are occupied;
 - historical recovery explicitly reserved `P1-072…P1-131` even where an old physical snapshot omitted rows;
-- every `P1-195…P1-225` is occupied;
+- every `P1-195…P1-226` is occupied;
 - `P2-009` and `P2-010` are explicitly history-reserved;
 - all other codes ever present in the legacy priority registry/history remain permanently reserved.
 
@@ -39,6 +39,7 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 
 | Code | Status | Single current owner / root cause |
 |---|---|---|
+| P0-004 | ACTIVE | Selected PDF fidelity must be complete and selection-bounded: ordinary page-owned ancestor layout/clipping/positioning/visual effects cannot truncate included descendants or inject unselected ancestor presentation into the saved copy. |
 | P0-013 | ACTIVE | Restore/import selection authority must be bound to the exact explicitly selected backup object/staging receipt; old selection/file identity cannot silently retarget. |
 | P0-022 | ACTIVE | Imported/legacy Yandex locator metadata is not destructive object provenance; remote destructive authority requires proven exact object identity. |
 | P0-023 | ACTIVE | PDF retry cache must be exact source-document generation bound; same-URL reload/replacement cannot reuse an older document's PDF. |
@@ -134,7 +135,7 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 |---|---|---|
 | P1-181 | MERGED → P1-209 | Both describe the same extension-page version-refresh root cause: success/version marker is committed before enumeration/reload/ack repair actually succeeds. P1-209 is the single current owner; P1-181 remains permanently reserved as historical duplicate. |
 
-## P1 — late current ACTIVE owners P1-195…P1-225
+## P1 — late current ACTIVE owners P1-195…P1-226
 
 Every code in this range is occupied and ACTIVE.
 
@@ -171,8 +172,9 @@ Every code in this range is occupied and ACTIVE.
 | P1-223 | ACTIVE | Create Folder remote mutation target and UI browse-refresh authority are separate generations; late completion cannot supersede newer navigation. |
 | P1-224 | ACTIVE | Same-origin frame/ancestor print style/marker rollback needs compare-before-restore; whole old style cannot overwrite newer host inline style. |
 | P1-225 | ACTIVE | Journal comment editor must freeze or preserve newer draft after save admission; late success cannot silently destroy text typed while request was pending. |
+| P1-226 | ACTIVE | Same-origin iframe selection geometry must compose content-box offsets and CSS transforms/zoom across every ancestor frame; simple child-rect plus frame-rect addition cannot drive outlines, usability, or overlap authority. |
 
-P1-195's historical reconstruction source is Git commit `b2d9ec47833f00fc4b0b42923d1671ae20286f31`; detailed evidence for P1-196…225 is indexed in `AUDIT_DELTA_INDEX.md` and remaining owner-specific deltas.
+P1-195's historical reconstruction source is Git commit `b2d9ec47833f00fc4b0b42923d1671ae20286f31`; detailed evidence for P1-196…226 is indexed in `AUDIT_DELTA_INDEX.md` and remaining owner-specific deltas.
 
 ## DONE items explicitly retained
 
