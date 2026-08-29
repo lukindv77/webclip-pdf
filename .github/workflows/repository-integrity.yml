@@ -42,6 +42,9 @@ jobs:
       - name: Release readiness schema/status
         run: python project_tools/check_release_readiness.py status
 
+      - name: Release readiness checker self-test
+        run: python project_tools/test_release_readiness.py
+
       - name: JavaScript syntax
         shell: bash
         run: |
