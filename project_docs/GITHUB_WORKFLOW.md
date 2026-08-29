@@ -70,11 +70,12 @@ The `external-only` marker is an explicit audited exception, not a generic waive
 
 External GitHub Actions are referenced only by exact 40-character commit SHA. Mutable refs such as `@v4`, `@v5`, `@main` or branch names are forbidden by `project_tools/check_ci_pins.py`.
 
-Current reviewed pins:
+Exact current action pins are intentionally **not duplicated in this document**. The authoritative pin values are the `uses:` lines in the permanent workflow files:
 
-- `actions/checkout@11d5960a326750d5838078e36cf38b85af677262` (`v4` line);
-- `actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065` (`v5` line);
-- `actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020` (`v4` line).
+- `.github/workflows/repository-integrity.yml`;
+- `.github/workflows/release-gate.yml`.
+
+Dependabot may update those exact SHAs in a reviewed grouped maintenance PR. This policy document changes only when the policy itself changes, not for every routine action-version update. `project_tools/check_ci_pins.py` validates that every external action reference remains a full immutable SHA.
 
 Hosted runner family is fixed to `ubuntu-24.04`; setup inputs are fixed to Python `3.12.14` and Node.js `22.23.2`.
 
