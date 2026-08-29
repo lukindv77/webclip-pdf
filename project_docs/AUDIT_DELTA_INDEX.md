@@ -12,7 +12,7 @@ No standalone audit delta is a current status authority. New audit findings must
 
 - `AUDIT_DELTA_SELECTION_CAPTURE_FIDELITY_2026-08-29.md`
 
-  PDF/print + frame selection fidelity. Registered scope: P0-004 ACTIVE refinement; new P1-226 ACTIVE; supporting dedup/refinement evidence for P0-067/P1-212, P1-003, P1-187, P2-006 and P2-007.
+  PDF/print + frame selection fidelity. Registered scope: P0-004 ACTIVE refinement; new P1-226 ACTIVE. Durable supporting summary: `AUDIT_SELECTION_CAPTURE_FIDELITY_EVIDENCE.md`. Supporting dedup/refinement evidence also covers P0-067/P1-212, P1-003, P1-187, P2-006 and P2-007.
 
 ## Families
 
