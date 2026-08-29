@@ -10,6 +10,77 @@ Canonical authorities остаются:
 - current automated test truth — exact GitHub Actions run + `TEST_STATUS.md` как current narrative;
 - release truth — `RELEASE_READINESS.md`.
 
+## Постоянная продуктовая цель WebClip PDF и обязательные правила глубокого аудита
+
+Главная цель существования WebClip PDF — **максимально качественно, точно и удобно позволять пользователю выделять нужную область веб-страницы, снимать максимально faithful копию выбранного содержимого и сохранять её для последующего чтения и/или долгосрочного архивного хранения**. PDF, Journal, backup/recovery, cloud storage, permissions, UI и остальные подсистемы оцениваются в том числе по тому, насколько они поддерживают эту основную цель.
+
+### Selection fidelity — корректное и удобное выделение
+
+Глубокий аудит обязан рассматривать пользовательское выделение как критический продуктовый контракт. Нужно проверять не только работу UI рамки/области, но и соответствие между тем, **что пользователь фактически видел и выбрал**, и тем, **что затем было захвачено и сохранено**.
+
+Обязательные классы проверки включают как минимум:
+
+- viewport/scroll, long pages и nested scrolling containers;
+- browser zoom, CSS zoom, `devicePixelRatio`, transforms и разные coordinate spaces;
+- fixed/sticky/overlay элементы и layout shifts;
+- lazy loading, delayed rendering и динамически меняющийся DOM;
+- SPA navigation, same-URL document replacement и stale selection state;
+- iframe, cross-origin frame boundaries, frame/document identity и reload/navigation;
+- shadow DOM и компоненты со сложной геометрией;
+- изменение страницы между выбором, capture, print/render и сохранением;
+- корректное восстановление страницы после любых временных mutation, применённых расширением.
+
+Любое существенное расхождение между пользовательским намерением `я выделил это` и фактическим результатом `расширение сохранило другое` считается существенным WebClipping finding и должно анализироваться на root cause/owner.
+
+### Archival fidelity — качество и точность сохранённой копии
+
+Успешный API call, download или наличие PDF-файла сами по себе не доказывают успех WebClipping. Аудит обязан оценивать конечный результат как архивную копию конкретного состояния страницы и проверять, насколько она пригодна для последующего чтения и хранения.
+
+Проверка должна включать как минимум:
+
+- полноту и порядок текста;
+- изображения, background images, SVG, canvas и другие визуальные ресурсы;
+- layout, размеры, переносы, clipping/overflow и page breaks;
+- fonts, styles, colors и существенные визуальные свойства;
+- links и пригодность результата для последующего чтения;
+- content outside viewport и long-page completeness;
+- fixed/sticky content, чтобы он не терялся и не дублировался ошибочно;
+- iframe/content boundaries там, где capture технически и по permissions допустим;
+- отсутствие временных служебных DOM/style artifacts самого расширения;
+- отсутствие случайной модификации исходной страницы после завершения операции;
+- соответствие сохранённой копии именно той logical page/document generation, которую пользователь намеревался зафиксировать.
+
+Ключевой invariant глубокого аудита:
+
+**Selection intent -> captured source state -> rendered archival copy должны относиться к одной и той же логической версии документа, frame identity и выбранной области либо система обязана честно сигнализировать degraded/unknown/retry вместо выдачи неточного результата как успешного.**
+
+### Обязательное внешнее исследование WebClipping
+
+Глубокий аудит **обязан регулярно изучать опыт других разработчиков, вендоров и пользователей похожего WebClipping/WebArchiving функционала**, а не ограничиваться внутренним кодом проекта.
+
+При релевантных вопросах нужно использовать внешнее исследование, включая глубокое исследование нескольких независимых источников, и изучать:
+
+- архитектуры и технические подходы других WebClipping/WebArchiving решений;
+- доступный open-source код, алгоритмы capture/snapshot/render/serialization и их trade-offs;
+- issues, bug reports, discussions, postmortems и известные browser/platform limitations;
+- пользовательские истории, complaints, usability problems и ожидания от clipping/archive fidelity;
+- подходы к area selection, full-page capture, DOM snapshotting, print pipelines, offline copies, iframe/shadow DOM, dynamic/lazy content и long-page rendering;
+- поведение решений уровня browser extensions, archival tools и vendor clipping products там, где сравнение помогает обнаружить пропущенный failure mode или более сильную архитектуру.
+
+Внешняя реализация не считается автоматически правильной. Чужой опыт используется как источник гипотез и известных failure modes, после чего вывод обязательно проверяется против fresh `main`, текущей архитектуры и фактического поведения WebClip PDF.
+
+Если исследование обнаруживает:
+
+1. конкретный дефект/риск текущей реализации — выполнить обычный duplicate/root-cause check и привязать finding к существующему owner либо предложить новый owner по принятому процессу;
+2. архитектурное улучшение, необходимое для fidelity/reliability основной WebClipping функции — вынести пользователю конкретное предложение с преимуществами, рисками и местом изменения;
+3. новую продуктовую возможность, способную заметно улучшить selection UX, capture fidelity, archive readability или долговечность результата — предложить пользователю и, если это действительно новая accepted backlog-работа, оформить как P2 только после проверки `AUDIT_REGISTRY.md`, family evidence, history и Git на отсутствие существующего owner/duplicate.
+
+### Поведение глубокого аудита относительно основной цели
+
+Приоритизация findings должна учитывать продуктовый impact. При прочих равных дефект, который способен привести к неверному выделению, неполному/неточному capture, потере части страницы, сохранению не той document generation или созданию misleading archival copy, имеет более высокий вес, чем внутренний дефект сопоставимой технической сложности, не влияющий на основное назначение расширения.
+
+Глубокий аудит должен активно пытаться опровергать предположения реализации через controlled schedules: reorder, timeout, late settlement, worker restart, navigation/reload, frame reuse, permission revoke/regrant, account/root switch, DOM/layout change, clear/import races и stale UI. Цель — установить, какие invariants действительно гарантируются кодом, а какие только предполагаются.
+
 ## Постоянный триггер перехода в новый чат
 
 Точная фраза пользователя:
