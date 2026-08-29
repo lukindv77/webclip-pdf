@@ -17,7 +17,7 @@ const optionsHtml = read('options.html');
 const journalCss = read('journal.css');
 const optionsCss = read('options.css');
 const worker = read('service-worker.js');
-const priorities = read('project_docs/PRIORITIES_P0_P1_P2.md');
+const auditRegistry = read('project_docs/AUDIT_REGISTRY.md');
 
 const stages = [
   'read-journal',
@@ -57,6 +57,8 @@ for (const stage of stages) {
 
 assert(/type:\s*'WEBCLIP_JOURNAL_YANDEX_EXPORT'[\s\S]*?operationId/.test(optionsJs), 'options: manual backup must use an operationId-bound backup request');
 assert(/async function exportJournalToYandex\(\)[\s\S]*?showBackupProgress\(operationId\)[\s\S]*?WEBCLIP_JOURNAL_YANDEX_EXPORT/.test(journalJs), 'journal: manual backup must show modal before starting Yandex export');
-assert(/\| P0-014 \| P0 \| REGRESSION \|/.test(priorities), 'P0-014 must be marked REGRESSION after local closure checks');
+
+assert(/## Default status for legacy assigned P0\/P1 codes[\s\S]*?\*\*IMPLEMENTED \/ RELEASE-REGRESSION\*\*/.test(auditRegistry), 'canonical audit registry must preserve the default implemented/release-regression state for legacy assigned P0/P1 codes');
+assert(!/^\|\s*P0-014\s*\|\s*(?:ACTIVE|DONE|MERGED|SUPERSEDED)/m.test(auditRegistry), 'P0-014 must not be overridden to a different canonical status without updating this regression gate');
 
 console.log('PASS P0-014 manual backup blocking progress UX regression');
