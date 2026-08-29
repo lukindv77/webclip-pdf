@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   statuses: write
 
 concurrency:
@@ -81,17 +81,21 @@ jobs:
           exit 1
 
       - name: Recovery artifact provenance self-test
-        if: ${{ always() }}
         run: python project_tools/test_recovery_archive.py
 
-      - name: Upload temporary audit source bundle
-        if: ${{ always() && github.ref == 'refs/heads/main' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: audit-source-${{ github.sha }}
-          retention-days: 1
-          if-no-files-found: error
-          path: |
-            project_docs/AUDIT_REGISTRY.md
-            project_docs/AUDIT_DELTA_INDEX.md
-            project_docs/AUDIT_DELTA_*.md
+      - name: One-shot audit family consolidation
+        if: ${{ github.ref == 'refs/heads/main' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python project_tools/consolidate_audit_families.py
+          python project_tools/check_repository_consistency.py
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Audit families already consolidated; no commit required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "docs: losslessly consolidate remaining audit families"
+          git push origin HEAD:main
