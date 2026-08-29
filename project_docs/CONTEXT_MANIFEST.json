@@ -26,6 +26,8 @@
     "audit": [
       "project_docs/AUDIT_HISTORY_INDEX.md",
       "project_docs/AUDIT_EVIDENCE.md",
+      "project_docs/AUDIT_FORMAT_NEUTRAL_CAPTURE_RESEARCH_EVIDENCE.md",
+      "project_docs/WEBCLIP_COPY_ARCHITECTURE_POLICY.md",
       "project_docs/TEST_EVIDENCE.md"
     ],
     "development": [
