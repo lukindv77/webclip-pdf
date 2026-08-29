@@ -8,6 +8,12 @@ All formerly current `AUDIT_DELTA_*.md` evidence files have completed lossless f
 
 No standalone audit delta is a current status authority. New audit findings must first be registered in `AUDIT_REGISTRY.md`; if a temporary delta is created during active analysis, CI requires it to be indexed until it is folded into the appropriate family evidence.
 
+## Current temporary audit deltas
+
+| Delta | Family | Registered owners / role |
+|---|---|---|
+| `AUDIT_DELTA_SELECTION_CAPTURE_FIDELITY_2026-08-29.md` | PDF/print + frame selection fidelity | P0-004 ACTIVE refinement; new P1-226 ACTIVE; supporting dedup/refinement evidence for P0-067/P1-212, P1-003, P1-187, P2-006 and P2-007. |
+
 ## Families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
@@ -23,7 +29,7 @@ No standalone audit delta is a current status authority. New audit findings must
 | 9 | Local download / native Save As / file settlement | `AUDIT_FAMILY_LOCAL_DOWNLOAD_SAVEAS_EVIDENCE.md` | P0-039, P1-079, P1-080, P1-087, P1-129, P1-146, P1-156, P1-169, P1-210. | 12 |
 | 10 | Chrome/MV3 APIs / browser-owned state / extension-page transport | `AUDIT_FAMILY_CHROME_MV3_SETTLEMENT_EVIDENCE.md` | P1-123…P1-131, P1-157, P1-158, P1-166, P1-170, P1-173, P1-203, P1-204, P1-209, P1-210, P1-217. | 17 |
 | 11 | Frame permission / cross-origin frame-agent identity and command generation | `AUDIT_FAMILY_FRAME_PERMISSION_IDENTITY_EVIDENCE.md` | P1-004, P1-157, P1-171, P1-193, P1-199…P1-203, P1-214. | 12 |
-| 12 | PDF/print / offscreen resource lifetime / live-DOM rollback / source generation | `AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md` | P0-003, P0-023, P0-063, P0-065, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, P1-069, P1-149…P1-153, P1-167, P1-199, P1-212…P1-214, P1-218…P1-224. | 26 |
+| 12 | PDF/print / offscreen resource lifetime / live-DOM rollback / source generation | `AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md` | P0-004, P0-003, P0-023, P0-063, P0-065, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, P1-003, P1-069, P1-149…P1-153, P1-167, P1-187, P1-199, P1-212…P1-214, P1-218…P1-224, P1-226. | 26 |
 | 13 | Incognito / trust boundaries / signed-link redaction | `AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md` | P0-033, P0-045 | previously consolidated |
 | 14 | Derived URL stats / view indexes | `AUDIT_FAMILY_URLSTATS_EVIDENCE.md` | P0-050 | previously consolidated |
 | 15 | Retired broad revalidation / cross-cutting inventories | `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` | cross-cutting historical controls | previously consolidated |
