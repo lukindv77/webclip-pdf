@@ -38,7 +38,12 @@ A future HTML/archive renderer may preserve more interactive semantics than PDF.
 
 Although PDF is not the universal copy model, PDF saving must remain predictable and high fidelity.
 
-For the faithful PDF mode, WebClip should preserve a static representation of the page/selected area **as it was actually presented to the user at the admitted capture state**, including material visual state that the user could perceive through normal interaction with the page. The PDF pipeline must not silently substitute a different responsive variant, page generation, resource state or unrelated layout simply because Chromium pagination uses different geometry.
+A faithful PDF is **not merely a screenshot of the current viewport**. Its contract combines two requirements:
+
+1. preserve the meaningful visual/structural presentation of the selected page state as the user actually encounters it on the site;
+2. produce a complete static copy of the selected content that the user can actually reach through ordinary non-destructive interaction such as scrolling, subject to an explicit static-flattening policy.
+
+This means pagination or static materialization may legitimately differ from the literal viewport rectangle, but it must not silently substitute a different responsive variant, page generation, unrelated layout, resource generation or hidden content policy merely because Chromium print geometry is different.
 
 At minimum PDF fidelity auditing must cover:
 
@@ -46,8 +51,9 @@ At minimum PDF fidelity auditing must cover:
 - zoom/transforms/frame geometry;
 - colors/backgrounds/fonts/SVG/canvas/images;
 - current form/control and other renderer-owned visible state where relevant;
-- open/closed/top-layer state where it is part of the admitted presentation;
-- clipping/overflow/fixed/sticky/long-content completeness;
+- open/closed/top-layer state and the explicit static-materialization rule for revealable content;
+- scrollable/nested content and long-page completeness without arbitrary clipping;
+- clipping/overflow/fixed/sticky behavior and pagination;
 - clickable links where PDF can safely represent them;
 - temporal state such as animations/transitions and page mutations: output must be bound to a defined admitted state rather than arbitrary render timing;
 - inability of WebClip's own dialogs/focus/preparation mutations to silently change the page state that is later claimed as the user's captured view.
@@ -56,11 +62,13 @@ At minimum PDF fidelity auditing must cover:
 
 ## Interactive content and static formats
 
-“User can interact with it on the site” does not mean a static PDF must execute the site's JavaScript or preserve dangerous active behavior. It means the capture model must understand that the visible state may depend on interaction and must apply an explicit policy.
+“User can interact with it on the site” does not mean a static PDF must execute the site's JavaScript or preserve dangerous active behavior. It means the capture model must understand which content/state is reachable through normal interaction and must apply an explicit, deterministic static representation policy.
 
 Examples:
 
-- A closed disclosure that can be expanded on the live site should not be silently expanded in a faithful-current-view PDF merely to expose more text. An explicitly named expanded/reader mode may materialize revealable content in an inert representation.
+- A scroll container may be expanded into complete static flow so that content the user could reach by scrolling is not lost, while preserving the container's meaningful ordering/appearance as far as the static format permits.
+- A closed disclosure that can be expanded on the live site needs an explicit policy. A current-view mode may keep it closed; an expanded/archival mode may materialize revealable content into an inert representation. If materialization changes the original visible state, the mode/diagnostics must make that transformation predictable rather than silently presenting it as an exact current-view snapshot.
+- Materialization must not synthesize page-owned click/submit/navigation behavior. It should derive an inert representation or use safe state extraction.
 - Focus/hover/target/top-layer/control state that materially changes what the user sees must be captured at a defined admission point or explicitly documented as outside a selected mode's fidelity envelope.
 - Future interactive/offline HTML-like formats may preserve safe interaction semantics that PDF cannot; they must still remain inert with respect to privileged WebClip authority and must not become a vehicle for replaying untrusted page actions with extension privileges.
 
