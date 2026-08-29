@@ -7,7 +7,7 @@
 - Always fresh-fetch `main` before analysis or write operations.
 - Current runtime remains Manifest V3 / `0.9.8` / Chrome >=118 until real release QA and an explicit release decision.
 - Stable P-numbers are never reused, including DONE/MERGED/SUPERSEDED codes.
-- Before allocating a new number, check `AUDIT_REGISTRY.md`, relevant `AUDIT_DELTA_INDEX.md` family/deltas, history evidence and Git history.
+- Before allocating a new number, check `project_docs/AUDIT_REGISTRY.md`, relevant `AUDIT_DELTA_INDEX.md` family/deltas, history evidence and Git history.
 - Historical test results are evidence only. Do not claim tests were rerun unless actually executed on the current runtime tree.
 - Real unpacked Chrome QA and real Yandex E2E remain release requirements.
 - Builds, tags and GitHub Releases are created only on explicit request after the applicable QA gate.
@@ -47,7 +47,8 @@ The following classes/files were retirement-compared, had unique information mig
 - `QA_STATUS_0_9_9.md`;
 - `PROJECT_RECOVERY.md`;
 - `AUDIT_CONSOLIDATION_INDEX.md` after unified registry merge;
-- 13 broad/correction/positive-control `AUDIT_DELTA_*` files already consolidated into current evidence documents.
+- dated `project_docs/HANDOFF_2026-08-29/` after mapping to current registry/evidence/recovery documents;
+- broad/correction/positive-control `AUDIT_DELTA_*` files that have passed lossless family/cross-cutting retirement.
 
 Owner-specific audit deltas are **not** bulk-deleted. They stay until their family passes the lossless retirement gate defined in `AUDIT_DELTA_INDEX.md`.
 
@@ -58,12 +59,13 @@ Owner-specific audit deltas are **not** bulk-deleted. They stay until their fami
 - User-facing extension ZIP is derived from that commit/tag and does not require a nested full source/recovery ZIP.
 - Optional recovery ZIP is a separate offline/disaster artifact built only from a clean exact commit; metadata records source commit/tags and file hashes.
 - Generated recovery/build/handoff archives are not source of truth and are not committed as working state.
+- Dated handoff folders are not retained in the working tree; `project_docs/RESTORE_PROMPT.md` is the restart procedure.
 
 See `project_docs/BUILD_AND_RECOVERY_RULES.md` and `project_docs/GITHUB_WORKFLOW.md`.
 
-## Current handoff
+## Repository integrity automation
 
-`project_docs/HANDOFF_2026-08-29/` remains only as historical conversational convenience. Fresh `main`, `AUDIT_REGISTRY.md`, current evidence and source always override it. Future handoff archives are created only on explicit request.
+`.github/workflows/repository-integrity.yml` is the repository organization/test gate. It runs the consistency checker, JavaScript syntax validation and deterministic JavaScript tests on push/PR. Historical test counts remain historical until a workflow run actually completes on the corresponding current SHA.
 
 ## Build artifacts
 
