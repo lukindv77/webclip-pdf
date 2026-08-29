@@ -20,11 +20,14 @@
     "restore": [
       "project_docs/RESTORE_PROMPT.md",
       "project_docs/CONTEXT_AUTOMATION_POLICY.md",
+      "project_docs/WEBCLIP_COPY_ARCHITECTURE_POLICY.md",
       "project_docs/GITHUB_WORKFLOW.md"
     ],
     "audit": [
       "project_docs/AUDIT_HISTORY_INDEX.md",
       "project_docs/AUDIT_EVIDENCE.md",
+      "project_docs/AUDIT_FORMAT_NEUTRAL_CAPTURE_RESEARCH_EVIDENCE.md",
+      "project_docs/WEBCLIP_COPY_ARCHITECTURE_POLICY.md",
       "project_docs/TEST_EVIDENCE.md"
     ],
     "development": [
@@ -32,6 +35,7 @@
       "project_docs/DATA_MODELS.md",
       "project_docs/DECISIONS_AND_RATIONALE.md",
       "project_docs/USER_REQUIREMENTS.md",
+      "project_docs/WEBCLIP_COPY_ARCHITECTURE_POLICY.md",
       "project_docs/TEST_PLAN.md"
     ],
     "release": [
