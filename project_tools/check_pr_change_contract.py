@@ -18,6 +18,7 @@ import sys
 from collections.abc import Mapping, Sequence
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 P_CODE = re.compile(r"\bP[012]-\d{3}\b")
 CHECKED = r"\[[xX]\]"
 AUDIT_NONE = re.compile(rf"^\s*-\s*{CHECKED}\s*`?audit-impact:\s*none`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
@@ -29,6 +30,13 @@ RUNTIME_DIRS = {"assets", "icons"}
 REGISTRY = "project_docs/AUDIT_REGISTRY.md"
 READINESS = "project_docs/RELEASE_READINESS.md"
 TEST_STATUS = "project_docs/TEST_STATUS.md"
+TEMPLATE_MARKERS = (
+    "audit-impact: none",
+    "audit-impact: owner",
+    "test-impact: external-only",
+    "P-owner(s) affected",
+    "PR change-contract validation",
+)
 
 
 def run_git(*args: str) -> str:
@@ -71,6 +79,10 @@ def is_deterministic_test_path(path: str) -> bool:
 
 def selected(pattern: re.Pattern[str], body: str) -> bool:
     return bool(pattern.search(body or ""))
+
+
+def validate_template(text: str) -> list[str]:
+    return [f"PR template missing machine-readable contract marker: {marker}" for marker in TEMPLATE_MARKERS if marker not in text]
 
 
 def current_texts(paths: Sequence[str]) -> dict[str, str]:
@@ -154,10 +166,21 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+
+    if not PR_TEMPLATE.is_file():
+        print("ERROR: .github/pull_request_template.md is missing", file=sys.stderr)
+        return 1
+    structure_errors = validate_template(PR_TEMPLATE.read_text(encoding="utf-8"))
+    if structure_errors:
+        for error in structure_errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        print(f"PR change contract structure FAILED: {len(structure_errors)} error(s).", file=sys.stderr)
+        return 1
+
     base = args.base or os.environ.get("PR_BASE_SHA", "").strip()
     head = args.head or os.environ.get("PR_HEAD_SHA", "").strip()
     if not base or not head:
-        print("PR change contract skipped: no exact PR base/head supplied.")
+        print("PR change contract structure PASS; exact PR diff not supplied, diff evaluation skipped.")
         return 0
 
     if args.body_file:
