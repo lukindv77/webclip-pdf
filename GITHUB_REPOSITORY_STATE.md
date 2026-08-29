@@ -5,7 +5,7 @@
 ## Working policy
 - Always fresh-fetch `main` before analysis or write operations.
 - Current runtime remains Manifest V3 / `0.9.8` / Chrome >=118 until real release QA and an explicit release decision.
-- Stable P-numbers are never reused. Before allocating a new number, check the canonical registry ranges, all relevant `project_docs/AUDIT_DELTA_*.md`, closure/history evidence and current source.
+- Stable P-numbers are never reused. Before allocating a new number, check the canonical registry ranges, all relevant `project_docs/AUDIT_DELTA_*.md`, history evidence and current source.
 - Historical test results are evidence only. Do not claim tests were rerun unless they were actually rerun on the current runtime tree.
 - Real unpacked Chrome QA and real Yandex E2E remain release requirements.
 - Builds, tags and GitHub Releases are created only on explicit request after the applicable QA gate.
@@ -18,13 +18,19 @@ The P-number registry is intentionally partitioned into two non-overlapping rang
 
 **P1-195…P1-225 are occupied.** Do not infer that any later integer is free without repository-wide semantic/history duplicate-check.
 
-Detailed audit state is reconstructed from:
-1. the two registry ranges above;
-2. all current `project_docs/AUDIT_DELTA_*.md` for detailed source proof, refinements, invariants and regressions;
-3. current runtime/source files;
-4. focused historical closure/test/deep-audit evidence when needed to validate an existing P-item, reopen or numbering decision.
+## Evidence layers
+Use these compact current evidence documents before going to Git history:
 
-A detailed delta is not obsolete merely because its number is now indexed. Historical audit files remain in the working tree until their unique evidence has been migrated and verified according to `AUDIT_CONSOLIDATION_INDEX.md`.
+- `project_docs/AUDIT_EVIDENCE.md` — historical implementation/browser proof formerly scattered across root `P*_CLOSURE.md` reports;
+- `project_docs/TEST_EVIDENCE.md` — historical test/browser checkpoints formerly scattered across root `STATIC_CHECKS_*.md` reports;
+- `project_docs/TEST_STATUS.md` — compact current test/release truth; historical 88/88 syntax + 74/74 deterministic is not a current rerun;
+- `project_docs/AUDIT_HISTORY_INDEX.md` — corrections, retractions, dedup decisions and negative findings needed for future duplicate-checks;
+- current `project_docs/AUDIT_DELTA_*.md` — detailed source proof, refinements, invariants and regression requirements;
+- current runtime/source files — final authority over stale descriptive text.
+
+The verbose root `P*_CLOSURE.md` and `STATIC_CHECKS_*.md` reports have been migrated into the compact evidence ledgers and are intentionally retired from the current working tree. Their exact originals remain available through Git history.
+
+`DEEP_AUDIT_2026-08-25.md`, `QA_STATUS_0_9_9.md` and `PROJECT_RECOVERY.md` are still present pending their own retirement comparisons. Do not delete or ignore them merely because the first evidence migration is complete.
 
 ## Current handoff
 The only current handoff checkpoint in the working tree is:
@@ -36,7 +42,7 @@ Read its four text files when restoring audit context:
 - `RECENT_COMMITS.md`
 - `RESTORE_ARCHIVE.md`
 
-Fresh `main` and the current audit registries always override stale handoff statements. Older handoff folders and embedded handoff ZIP snapshots are intentionally not kept in the current tree; their historical contents remain available through Git history.
+Fresh `main`, the current audit registries and the evidence documents above always override stale handoff statements. Older handoff folders and embedded handoff ZIP snapshots are intentionally not kept in the current tree; their historical contents remain available through Git history.
 
 ## Build artifacts
 Published binary builds belong in GitHub Releases rather than the working tree. Exact source state is identified by commit/tag; release assets carry their own checksums and metadata.
