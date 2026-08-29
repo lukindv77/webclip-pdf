@@ -39,6 +39,12 @@ jobs:
       - name: Repository consistency
         run: python project_tools/check_repository_consistency.py
 
+      - name: CI action pinning
+        run: python project_tools/check_ci_pins.py
+
+      - name: CI pinning self-test
+        run: python project_tools/test_ci_pins.py
+
       - name: PR change contract
         if: github.event_name == 'pull_request'
         env:
