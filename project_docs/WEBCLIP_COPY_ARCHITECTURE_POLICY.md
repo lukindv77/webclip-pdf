@@ -14,7 +14,7 @@ The intended direction is:
 
 A format-specific renderer may lose capabilities that its format cannot represent, but it must do so predictably and under an explicit mode/policy rather than silently redefining what was captured.
 
-Existing P2-007 is the natural backlog/navigation owner for multiple capture/output modes; this policy does not create a second P2 owner or change P2-007's current status.
+Existing P2 ownership remains split by scope rather than duplicated: **P2-007** is the natural architecture/backlog owner for capture/output mode separation, while **P2-001** remains the concrete backlog owner for saving HTML/Markdown alongside PDF. This policy creates no second owner and changes neither status.
 
 ## Fidelity contract shared by future formats
 
