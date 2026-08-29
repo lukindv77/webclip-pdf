@@ -37,6 +37,10 @@ def main() -> None:
     bad["handoff"]["trigger_phrase"] = "some other phrase"
     assert_has(module.validate_manifest(bad), "trigger phrase")
 
+    bad = copy.deepcopy(data)
+    bad["handoff"]["protocol_document"] = "project_docs/GITHUB_WORKFLOW.md"
+    assert_has(module.validate_manifest(bad), "handoff protocol")
+
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
         bad = copy.deepcopy(data)
@@ -45,12 +49,15 @@ def main() -> None:
         assert_has(errors, "declared context path missing")
 
     restore = (ROOT / "project_docs" / "RESTORE_PROMPT.md").read_text(encoding="utf-8")
-    workflow = (ROOT / "project_docs" / "GITHUB_WORKFLOW.md").read_text(encoding="utf-8")
+    policy = (ROOT / "project_docs" / "CONTEXT_AUTOMATION_POLICY.md").read_text(encoding="utf-8")
     errors = module.validate_restore_and_policy(
         restore + "\nчитать `project_docs/AUDIT_DELTA_*.md`\n",
-        workflow,
+        policy,
     )
     assert_has(errors, "retired/currently-invalid instruction")
+
+    errors = module.validate_restore_and_policy(restore, policy.replace("14 постоянных правил автоматизации", "rules"))
+    assert_has(errors, "permanent policy marker")
 
     print("Context contract self-test PASS.")
 
