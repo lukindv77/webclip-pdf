@@ -1,0 +1,59 @@
+name: Repository integrity
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-integrity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-integrity:
+    name: repository-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Repository consistency
+        run: python project_tools/check_repository_consistency.py
+
+      - name: JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r file; do
+            node --check "$file"
+          done < <(git ls-files '*.js')
+
+      - name: Deterministic JavaScript tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          for test in project_tools/test_*.js; do
+            echo "==> $test"
+            node "$test"
+            count=$((count + 1))
+          done
+          echo "Executed $count deterministic test files."
