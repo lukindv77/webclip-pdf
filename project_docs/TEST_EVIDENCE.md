@@ -1,6 +1,6 @@
 # Historical test evidence
 
-This document consolidates historical engineering test/browser checkpoints that were previously scattered across root `STATIC_CHECKS_*.md` files and closure narratives.
+This document consolidates historical engineering test/browser checkpoints that were previously scattered across root `STATIC_CHECKS_*.md`, closure narratives and the accumulated `QA_STATUS_0_9_9.md` WIP log.
 
 **It is not the current test gate.** These results were executed at different physical WIP checkpoints and their file/test counts are therefore not expected to be monotonic by P-number. No test was rerun to create this document.
 
@@ -43,14 +43,18 @@ Unless a row explicitly says otherwise:
 
 ## Important browser / real-world evidence not reducible to suite counts
 
-- P1-153 real Chrome `its.1c.ru` clipping reproduction was closed on 2026-08-25 for that specific page: 2-page PDF, complete third example/final text/link, `documentScrollHeight=1155` vs viewport 878, resources 5/5, PDF 134,659 bytes. See `AUDIT_EVIDENCE.md` / `P1-153_CLOSURE.md`.
+- P1-153 real Chrome `its.1c.ru` clipping reproduction was closed on 2026-08-25 for that specific page: 2-page PDF, complete third example/final text/link, `documentScrollHeight=1155` vs viewport 878, resources 5/5, PDF 134,659 bytes.
 - P1-149 real diagnostic repro established selected content inside a same-origin iframe (`frameDepth=1`) with 3324 child text chars and 983 px child scroll height while the top print document stayed viewport constrained.
 - P1-151/P1-152 real repro sequence established that height expansion alone did not solve Chromium pagination of an iframe replaced element and that a fully cloned proxy could still be constrained by the original ancestor shell.
-- Managed P1-007 runs intentionally use the policy-managed Chromium environment; the project did not bypass enterprise policy to fake an unpacked extension pass.
+- Managed P1-007 runs intentionally used the policy-managed Chromium environment; the project did not bypass enterprise policy to fake an unpacked extension pass.
+- Historical release-QA environment detail: system Chromium was governed by `/etc/chromium/policies/managed/000_policy_merge.json` with `ExtensionInstallBlocklist: ["*"]`; unpacked loading reported `Loading of unpacked extensions is disabled by the administrator`. No alternate local Chrome/Chromium/Chrome-for-Testing was available in that environment, and installing a Playwright browser was unavailable because that environment had no network access. This explains a historical blocker; it is not a permanent statement about future environments.
+- A headed Xvfb/Playwright rerun for the isolated `Прочитать позже` UI flow timed out in that environment. Separately, user-side functional confirmation reported that `Прочитать позже` completed saving after the historical `PAGE_UPLOAD_STAGES` fix. This is useful WIP evidence, not release E2E.
+- A real Chromium print-render experiment for the progress UI established that `beforeprint`/`afterprint` completed within the same print-render before the next `requestAnimationFrame`; the next frame observed the WebClip host restored with `display:block`, and `pdftotext` confirmed the test WebClip progress-modal text was absent from the resulting PDF. This proves that specific historical print-visibility behavior, not the broader current print-generation audit contract.
+- An audit-only headless Chromium print experiment demonstrated that Chromium can preserve unsafe link annotations (`javascript:`, `data:` and a local `file:` target) in PDF output; that evidence motivated P0-071. It was not a release regression gate.
 
-## Source mapping
+## Retired source mapping
 
-Historical root files consolidated by this document include:
+The following historical root static reports were read and consolidated here before removal from current `main`:
 
 - `STATIC_CHECKS_P1-001.md`
 - `STATIC_CHECKS_P1-003.md`
@@ -74,4 +78,4 @@ Historical root files consolidated by this document include:
 - `STATIC_CHECKS_P1-128_P1-129.md`
 - `STATIC_CHECKS_P1-146.md`
 
-These root files remain present until a retirement comparison confirms this ledger retained every unique test/browser fact needed by the project.
+The accumulated root `QA_STATUS_0_9_9.md` was also retirement-compared against this ledger and `TEST_STATUS.md`. Its unique browser/environment observations are retained above; its repeated WIP chronology, implementation summaries and old PASS counts are intentionally not duplicated because the current registry and this evidence ledger already preserve their durable meaning. All retired source files remain exactly recoverable from Git history.
