@@ -8,24 +8,26 @@
 
 1. Получить свежий HEAD `main` и фактическое дерево репозитория.
 2. Прочитать `GITHUB_REPOSITORY_STATE.md`.
-3. Прочитать текущие реестры аудита:
-   - `project_docs/PRIORITIES_P0_P1_P2.md` — исторический canonical range до P1-194;
-   - `project_docs/AUDIT_CONSOLIDATION_INDEX.md` — canonical supplement P1-195…P1-225;
-   - `project_docs/AUDIT_HISTORY_INDEX.md` — corrections/retractions/dedup/negative findings, нужные для duplicate-check.
-4. Для фактического состояния тестов прочитать:
+3. Прочитать **единый current registry**: `project_docs/AUDIT_REGISTRY.md`.
+4. Для навигации по оставшемуся подробному audit evidence прочитать `project_docs/AUDIT_DELTA_INDEX.md`, затем только релевантные `project_docs/AUDIT_DELTA_*.md`.
+5. Перед duplicate/number decision прочитать `project_docs/AUDIT_HISTORY_INDEX.md` и при необходимости:
+   - `project_docs/AUDIT_RETIRED_DELTA_EVIDENCE.md`;
+   - `project_docs/AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md`;
+   - `project_docs/AUDIT_EVIDENCE.md`.
+6. Для фактического состояния тестов прочитать:
    - `project_docs/TEST_STATUS.md`;
    - при необходимости historical proof — `project_docs/TEST_EVIDENCE.md`.
-5. Для historical implementation/browser proof существующих P-item читать `project_docs/AUDIT_EVIDENCE.md`.
-6. Для детального root cause/acceptance/refinement читать релевантные `project_docs/AUDIT_DELTA_*.md`; они пока остаются подробным evidence-слоем и не считаются устаревшими только потому, что номер уже внесён в registry.
 7. Для архитектуры/требований по теме читать текущие `project_docs/ARCHITECTURE.md`, `DATA_MODELS.md`, `DECISIONS_AND_RATIONALE.md`, `USER_REQUIREMENTS.md`, `TEST_PLAN.md` и актуальный runtime source.
-8. Если нужен краткий контекст предыдущей audit-сессии, использовать только текущий `project_docs/HANDOFF_2026-08-29/`, но свежий `main` и текущие registry/evidence документы всегда имеют приоритет.
+8. Если нужен краткий разговорный контекст старой audit-сессии, текущий `project_docs/HANDOFF_2026-08-29/` можно использовать только как historical convenience; свежий `main` + current registry/evidence всегда имеют приоритет.
+
+`project_docs/PRIORITIES_P0_P1_P2.md` теперь только compatibility pointer. Он **не** является вторым реестром статусов.
 
 ## Правило новых P-кодов
 
-- Стабильные P-коды не переиспользовать.
-- P1-195…P1-225 уже заняты.
-- Не считать следующий числовой код свободным только по последовательности.
-- Перед новым номером проверить текущие registry, relevant `AUDIT_DELTA_*`, `AUDIT_HISTORY_INDEX.md`, текущий source и при необходимости Git history.
+- Стабильные P-коды не переиспользовать никогда, включая DONE/MERGED/SUPERSEDED.
+- P0-079/P0-080 и P1-195…P1-225 уже заняты; P1-072…P1-131 и P2-009/P2-010 имеют explicit history reservation.
+- Не считать следующий числовой код свободным только по последовательности или отсутствию строки в compact table.
+- Перед новым номером проверить `AUDIT_REGISTRY.md`, relevant family в `AUDIT_DELTA_INDEX.md`, remaining deltas, `AUDIT_HISTORY_INDEX.md`, текущий source и Git history.
 - Если root cause уже принадлежит существующему owner, расширять/reopen его, а не создавать дубликат.
 
 ## Критические правила текущей ветки
@@ -52,6 +54,16 @@
 8. Свежий lookup по textual id/path/URL сам по себе не является CAS и не должен ретаргетить stale action.
 9. Stale asynchronous generation не имеет права переписывать более новый пользовательский intent/UI state.
 
+## Recovery architecture
+
+- Exact Git commit SHA — canonical WIP source snapshot.
+- Annotated release tag — immutable pointer на exact tested/released commit.
+- Пользовательский extension ZIP не обязан содержать вторую полную копию исходников/recovery ZIP.
+- Отдельный recovery ZIP — только optional offline/disaster artifact одного clean exact commit; его metadata содержит source commit/tags/hashes.
+- Handoff создаётся только по прямому запросу и не становится параллельным source of truth.
+
 ## Исторические файлы
 
-Старые handoff ZIP/snapshots уже намеренно удалены из текущего дерева; их содержимое остаётся в Git history. Старые closure/static/deep/QA narratives постепенно заменяются compact registry/evidence документами и могут удаляться из текущего `main` только после lossless retirement comparison.
+Root `P*_CLOSURE.md`, `STATIC_CHECKS_*.md`, `DEEP_AUDIT_2026-08-25.md`, `QA_STATUS_0_9_9.md` и `PROJECT_RECOVERY.md` уже прошли retirement comparison и удалены из current tree; их exact originals остаются в Git history.
+
+Часть broad/correction/positive-control `AUDIT_DELTA_*` также уже lossless-консолидирована и удалена. Owner-specific deltas остаются до индивидуального retirement gate; уменьшать их количество ценой потери source proof/acceptance запрещено.
