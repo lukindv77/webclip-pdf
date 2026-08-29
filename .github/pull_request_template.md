@@ -30,11 +30,15 @@ P-owner(s) affected, or `none`:
 
 `______________________________`
 
+For **every runtime change**, replace the placeholder below with a concrete explanation of why no existing owner/invariant is affected, or how the declared owner(s) are affected:
+
+`audit-rationale: <replace with concrete rationale>`
+
 If `audit-impact: owner` changes runtime and no deterministic regression test is appropriate, select this explicit escape hatch and keep the required real boundary in durable evidence:
 
 - [ ] `test-impact: external-only` — acceptance requires real Chrome/Yandex/other external verification; no suitable deterministic test is being added by this PR.
 
-The PR gate validates these markers against the actual changed-file set. Do not check `external-only` merely to avoid writing a deterministic test.
+When deterministic tests are added for `audit-impact: owner`, each declared P-code must appear in the changed test source. The PR gate validates these markers against the actual changed-file set. Do not check `external-only` merely to avoid writing a deterministic test.
 
 ## Validation
 
