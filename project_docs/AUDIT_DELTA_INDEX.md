@@ -2,7 +2,7 @@
 
 Baseline for this index: `bbaf7b1202daa056371211f6d1db0f698acee8db`.
 
-This file is **navigation only**. It is not an independent status registry and it does not allocate P-numbers. Current status/ownership comes from the canonical audit registry layer; unique corrections and retired positive controls are preserved in `AUDIT_HISTORY_INDEX.md`, `AUDIT_EVIDENCE.md`, `AUDIT_RETIRED_DELTA_EVIDENCE.md`, `TEST_EVIDENCE.md` and Git history.
+This file is **navigation only**. It is not an independent status registry and it does not allocate P-numbers. Current status/ownership comes from `AUDIT_REGISTRY.md`; unique corrections and retired positive controls are preserved in `AUDIT_HISTORY_INDEX.md`, `AUDIT_EVIDENCE.md`, `AUDIT_RETIRED_DELTA_EVIDENCE.md`, `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md`, `TEST_EVIDENCE.md` and Git history.
 
 ## Retirement gate
 
@@ -211,7 +211,6 @@ Primary owners commonly composed here: P0-039, P1-079, P1-080, P1-087, P1-129, P
 Primary owners commonly composed here: P1-123…P1-131, P1-157, P1-158, P1-166, P1-170, P1-173, P1-203, P1-204, P1-209, P1-210, P1-217.
 
 - `AUDIT_DELTA_ACTION_DEGRADED_READ_STALE_URL_STATE_2026-08-28.md`
-- `AUDIT_DELTA_BROWSER_OWNED_WORKER_GENERATIONS_REVALIDATION_2026-08-28.md`
 - `AUDIT_DELTA_CHROME_ACTION_ADMISSION_REPAIR_2026-08-27.md`
 - `AUDIT_DELTA_CHROME_ACTION_PARTIAL_FAILURE_REPAIR_2026-08-28.md`
 - `AUDIT_DELTA_CHROME_READ_ADMISSION_2026-08-27.md`
@@ -226,12 +225,10 @@ Primary owners commonly composed here: P1-123…P1-131, P1-157, P1-158, P1-166, 
 - `AUDIT_DELTA_POPUP_CONTEXT_START_SELECTION_PARITY_2026-08-28.md`
 - `AUDIT_DELTA_POPUP_DOCUMENT_COMMAND_AND_FRAME_PERMISSION_AUTHORITY_2026-08-28.md`
 - `AUDIT_DELTA_RECONCILIATION_DISCOVERY_AFTER_PAGE_LOSS_2026-08-28.md`
-- `AUDIT_DELTA_RUNTIME_SENDER_ACL_REVALIDATION_2026-08-27.md`
 - `AUDIT_DELTA_SERIALIZED_QUEUE_ADMISSION_COVERAGE_2026-08-27.md`
-- `AUDIT_DELTA_SERVICE_WORKER_CHROME_API_BYPASS_INVENTORY_2026-08-28.md`
 - `AUDIT_DELTA_TAB_CREATE_MV3_RECEIPT_2026-08-28.md`
 
-The context-menu click-origin-frame semantics positive control has already been retired into `AUDIT_RETIRED_DELTA_EVIDENCE.md`.
+Broad worker-generation/runtime-ACL/Chrome-API inventory revalidations were already consolidated into `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` and removed from current `main`.
 
 ## 11. Frame permission / cross-origin frame-agent identity and command generation
 
@@ -281,7 +278,7 @@ Primary owners commonly composed here: P0-003, P0-023, P0-067, P0-068, P0-070, P
 
 ## 13. Incognito / trust boundaries / redaction
 
-Primary owners commonly composed here: P0-037, P0-066 and runtime sender/identity owners.
+Primary owners commonly composed here: P0-033, P0-045, P0-066 and runtime sender/identity owners.
 
 - `AUDIT_DELTA_INCOGNITO_ACTION_DISCLOSURE_2026-08-27.md`
 - `AUDIT_DELTA_INCOGNITO_POPUP_PERSISTENT_STATE_2026-08-27.md`
@@ -289,31 +286,24 @@ Primary owners commonly composed here: P0-037, P0-066 and runtime sender/identit
 
 ## 14. Derived URL stats / view indexes
 
-Primary owners commonly composed here: P1-083, P1-206, P1-216.
+Primary owners commonly composed here: P0-050, P1-083, P1-206, P1-216.
 
 - `AUDIT_DELTA_URLSTATS_DIRTY_CONSUMER_FAILOPEN_2026-08-28.md`
 - `AUDIT_DELTA_URLSTATS_REBUILD_ISOLATION_2026-08-27.md`
 
-## 15. Broad revalidation / cross-cutting audit inventories
+## 15. Retired broad revalidation / cross-cutting inventories
 
-These files deliberately span multiple owners. Do not retire them merely because their individual findings also appear under thematic families; compare their positive controls and duplicate decisions first.
-
-- `AUDIT_DELTA_MULTI_BLOCK_REVALIDATION_2026-08-28.md`
-- `AUDIT_DELTA_MULTI_BLOCK_REVALIDATION_PART2_2026-08-28.md`
-- `AUDIT_DELTA_BROWSER_OWNED_WORKER_GENERATIONS_REVALIDATION_2026-08-28.md`
-- `AUDIT_DELTA_RUNTIME_SENDER_ACL_REVALIDATION_2026-08-27.md`
-- `AUDIT_DELTA_SERVICE_WORKER_CHROME_API_BYPASS_INVENTORY_2026-08-28.md`
+The broad multi-block, worker-generation, runtime-ACL and direct-Chrome-API inventory deltas have already passed lossless retirement comparison. Their durable positive/negative controls and taxonomy are now in `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` and `AUDIT_RETIRED_DELTA_EVIDENCE.md`; exact originals remain in Git history. They are intentionally **not** listed as current delta files here.
 
 ## Practical consolidation order
 
-The safest next family order is:
+The remaining safe order is:
 
-1. broad positive-control/revalidation inventories — migrate only durable negative/positive evidence;
-2. Chrome/MV3 browser-owned state family;
-3. PDF/print generation + live-DOM rollback family;
-4. Journal view/import/comment families;
-5. local-download/Save-As receipts;
-6. Yandex auth/context and destructive-object identity;
-7. backup/scheduler/recovery last, because it composes the highest number of generation/receipt owners.
+1. Chrome/MV3 browser-owned state family;
+2. PDF/print generation + live-DOM rollback family;
+3. Journal view/import/comment families;
+4. local-download/Save-As receipts;
+5. Yandex auth/context and destructive-object identity;
+6. backup/scheduler/recovery last, because it composes the highest number of generation/receipt owners.
 
 The purpose is not to minimize file count as quickly as possible. The purpose is to make every surviving file have a clear reason to exist while Git history becomes the archive for superseded proof.
