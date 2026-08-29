@@ -32,6 +32,13 @@ def expect_fail(name: str, changed: list[str], body: str, needle: str, texts: di
 
 
 def main() -> None:
+    valid_template = "\n".join(module.TEMPLATE_MARKERS)
+    if module.validate_template(valid_template):
+        raise AssertionError("template markers should pass")
+    template_errors = module.validate_template("audit-impact: none")
+    if not template_errors or not any("audit-impact: owner" in error for error in template_errors):
+        raise AssertionError(f"missing template marker was not detected: {template_errors}")
+
     expect_pass("docs-only", ["README.md"], "")
 
     expect_fail(
