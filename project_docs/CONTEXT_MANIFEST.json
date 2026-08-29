@@ -19,6 +19,7 @@
   "profiles": {
     "restore": [
       "project_docs/RESTORE_PROMPT.md",
+      "project_docs/CONTEXT_AUTOMATION_POLICY.md",
       "project_docs/GITHUB_WORKFLOW.md"
     ],
     "audit": [
@@ -48,7 +49,7 @@
   "handoff": {
     "trigger_phrase": "Подготовь переход в новый чат",
     "always_allowed_with_unfinished_work": true,
-    "protocol_document": "project_docs/GITHUB_WORKFLOW.md",
+    "protocol_document": "project_docs/CONTEXT_AUTOMATION_POLICY.md",
     "restore_prompt": "project_docs/RESTORE_PROMPT.md",
     "unfinished_work_lookup_order": [
       "open_pull_request",
