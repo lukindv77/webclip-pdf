@@ -20,6 +20,10 @@ No standalone audit delta is a current status authority. New audit findings must
 
   24-block interactive-capture/live-frame-topology/renderer-state audit tranche. Registered scope: new P1-227 ACTIVE for bounded live same-origin frame topology during manual selection. Supporting refinements/controls cover P0-004, P0-066, P0-068, P0-071, P0-075, P1-160, P1-187, P1-213, P2-006 and P2-007; cross-origin topology remains with the existing frame lifecycle owners.
 
+- `AUDIT_CAPTURE_ADMISSION_RESOURCE_FIDELITY_EVIDENCE_2026-08-29.md`
+
+  26-block capture-admission/responsive-fidelity/renderer-resource-readiness audit tranche. Registered status change: P1-003 reopened ACTIVE because bounded preparation does not yet cover the actual selected visual resource graph (pseudo/CSS visual resources and frame parity), while `Page.printToPDF` is not a readiness barrier. Supporting refinements/controls cover P0-004, P0-070, P0-071, P0-075, P1-004, P1-187 and P2-007 without additional status transitions.
+
 ## Families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
