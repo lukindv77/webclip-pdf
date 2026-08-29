@@ -28,15 +28,15 @@ WebClip выбирает DOM-блоки, а не только текстовый
 
 ## Временная нормализация ссылок
 
-Относительные `href` превращаются в абсолютные перед печатью и затем откатываются. Это повышает шанс корректной работы ссылок из PDF вне контекста исходного документа.
+Относительные `href` могут переводиться в безопасное абсолютное печатное представление. Временная запись принадлежит конкретной print-generation: после печати исходное значение восстанавливается только если host page не изменила тот же атрибут после WebClip. Stale rollback не имеет права перезаписывать более новое состояние страницы (P1-221).
 
 ## Изображения как ссылки на оригинал
 
-Если `<img>` не находится внутри `<a>`, он временно оборачивается ссылкой на `currentSrc/src`. Это отдельное пользовательское требование: из PDF должна быть возможность открыть исходное изображение.
+Если `<img>` не находится внутри `<a>`, печатное представление должно сохранять возможность открыть исходный URL изображения. Реализация не должна полагаться на blind structural rollback: generated wrapper/marker имеет точную print-generation/ownership и удаляется только если всё ещё является объектом, созданным WebClip; более новая host-page структура не заменяется старым snapshot (P1-219).
 
-## Спойлеры раскрываются до печати
+## Disclosure-контент в печатном представлении
 
-Архивная копия должна содержать скрытый полезный контент. После печати пользователь разрешил не восстанавливать закрытое состояние.
+Полезный скрытый контент желательно включать в PDF, но это требование не даёт WebClip права выполнять произвольные page-owned controls. Допустимы inert/static representation и нативное состояние, которое можно безопасно представить без synthetic click/submit/navigation/business logic; если для раскрытия требуется реальное действие приложения, нужен явный пользовательский шаг или безопасная альтернативная репрезентация (P0-067/P1-212).
 
 ## Яндекс OAuth: PKCE + verification_code
 
@@ -54,10 +54,9 @@ Manifest V3 service worker может быть выгружен. Кэш толь
 
 Папка расширения — не подходящее runtime-хранилище. IndexedDB доступна расширению, переживает перезапуск браузера и обычное обновление той же установленной копии.
 
-## Recovery archive хранится как обычный файл внутри сборки
+## Recovery architecture — Git-first (SUPERSEDED old nested-archive rule)
 
-Runtime расширения его не использует. Он нужен человеку/следующему чату. Это позволяет открыть сборку, извлечь recovery zip и получить полный проектный контекст.
-
+Старое решение вкладывать полный recovery ZIP внутрь каждой пользовательской сборки отменено P0-019. Текущий WIP source snapshot — exact Git commit SHA; released source state определяется exact release commit + annotated tag. Пользовательский extension ZIP не обязан содержать nested source/recovery ZIP. Отдельный recovery ZIP допускается как offline/disaster artifact только из clean exact commit и содержит metadata + SHA-256 manifest. Текущая authority: `BUILD_AND_RECOVERY_RULES.md`.
 
 ## Решение: журнал сайта как источник повторно используемых шаблонов
 
@@ -121,11 +120,13 @@ Runtime расширения его не использует. Он нужен �
 ### Для открытия Yandex PDF хранится `public_url`, а не ссылка из пути
 Путь/имя файла могут измениться. Поэтому после upload при включённой настройке ресурс публикуется, а journal entry сохраняет `publicUrl`. `remotePath` остаётся диагностическим значением «путь при сохранении».
 
-### Retry page upload идемпотентен после частичного успеха
-Если первая попытка успела передать PDF, но упала на публикации/проверке, retry сначала проверяет существующий `remotePath`. При совпадающем размере готовый remote file переиспользуется; байты не загружаются повторно. Это предотвращает тупик с `overwrite=false`.
+### Retry page upload после неизвестного/частичного settlement
+
+Историческая стратегия «существующий `remotePath` + совпадающий byte-size = ранее загруженный объект» признана недостаточной и не является current correctness authority. По P1-184 path+size не доказывают object/content identity: retry/recovery должен использовать immutable operation-owned bytes/content fingerprint и точный remote object/proven-transfer receipt. Неизвестный settlement остаётся `unknown` до reconciliation; совпадение пути и размера не разрешает adoption/publication/final success.
 
 ### Page progress не должен попадать в PDF
-Progress UI остаётся видимым во время подготовки и сетевых этапов. Непосредственно перед `Page.printToPDF` service worker временно скрывает extension root через сообщение content script и возвращает его сразу после завершения CDP-команды. После получения PDF print-модификации DOM откатываются, а progress продолжает показывать сетевые этапы.
+
+Progress UI остаётся видимым во время подготовки и сетевых этапов. Непосредственно перед `Page.printToPDF` extension-owned progress root может быть временно скрыт и затем восстановлен. Любые временные изменения host DOM/атрибутов/обёрток очищаются только при доказанном ownership текущей print-generation; compare-before-restore не позволяет late cleanup перезаписать новое состояние страницы (P1-218…P1-224).
 
 ## Decision: direct IndexedDB read for journal UI (0.9.6)
 The standalone journal view reads `WebClipJournal/entries` directly instead of asking the service worker for its display list. Rationale: the persistent database is already the source of truth, and the extra message/filter hop produced a reproducible case where the full journal differed depending on the source browser tab. Mutations remain centralized in the service worker.

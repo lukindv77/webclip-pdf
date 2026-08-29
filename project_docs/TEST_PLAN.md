@@ -3,18 +3,18 @@
 ## P0 перед каждой сборкой
 
 ### Manifest / recovery
-- Manifest V3, version совпадает с build name.
-- `contextMenus`, `alarms`, `debugger`, `offscreen`, `storage`, `downloads`, `scripting` присутствуют.
-- Все JS проходят syntax check.
-- Внешний ZIP содержит recovery ZIP той же версии; recovery CRC и required files проходят.
-
+- Manifest V3; runtime version берётся из `manifest.json` и не повышается из-за docs/audit-only изменений.
+- `contextMenus`, `alarms`, `debugger`, `offscreen`, `storage`, `downloads`, `scripting` присутствуют согласно current manifest.
+- Все tracked JS проходят syntax check.
+- `python project_tools/test_recovery_archive.py` подтверждает Git-first recovery: build только из clean exact commit, exact `source_commit` metadata, обязательные файлы, SHA-256/CRC и отказ на dirty tree.
+- Пользовательский extension ZIP не обязан содержать nested recovery ZIP; P0-019 superseded old rule.
 
 ### Независимость полного журнала от активной вкладки (P0)
 - Иметь минимум 2 записи журнала.
 - На `chrome://newtab/` открыть popup → `Весь журнал`; число записей > 0.
 - На уже открытой `https://` странице открыть popup → `Весь журнал`; число записей должно быть тем же.
 - Открыть новую пустую вкладку, затем перейти в ней на произвольный `https://` URL и снова открыть `Весь журнал`; число записей не меняется.
-- В Console журнала не должно быть необработанных ошибок; если прямой IDB и worker расходятся, допускается только диагностический warning, интерфейс показывает более полную выборку.
+- В Console журнала не должно быть необработанных ошибок; ordinary Journal view не материализует параллельно два полных списка. Публикуемый URL/site/all view должен соответствовать одной coherent Journal revision (P1-206).
 - `Текущий URL` и `Текущий сайт` по-прежнему используют source context и фильтруют записи корректно.
 
 ### Включены / Исключены
@@ -46,8 +46,9 @@
 ### PDF
 - header содержит адрес сайта, clickable full URL, «Название страницы», local datetime;
 - обычные ссылки/relative links кликабельны;
-- linked image сохраняет исходную ссылку; unlinked image кликается на image URL;
-- spoiler/details раскрываются и содержимое печатается;
+- linked image сохраняет исходную ссылку; unlinked image сохраняет безопасную ссылку на image URL;
+- disclosure/details-контент попадает в PDF только через безопасную inert/static representation или допустимое состояние; arbitrary synthetic click/submit/navigation не выполняются (P0-067/P1-212);
+- временные link/image/frame/resource изменения не blind-rollback поверх более новой host mutation: cleanup использует compare-before-restore/exact ownership (P1-218…P1-224);
 - имя ≤100 символов и только одна точка перед `.pdf`.
 
 ### Яндекс PDF upload

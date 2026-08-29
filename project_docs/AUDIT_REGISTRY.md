@@ -2,7 +2,7 @@
 
 Canonical status baseline: `main` at/after `745207cb7886bbc6d9369bac7c527218e1aaf4ab`.
 
-This file is the **single current authority for P-code ownership and status**. Detailed source proof, deterministic race schedules and implementation acceptance remain in the referenced `AUDIT_DELTA_*` families / consolidated evidence until each family is losslessly retired.
+This file is the **single current authority for P-code ownership and status**. Detailed source proof, deterministic race schedules, corrections, positive controls and implementation acceptance are retained in consolidated `AUDIT_FAMILY_*_EVIDENCE.md`, cross-cutting/history evidence and Git history.
 
 ## Status model
 
@@ -208,8 +208,8 @@ P2 items are not silently treated as current release blockers unless another ACT
 Use these files by role:
 
 - `AUDIT_REGISTRY.md` — **current code ownership/status only**;
-- `AUDIT_DELTA_INDEX.md` — navigation from root-cause family to remaining detailed deltas;
-- remaining `AUDIT_DELTA_*.md` — detailed current source proof/acceptance/regression schedules until individually consolidated;
+- `AUDIT_DELTA_INDEX.md` — navigation from root-cause family to consolidated family evidence;
+- consolidated `AUDIT_FAMILY_*_EVIDENCE.md` — detailed current source proof/acceptance/regression schedules until individually consolidated;
 - `AUDIT_EVIDENCE.md` — historical implementation/browser proof;
 - `AUDIT_RETIRED_DELTA_EVIDENCE.md` — losslessly retired correction/positive-control deltas;
 - `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` — broad revalidation/implementation taxonomy/positive controls;
@@ -223,7 +223,7 @@ Use these files by role:
 Before assigning any new P-code:
 
 1. semantic-search current `AUDIT_REGISTRY.md` owner/root cause;
-2. inspect relevant family in `AUDIT_DELTA_INDEX.md` and remaining detailed deltas;
+2. inspect relevant family in `AUDIT_DELTA_INDEX.md` and consolidated family evidence;
 3. inspect `AUDIT_HISTORY_INDEX.md` / retired evidence for rejected/merged hypotheses;
 4. search Git history for prior assignment/reservation;
 5. only then allocate a demonstrably unused code.
