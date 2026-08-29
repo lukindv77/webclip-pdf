@@ -22,6 +22,7 @@ CANONICAL_REGISTRY = DOCS / "AUDIT_REGISTRY.md"
 DELTA_INDEX = DOCS / "AUDIT_DELTA_INDEX.md"
 CONTROL_DOCS = [
     ROOT / "GITHUB_REPOSITORY_STATE.md",
+    ROOT / "README.md",
     DOCS / "README_INDEX.md",
     DOCS / "RESTORE_PROMPT.md",
     DOCS / "BUILD_AND_RECOVERY_RULES.md",
@@ -34,6 +35,9 @@ FORBIDDEN_CURRENT_PATHS = {
     ROOT / "QA_STATUS_0_9_9.md",
     ROOT / "PROJECT_RECOVERY.md",
     DOCS / "AUDIT_CONSOLIDATION_INDEX.md",
+    DOCS / "DOCUMENTATION_CONSISTENCY_AUDIT.md",
+    ROOT / "project_tools" / "consolidate_audit_families.py",
+    ROOT / "project_tools" / "normalize_repository_docs.py",
 }
 FORBIDDEN_TRACKED_SUFFIXES = {".zip", ".crx", ".pem", ".p12", ".pfx", ".key"}
 FORBIDDEN_TRACKED_NAMES = {".env", "id_rsa", "id_ed25519"}
@@ -92,6 +96,7 @@ def check_required_structure(result: CheckResult) -> None:
         DOCS / "BUILD_AND_RECOVERY_RULES.md",
         DOCS / "RESTORE_PROMPT.md",
         ROOT / "GITHUB_REPOSITORY_STATE.md",
+        ROOT / "README.md",
         ROOT / "manifest.json",
     ]
     for path in required:
@@ -100,7 +105,7 @@ def check_required_structure(result: CheckResult) -> None:
 
     for path in FORBIDDEN_CURRENT_PATHS:
         if path.exists():
-            result.error(f"retired competing source returned to current tree: {path.relative_to(ROOT)}")
+            result.error(f"retired competing/one-shot source returned to current tree: {path.relative_to(ROOT)}")
 
     if CANONICAL_REGISTRY.is_file() and "single current authority" not in read(CANONICAL_REGISTRY):
         result.error("AUDIT_REGISTRY.md no longer declares single current authority")
@@ -199,6 +204,18 @@ def check_release_truth(result: CheckResult) -> None:
         result.error("TEST_STATUS.md mentions 88/88 without clearly classifying it as historical evidence")
 
 
+def check_root_readme(result: CheckResult) -> None:
+    path = ROOT / "README.md"
+    if not path.is_file():
+        return
+    text = read(path)
+    if len(text.splitlines()) > 250:
+        result.error("README.md has grown back into an audit/changelog narrative (>250 lines)")
+    for marker in ("0.9.8", "project_docs/AUDIT_REGISTRY.md", "project_docs/TEST_STATUS.md"):
+        if marker not in text:
+            result.error(f"README.md missing current navigation/runtime marker: {marker}")
+
+
 def check_control_doc_links(result: CheckResult) -> None:
     for doc in CONTROL_DOCS:
         if not doc.is_file():
@@ -224,6 +241,7 @@ def check_control_doc_links(result: CheckResult) -> None:
 def check_canonical_references(result: CheckResult) -> None:
     required_refs = {
         ROOT / "GITHUB_REPOSITORY_STATE.md": ["project_docs/AUDIT_REGISTRY.md", "project_docs/TEST_STATUS.md"],
+        ROOT / "README.md": ["project_docs/AUDIT_REGISTRY.md", "project_docs/TEST_STATUS.md", "project_docs/BUILD_AND_RECOVERY_RULES.md"],
         DOCS / "RESTORE_PROMPT.md": ["AUDIT_REGISTRY.md", "TEST_STATUS.md"],
         DOCS / "README_INDEX.md": ["AUDIT_REGISTRY.md", "BUILD_AND_RECOVERY_RULES.md"],
     }
@@ -243,6 +261,7 @@ def main() -> int:
     check_delta_index(result)
     check_tracked_artifacts(result)
     check_release_truth(result)
+    check_root_readme(result)
     check_control_doc_links(result)
     check_canonical_references(result)
 
