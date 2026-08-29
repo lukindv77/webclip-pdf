@@ -12,40 +12,63 @@ Default branch: `main`.
 
 ## PR-first working policy
 
-Normal development, audit, documentation and repository-maintenance changes should use:
+Normal development, audit, documentation and repository-maintenance changes use:
 
-`fresh main -> short-lived branch -> Pull Request -> exact-head CI -> reviewed merge -> branch deletion`.
+`fresh main -> work branch -> Pull Request -> exact-head CI -> reviewed merge`
 
-This is the default process even while GitHub branch protection is not technically available/enforced for this private repository. The policy is procedural until GitHub reports active protection/ruleset enforcement.
+`main` intentionally remains `protected=false`: the repository stays private, and the project will not move to GitHub Pro or public solely for branch protection. This is an accepted constraint, not an unfinished migration.
 
-Rules:
+Compensating process controls:
 
 1. Fresh-fetch `main` immediately before creating/updating the work branch.
 2. Keep one logical change per PR where practical; do not mix unrelated runtime fixes with repository cleanup or release-history retirement.
 3. Use `.github/pull_request_template.md` and record the exact reviewed PR head SHA.
-4. Merge only when `repository-integrity` is green for that exact head SHA and the head has not moved since review.
-5. Prefer `squash` for maintenance/docs-only PRs unless preserving a meaningful multi-commit investigation is useful; runtime/audit changes may retain commits when their sequence is evidence.
-6. Direct writes to `main` are exceptional: emergency recovery or a tooling limitation that makes a safe PR path impossible. They still require fresh-fetch, exact-SHA verification and a post-write CI check.
-7. Delete merged short-lived branches once GitHub branch-deletion capability is available. Never preserve a branch merely as a substitute for Git history or a Release artifact.
+4. Compare the full PR diff with fresh `main` before review/merge.
+5. Merge only when `repository-integrity` is green for that exact head SHA and the head has not moved since review.
+6. Immediately before merge re-check head SHA, mergeability and changed files; use expected-head protection in the merge call when available.
+7. Prefer squash for repository/docs-only PRs; preserve multi-commit runtime/audit investigations only when their sequence itself is useful evidence.
+8. Never force-update `main` as part of normal work.
+
+Direct modification of `main` is reserved for explicitly documented emergency recovery after a separate user decision. `protected=false` is not permission to bypass PR-first workflow.
+
+The detailed P-owner lifecycle is defined in `AUDIT_CHANGE_WORKFLOW.md`.
 
 ## Правила синхронизации
 
 - В GitHub отправляются production code, current project docs, active audit evidence/indexes and `project_tools`.
-- Исторические отчёты, уже lossless-консолидированные в current evidence/history registries, не обязаны оставаться отдельными файлами в рабочем дереве: Git history сохраняет их оригинал.
+- Исторические отчёты, уже lossless-консолидированные в current evidence/history registries, не обязаны оставаться отдельными файлами в working tree: Git history сохраняет их оригинал.
 - Не коммитить OAuth/session tokens, `.env`, private keys, browser profiles, caches, temporary logs или generated recovery archives.
 - `.gitignore` является частью security boundary и проверяется consistency gate.
 - Manifest `0.9.8` сохраняется до release QA; Git commit сам по себе не является релизом и не требует повышения version.
 
 ## Automated integrity gate
 
-`.github/workflows/repository-integrity.yml` запускается на push/PR в `main` и вручную. Он должен подтверждать:
+`.github/workflows/repository-integrity.yml` запускается на push/PR в `main` и вручную. Он подтверждает:
 
 1. repository/audit organization через `project_tools/check_repository_consistency.py`;
-2. JavaScript syntax для tracked `.js`;
-3. deterministic `project_tools/test_*.js`;
-4. Git-first recovery builder через `project_tools/test_recovery_archive.py`.
+2. корректность структуры `RELEASE_READINESS.md` через `check_release_readiness.py status` — статус `NOT READY` здесь допустим;
+3. JavaScript syntax для tracked `.js`;
+4. deterministic `project_tools/test_*.js`;
+5. Git-first recovery builder через `project_tools/test_recovery_archive.py`.
 
-CI PASS на конкретном SHA можно считать текущим детерминированным gate только для реально выполненных им checks. Он не заменяет real unpacked Chrome и real Yandex E2E.
+CI PASS на конкретном SHA означает только реально выполненные им checks. Он не заменяет real unpacked Chrome и real Yandex E2E.
+
+## Manual release gate
+
+`.github/workflows/release-gate.yml` запускается только вручную и имеет `contents: read`.
+
+Inputs:
+
+- exact candidate commit SHA;
+- exact expected manifest version.
+
+Workflow checkout-ит именно candidate SHA, требует clean tree, повторяет repository consistency, JS syntax, deterministic suite и recovery provenance, затем запускает:
+
+`project_tools/check_release_readiness.py gate`
+
+Gate fail-closed проверяет `RELEASE_READINESS.md`: real unpacked Chrome evidence, real Yandex E2E evidence, review release-critical P0/P1 owners, explicit release decision и совпадение target/manifest/candidate identity.
+
+**Release gate ничего не публикует:** не создаёт build, tag, Release, asset и не изменяет repository contents. READY — только условие для отдельного явного release action.
 
 ## Release / recovery
 
@@ -55,16 +78,24 @@ CI PASS на конкретном SHA можно считать текущим �
 - Каждый официальный release asset получает SHA-256; release публикует единый `SHA256SUMS`.
 - GitHub Release привязан к exact annotated tag/commit и в описании указывает full commit SHA и реальный статус tag signature.
 - Нельзя называть tag подписанным/verified, если подпись фактически не была создана и проверена.
-- Исторические pre-release artifacts инвентаризированы в `RELEASE_HISTORY_INDEX.md`; их удаление требует отдельного lossless retirement comparison и не совмещается с обычной разработкой.
+- Исторические pre-release artifacts инвентаризированы в `RELEASE_HISTORY_INDEX.md`; их удаление требует отдельного lossless retirement comparison.
 
 ## Handoff
 
 - Dated handoff folders не являются current repository state и не накапливаются в `main`.
 - Одноразовый handoff создаётся только по прямому запросу пользователя как disposable export exact commit.
-- Для восстановления рабочего контекста используется `project_docs/RESTORE_PROMPT.md` + current registry/evidence + Git history.
+- Для восстановления рабочего контекста используется `RESTORE_PROMPT.md` + current registry/evidence + Git history.
 
-## Main branch safety target
+## Accepted main branch posture
 
-`main` должен защищаться от force-push и удаления и, когда GitHub позволяет это для данного private repository, требовать `repository-integrity` для merge через PR.
+Зафиксированное решение проекта:
 
-На checkpoint 2026-08-29 GitHub API сообщал `protected=false`; repository rulesets для этого private repository возвращали требование GitHub Pro либо public repository, а branch-protection endpoint был недоступен текущей интеграции. Поэтому protection **не считается включённым**. Наличие PR-first policy и CI снижает риск, но не заменяет реальную серверную защиту ветки.
+- repository остаётся **private**;
+- GitHub Pro ради branch protection не приобретается;
+- repository не переводится в public ради branch protection;
+- `main` остаётся **`protected=false`**;
+- защита от ошибок обеспечивается PR-first process, exact-head CI/TOCTOU check, Git history/recovery provenance и запретом обычных direct/force writes в `main`.
+
+Это ограничение нужно учитывать при каждой операции записи, но его не следует снова заводить как open repository-cleanup blocker.
+
+Если API текущей интеграции не умеет удалить obsolete branch refs, такие ветки не считаются источником истины; после доказательства отсутствия уникального полезного состояния их допустимо выровнять с canonical `main`, сохранив прежний exact head SHA в PR/Issue/Git evidence.
