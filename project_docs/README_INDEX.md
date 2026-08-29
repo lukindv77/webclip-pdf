@@ -23,7 +23,9 @@
 - `AUDIT_EVIDENCE.md` — historical implementation/browser proof;
 - `AUDIT_RETIRED_DELTA_EVIDENCE.md` — losslessly retired audit-delta proof;
 - `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` — broad revalidation/implementation taxonomy;
-- `AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md` — consolidated P0-045 Incognito and P0-033 signed-link evidence;
+- `AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md` — consolidated P0-045 Incognito + P0-033 signed-link family;
+- `AUDIT_FAMILY_URLSTATS_EVIDENCE.md` — consolidated P0-050 derived-index generation/consumer family;
+- `AUDIT_FAMILY_JOURNAL_COMMENTS_EVIDENCE.md` — consolidated P1-202/P1-211/P1-225 comment lifecycle/draft evidence plus P0-076/P1-173 refinements;
 - `TEST_EVIDENCE.md` — historical test/browser checkpoints;
 - remaining `AUDIT_DELTA_*.md` — detailed source proof/acceptance, пока конкретная family не прошла lossless retirement.
 
