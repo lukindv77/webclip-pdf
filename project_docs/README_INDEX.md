@@ -2,33 +2,49 @@
 
 Рекомендуемый порядок чтения текущего проекта:
 
-1. `RESTORE_PROMPT.md` — правила восстановления контекста из свежего GitHub `main`.
+1. `RESTORE_PROMPT.md` — восстановление контекста только из свежего GitHub `main`.
 2. `AUDIT_REGISTRY.md` — **единый current registry P-кодов, owners и статусов**.
-3. `AUDIT_DELTA_INDEX.md` — карта root-cause семейств к оставшимся detailed audit deltas.
+3. `AUDIT_DELTA_INDEX.md` — навигация по полностью консолидированным audit families.
 4. `TEST_STATUS.md` — текущая правда о тестах/release gate; historical PASS не является current rerun.
-5. `DOCUMENTATION_CONSISTENCY_AUDIT.md` — обязательные current-authority overrides для stale sections больших исторических документов.
-6. `PROJECT_OVERVIEW.md` — что это за проект и его инварианты.
-7. `USER_REQUIREMENTS.md` — нормализованная история требований; superseded recovery/implementation wording читать с consistency override.
+5. `DOCUMENTATION_CONSISTENCY_AUDIT.md` — current-authority overrides для stale sections больших исторических документов.
+6. `PROJECT_OVERVIEW.md` — назначение проекта и основные инварианты.
+7. `USER_REQUIREMENTS.md` — требования; superseded wording читать с consistency override.
 8. `ARCHITECTURE.md` — компоненты и потоки; open-owner guarantees не выводить из stale historical paragraphs.
-9. `DECISIONS_AND_RATIONALE.md` — история решений и причин; superseded decisions помечены/переопределены current policy.
+9. `DECISIONS_AND_RATIONALE.md` — решения и причины; superseded decisions не являются current authority.
 10. `DATA_MODELS.md` — IndexedDB/storage/snapshot/receipt models.
-11. `TEST_PLAN.md` — исторически накопленный regression plan; stale nested-recovery check заменён Git-first recovery self-test policy.
+11. `TEST_PLAN.md` — regression plan; recovery gate определяется Git-first policy и recovery self-test.
 12. `BUILD_AND_RECOVERY_RULES.md` — Git-first release/recovery/provenance architecture.
 13. `CHANGELOG_AND_RATIONALE.md` — история функциональных изменений.
 14. `ASSISTANT_NOTES_AND_LIMITATIONS.md` — технические ограничения.
 
-Дополнительные evidence/history документы:
+## Audit evidence
 
-- `AUDIT_HISTORY_INDEX.md` — retractions/dedup/product-security decisions;
+Standalone `AUDIT_DELTA_*.md` больше не являются рабочим слоем current tree. Все ранее существовавшие delta прошли lossless family retirement; их исходный Markdown сохранён в family evidence с исходным именем и SHA-256, а полный historical state дополнительно остаётся в Git history.
+
+Основные evidence/history документы:
+
+- `AUDIT_HISTORY_INDEX.md` — corrections, retractions, dedup/product-security decisions;
 - `AUDIT_EVIDENCE.md` — historical implementation/browser proof;
-- `AUDIT_RETIRED_DELTA_EVIDENCE.md` — losslessly retired audit-delta proof;
+- `AUDIT_RETIRED_DELTA_EVIDENCE.md` — ранее свёрнутые correction/positive-control deltas;
 - `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` — broad revalidation/implementation taxonomy;
-- `AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md` — consolidated P0-045 Incognito + P0-033 signed-link family;
-- `AUDIT_FAMILY_URLSTATS_EVIDENCE.md` — consolidated P0-050 derived-index generation/consumer family;
-- `AUDIT_FAMILY_JOURNAL_COMMENTS_EVIDENCE.md` — consolidated P1-202/P1-211/P1-225 comment lifecycle/draft evidence plus P0-076/P1-173 refinements;
-- `TEST_EVIDENCE.md` — historical test/browser checkpoints;
-- remaining `AUDIT_DELTA_*.md` — detailed source proof/acceptance, пока конкретная family не прошла lossless retirement.
+- `AUDIT_FAMILY_BACKUP_RECOVERY_GENERATION_EVIDENCE.md`;
+- `AUDIT_FAMILY_YANDEX_AUTH_CONFIG_EVIDENCE.md`;
+- `AUDIT_FAMILY_YANDEX_REMOTE_IDENTITY_EVIDENCE.md`;
+- `AUDIT_FAMILY_BACKUP_RESTORE_EVIDENCE.md`;
+- `AUDIT_FAMILY_JOURNAL_IMPORT_PROVENANCE_EVIDENCE.md`;
+- `AUDIT_FAMILY_JOURNAL_VIEW_AUTHORITY_EVIDENCE.md`;
+- `AUDIT_FAMILY_JOURNAL_COMMENTS_EVIDENCE.md`;
+- `AUDIT_FAMILY_OPERATION_RECEIPTS_EVIDENCE.md`;
+- `AUDIT_FAMILY_LOCAL_DOWNLOAD_SAVEAS_EVIDENCE.md`;
+- `AUDIT_FAMILY_CHROME_MV3_SETTLEMENT_EVIDENCE.md`;
+- `AUDIT_FAMILY_FRAME_PERMISSION_IDENTITY_EVIDENCE.md`;
+- `AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md`;
+- `AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md`;
+- `AUDIT_FAMILY_URLSTATS_EVIDENCE.md`;
+- `TEST_EVIDENCE.md` — historical test/browser checkpoints.
 
-`PRIORITIES_P0_P1_P2.md` оставлен только как compatibility pointer на `AUDIT_REGISTRY.md`; он не является вторым реестром.
+`AUDIT_DELTA_INDEX.md` является навигационной таблицей по этим семействам, а не вторым status registry.
 
-`GITHUB_WORKFLOW.md` — canonical private remote, automated integrity gate and release provenance rules.
+`PRIORITIES_P0_P1_P2.md` оставлен только как compatibility pointer на `AUDIT_REGISTRY.md`.
+
+`GITHUB_WORKFLOW.md` описывает canonical private remote, automated integrity gate и release provenance rules.
