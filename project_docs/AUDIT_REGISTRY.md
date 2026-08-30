@@ -23,7 +23,7 @@ Important preserved reservations:
 
 - late `P0-079` and `P0-080` are occupied;
 - historical recovery explicitly reserved `P1-072…P1-131` even where an old physical snapshot omitted rows;
-- every `P1-195…P1-228` is occupied;
+- every `P1-195…P1-229` is occupied;
 - `P2-009` and `P2-010` are explicitly history-reserved;
 - all other codes ever present in the legacy priority registry/history remain permanently reserved.
 
@@ -137,7 +137,7 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 |---|---|---|
 | P1-181 | MERGED → P1-209 | Both describe the same extension-page version-refresh root cause: success/version marker is committed before enumeration/reload/ack repair actually succeeds. P1-209 is the single current owner; P1-181 remains permanently reserved as historical duplicate. |
 
-## P1 — late current ACTIVE owners P1-195…P1-228
+## P1 — late current ACTIVE owners P1-195…P1-229
 
 Every code in this range is occupied and ACTIVE.
 
@@ -177,8 +177,9 @@ Every code in this range is occupied and ACTIVE.
 | P1-226 | ACTIVE | Same-origin iframe selection geometry must compose content-box offsets and CSS transforms/zoom across every ancestor frame; simple child-rect plus frame-rect addition cannot drive outlines, usability, or overlap authority. |
 | P1-227 | ACTIVE | Active manual selection must track bounded/coalesced same-origin frame topology changes: newly inserted/replaced/nested accessible frame documents become selectable without restart/auto-content, detached listeners are cleaned, and stale discovery cannot cross selection-session generation. |
 | P1-228 | ACTIVE | Manual selection candidate/geometry authority must represent user-observable rendered intent rather than raw `event.target` plus one axis-aligned bbox: invisible interceptors/click-suppressed regions cannot decide commit, and fragmented/transformed/clipped/SVG geometry cannot create false outline/overlap authority; bounded candidate traversal is required. |
+| P1-229 | ACTIVE | Cross-origin frame selected-only PDF representation needs one WebClip-owned media/geometry contract: worker screen-media emulation must not disable child Include/Exclude filtering or print screen-only selection decoration, and iframe print geometry must be measured from the same effective post-filter selected representation rather than pre-filter full-document height. |
 
-P1-195's historical reconstruction source is Git commit `b2d9ec47833f00fc4b0b42923d1671ae20286f31`; detailed evidence for P1-196…228 is indexed in `AUDIT_DELTA_INDEX.md` and remaining owner-specific deltas.
+P1-195's historical reconstruction source is Git commit `b2d9ec47833f00fc4b0b42923d1671ae20286f31`; detailed evidence for P1-196…229 is indexed in `AUDIT_DELTA_INDEX.md` and remaining owner-specific deltas.
 
 ## DONE items explicitly retained
 
