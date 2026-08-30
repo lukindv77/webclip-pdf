@@ -6,16 +6,19 @@
 
 Организация каждой инструментальной audit-сессии дополнительно и обязательно подчиняется `SESSION_EXECUTION_AND_INTERRUPTION_SAFETY_POLICY.md`: перед началом сообщается exact состояние незавершённой работы и план/риски сессии, объём рассчитывается на максимально полезное использование всего инструментального окна, а substantive progress сохраняется этапами в durable checkpoints так, чтобы неожиданное прерывание не требовало реконструкции работы из чата или локального ephemeral состояния.
 
+Выбор и приоритизация крупных deep-audit user operations/surfaces дополнительно и обязательно подчиняются `AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md`. Deep audit должен регулярно сверять свою User Intent / Operation Map с актуальным внешним опытом похожих и пересекающихся продуктов: official developer materials/demos, GitHub projects/issues/discussions, user forums/Reddit, reviews/comparisons и web-archiving practices. Внешний опыт является evidence-input для того, **что** нужно аудировать и с каким приоритетом, но не автоматически меняет product contract WebClip и не создаёт P-owner без обычной root-cause/admission процедуры.
+
 ## 1. Начало работы
 
 1. Fresh-fetch `main` и зафиксировать exact baseline SHA.
 2. Проверить `AUDIT_REGISTRY.md`, `AUDIT_DELTA_INDEX.md`, соответствующий `AUDIT_FAMILY_*_EVIDENCE.md`, `AUDIT_HISTORY_INDEX.md` и Git history.
-3. Сначала определить, является ли наблюдение:
+3. Перед выбором нового крупного deep-audit tranche проверить freshness текущего external user-intent baseline по `AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md`; если baseline устарел или появился существенный новый peer-product/platform/user-intent signal, сначала выполнить и durably сохранить необходимый delta-scan/research refresh.
+4. Сначала определить, является ли наблюдение:
    - новым root cause;
    - уточнением существующего owner;
    - duplicate/merged finding;
    - historical/non-current observation.
-4. Новый P-код выделяется только для нового самостоятельного owner. Существующий код никогда не переиспользуется.
+5. Новый P-код выделяется только для нового самостоятельного owner. Существующий код никогда не переиспользуется.
 
 ## 2. Admission нового finding
 
