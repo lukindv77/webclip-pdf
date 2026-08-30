@@ -20,7 +20,20 @@ WebClip должен сохранять копии страниц сайта с 
 
 ## Постоянное правило внешнего user-intent research для глубокого аудита
 
-`AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md` является обязательным входом в выбор и приоритизацию deep-audit operations/surfaces. Во время активного глубокого аудита WebClip должен регулярно сверять User Intent / Operation Map с актуальным опытом пользователей похожих и пересекающихся решений по official developer materials/demos, GitHub projects/issues/discussions, reviews/comparisons, Reddit/другим пользовательским форумам и web-archiving practices. Внешний опыт используется для выявления реальных пользовательских задач, ожиданий и recurring pain, но не автоматически копирует чужой product contract в WebClip. Текущий датированный baseline хранится отдельным durable research-evidence документом и refresh-ится по freshness rules policy.
+`AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md` является обязательным входом в выбор и приоритизацию deep-audit operations/surfaces и одновременно в product discovery. Во время активного глубокого аудита WebClip должен регулярно сверять User Intent / Operation Map с актуальным опытом пользователей похожих и пересекающихся решений по official developer materials/demos, GitHub projects/issues/discussions, reviews/comparisons, Reddit/другим пользовательским форумам и web-archiving practices. Внешний опыт используется для выявления реальных пользовательских задач, ожиданий, recurring pain и кандидатных новых функций/режимов/UX-улучшений, но не автоматически копирует чужой product contract в WebClip. Текущие датированные baseline/user-intent и Product Opportunity Map хранятся отдельными durable research-evidence документами и refresh-ятся по freshness rules policy.
+
+## Нормативный контракт текущего основного PDF-режима
+
+`WEBCLIP_PDF_FIDELITY_CONTRACT.md` является обязательным product/architecture и deep-audit contract текущего основного PDF. Этот режим является осознанным гибридом **fidelity + bounded static completeness**.
+
+Ключевые границы:
+
+- уже существующее содержимое selected scope, доступное обычным scrolling страницы или nested scroll containers, должно попадать в статический PDF, а не обрезаться текущим viewport;
+- если scroll/infinite/virtualized behavior создаёт **новое логическое содержимое**, WebClip не должен сам auto-scroll-ить live page за новым content: предел задаёт пользователь своим scroll, а ранее user-reached content не должен теряться только из-за virtual DOM recycling;
+- закрытые spoilers/`<details>` внутри selected scope безопасно раскрываются только в inert static representation для последующего чтения; provenance может сохранять факт, что source state был closed;
+- hover-only menus/tooltips/overlays/flyouts/styling в текущую PDF-копию не входят даже если hover был открыт пользователем;
+- responsive/resource/temporal/control/frame state должен оставаться связанным с admitted source generation, а pagination не должна молча выбирать другую responsive representation;
+- будущие HTML/archive/Reader/screenshot и другие форматы/режимы получают отдельные fidelity/completeness contracts и не наследуют этот PDF contract автоматически.
 
 ## Основной пользовательский поток
 
@@ -53,7 +66,9 @@ WebClip должен сохранять копии страниц сайта с 
 - Родительская область «Включены» поглощает дочерние области «Включены», но валидные области «Исключены» сохраняются.
 - Same-origin iframe участвуют в выборе, основном контенте и journal restore через `framePath + element locator`.
 - Ссылки и ссылки изображений остаются кликабельными в PDF насколько это поддерживает Chromium.
-- Спойлеры раскрываются перед PDF и не обязаны закрываться обратно.
+- Уже существующее scrollable содержимое selected scope должно быть статически представлено полностью; WebClip не должен auto-scroll live page для создания новых logical items за user-reached boundary.
+- Закрытые spoilers/`<details>` внутри selected scope раскрываются в inert static PDF representation без синтетического page-owned click; исходное closed/open состояние может сохраняться в provenance.
+- Hover-only состояние не входит в текущую PDF-копию даже если hover активировал пользователь.
 - PDF header: адрес сайта, clickable full URL, «Название страницы», локальная дата/время.
 - Имя: `Title__DomainUpTo3__timestamp.pdf`, максимум 100 символов, точка только перед расширением.
 - Ошибка Яндекс Диска не очищает области «Включены/Исключены»; retry использует те же байты PDF.
