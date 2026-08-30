@@ -14,11 +14,13 @@
    - `project_docs/AUDIT_DELTA_INDEX.md`;
    - `project_docs/TEST_STATUS.md`.
 4. Определить профиль текущей задачи: restore / audit / development / release.
-5. Читать только файлы нужного профиля и релевантные `AUDIT_FAMILY_*_EVIDENCE.md` через навигацию `AUDIT_DELTA_INDEX.md`.
+5. Читать только файлы нужного профиля и релевантные `AUDIT_FAMILY_*_EVIDENCE.md` через навигацию `AUDIT_DELTA_INDEX.md`. Для профиля **audit** обязательно прочитать `project_docs/CONTEXT_AUTOMATION_POLICY.md`, включая постоянную границу defensive-security scope.
 6. Для исторического контекста использовать `AUDIT_HISTORY_INDEX.md`, `AUDIT_EVIDENCE.md`, `TEST_EVIDENCE.md`, retired evidence и Git history только по необходимости.
 7. Проверить open Pull Request и open Issue: они могут содержать незавершённую фактическую работу/hand-off checkpoint, но не заменяют canonical status authority.
 
 `AUDIT_REGISTRY.md` — единственный current authority для P-code owner/status. `AUDIT_DELTA_INDEX.md` — только family navigation. Standalone historical delta-файлы не являются обязательным current read; подробное действующее proof хранится в consolidated `AUDIT_FAMILY_*_EVIDENCE.md` и cross-cutting/history evidence.
+
+Для security-вопросов глубокого аудита действует постоянная defensive-only граница из `CONTEXT_AUTOMATION_POLICY.md`: анализировать защиту конфиденциальности, целостности, хранения и передачи данных/файлов/credentials расширения и внешних API-контекстов; не переходить к эксплуатации, обходу авторизации, атакам, вредоносному коду или инструкциям по проникновению. При необходимости класс угрозы описывается только концептуально через защищаемые данные, условие риска и defensive control.
 
 ## Постоянный триггер перехода в новый чат
 
