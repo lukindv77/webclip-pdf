@@ -52,6 +52,10 @@ No standalone audit delta is a current status authority. New audit findings must
 
   50-block cross-origin frame physical-PDF media/selected-geometry audit tranche from fresh `main`. Registered scope: new **P1-229 ACTIVE** because worker `screen` media emulation disables the frame-agent's `@media print` Include/Exclude filter while enabling its `@media screen` green/red selection outlines; the child also returns pre-filter full-document height that top uses for iframe pagination. Managed Chromium reproduces selected + excluded + unrelated child text and selection outlines in the PDF, while a media-independent child filter is a positive control and post-filter geometry is required to avoid excess blank pages. Supporting owner boundaries: P0-004, P1-004, P1-003 and P0-070.
 
+- `AUDIT_SELECTED_ONLY_CASCADE_AUTHORITY_2026-08-30_EVIDENCE.md`
+
+  28-block selected-only author-cascade authority tranche from fresh `main`. No new P-number/status transition: direct Chromium PDF proof refines P0-075/P0-004 because live author-origin `display:none!important` is not authoritative against page inline/high-specificity/layered important declarations; unselected and explicit Exclude content can enter the PDF and a 5000px unselected tail expanded output from 1 to 6 pages. P1-003 retains actual-rendered-resource-graph parity. P1-229 is explicitly refined: its media-independent child-filter positive control fixes the media dimension only and is not full closure unless the selected-only representation is also non-overridable by page author cascade. Negative controls preserve non-important CSS, lower-specificity important CSS, visibility-only, animation, `display:contents` and a rejected transition hypothesis.
+
 ## Families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
