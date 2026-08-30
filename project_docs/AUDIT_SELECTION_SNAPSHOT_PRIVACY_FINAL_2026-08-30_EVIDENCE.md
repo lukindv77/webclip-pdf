@@ -111,3 +111,5 @@ Resolver analysis explains why the fields exist: selected text can contribute 24
 - The completed session contains **56 audited blocks** when the detailed staged evidence and these closing controls are counted together.
 
 The branch-level interruption checkpoints are intentionally preserved in Git history. The obsolete initial post-freeze planning file may be removed from the final tree because all unique dedup decisions are now preserved in the privacy evidence set; removing it does not erase its checkpoint commit from branch history.
+
+PR delivery is intentionally classified as existing-owner audit impact (`- [x] audit-impact: owner`) with P1-182 and its supporting owners declared; docs-only evidence does not require a runtime test-impact exception.
