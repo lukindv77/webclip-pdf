@@ -4,6 +4,8 @@
 
 `AUDIT_REGISTRY.md` остаётся единственным current authority по P-кодам, owner и status. Family evidence хранит доказательную базу; GitHub Issue/PR — рабочий процесс, но не заменяет registry.
 
+Организация каждой инструментальной audit-сессии дополнительно и обязательно подчиняется `SESSION_EXECUTION_AND_INTERRUPTION_SAFETY_POLICY.md`: перед началом сообщается exact состояние незавершённой работы и план/риски сессии, объём рассчитывается на максимально полезное использование всего инструментального окна, а substantive progress сохраняется этапами в durable checkpoints так, чтобы неожиданное прерывание не требовало реконструкции работы из чата или локального ephemeral состояния.
+
 ## 1. Начало работы
 
 1. Fresh-fetch `main` и зафиксировать exact baseline SHA.
