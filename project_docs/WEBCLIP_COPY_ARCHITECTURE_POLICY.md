@@ -2,6 +2,12 @@
 
 This document is a permanent product/architecture requirement. It does **not** define current P-code status; `AUDIT_REGISTRY.md` remains the sole status/owner authority.
 
+## Project mission authority
+
+`PROJECT_MISSION_AND_DEFENSIVE_SECURITY_POLICY.md` is the upper-level normative mission for WebClip. This architecture policy must be interpreted under that mission: preserve the user-selected page state for later reading with maximal truthful fidelity, while all preparation, storage, transfer, diagnostics and external integrations remain safe for the user and operate within a defensive-security scope. A technically successful serialization is not success if it silently changes the admitted user-visible state or compromises user data.
+
+Security analysis for this architecture is defensive. Exploit development, authorization bypass, attacks, service compromise, malicious code and intrusion instructions are outside project scope. When a threat class is relevant to an architecture decision, the required level is conceptual: protected asset, condition that creates the risk, and the defensive mechanism that closes it.
+
 ## Core rule: page copy is format-neutral
 
 The primary WebClip product object is a **captured copy of an explicitly identified page/document state and user-selected scope**, not a PDF file.
