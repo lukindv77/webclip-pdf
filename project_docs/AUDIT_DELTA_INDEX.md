@@ -44,6 +44,10 @@ No standalone audit delta is a current status authority. New audit findings must
 
   36-block SelectionSnapshot restore-soundness / remote-settlement / bounded-locator-work tranche from fresh `main`. No new P-number or status transition: P1-001 gains end-to-end restore truth for sound candidate/confidence sets, idempotent local/remote application and final report/state reconciliation; P1-200 covers failed/late remote clear/start/restore session ordering; P1-171 covers exact frame/document boundary and conservative cross-frame confidence; P1-154 preserves aggregate count/cap truth; P1-168/P1-160 retain bounded locator/snapshot/outline computation. Managed Chromium reproduces duplicate remote restores toggling state off while returning success, 251st remote selections refused while returning success, and an exact target at tag-candidate position 5001 losing to an in-window decoy with score 99 / high confidence. Existing positive controls for in-window exact match and ambiguity fail-closed remain valid.
 
+- `AUDIT_SELECTION_SAVE_FREEZE_REENTRANCY_IPC_2026-08-30_EVIDENCE.md`
+
+  50-block selection save-freeze / host-reentrant marker / pre-IPC locator-admission tranche from fresh `main`. No new P-number or status transition: P0-070/P1-200/P1-214 gain exact reviewed local+remote selection-freeze receipt requirements so mutable remote state cannot diverge between confirmation, `meta.selectionSnapshot` and physical multi-frame preparation; P0-075/P0-080/P1-228 gain managed-Chromium isolated-world proof that WebClip marker writes can synchronously execute page custom-element/CSS reactions before Map commit, including target removal/replacement, marker stripping and reentrant nested selection; P1-168/P1-172 gain early per-field/depth/byte limits before `CSS.escape`, selector parsing and Chrome message serialization. Worker SelectionSnapshot sanitization remains a positive authoritative second boundary.
+
 ## Families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
