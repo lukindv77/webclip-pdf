@@ -23,7 +23,7 @@ Important preserved reservations:
 
 - late `P0-079` and `P0-080` are occupied;
 - historical recovery explicitly reserved `P1-072…P1-131` even where an old physical snapshot omitted rows;
-- every `P1-195…P1-229` is occupied;
+- every `P1-195…P1-230` is occupied;
 - `P2-009` and `P2-010` are explicitly history-reserved;
 - all other codes ever present in the legacy priority registry/history remain permanently reserved.
 
@@ -180,6 +180,14 @@ Every code in this range is occupied and ACTIVE.
 | P1-229 | ACTIVE | Cross-origin frame selected-only PDF representation needs one WebClip-owned media/geometry contract: worker screen-media emulation must not disable child Include/Exclude filtering or print screen-only selection decoration, and iframe print geometry must be measured from the same effective post-filter selected representation rather than pre-filter full-document height. |
 
 P1-195's historical reconstruction source is Git commit `b2d9ec47833f00fc4b0b42923d1671ae20286f31`; detailed evidence for P1-196…229 is indexed in `AUDIT_DELTA_INDEX.md` and remaining owner-specific deltas.
+
+## P1 — current ACTIVE owners after P1-229
+
+| Code | Status | Single current owner / root cause |
+|---|---|---|
+| P1-230 | ACTIVE | Current PDF capture must preserve bounded, generation-bound logical content actually materialized/seen through the user's own dynamic/virtualized scrolling up to the maximum user-reached boundary, including after scroll-back and DOM recycling, or truthfully report partial/degraded/unknown; current mounted DOM/window alone cannot silently substitute for that admitted history, and WebClip must not auto-scroll beyond the user's boundary. |
+
+P1-230 is admitted from the 2026-08-30 C22/C23 contract tranche in `AUDIT_USER_REACHED_DYNAMIC_SCROLL_2026-08-30_EVIDENCE.md`. Historical deferred/virtualized evidence intentionally left this code unallocated while current-view-vs-complete-logical semantics were still a P2-007 product question; `WEBCLIP_PDF_FIDELITY_CONTRACT.md` later explicitly resolved the current PDF contract in favor of bounded user-reached content preservation.
 
 ## DONE items explicitly retained
 
