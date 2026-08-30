@@ -56,6 +56,10 @@ No standalone audit delta is a current status authority. New audit findings must
 
   28-block selected-only author-cascade authority tranche from fresh `main`. No new P-number/status transition: direct Chromium PDF proof refines P0-075/P0-004 because live author-origin `display:none!important` is not authoritative against page inline/high-specificity/layered important declarations; unselected and explicit Exclude content can enter the PDF and a 5000px unselected tail expanded output from 1 to 6 pages. P1-003 retains actual-rendered-resource-graph parity. P1-229 is explicitly refined: its media-independent child-filter positive control fixes the media dimension only and is not full closure unless the selected-only representation is also non-overridable by page author cascade. Negative controls preserve non-important CSS, lower-specificity important CSS, visibility-only, animation, `display:contents` and a rejected transition hypothesis.
 
+- `AUDIT_SELECTION_SNAPSHOT_PRIVACY_FINAL_2026-08-30_EVIDENCE.md`
+
+  56-block SelectionSnapshot privacy revalidation tranche from fresh `main`, with interruption-safe detailed evidence in `AUDIT_SELECTION_SNAPSHOT_PRIVACY_REVALIDATION_2026-08-30_EVIDENCE.md`, `AUDIT_SELECTION_SNAPSHOT_PRIVACY_PORTABILITY_2026-08-30_EVIDENCE.md` and `AUDIT_SELECTION_SNAPSHOT_PRIVACY_RESOLVER_2026-08-30_EVIDENCE.md`. No new P-number or status transition: fresh source plus managed-Chromium proof revalidates P1-182 because a benign selected node can durably capture unselected parent/previous/next plaintext and raw `href/src` secrets; the same non-minimized snapshot propagates through Journal, pending local/remote recovery, PDF retry cache, local JSON export, Yandex backup and import staging/round-trip. Resolver scoring currently assigns selected text up to 24 points, raw `href` 14, raw `src` 10 and surrounding context up to 18, so privacy repair must be a coordinated versioned feature/scoring/ambiguity migration rather than field deletion. Supporting owner boundaries: P0-066, P1-001, P1-168, P1-188 and P0-077.
+
 ## Families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
