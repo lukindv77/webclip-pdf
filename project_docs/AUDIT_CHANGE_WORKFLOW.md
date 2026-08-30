@@ -10,18 +10,21 @@
 
 Для текущего основного PDF-режима `WEBCLIP_PDF_FIDELITY_CONTRACT.md` является обязательной PDF-specific acceptance authority. Deep audit не должен оценивать PDF по неопределённому критерию «похоже на страницу»: ordinary-scroll completeness, user-reached boundary для scroll-triggered dynamic content, spoiler materialization, hover exclusion, responsive/resource identity, temporal/focus state, pagination и truthful degradation проверяются относительно явно принятого contract.
 
+`AUDIT_COVERAGE_CAMPAIGN_POLICY.md` является обязательной методикой систематического deep audit. Она разделяет coverage completeness и finding closure, задаёт Coverage Matrix по end-to-end boundaries/surface families, evidence ladder L1–L5, controls, tranche envelope, root-cause saturation, campaign ranking, closure re-audit и project-wide completion gates. Наличие большого P-registry или большого количества audit blocks не является доказательством полной coverage. Current initial reconstruction хранится в `AUDIT_COVERAGE_RECONSTRUCTION_2026-08-30.md` и должна обновляться/заменяться последующими durable coverage checkpoints.
+
 ## 1. Начало работы
 
 1. Fresh-fetch `main` и зафиксировать exact baseline SHA.
-2. Проверить `AUDIT_REGISTRY.md`, `AUDIT_DELTA_INDEX.md`, соответствующий `AUDIT_FAMILY_*_EVIDENCE.md`, `AUDIT_HISTORY_INDEX.md` и Git history.
+2. Проверить `AUDIT_REGISTRY.md`, `AUDIT_DELTA_INDEX.md`, соответствующий `AUDIT_FAMILY_*_EVIDENCE.md`, `AUDIT_HISTORY_INDEX.md`, current Coverage Matrix/reconstruction и Git history.
 3. Перед выбором нового крупного deep-audit tranche проверить freshness текущего external user-intent baseline по `AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md`; если baseline устарел или появился существенный новый peer-product/platform/user-intent signal, сначала выполнить и durably сохранить необходимый delta-scan/research refresh.
-4. Если tranche затрагивает текущий основной PDF fidelity/completeness, сформулировать audit questions и acceptance относительно `WEBCLIP_PDF_FIDELITY_CONTRACT.md`, включая применимые transformation class и границу admitted/user-reached state.
-5. Сначала определить, является ли наблюдение:
+4. Выбирать следующий крупный tranche из nonterminal/high-risk coverage gaps согласно `AUDIT_COVERAGE_CAMPAIGN_POLICY.md`, а не только по наличию очередного интересного edge case. До старта определить boundaries, required evidence, controls, variant classes и termination envelope.
+5. Если tranche затрагивает текущий основной PDF fidelity/completeness, сформулировать audit questions и acceptance относительно `WEBCLIP_PDF_FIDELITY_CONTRACT.md`, включая применимые transformation class и границу admitted/user-reached state.
+6. Сначала определить, является ли наблюдение:
    - новым root cause;
    - уточнением существующего owner;
    - duplicate/merged finding;
    - historical/non-current observation.
-6. Новый P-код выделяется только для нового самостоятельного owner. Существующий код никогда не переиспользуется.
+7. Новый P-код выделяется только для нового самостоятельного owner. Существующий код никогда не переиспользуется.
 
 ## 2. Admission нового finding
 
@@ -34,8 +37,9 @@ Issue должен содержать:
 - наблюдаемый дефект или нарушенный invariant;
 - deterministic schedule/reproduction, если применимо;
 - границу authority/generation/receipt, если finding связан с concurrency/recovery;
-- предложение: existing owner / new owner / duplicate / reject;
-- acceptance criteria.
+- proposal: existing owner / new owner / duplicate / reject;
+- acceptance criteria;
+- coverage cells/surfaces и required evidence level, если finding возник в systematic deep-audit campaign.
 
 Issue может существовать до присвоения P-кода. **Резервирование номера происходит только после записи в `AUDIT_REGISTRY.md`.**
 
@@ -53,6 +57,8 @@ Issue может существовать до присвоения P-кода. 
 2. выбрать следующий свободный номер только после проверки permanent reservations;
 3. в одном PR добавить registry row и необходимую evidence-навигацию;
 4. не считать номер свободным даже после DONE/MERGED/SUPERSEDED.
+
+Новый symptom не получает отдельный owner только потому, что наблюдается на другом fixture. Новый owner нужен, если после полного исправления root cause A нарушение B может независимо остаться по другому механизму.
 
 ## 4. Ветка и PR
 
@@ -108,7 +114,17 @@ Issue может существовать до присвоения P-кода. 
 
 `PASS` deterministic test не переводит finding в DONE, если acceptance требует real Chrome, permission UI, native Save As, реальный Yandex API или другой внешний boundary.
 
-## 7. Status transitions
+Finding нельзя закрывать evidence ниже уровня, на котором проявляется дефект. Если дефект observable только в physical PDF, unit/source proof не заменяет L4 closure.
+
+## 7. Closure re-audit
+
+После implementation owner нельзя проверять только старый reproduction. Согласно `AUDIT_COVERAGE_CAMPAIGN_POLICY.md` выполняется Closure Sweep соответствующего region Coverage Matrix.
+
+Минимально повторно рассматриваются affected admission/capture/materialization/renderer/artifact/persistence/provenance cells. Если изменился shared capture/materialization layer, revalidation scope расширяется на соседние families, которые используют этот слой.
+
+Результат closure должен обновить durable evidence/coverage state и отдельно показать, какие claims остаются external/unknown/partial.
+
+## 8. Status transitions
 
 - `ACTIVE` -> implementation может быть добавлена, но owner остаётся ACTIVE до требуемой direct verification.
 - `ACTIVE` -> `DONE` только после выполнения полного acceptance contract.
@@ -116,19 +132,28 @@ Issue может существовать до присвоения P-кода. 
 - `ACTIVE` -> `SUPERSEDED` только при явном архитектурном/product решении, заменяющем старое требование.
 - Historical PASS никогда автоматически не закрывает later-reopened owner.
 
-## 8. Evidence после merge
+Coverage outcome и P-status различаются: `ARTIFACT-COVERED / FINDING` может быть terminal audit cell при ACTIVE owner.
+
+## 9. Evidence после merge
 
 После merge current truth должен быть восстанавливаем из:
 
 1. `AUDIT_REGISTRY.md` — owner/status;
 2. family evidence — proof/race/acceptance/corrections;
-3. tests и exact Git commit;
-4. `TEST_STATUS.md` / `TEST_EVIDENCE.md` — test/release interpretation;
-5. GitHub PR/Issue — рабочая дискуссия и reviewed diff.
+3. Coverage Matrix/reconstruction — систематическая видимость proved/broken/partial/external/uncovered surfaces;
+4. tests и exact Git commit;
+5. `TEST_STATUS.md` / `TEST_EVIDENCE.md` — test/release interpretation;
+6. GitHub PR/Issue — рабочая дискуссия и reviewed diff.
 
 Нельзя оставлять единственную существенную acceptance-деталь только в тексте Issue/PR или чате.
 
-## 9. Release boundary
+## 10. Deep-audit completion boundary
+
+Project state `DEEP-AUDIT-COVERAGE-COMPLETE` допустим только по gates `AUDIT_COVERAGE_CAMPAIGN_POLICY.md`: все CORE families triaged, все material relevant cells terminal с required evidence либо explicit external/limitation boundary, все findings имеют root-cause ownership и нет unexplained NOT-AUDITED областей.
+
+Этот статус не означает, что все findings исправлены. `DEEP-AUDIT-CRITICAL-CLOSURE-COMPLETE` и `RELEASE-READY` являются отдельными более сильными состояниями.
+
+## 11. Release boundary
 
 Audit implementation и release readiness — разные состояния. Release-кандидат дополнительно проходит `.github/workflows/release-gate.yml` и правила `RELEASE_READINESS.md`.
 
