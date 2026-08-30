@@ -40,16 +40,20 @@ Shared capture/provenance must be capable of expressing, where technically obtai
 
 A future HTML/archive renderer may preserve more interactive semantics than PDF. A Reader/simplified renderer may intentionally transform layout. Those are separate output/mode contracts, not evidence that the original capture was inaccurate.
 
+The current PDF-specific semantics are defined normatively by `WEBCLIP_PDF_FIDELITY_CONTRACT.md`. Other future formats/modes require their own explicit product decisions rather than inheriting PDF's fidelity/completeness trade-offs automatically.
+
 ## PDF remains a strict first-class fidelity contract
 
 Although PDF is not the universal copy model, PDF saving must remain predictable and high fidelity.
 
-A faithful PDF is **not merely a screenshot of the current viewport**. Its contract combines two requirements:
+The current primary PDF is deliberately a **hybrid of fidelity and bounded static completeness**. It is not merely a screenshot of the current viewport, but it is also not a crawler or an unlimited materializer.
+
+Its contract combines two requirements:
 
 1. preserve the meaningful visual/structural presentation of the selected page state as the user actually encounters it on the site;
-2. produce a complete static copy of the selected content that the user can actually reach through ordinary non-destructive interaction such as scrolling, subject to an explicit static-flattening policy.
+2. produce a complete static representation of already-existing selected content reachable through ordinary scrolling and safely materializable collapsed content, while scroll-triggered **new logical content** is bounded by how far the user himself/herself has scrolled rather than by WebClip auto-scrolling the live page for more items.
 
-This means pagination or static materialization may legitimately differ from the literal viewport rectangle, but it must not silently substitute a different responsive variant, page generation, unrelated layout, resource generation or hidden content policy merely because Chromium print geometry is different.
+This means pagination or static materialization may legitimately differ from the literal viewport rectangle, but it must not silently substitute a different responsive variant, page generation, unrelated layout, resource generation or hidden-content policy merely because Chromium print geometry is different.
 
 At minimum PDF fidelity auditing must cover:
 
@@ -57,25 +61,31 @@ At minimum PDF fidelity auditing must cover:
 - zoom/transforms/frame geometry;
 - colors/backgrounds/fonts/SVG/canvas/images;
 - current form/control and other renderer-owned visible state where relevant;
-- open/closed/top-layer state and the explicit static-materialization rule for revealable content;
-- scrollable/nested content and long-page completeness without arbitrary clipping;
+- explicit spoiler/disclosure static-materialization semantics;
+- ordinary/nested scroll completeness and the user-reached boundary for scroll-triggered dynamic growth;
+- virtualized content already within the user-reached range even when current DOM recycling removes earlier nodes;
 - clipping/overflow/fixed/sticky behavior and pagination;
 - clickable links where PDF can safely represent them;
 - temporal state such as animations/transitions and page mutations: output must be bound to a defined admitted state rather than arbitrary render timing;
+- material non-hover focus/selection state;
+- explicit exclusion of hover-only menus/tooltips/overlays/styling, even when hover is active at admission;
 - inability of WebClip's own dialogs/focus/preparation mutations to silently change the page state that is later claimed as the user's captured view.
 
 `media: screen` is not by itself proof of visual fidelity: layout-dependent screen media/container/viewport rules can still be reevaluated against print geometry.
 
 ## Interactive content and static formats
 
-“User can interact with it on the site” does not mean a static PDF must execute the site's JavaScript or preserve dangerous active behavior. It means the capture model must understand which content/state is reachable through normal interaction and must apply an explicit, deterministic static representation policy.
+“User can interact with it on the site” does not mean a static PDF must execute the site's JavaScript or preserve dangerous active behavior. It means the capture model must understand which content/state belongs to the accepted PDF completeness envelope and apply an explicit, deterministic static representation policy.
 
-Examples:
+For the current primary PDF contract:
 
-- A scroll container may be expanded into complete static flow so that content the user could reach by scrolling is not lost, while preserving the container's meaningful ordering/appearance as far as the static format permits.
-- A closed disclosure that can be expanded on the live site needs an explicit policy. A current-view mode may keep it closed; an expanded/archival mode may materialize revealable content into an inert representation. If materialization changes the original visible state, the mode/diagnostics must make that transformation predictable rather than silently presenting it as an exact current-view snapshot.
-- Materialization must not synthesize page-owned click/submit/navigation behavior. It should derive an inert representation or use safe state extraction.
-- Focus/hover/target/top-layer/control state that materially changes what the user sees must be captured at a defined admission point or explicitly documented as outside a selected mode's fidelity envelope.
+- A scroll container whose content already exists may be expanded into complete static flow so that content the user could reach by ordinary scrolling is not lost, while preserving meaningful ordering/appearance as far as the static format permits.
+- Scroll/infinite/virtualized behavior that creates **new logical content** is different: WebClip does not auto-scroll the live page farther to obtain more items. The user's own furthest reached scroll boundary defines the logical-content limit; material already present at capture-session start is also in scope. If virtual DOM recycling prevents faithful recovery of content already within that boundary, the result must be truthfully partial/degraded/unknown rather than silently complete.
+- A closed spoiler/`<details>` or equivalent safely materializable collapsed block inside selected scope is expanded in the inert PDF representation for later reading, while provenance may record that its source state was closed. WebClip must not synthesize a page-owned click on the live page merely to fetch or activate new state.
+- Materialization must not synthesize page-owned submit/navigation behavior, arbitrary `Load more` actions or crawler-like expansion.
+- Material non-hover focus/selection/control state should be captured at the admission point when it changes the resulting presentation.
+- Hover-only state is explicitly excluded from the current PDF contract even if it was active because of the user's pointer: hover menus, tooltips, flyouts, overlays and hover-only styling should not appear in the saved PDF.
+- Non-hover dialog/popover/top-layer state follows admission: opened state may be preserved, closed state is not automatically opened for completeness.
 - Future interactive/offline HTML-like formats may preserve safe interaction semantics that PDF cannot; they must still remain inert with respect to privileged WebClip authority and must not become a vehicle for replaying untrusted page actions with extension privileges.
 
 ## Capture first, render second
@@ -88,6 +98,7 @@ Candidate inputs include Chromium `DOMSnapshot.captureSnapshot`, `Page.captureSn
 - canvas/video/form/shadow/iframe handling;
 - responsive/layout geometry;
 - resource completeness and offline durability;
+- user-reached dynamic-scroll boundaries and virtualized-history requirements where applicable;
 - size/node/byte/time budgets;
 - privacy and safe-URI behavior;
 - hostile-page isolation/inertness;
@@ -100,8 +111,12 @@ No single browser API is assumed to be a complete canonical snapshot. The projec
 
 When multiple capture/output modes exist, the UI must make their semantics understandable. A user choosing faithful page/selection copy must not unknowingly receive a Reader transformation; a user choosing a simplified/expanded/interactive archival mode should know what is transformed or preserved.
 
+The current PDF hybrid is defined by `WEBCLIP_PDF_FIDELITY_CONTRACT.md`; this does not pre-approve equivalent semantics for future formats.
+
 Completeness warnings and degradation should be durable with the saved record where useful. Success means a truthful copy under the selected mode's contract, not merely that a file was produced.
 
 ## Audit rule
 
-Deep audit must continue to test the shared capture boundary independently from individual output renderers, then test each renderer's own fidelity contract. A finding caused by capture/provenance should be fixed once at the shared layer where possible; a PDF-only pagination/rendering defect remains a PDF-specific owner/acceptance case.
+Deep audit must continue to test the shared capture boundary independently from individual output renderers, then test each renderer's own fidelity contract. For current PDF, `WEBCLIP_PDF_FIDELITY_CONTRACT.md` is the normative PDF-specific acceptance reference.
+
+A finding caused by capture/provenance should be fixed once at the shared layer where possible; a PDF-only pagination/rendering/static-materialization defect remains a PDF-specific owner/acceptance case.
