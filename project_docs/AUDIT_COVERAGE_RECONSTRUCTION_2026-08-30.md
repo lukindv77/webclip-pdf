@@ -6,6 +6,8 @@ Baseline canonical `main`: `bcf310b13dd8584d2e0d66ae4007b511a859843d`.
 
 Stage-2 C22/C23 revalidation audited canonical `main`: `a0e1252317dfa1a1146dbed0e5b8bfe5bb760491`.
 
+Stage-3 C26 hover-exclusion revalidation audited canonical `main`: `153d09c164473643229b29946dc35ba413715913`.
+
 Purpose: первая фактическая реконструкция deep-audit Coverage Matrix из уже существующих durable audit evidence, registry/history и merged physical-browser tranches. Этот документ **не заменяет P-code owner/status authority**: `AUDIT_REGISTRY.md` остаётся единственным canonical authority. Coverage rows ниже фиксируют achieved evidence/outcome и должны обновляться после targeted tranches.
 
 Методика задаётся `AUDIT_COVERAGE_CAMPAIGN_POLICY.md`. PDF acceptance задаётся `WEBCLIP_PDF_FIDELITY_CONTRACT.md`.
@@ -36,7 +38,8 @@ Current authority/context:
 - PR #46 / `AUDIT_RESPONSIVE_REPLACED_MEDIA_FIDELITY*_2026-08-30_EVIDENCE.md`;
 - PR #47 / `AUDIT_RESPONSIVE_IMAGE_CAPTURE_IDENTITY*_2026-08-30_EVIDENCE.md`;
 - PR #48 / `AUDIT_FOCUS_INTERACTION_STATE_FIDELITY*_2026-08-30_EVIDENCE.md`;
-- C22/C23 targeted tranche / `AUDIT_USER_REACHED_DYNAMIC_SCROLL_2026-08-30_EVIDENCE.md` plus its two managed-Chromium physical probes.
+- C22/C23 targeted tranche / `AUDIT_USER_REACHED_DYNAMIC_SCROLL_2026-08-30_EVIDENCE.md` plus its two managed-Chromium physical probes;
+- C26 targeted tranche / `AUDIT_HOVER_EXCLUSION_CONTRACT_2026-08-30_EVIDENCE.md` plus `project_tools/audit_hover_exclusion_contract.py`.
 
 Также использованы supplemental summaries из `AUDIT_DELTA_INDEX.md`, включая selection/admission, selected-only cascade, post-freeze render cut, print rollback, local prepare budgets, source URL minimization, PDF byte transfer receipt и связанные Yandex/Journal/recovery boundaries.
 
@@ -52,7 +55,7 @@ Historical evidence засчитывается только для того clai
 2. inert spoiler/disclosure materialization без page-owned synthetic activation;
 3. mandatory hover exclusion даже если hover active at admission.
 
-C22/C23 теперь revalidated fresh targeted tranche: evidence достигло L3+L4 и outcome классифицирован как FINDING с независимым owner P1-230. C24 и C26 остаются `REVALIDATION-REQUIRED`.
+C22/C23 и C26 теперь revalidated fresh targeted tranches: required L3+L4 evidence достигнуто и outcome классифицирован как FINDING. C22/C23 имеет independent owner P1-230; C26 уточняет existing P0-075/P0-070/P0-004 и не создаёт duplicate P1-231. C24 остаётся `REVALIDATION-REQUIRED`.
 
 ## 3. Family-level current matrix
 
@@ -85,7 +88,7 @@ C22/C23 теперь revalidated fresh targeted tranche: evidence достигл
 | C23 | Virtualized/windowed content history within user-reached range | yes | L3+L4 under current PDF contract | gradual user-like traversal materialized/seen logical 1…57, returned to top, physical PDF retained only mounted 1…8; recycled selected row changed logical identity | `ARTIFACT-COVERED / FINDING` | **P1-230 ACTIVE** primary whole-history owner; P0-070/P0-080 remain supporting generation/selection identity owners |
 | C24 | Spoilers/disclosures / inert expansion | yes | L3+L4 under current PDF contract | historical disclosure/details and print-preparation evidence | `REVALIDATION-REQUIRED / UNKNOWN` | P0-067/P1-212/P0-004/P0-070/P1-167 related; must prove inert expansion, Exclude preservation and no page-owned activation |
 | C25 | Dialog / popover / top layer | yes | L3+L4 | PR #37 physical clipping/repetition/current-scroll state | `ARTIFACT-COVERED / FINDING` | P0-004, P1-187, P0-070 supporting |
-| C26 | Hover exclusion | yes | L3+L4 under current PDF contract | PR #48 proves hover-only state is physically printable in Chromium and WebClip pointer movement can change it | `REVALIDATION-REQUIRED / UNKNOWN` | P0-075/P0-070/P0-004 related; no proof current pipeline deliberately normalizes non-hover representation |
+| C26 | Hover exclusion | yes | L3+L4 under current PDF contract | fresh current-source + Chromium 144 physical controls: review backdrop clears CSS/pseudo hover, but persistent JS hover-opened DOM remains in top and same-origin-frame PDFs; non-hover dialog positive preserved | `ARTIFACT-COVERED / FINDING` | **P0-075/P0-070/P0-004 existing owners**; no P1-231. Need trusted non-hover admitted representation or truthful degraded/unknown when hover provenance cannot be separated |
 | C27 | Focus / selection / interaction-induced page state | yes | L3+L4 | PR #48 physical focus/hover/application-mutation evidence | `ARTIFACT-COVERED / FINDING` | P0-075, P0-070, P0-004, P1-187 supporting |
 | C28 | Responsive/environment state | yes | L3+L4 | PR #44/#47 physical viewport/resource evidence | `ARTIFACT-COVERED / FINDING` | P0-004, P0-070, P0-075, P1-187, P1-003 |
 | C29 | Viewport units / container-query dependent geometry | yes | L3+L4 | PR #44 physical `vw/vh`/paged-geometry evidence; frame CSS evidence | `ARTIFACT-COVERED / FINDING` | P0-004/P1-187/P0-070/P0-075 supporting |
@@ -112,13 +115,13 @@ C22/C23 теперь revalidated fresh targeted tranche: evidence достигл
 Реконструкция показывает, что проект уже имеет unusually deep engineering evidence для многих renderer/physical-PDF surfaces:
 
 - direct managed-Chromium `Page.printToPDF` physical probes используются не эпизодически, а во многих independent tranches;
-- layout/clipping/pagination, fonts, resources, frame flattening, responsive candidate identity, temporal state, focus и теперь user-reached virtual-history behavior проверены именно на physical PDF, а не только source/model level;
+- layout/clipping/pagination, fonts, resources, frame flattening, responsive candidate identity, temporal state, focus, user-reached virtual-history и hover-exclusion behavior проверены именно на physical PDF, а не только source/model level;
 - historical audits сохраняют positive/negative/rejected controls, что снижает риск повторного открытия отвергнутых broad hypotheses;
 - registry разделяет exact-generation, resource, frame, persistence, recovery и user-reached-history owners вместо одного неуправляемого «PDF fidelity bug».
 
 То есть главный текущий deficiency — не отсутствие глубины вообще, а **оставшиеся contract-specific gaps, ACTIVE findings и explicit L5 boundaries**.
 
-## 5. Главные gaps после C22/C23 revalidation
+## 5. Главные gaps после C22/C23 и C26 revalidation
 
 ### G1 — user-driven dynamic-scroll / virtualized history — classified FINDING, owner P1-230
 
@@ -132,11 +135,19 @@ Fresh C22/C23 tranche доказал:
 
 Это больше не product-mode ambiguity P2-007: текущий PDF contract уже определяет user-reached dynamic content как входящий в completeness envelope. Whole-history loss классифицирован как independent **P1-230 ACTIVE**. Implementation остаётся отдельным будущим closure tranche.
 
-### G2 — hover exclusion теперь следующий mandatory negative representation contract
+### G2 — hover exclusion — classified FINDING under existing owners
 
-PR #48 физически доказал, что Chromium может сериализовать hover-only pixels/text. Исторически это было evidence о transient-state fidelity/risk. Current product decision требует обратное: hover всегда исключается.
+Fresh C26 tranche уточнил historical PR #48 против current contract:
 
-Нужно доказать deliberate non-hover normalization без page-owned side effects и без уничтожения других admitted states. Это следующий рекомендуемый fresh tranche по silent-scope-expansion risk.
+- direct Chromium физически сериализует CSS `:hover`, hover pseudo-content и JS hover-mounted DOM;
+- current WebClip-shaped review backdrop естественно снимает tested CSS/pseudo hover и вызывает pointerleave — broad CSS-hover failure rejected;
+- если page сама удаляет hover UI on leave, physical PDF чистый;
+- если hover-opened JS flyout остаётся mounted, current preparation не имеет provenance/non-hover representation boundary и physical PDF сохраняет его;
+- same-origin frame повторяет механизм;
+- independent non-hover open dialog остаётся, поэтому blanket transient-state deletion недопустим;
+- inability to distinguish hover provenance currently не превращается в truthful degraded/unknown.
+
+Root-cause saturation показывает existing **P0-075 / P0-070 / P0-004** sufficient. Новый P1-231 не выделяется.
 
 ### G3 — spoiler expansion должен быть inert и selection-bounded
 
@@ -163,53 +174,54 @@ Real unpacked Chrome, optional permission UI, native download/Save As и real ex
 
 По current campaign ranking следующий tranche рекомендуется:
 
-### **C26 — Mandatory Hover Exclusion Contract Tranche**
+### **C24 — Inert Spoiler / Disclosure Expansion Contract Tranche**
 
 Почему он следующий:
 
-- current PDF contract прямо запрещает hover-only state;
-- PR #48 уже доказал высокий-risk mechanism: hover-only presentation физически может попасть в PDF;
-- current source исторически использует pointer/mouse activity для selection UX, поэтому WebClip-caused hover contamination должен быть отделён от user/admitted non-hover state;
-- нарушение может быть silent scope/pixel expansion: PDF выглядит правдоподобно, но содержит меню/tooltip/flyout, которого по contract быть не должно;
-- historical L3/L4 foundation позволяет сделать targeted finite tranche, а не широкий повтор transient-state audit.
+- current PDF contract прямо требует safe closed disclosure content для later reading;
+- одновременно запрещена synthetic live page activation;
+- historical source уже содержит disclosure/spoiler expansion logic, поэтому риск не теоретический: нужно разделить native inert state mutation от page-owned click/network/stateful expansion;
+- Exclude имеет абсолютный приоритет и не может быть возвращён expansion/materialization;
+- silent scope expansion и page-side mutation возможны одновременно, поэтому требуется exact L3+L4 contract test, а не только source inspection.
 
 Предварительный envelope:
 
-- B1 User Intent / current contract exclusion;
-- B2 Admission: source pointer/focus/top-layer distinction;
-- B3 Capture: source hover contamination and page-owned JS hover state;
-- B4 static normalization: remove hover-only representation without synthetic page interaction;
+- B1 User Intent / Include+Exclude authority;
+- B2 Admission: source open/closed state;
+- B3 Capture: safe native disclosure descendants and provenance;
+- B4 static materialization: inert expansion only, no live page-owned activation;
 - B5 renderer;
 - B6 physical PDF;
-- B8 truthful degradation, если hover нельзя отделить от другого admitted state.
+- B8 truthful degradation for network/stateful/unknown disclosures.
 
 Required controls:
 
-1. CSS `:hover` tooltip/menu — must be absent in physical PDF;
-2. pseudo-element generated only by hover — absent;
-3. JS `pointerenter` / `mouseenter` flyout — no synthetic deactivation/activation side effects and no stale hover-only capture;
-4. WebClip selection pointer movement — must not make its own hover contamination authoritative;
-5. focus-visible/non-hover state — positive control, must remain where contract requires it;
-6. open non-hover dialog/popover — positive control, must not be removed as if hover;
-7. same-origin/cross-origin frame variants where feasible;
-8. inability to disentangle hover without destroying admitted state -> truthful degraded/unknown;
-9. physical PDF artifact verification.
+1. native closed `<details>` inside Include — content present in PDF;
+2. source open `<details>` — content remains present, with no false source-closed claim;
+3. Excluded descendant inside closed disclosure — remains absent after expansion;
+4. nested native disclosures — finite bounded expansion;
+5. page-owned click-backed accordion — must not be synthetic-clicked merely to reveal content;
+6. page-owned activation with visible/network/mutation side effect — no side effect from WebClip materialization;
+7. safe CSS/ARIA disclosure where content is already present but hidden — classify whether inert representation is provable without page events;
+8. same-origin frame parity; cross-origin remains explicit boundary where necessary;
+9. inability to materialize without page-owned state transition -> truthful degraded/unknown;
+10. physical PDF verification.
 
-Required evidence: **L3+L4**, plus source/model proof for exact cleanup/normalization ownership.
+Required evidence: **L3+L4**, plus L1 source proof for exact expansion/rollback ownership and bounded-work behavior.
 
-After C26, C24 inert spoiler/disclosure expansion remains the next expected contract revalidation unless fresh ranking/evidence changes priority.
+After C24, campaign ranking should be recomputed rather than assuming C02/C03 order.
 
-## 7. Campaign state after C22/C23
+## 7. Campaign state after C26
 
 Current project state remains:
 
 **`DEEP-AUDIT-IN-PROGRESS`**.
 
-C22/C23 are now audit-complete at required L3+L4 in the important sense that their outcome is terminal **FINDING**, not because implementation is fixed. P1-230 owns the unresolved implementation acceptance.
+C22/C23 and C26 are audit-complete at required L3+L4 in the important sense that their outcome is terminal **FINDING**, not because implementation is fixed. P1-230 owns C22/C23 implementation acceptance; C26 refines existing P0-075/P0-070/P0-004 acceptance.
 
 Coverage is still not complete because:
 
-- C24 and C26 remain `REVALIDATION-REQUIRED`;
+- C24 remains `REVALIDATION-REQUIRED`;
 - C02/C03 retain weaker end-to-end physical coverage;
 - L5 external boundaries remain explicit pending;
 - many proven FINDING owners remain ACTIVE;
@@ -221,10 +233,10 @@ Coverage is still not complete because:
 
 Следующий targeted tranche должен обновить минимум:
 
-- C26 hover exclusion achieved L3/L4 outcome;
+- C24 spoiler/disclosure achieved L3/L4 outcome;
 - exact owner/duplicate classification;
 - positive/negative/contract-boundary controls;
 - residual adjacent gaps;
-- campaign ranking после C26.
+- campaign ranking после C24.
 
-После этого ожидаемый следующий candidate — C24 inert spoiler/disclosure expansion, если fresh evidence не изменит ranking.
+После C24 нужно заново сравнить C02/C03 и explicit L5/other residual cells по текущему risk ranking.
