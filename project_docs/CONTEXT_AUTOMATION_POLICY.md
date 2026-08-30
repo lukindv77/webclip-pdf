@@ -81,6 +81,33 @@ Canonical authorities остаются:
 
 Глубокий аудит должен активно пытаться опровергать предположения реализации через controlled schedules: reorder, timeout, late settlement, worker restart, navigation/reload, frame reuse, permission revoke/regrant, account/root switch, DOM/layout change, clear/import races и stale UI. Цель — установить, какие invariants действительно гарантируются кодом, а какие только предполагаются.
 
+### Defensive security scope — конфиденциальность, целостность, хранение и передача данных
+
+Вопросы безопасности в глубоком аудите WebClip PDF рассматриваются **только как defensive security / защитный архитектурный анализ**. Цель — определить, насколько проект защищает данные пользователя и учетные данные расширения при хранении, обработке и передаче во внешние сервисы/API.
+
+В security-scope входят:
+
+- конфиденциальность и целостность PDF, SelectionSnapshot, Journal, backup/recovery, cache, OperationLog, настроек и иной extension-owned информации;
+- безопасное хранение OAuth/access credentials, account/root/config context и иных секретов расширения с корректным разделением session/durable lifetime и минимально необходимой retention;
+- минимизация, redaction и отсутствие случайной долговременной фиксации чувствительных URL, metadata, locator-context, диагностических или пользовательских данных;
+- передача файлов и метаданных во внешние сервисы/API только в рамках ожидаемого endpoint/account/root/operation context, с проверяемой транспортной и operation identity;
+- недопущение смешивания данных, credentials, cache/recovery authority или результатов между вкладками, document/application generations, операциями, аккаунтами и внешними target contexts;
+- целостность backup/export/import, upload/download/retry/recovery receipts и честное различение verified / unknown / failed settlement;
+- безопасная обработка redirects, signed/capability URLs, внешних API-ответов и credential-bearing запросов без раскрытия учетных данных в durable metadata, URL или diagnostics;
+- корректное удаление, lifecycle/retention и восстановление данных без ложного утверждения об удалении или успешном сохранении.
+
+Не входят в scope и не должны становиться задачами аудита:
+
+- поиск или разработка способов эксплуатации уязвимостей;
+- создание exploit/PoC для проникновения или обхода защитных механизмов;
+- обход авторизации, подбор способов взлома сервисов или получение несанкционированного доступа;
+- проведение атак на сайты, внешние сервисы, API, браузер или инфраструктуру;
+- создание вредоносного кода либо инструкций по проникновению, компрометации или захвату систем.
+
+Если для оценки риска необходимо назвать класс угрозы, он описывается **только концептуально**: какие данные/authority защищаются, при каком условии возникает риск и какой defensive invariant/механизм должен его закрыть. Эксплуатационные шаги, offensive methodology и инструкции по использованию слабости не требуются и не документируются.
+
+Это ограничение security-scope не сужает обычный аудит correctness, reliability, concurrency, generation/receipt, rollback, performance, selection fidelity и archival fidelity, когда эти вопросы сами по себе не являются offensive-security анализом.
+
 ## Постоянный триггер перехода в новый чат
 
 Точная фраза пользователя:
