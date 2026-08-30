@@ -59,6 +59,24 @@ This is a current-contract **FINDING**, but not a new independent root cause. Th
 
 Therefore **P1-231 remains unallocated**. Do not create a dedicated hover owner for this same mechanism unless future implementation introduces a materially independent hover-normalization subsystem/root cause.
 
+### Historical disclosure support is not current C24 inert-contract PASS — keep under existing owners
+
+Historical source and browser evidence showed that WebClip could reveal native `<details>` and page-style disclosure content for printing. That evidence must not be promoted to a current C24 PASS after `WEBCLIP_PDF_FIDELITY_CONTRACT.md` made the acceptance rule explicit: source-closed safe content may be statically expanded for later reading only through inert representation, without page-owned activation or silent admission of stateful interaction-created content.
+
+Fresh C24 L3/L4 revalidation on canonical `main = 0ecfff217d8cc81099fadd9476532d8d7d845f28` establishes the precise split:
+
+- native closed and nested `<details>` can become physically readable, already-open details stays open, and an explicitly Excluded descendant remains absent — positive controls;
+- current preparation sets `details.open = true` on the live page, so a page-owned `toggle` handler can create new DOM that then appears in the physical PDF;
+- current ARIA/accordion fallback performs page-owned `.click()`; disclosure-like `button[type=submit]` and non-hash anchor controls can pass the heuristic, and a tested semantic submit produced a real submit event;
+- stateful DOM created only because of WebClip's synthetic click appeared in the physical PDF;
+- disclosure mutations are intentionally not rolled back after print, and no `sourceState=closed` versus `staticRepresentation=expanded` provenance receipt is emitted;
+- selected same-origin child details receives top-helper expansion, while current cross-origin `frame-agent.js` has no disclosure-expansion step;
+- serial per-control waits and broad disclosure scans remain outside one shared preparation budget.
+
+This is **C24 `ARTIFACT-COVERED / FINDING`**, but it does not establish an independent new root cause. Synthetic activation is already owned by **P0-067/P1-212**; shared preparation work by **P1-167**; live-hostile-page/static-generation/physical consequences by **P0-075/P0-070/P0-004**; **P1-004** remains the supporting cross-origin feature umbrella. Historical PR #29 had already classified disclosure `.click()`/budget evidence under these owners without a new P-code.
+
+Therefore do **not** allocate P1-231 merely because C24 now has current-contract physical evidence. A future new owner requires a materially independent root cause, not another disclosure fixture or frame variant of these same mechanisms. Durable evidence: `AUDIT_INERT_DISCLOSURE_CONTRACT_2026-08-30_EVIDENCE.md` and `project_tools/audit_inert_disclosure_contract.py`.
+
 ## Status-history traps
 
 ### Historical closure PASS does not override later reopen
