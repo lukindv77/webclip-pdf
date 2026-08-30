@@ -34,6 +34,16 @@ The audit extended P2-019 from the Journal view/worker duplicate schema owner to
 
 A later audit showed that one-shot link sanitization before `Page.printToPDF` is insufficient because host `beforeprint` mutation can recontaminate the live print DOM. This broadened P0-071 from pre-print URI sanitization to an enforceable safe-scheme invariant on the actual printed representation; it was intentionally not assigned a new P0.
 
+### Historical virtualized-content mode ambiguity was superseded for current PDF — P1-230 is now independent
+
+The earlier deferred/virtualized materialization tranche intentionally did **not** allocate P1-230. At that time, whether the primary PDF should preserve only the current mounted/rendered window or a wider logical history was still an unresolved P2-007 product/mode question.
+
+That historical classification was correct for the then-current contract. It is not current acceptance truth after `WEBCLIP_PDF_FIDELITY_CONTRACT.md` explicitly required scroll-triggered new logical content already materialized by the user's own scrolling, up to the user's reached boundary, to remain within the PDF completeness envelope. WebClip itself still must not auto-scroll farther merely to create new logical items.
+
+Fresh C22/C23 L3/L4 evidence subsequently proved that a virtualizer can recycle/detach items the user actually traversed, leaving physical PDF with only the current mounted window. This defect persists independently of ordinary clipping, resource readiness and document/application-generation owners. Therefore P1-230 is the independent current owner for generation-bound preservation/reconstruction of user-reached dynamic/virtualized history or truthful partial/degraded/unknown when that history cannot be safely reconstructed.
+
+Do not repeat the old “P2-007 mode ambiguity, therefore no owner” conclusion for the current primary PDF unless the product contract is explicitly changed again.
+
 ## Status-history traps
 
 ### Historical closure PASS does not override later reopen
