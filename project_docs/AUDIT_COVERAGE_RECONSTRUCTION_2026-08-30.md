@@ -8,6 +8,8 @@ Stage-2 C22/C23 revalidation audited canonical `main`: `a0e1252317dfa1a1146dbed0
 
 Stage-3 C26 hover-exclusion revalidation audited canonical `main`: `153d09c164473643229b29946dc35ba413715913`.
 
+Stage-4 C24 inert-disclosure revalidation audited canonical `main`: `0ecfff217d8cc81099fadd9476532d8d7d845f28`.
+
 Purpose: первая фактическая реконструкция deep-audit Coverage Matrix из уже существующих durable audit evidence, registry/history и merged physical-browser tranches. Этот документ **не заменяет P-code owner/status authority**: `AUDIT_REGISTRY.md` остаётся единственным canonical authority. Coverage rows ниже фиксируют achieved evidence/outcome и должны обновляться после targeted tranches.
 
 Методика задаётся `AUDIT_COVERAGE_CAMPAIGN_POLICY.md`. PDF acceptance задаётся `WEBCLIP_PDF_FIDELITY_CONTRACT.md`.
@@ -39,7 +41,8 @@ Current authority/context:
 - PR #47 / `AUDIT_RESPONSIVE_IMAGE_CAPTURE_IDENTITY*_2026-08-30_EVIDENCE.md`;
 - PR #48 / `AUDIT_FOCUS_INTERACTION_STATE_FIDELITY*_2026-08-30_EVIDENCE.md`;
 - C22/C23 targeted tranche / `AUDIT_USER_REACHED_DYNAMIC_SCROLL_2026-08-30_EVIDENCE.md` plus its two managed-Chromium physical probes;
-- C26 targeted tranche / `AUDIT_HOVER_EXCLUSION_CONTRACT_2026-08-30_EVIDENCE.md` plus `project_tools/audit_hover_exclusion_contract.py`.
+- C26 targeted tranche / `AUDIT_HOVER_EXCLUSION_CONTRACT_2026-08-30_EVIDENCE.md` plus `project_tools/audit_hover_exclusion_contract.py`;
+- C24 targeted tranche / `AUDIT_INERT_DISCLOSURE_CONTRACT_2026-08-30_EVIDENCE.md` plus `project_tools/audit_inert_disclosure_contract.py`.
 
 Также использованы supplemental summaries из `AUDIT_DELTA_INDEX.md`, включая selection/admission, selected-only cascade, post-freeze render cut, print rollback, local prepare budgets, source URL minimization, PDF byte transfer receipt и связанные Yandex/Journal/recovery boundaries.
 
@@ -55,7 +58,7 @@ Historical evidence засчитывается только для того clai
 2. inert spoiler/disclosure materialization без page-owned synthetic activation;
 3. mandatory hover exclusion даже если hover active at admission.
 
-C22/C23 и C26 теперь revalidated fresh targeted tranches: required L3+L4 evidence достигнуто и outcome классифицирован как FINDING. C22/C23 имеет independent owner P1-230; C26 уточняет existing P0-075/P0-070/P0-004 и не создаёт duplicate P1-231. C24 остаётся `REVALIDATION-REQUIRED`.
+C22/C23, C26 и C24 теперь revalidated fresh targeted tranches: required L3+L4 evidence достигнуто и outcome классифицирован как FINDING. C22/C23 имеет independent owner P1-230; C26 уточняет existing P0-075/P0-070/P0-004; C24 revalidates existing P0-067/P1-212/P1-167/P0-075/P0-070/P0-004 with P1-004 supporting cross-origin parity. Ни C26, ни C24 не создают duplicate P1-231.
 
 ## 3. Family-level current matrix
 
@@ -86,7 +89,7 @@ C22/C23 и C26 теперь revalidated fresh targeted tranches: required L3+L4 
 | C21 | Lazy/offscreen resources already belonging to content | yes | L3+L4 | PR #36/#39/#40 resource readiness evidence | `ARTIFACT-COVERED / FINDING` | P1-003, P1-167 and supporting representation owners |
 | C22 | Scroll-triggered **new logical content** / user-reached max boundary | yes | L3+L4 under current PDF contract | fresh source + managed Chromium 144 + physical PDF controls: print does not generate N+1; user-materialized retained nodes survive scroll-back; current source has no generation-bound user max/history receipt | `ARTIFACT-COVERED / FINDING` | **P1-230 ACTIVE**; add trusted/generation-bound user-reached boundary capture, no WebClip auto-scroll beyond it, nested/frame parity, bounded truthful degradation |
 | C23 | Virtualized/windowed content history within user-reached range | yes | L3+L4 under current PDF contract | gradual user-like traversal materialized/seen logical 1…57, returned to top, physical PDF retained only mounted 1…8; recycled selected row changed logical identity | `ARTIFACT-COVERED / FINDING` | **P1-230 ACTIVE** primary whole-history owner; P0-070/P0-080 remain supporting generation/selection identity owners |
-| C24 | Spoilers/disclosures / inert expansion | yes | L3+L4 under current PDF contract | historical disclosure/details and print-preparation evidence | `REVALIDATION-REQUIRED / UNKNOWN` | P0-067/P1-212/P0-004/P0-070/P1-167 related; must prove inert expansion, Exclude preservation and no page-owned activation |
+| C24 | Spoilers/disclosures / inert expansion | yes | L3+L4 under current PDF contract | fresh current-source + Chromium 144 physical controls: native closed/nested details become readable and Exclude stays absent, but live `open=true` fires page toggle side effects; ARIA/submit/anchor controls receive synthetic clicks; click/toggle-created DOM enters PDF; disclosure mutations persist; same-origin details expand while frame-agent has no cross-origin expansion | `ARTIFACT-COVERED / FINDING` | **P0-067/P1-212 existing owners** primary; P1-167/P0-075/P0-070/P0-004 supporting, P1-004 cross-origin umbrella. Need inert WebClip-owned representation, provenance, shared budget and frame parity/truthful degradation; no P1-231 |
 | C25 | Dialog / popover / top layer | yes | L3+L4 | PR #37 physical clipping/repetition/current-scroll state | `ARTIFACT-COVERED / FINDING` | P0-004, P1-187, P0-070 supporting |
 | C26 | Hover exclusion | yes | L3+L4 under current PDF contract | fresh current-source + Chromium 144 physical controls: review backdrop clears CSS/pseudo hover, but persistent JS hover-opened DOM remains in top and same-origin-frame PDFs; non-hover dialog positive preserved | `ARTIFACT-COVERED / FINDING` | **P0-075/P0-070/P0-004 existing owners**; no P1-231. Need trusted non-hover admitted representation or truthful degraded/unknown when hover provenance cannot be separated |
 | C27 | Focus / selection / interaction-induced page state | yes | L3+L4 | PR #48 physical focus/hover/application-mutation evidence | `ARTIFACT-COVERED / FINDING` | P0-075, P0-070, P0-004, P1-187 supporting |
@@ -115,13 +118,13 @@ C22/C23 и C26 теперь revalidated fresh targeted tranches: required L3+L4 
 Реконструкция показывает, что проект уже имеет unusually deep engineering evidence для многих renderer/physical-PDF surfaces:
 
 - direct managed-Chromium `Page.printToPDF` physical probes используются не эпизодически, а во многих independent tranches;
-- layout/clipping/pagination, fonts, resources, frame flattening, responsive candidate identity, temporal state, focus, user-reached virtual-history и hover-exclusion behavior проверены именно на physical PDF, а не только source/model level;
+- layout/clipping/pagination, fonts, resources, frame flattening, responsive candidate identity, temporal state, focus, user-reached virtual-history, hover-exclusion и disclosure-expansion behavior проверены именно на physical PDF, а не только source/model level;
 - historical audits сохраняют positive/negative/rejected controls, что снижает риск повторного открытия отвергнутых broad hypotheses;
 - registry разделяет exact-generation, resource, frame, persistence, recovery и user-reached-history owners вместо одного неуправляемого «PDF fidelity bug».
 
 То есть главный текущий deficiency — не отсутствие глубины вообще, а **оставшиеся contract-specific gaps, ACTIVE findings и explicit L5 boundaries**.
 
-## 5. Главные gaps после C22/C23 и C26 revalidation
+## 5. Главные gaps после C22/C23, C26 и C24 revalidation
 
 ### G1 — user-driven dynamic-scroll / virtualized history — classified FINDING, owner P1-230
 
@@ -149,18 +152,21 @@ Fresh C26 tranche уточнил historical PR #48 против current contract
 
 Root-cause saturation показывает existing **P0-075 / P0-070 / P0-004** sufficient. Новый P1-231 не выделяется.
 
-### G3 — spoiler expansion должен быть inert и selection-bounded
+### G3 — inert spoiler/disclosure expansion — classified FINDING under existing owners
 
-Исторический проект умеет раскрывать disclosures/spoilers, но current contract требует одновременно:
+Fresh C24 tranche доказал одновременно positive и failing controls:
 
-- closed safe content включается;
-- source closed/open provenance не подменяется;
-- expansion происходит на inert capture/static representation;
-- никакого page-owned synthetic activation;
-- Exclude не возвращается;
-- network/stateful disclosure без user materialization не активируется молча.
+- native closed и nested `<details>` можно физически сделать читаемыми; already-open остаётся open;
+- Excluded descendant внутри раскрытого details остаётся отсутствующим в physical PDF;
+- но current helper меняет live `details.open`, и page-owned `toggle` side effect может создать новый DOM, который затем попадает в PDF;
+- ARIA/accordion fallback вызывает реальный page-owned `.click()`; disclosure-like `button[type=submit]` и non-hash anchor могут пройти текущую эвристику;
+- stateful content, созданный именно synthetic click, попадает в physical PDF;
+- disclosure mutations намеренно не rollback-ятся после print;
+- sourceState=closed и staticRepresentation=expanded не имеют отдельного provenance receipt;
+- selected same-origin frame получает top-helper expansion, а current cross-origin frame-agent disclosure expansion не реализует;
+- serial 40-ms waits и broad candidate scans остаются вне one shared prepare budget.
 
-Existing evidence покрывает части механизма, но не весь acceptance envelope.
+Root causes уже принадлежат **P0-067/P1-212** (synthetic control activation), **P1-167** (shared preparation budget), **P0-075/P0-070/P0-004** (live-page/static-generation/physical consequences), с **P1-004** как supporting cross-origin feature umbrella. Новый P1-231 не выделяется.
 
 ### G4 — restore/main-content end-to-end physical artifact coverage слабее, чем renderer-selection evidence
 
@@ -170,60 +176,61 @@ Selection/picker/restore audits очень глубоки на admission/locator
 
 Real unpacked Chrome, optional permission UI, native download/Save As и real external-storage API остаются `EXTERNAL-REQUIRED`, что согласуется с current `TEST_STATUS.md`/release policy. Это не должно ошибочно превращаться в managed PASS.
 
-## 6. Приоритет следующего deep-dive tranche
+## 6. Приоритет следующего deep-dive tranche после C24
 
-По current campaign ranking следующий tranche рекомендуется:
+После снятия C24 из `REVALIDATION-REQUIRED / UNKNOWN` остаются два material in-repo CORE gaps с weaker-than-required end-to-end artifact evidence: C02 и C03. Explicit L5 rows C41/C42/C46 нельзя закрыть managed evidence и поэтому они не должны вытеснять доступный in-repo coverage work.
 
-### **C24 — Inert Spoiler / Disclosure Expansion Contract Tranche**
+По current risk ranking следующий tranche рекомендуется:
 
-Почему он следующий:
+### **C02 — SelectionSnapshot Restore → Final Physical PDF Contract Tranche**
 
-- current PDF contract прямо требует safe closed disclosure content для later reading;
-- одновременно запрещена synthetic live page activation;
-- historical source уже содержит disclosure/spoiler expansion logic, поэтому риск не теоретический: нужно разделить native inert state mutation от page-owned click/network/stateful expansion;
-- Exclude имеет абсолютный приоритет и не может быть возвращён expansion/materialization;
-- silent scope expansion и page-side mutation возможны одновременно, поэтому требуется exact L3+L4 contract test, а не только source inspection.
+Почему C02 выше C03:
 
-Предварительный envelope:
+- это прямой B1/B2→B6 мост: сохранённый user Include/Exclude intent восстанавливается в текущем rendered DOM, после чего exact restored scope должен пройти весь save pipeline до physical artifact;
+- registry уже содержит ACTIVE P1-001 restore-soundness contract, а cross-frame variants поддерживаются P1-200/P1-171; ошибка restore может silently retarget user intent до того, как renderer/PDF checks вообще начнутся;
+- current matrix имеет strong managed Chromium restore/admission evidence, но только `RENDERER-COVERED / PARTIAL` для final saved artifact;
+- physical closure можно построить на safe deterministic fixtures без L5 external dependency;
+- C03 Main Content остаётся следующим близким candidate, но auto-candidate quality является secondary admission source по сравнению с exact restore of previously explicit selection intent.
 
-- B1 User Intent / Include+Exclude authority;
-- B2 Admission: source open/closed state;
-- B3 Capture: safe native disclosure descendants and provenance;
-- B4 static materialization: inert expansion only, no live page-owned activation;
+Предварительный envelope C02:
+
+- B1 restored Include/Exclude intent and portable snapshot authority;
+- B2 exact current rendered-target admission, confidence/ambiguity and generation;
+- B3 capture of restored scope including frame variants;
+- B4 static materialization without scope drift;
 - B5 renderer;
-- B6 physical PDF;
-- B8 truthful degradation for network/stateful/unknown disclosures.
+- B6 physical PDF assertion of intended included/excluded markers;
+- B8 truthful restore/save provenance when target becomes ambiguous/non-admissible before physical cut.
 
 Required controls:
 
-1. native closed `<details>` inside Include — content present in PDF;
-2. source open `<details>` — content remains present, with no false source-closed claim;
-3. Excluded descendant inside closed disclosure — remains absent after expansion;
-4. nested native disclosures — finite bounded expansion;
-5. page-owned click-backed accordion — must not be synthetic-clicked merely to reveal content;
-6. page-owned activation with visible/network/mutation side effect — no side effect from WebClip materialization;
-7. safe CSS/ARIA disclosure where content is already present but hidden — classify whether inert representation is provable without page events;
-8. same-origin frame parity; cross-origin remains explicit boundary where necessary;
-9. inability to materialize without page-owned state transition -> truthful degraded/unknown;
-10. physical PDF verification.
+1. stable restored Include -> expected marker in physical PDF;
+2. restored Exclude -> excluded marker absent physically;
+3. benign DOM insertion/reordering with high-confidence correct restore -> same physical selected content;
+4. structurally similar competing targets -> ambiguous/fail rather than wrong physical artifact;
+5. hidden/transparent/non-admissible high-score target -> no success/full PDF claim;
+6. target replacement after restore/admission before save -> generation/connectedness must not silently retarget;
+7. same-origin frame restore -> physical artifact parity;
+8. cross-origin frame restore/session identity only to the strongest managed level allowed, keeping real permission UI L5 explicit;
+9. rollback/retry does not reuse stale restore authority;
+10. physical PDF verification for each material success/failure path.
 
-Required evidence: **L3+L4**, plus L1 source proof for exact expansion/rollback ownership and bounded-work behavior.
+Required evidence: **L3+L4**, with L1 source proof and L2 deterministic identity/race controls where needed.
 
-After C24, campaign ranking should be recomputed rather than assuming C02/C03 order.
+C03 should be compared again after C02 rather than assumed automatically next if C02 reveals a shared admission/root-owner issue.
 
-## 7. Campaign state after C26
+## 7. Campaign state after C24
 
 Current project state remains:
 
 **`DEEP-AUDIT-IN-PROGRESS`**.
 
-C22/C23 and C26 are audit-complete at required L3+L4 in the important sense that their outcome is terminal **FINDING**, not because implementation is fixed. P1-230 owns C22/C23 implementation acceptance; C26 refines existing P0-075/P0-070/P0-004 acceptance.
+C22/C23, C26 and C24 are audit-complete at their required L3+L4 in the important sense that their outcome is terminal **FINDING**, not because implementation is fixed. P1-230 owns C22/C23 implementation acceptance; C26 refines existing P0-075/P0-070/P0-004; C24 refines existing P0-067/P1-212/P1-167/P0-075/P0-070/P0-004 with P1-004 supporting cross-origin parity.
 
 Coverage is still not complete because:
 
-- C24 remains `REVALIDATION-REQUIRED`;
 - C02/C03 retain weaker end-to-end physical coverage;
-- L5 external boundaries remain explicit pending;
+- C46 remains `EXTERNAL-REQUIRED / UNKNOWN` and C41/C42 retain external L5 boundaries;
 - many proven FINDING owners remain ACTIVE;
 - family rows still need decomposition when a future tranche reveals materially distinct cells.
 
@@ -231,12 +238,12 @@ Coverage is still not complete because:
 
 ## 8. Следующий durable checkpoint
 
-Следующий targeted tranche должен обновить минимум:
+Следующий targeted tranche должен быть C02 и обновить минимум:
 
-- C24 spoiler/disclosure achieved L3/L4 outcome;
-- exact owner/duplicate classification;
-- positive/negative/contract-boundary controls;
-- residual adjacent gaps;
-- campaign ranking после C24.
+- achieved L3/L4 outcome for restore -> final physical PDF;
+- exact owner/duplicate classification against P1-001/P1-200/P1-171 and adjacent generation owners;
+- positive/negative/adversarial contract controls;
+- residual C03 and L5 gaps;
+- campaign ranking after C02.
 
-После C24 нужно заново сравнить C02/C03 и explicit L5/other residual cells по текущему risk ranking.
+После C02 нужно заново сравнить C03 и explicit L5/other residual cells по текущему risk ranking.
