@@ -48,6 +48,10 @@ No standalone audit delta is a current status authority. New audit findings must
 
   50-block selection save-freeze / host-reentrant marker / pre-IPC locator-admission tranche from fresh `main`. No new P-number or status transition: P0-070/P1-200/P1-214 gain exact reviewed local+remote selection-freeze receipt requirements so mutable remote state cannot diverge between confirmation, `meta.selectionSnapshot` and physical multi-frame preparation; P0-075/P0-080/P1-228 gain managed-Chromium isolated-world proof that WebClip marker writes can synchronously execute page custom-element/CSS reactions before Map commit, including target removal/replacement, marker stripping and reentrant nested selection; P1-168/P1-172 gain early per-field/depth/byte limits before `CSS.escape`, selector parsing and Chrome message serialization. Worker SelectionSnapshot sanitization remains a positive authoritative second boundary.
 
+- `AUDIT_REMOTE_FRAME_PRINT_MEDIA_GEOMETRY_2026-08-30_EVIDENCE.md`
+
+  50-block cross-origin frame physical-PDF media/selected-geometry audit tranche from fresh `main`. Registered scope: new **P1-229 ACTIVE** because worker `screen` media emulation disables the frame-agent's `@media print` Include/Exclude filter while enabling its `@media screen` green/red selection outlines; the child also returns pre-filter full-document height that top uses for iframe pagination. Managed Chromium reproduces selected + excluded + unrelated child text and selection outlines in the PDF, while a media-independent child filter is a positive control and post-filter geometry is required to avoid excess blank pages. Supporting owner boundaries: P0-004, P1-004, P1-003 and P0-070.
+
 ## Families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
@@ -62,8 +66,8 @@ No standalone audit delta is a current status authority. New audit findings must
 | 8 | Operation receipt / OperationLog / user reconciliation | `AUDIT_FAMILY_OPERATION_RECEIPTS_EVIDENCE.md` | P1-145, P1-197, P1-198, P1-205, P1-210 and durability/maintenance owners. | 15 |
 | 9 | Local download / native Save As / file settlement | `AUDIT_FAMILY_LOCAL_DOWNLOAD_SAVEAS_EVIDENCE.md` | P0-039, P1-079, P1-080, P1-087, P1-129, P1-146, P1-156, P1-169, P1-210. | 12 |
 | 10 | Chrome/MV3 APIs / browser-owned state / extension-page transport | `AUDIT_FAMILY_CHROME_MV3_SETTLEMENT_EVIDENCE.md` | P1-123…P1-131, P1-157, P1-158, P1-166, P1-170, P1-173, P1-203, P1-204, P1-209, P1-210, P1-217. | 17 |
-| 11 | Frame permission / cross-origin frame-agent identity and command generation | `AUDIT_FAMILY_FRAME_PERMISSION_IDENTITY_EVIDENCE.md` | P1-004, P1-157, P1-171, P1-193, P1-199…P1-203, P1-214. | 12 |
-| 12 | PDF/print / offscreen resource lifetime / live-DOM rollback / source generation | `AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md` | P0-004, P0-003, P0-023, P0-063, P0-065, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, P1-003, P1-069, P1-149…P1-153, P1-160, P1-167, P1-187, P1-199, P1-212…P1-214, P1-218…P1-224, P1-226, P1-227, P1-228. | 26 |
+| 11 | Frame permission / cross-origin frame-agent identity and command generation | `AUDIT_FAMILY_FRAME_PERMISSION_IDENTITY_EVIDENCE.md` | P1-004, P1-157, P1-171, P1-193, P1-199…P1-203, P1-214, P1-229. | 12 |
+| 12 | PDF/print / offscreen resource lifetime / live-DOM rollback / source generation | `AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md` | P0-004, P0-003, P0-023, P0-063, P0-065, P0-067, P0-068, P0-070, P0-071, P0-075, P0-080, P1-003, P1-069, P1-149…P1-153, P1-160, P1-167, P1-187, P1-199, P1-212…P1-214, P1-218…P1-224, P1-226, P1-227, P1-228, P1-229. | 26 |
 | 13 | Incognito / trust boundaries / signed-link redaction | `AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md` | P0-033, P0-045 | previously consolidated |
 | 14 | Derived URL stats / view indexes | `AUDIT_FAMILY_URLSTATS_EVIDENCE.md` | P0-050 | previously consolidated |
 | 15 | Retired broad revalidation / cross-cutting inventories | `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` | cross-cutting historical controls | previously consolidated |
