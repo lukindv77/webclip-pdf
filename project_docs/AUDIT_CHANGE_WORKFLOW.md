@@ -8,17 +8,20 @@
 
 Выбор и приоритизация крупных deep-audit user operations/surfaces дополнительно и обязательно подчиняются `AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md`. Deep audit должен регулярно сверять свою User Intent / Operation Map с актуальным внешним опытом похожих и пересекающихся продуктов: official developer materials/demos, GitHub projects/issues/discussions, user forums/Reddit, reviews/comparisons и web-archiving practices. Внешний опыт является evidence-input для того, **что** нужно аудировать и с каким приоритетом, но не автоматически меняет product contract WebClip и не создаёт P-owner без обычной root-cause/admission процедуры.
 
+Для текущего основного PDF-режима `WEBCLIP_PDF_FIDELITY_CONTRACT.md` является обязательной PDF-specific acceptance authority. Deep audit не должен оценивать PDF по неопределённому критерию «похоже на страницу»: ordinary-scroll completeness, user-reached boundary для scroll-triggered dynamic content, spoiler materialization, hover exclusion, responsive/resource identity, temporal/focus state, pagination и truthful degradation проверяются относительно явно принятого contract.
+
 ## 1. Начало работы
 
 1. Fresh-fetch `main` и зафиксировать exact baseline SHA.
 2. Проверить `AUDIT_REGISTRY.md`, `AUDIT_DELTA_INDEX.md`, соответствующий `AUDIT_FAMILY_*_EVIDENCE.md`, `AUDIT_HISTORY_INDEX.md` и Git history.
 3. Перед выбором нового крупного deep-audit tranche проверить freshness текущего external user-intent baseline по `AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md`; если baseline устарел или появился существенный новый peer-product/platform/user-intent signal, сначала выполнить и durably сохранить необходимый delta-scan/research refresh.
-4. Сначала определить, является ли наблюдение:
+4. Если tranche затрагивает текущий основной PDF fidelity/completeness, сформулировать audit questions и acceptance относительно `WEBCLIP_PDF_FIDELITY_CONTRACT.md`, включая применимые transformation class и границу admitted/user-reached state.
+5. Сначала определить, является ли наблюдение:
    - новым root cause;
    - уточнением существующего owner;
    - duplicate/merged finding;
    - historical/non-current observation.
-5. Новый P-код выделяется только для нового самостоятельного owner. Существующий код никогда не переиспользуется.
+6. Новый P-код выделяется только для нового самостоятельного owner. Существующий код никогда не переиспользуется.
 
 ## 2. Admission нового finding
 
