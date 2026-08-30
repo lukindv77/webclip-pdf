@@ -44,6 +44,21 @@ Fresh C22/C23 L3/L4 evidence subsequently proved that a virtualizer can recycle/
 
 Do not repeat the old “P2-007 mode ambiguity, therefore no owner” conclusion for the current primary PDF unless the product contract is explicitly changed again.
 
+### Historical hover-mode ambiguity was resolved, but C26 stays under P0-075/P0-070/P0-004 — do not allocate P1-231
+
+The earlier focus/interaction-state tranche proved that Chromium can physically serialize CSS `:hover`, hover-only content and pointer-dependent state, but deliberately left preservation-versus-normalization as a product-mode decision. It assigned the underlying live-control-plane/admission/physical mechanism to P0-075/P0-070/P0-004 with P2-007 supporting.
+
+The later current PDF contract explicitly resolved the product question: hover-only state must be excluded even when user hover existed at admission. Fresh C26 L3/L4 revalidation then showed a precise split:
+
+- current WebClip-shaped full-screen review backdrop clears tested ordinary CSS/pseudo hover and fires pointerleave;
+- if the page itself removes hover UI on leave, physical PDF does not contain it;
+- but a JS flyout mounted by hover and retained after leave is still consumed as ordinary live DOM and appears in physical PDF, including in a same-origin frame;
+- allowed non-hover open dialog remains present, so blanket transient-state deletion is not an acceptable replacement.
+
+This is a current-contract **FINDING**, but not a new independent root cause. The failure is exactly the already-owned absence of a trusted/inert admitted representation before host-page interaction and physical generation. P0-075 is the primary isolation/control-plane owner; P0-070 owns deterministic admitted generation; P0-004 owns physical selected-copy consequences. P2-007 is no longer needed to decide current-PDF hover semantics.
+
+Therefore **P1-231 remains unallocated**. Do not create a dedicated hover owner for this same mechanism unless future implementation introduces a materially independent hover-normalization subsystem/root cause.
+
 ## Status-history traps
 
 ### Historical closure PASS does not override later reopen
