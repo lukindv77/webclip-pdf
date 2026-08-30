@@ -225,4 +225,4 @@ The external evidence instead shows that peer products make different deliberate
 
 ## 7. Freshness / next refresh
 
-This is the initial baseline dated 2026-08-30. Under `AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md`, active deep-audit work should perform a delta freshness scan no later than approximately 30 days from this baseline, and earlier if a material peer-product/platform/user-intent change is observed or the audit coverage/fidelity contract is substantially reprioritized.
+This is the initial baseline dated 2026-08-30. Under `AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md`, active deep-audit work should perform a delta freshness scan no later than approximately 7 days from this baseline, and earlier if a material peer-product/platform/user-intent change is observed or the audit coverage/fidelity contract is substantially reprioritized.
