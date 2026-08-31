@@ -93,6 +93,26 @@ These are **C02 `ARTIFACT-COVERED / FINDING`**, but they do not establish a new 
 
 Do not allocate another late P1 solely because these already-owned restore/generation defects now have B6 physical proof. A future separate owner requires a materially independent restore-to-artifact mechanism after candidate admission and exact-generation fencing are implemented. Durable evidence: `AUDIT_SELECTION_RESTORE_PHYSICAL_PDF_2026-08-31_EVIDENCE.md` and `project_tools/audit_selection_restore_physical_pdf.py`.
 
+### Main Content confidence/fallback is P1-160, while P1-228 remains manual hit-test/geometry — C03 duplicate boundary
+
+Fresh C03 L3/L4 revalidation on canonical `main = 869c47b14254fdadded1e24dc6a6bfabafc049a1` closes Main Content automatic candidate admission through physical PDF and clarifies an important owner boundary.
+
+Current source and physical controls establish:
+
+- a strong visible semantic article beats unrelated navigation/footer shell and reaches physical PDF — positive control;
+- a hidden semantic competitor is rejected — positive control;
+- an accessible same-origin frame article can become the physical selected scope — positive control;
+- `bestScore < 900` only triggers a second fallback pass; after that pass there is no final confidence floor, so a weak BODY remains non-null and can be selected instead of reaching the existing “choose manually” fallback UX;
+- a supporting exact-formula model measured the retained weak BODY fixture at score 185, and physical PDF contains the navigation/footer shell;
+- two equally scored strong articles have no second-best/margin/ambiguity state; strict `score > bestScore` promotes DOM/Set iteration order into saved-scope authority, and physical PDF contains only the first tied candidate;
+- post-auto replacement/disconnection keeps stale internal Include authority and can yield an artifact with no intended selected content;
+- in-place mutation of the selected Element can change the logical content serialized under the old automatic decision;
+- candidate discovery/scoring performs broad whole-document scans and repeated descendant/body-text work without one shared node/candidate/time envelope.
+
+The low-confidence and tied-winner findings are already exactly within **P1-160**, whose canonical wording requires bounded auto-content discovery and graceful manual fallback. Do **not** move them to **P1-228**: that owner is specifically manual event-target / hit-test / rendered-geometry authority. Post-admission replacement/drift remains **P0-080/P0-070/P0-075**, with **P0-004** for physical consequence.
+
+Therefore no new “auto-content confidence” P-code is allocated. A separate owner would require a materially independent confidence subsystem after P1-160’s discovery/fallback contract is implemented. Durable evidence: `AUDIT_MAIN_CONTENT_PHYSICAL_PDF_2026-08-31_EVIDENCE.md` and `project_tools/audit_main_content_physical_pdf.py`.
+
 ## Status-history traps
 
 ### Historical closure PASS does not override later reopen
