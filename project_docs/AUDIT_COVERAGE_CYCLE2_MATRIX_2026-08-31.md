@@ -6,7 +6,9 @@ Campaign: `DEEP-AUDIT-CYCLE-2-2026-08-31`.
 
 Canonical baseline for this sweep: `main = 7a0280851133dbf87e3b25b90dbdd4c4ed5e4217` (Cycle-2 external baseline/kickoff already merged; post-merge Repository Integrity #179 SUCCESS).
 
-This is the first Coverage Sweep checkpoint of the second full deep-audit campaign. `AUDIT_REGISTRY.md` remains the only P-code owner/status authority. Cycle-1 evidence is reused only for the exact claims that survive Change Impact; a new browser/platform variant does not invalidate unrelated historical evidence and historical evidence does not prove a newly introduced renderer semantic.
+Latest coverage checkpoint: T1/PD2 evidence was executed from canonical `main = ceefea2e9d779912b0cc0270762ff1748d678683` on Chrome for Testing 152.0.7977.64 and is recorded in `AUDIT_CYCLE2_T1_VIEW_TRANSITION_RENDER_CUT_2026-08-31.md`.
+
+This is the current Coverage Sweep checkpoint of the second full deep-audit campaign. `AUDIT_REGISTRY.md` remains the only P-code owner/status authority. Cycle-1 evidence is reused only for the exact claims that survive Change Impact; a new browser/platform variant does not invalidate unrelated historical evidence and historical evidence does not prove a newly introduced renderer semantic.
 
 ## 1. Sweep method
 
@@ -29,6 +31,7 @@ Legend:
 
 - `CARRY-FORWARD` — prior required evidence remains applicable to the current claim; no material Change Impact identified for this family during this sweep.
 - `REVALIDATION-REQUIRED` — the old claim remains evidence for its old variant, but at least one new stable renderer/platform variant is not covered.
+- `ARTIFACT-COVERED / FINDING` on a PD variant — that specific variant reached required L3+L4 and remains a known defect; another variant can still keep the family nonterminal.
 - `EXTERNAL-REQUIRED` — real product/native/service boundary remains L5.
 - FINDING/PASS-CONTROL/UNKNOWN are outcomes, not implementation statuses.
 
@@ -47,11 +50,11 @@ Legend:
 | C11 | Canvas | RELEVANT | L3+L4 | frame/post-freeze physical controls | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | no material platform delta identified | P1-187/P0-070/P0-004 |
 | C12 | Video/replaced media/current frame | RELEVANT | L3+L4 | media-time/frame physical evidence | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | no material current media semantic delta identified | P1-187/P1-003/P0-070 |
 | C13 | Form / renderer-owned controls | RELEVANT | L3+L4 | physical renderer-control/focus evidence | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | **EI1 high-priority implementation/closure signal**: fresh peer report reinforces current-value fidelity/privacy but does not make old WebClip evidence stale | P1-187 + generation/focus/privacy owners |
-| C14 | Pseudo/generated content | RELEVANT | L3+L4 | generated-content/resource/post-freeze physical evidence | `REVALIDATION-REQUIRED / FINDING retained` | **PD2/PD3** `::view-transition`, `::backdrop`, `::scroll-marker` pseudo surfaces and page-driven pseudo state | P1-003/P1-187/P0-070/P0-075 depending mechanism |
+| C14 | Pseudo/generated content | RELEVANT | L3+L4 | generated-content/resource/post-freeze physical evidence | `REVALIDATION-REQUIRED / FINDING retained + PD2 ARTIFACT-COVERED / FINDING` | **PD2 covered** by current-Chrome physical View Transition evidence; **PD3 remains** for `::backdrop` / `::scroll-marker` pseudo state | P1-003/P1-187/P0-070/P0-075 depending mechanism |
 | C15 | Links/anchors/internal destinations | RELEVANT | L4 | physical annotations/destinations + namespace evidence | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | no new link/PDF annotation semantic identified | P0-004/P1-187/P0-068/P1-213 + safe-URI/privacy owners |
 | C16 | Same-origin iframe | RELEVANT | L3+L4 | broad frame/physical evidence + admission positives | `REVALIDATION-REQUIRED / FINDING retained` | **PD4** scoped custom-element registry inside/alongside frame/shadow representation | P1-187/P0-068/P0-004/P0-070/P1-003 + frame owners |
 | C17 | Cross-origin iframe capture/print boundary | EXPLICIT-BOUNDARY | L3+L4 + L5 for real permission/session | remote-frame managed physical evidence | `ARTIFACT-COVERED / FINDING + EXTERNAL-REQUIRED` **CARRY-FORWARD** | real unpacked permission/session path remains L5; new platform variants should include cross-origin only where the feature can materially cross the frame boundary | P1-004/P1-171/P1-199/P1-200/P1-229 |
-| C18 | Shadow DOM/slots/composed tree | RELEVANT | L3+L4 | physical composed/rendered scope evidence | `REVALIDATION-REQUIRED / FINDING retained` | **PD2/PD4** element-scoped/nested View Transitions and scoped custom-element registries | P0-004/P0-070/P0-075/P1-003/P1-160/P1-227/P1-228 etc. |
+| C18 | Shadow DOM/slots/composed tree | RELEVANT | L3+L4 | physical composed/rendered scope evidence | `REVALIDATION-REQUIRED / FINDING retained + PD2 ARTIFACT-COVERED / FINDING` | **PD2 covered** including Shadow/composed-scope element transition; **PD4 remains** for scoped custom-element registries | P0-004/P0-070/P0-075/P1-003/P1-160/P1-227/P1-228 etc. |
 | C19 | Ordinary long-page existing content | RELEVANT | L3+L4 | complete-vs-clipped long-page physical controls | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | no new ordinary-scroll completeness contract change | P0-004 |
 | C20 | Nested scroll / retained scrollports | RELEVANT | L3+L4 | physical slice/current-scroll + dynamic nested controls | `REVALIDATION-REQUIRED / FINDING retained` | **PD1/PD3** scroll-triggered animation phase and `::scroll-marker`; PD7 Chrome 153 single-axis semantics remain WATCH | P0-004/P1-187 |
 | C21 | Lazy/offscreen resources already belonging to content | RELEVANT | L3+L4 | deferred/resource readiness physical evidence | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | EI3 priority only; existing lazy-resource distinction remains contractually unchanged | P1-003/P1-167 + representation owners |
@@ -66,9 +69,9 @@ Legend:
 | C30 | Clipping/overflow/paint containment | RELEVANT | L3+L4 | physical overflow/clip/contain controls | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | PD7 may promote a new overflow combination after Chrome 153 stable; current stable target unchanged for this claim | P0-004 |
 | C31 | Fixed/sticky | RELEVANT | L3+L4 | physical fixed/sticky flattening controls | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | **PD7 WATCH only**: Chrome 153 beta single-axis scroll-container ancestry is not yet a current stable requirement | P0-004/P1-187 |
 | C32 | Pagination / physical page breaks | RELEVANT | L4 | physical page-count/layout evidence | `REVALIDATION-REQUIRED / FINDING retained` | **PD5/PD6** `text-fit` page-count impact and print `page-margin-safety`/author `@page` interaction | P0-004 + representation/resource owners |
-| C33 | CSS/WAAPI animations/transitions | RELEVANT | L3+L4 | physical sampled-phase drift evidence | `REVALIDATION-REQUIRED / FINDING retained` | **PD1/PD2** scroll-triggered animation and element-scoped/nested View Transition admitted phase | P0-070/P0-004/P1-187/P0-075 |
+| C33 | CSS/WAAPI animations/transitions | RELEVANT | L3+L4 | physical sampled-phase drift evidence | `REVALIDATION-REQUIRED / FINDING retained + PD2 ARTIFACT-COVERED / FINDING` | **PD2 covered** for document/element/concurrent transition admitted phase; **PD1 remains** for scroll-triggered animation | P0-070/P0-004/P1-187/P0-075 |
 | C34 | Animated image/GIF frame | RELEVANT | L3+L4 | physical animated-frame evidence | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | no material animated-image browser semantic delta identified | temporal/resource-generation owner set |
-| C35 | Mutation during preparation/beforeprint/physical render cut | RELEVANT | L3+L4 | post-freeze physical render-cut evidence | `REVALIDATION-REQUIRED / FINDING retained` | **PD1/PD2** transition/scroll-triggered state can advance or swap around capture/print cut | P0-070/P0-075/P0-004; P1-003/P1-187 support |
+| C35 | Mutation during preparation/beforeprint/physical render cut | RELEVANT | L3+L4 | post-freeze physical render-cut evidence | `REVALIDATION-REQUIRED / FINDING retained + PD2 ARTIFACT-COVERED / FINDING` | **PD2 covered**: `Page.printToPDF` substitutes final DOM and clears active View Transition pseudo state; **PD1 remains** for scroll-triggered state around render cut | P0-070/P0-075/P0-004; P1-003/P1-187 support |
 | C36 | Same locator/URL, different resource bytes/generation | RELEVANT | L2+L3+L4 | physical resource-generation/transfer evidence | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | EI3 reinforces priority; no new URL/resource generation semantic found | P0-070/P1-003/P1-187/P1-184 |
 | C37 | Failure/retry/rollback/convergence | RELEVANT | L2; L3/L5 where needed | deterministic/renderer lifecycle + rollback | `DETERMINISTIC/RENDERER-COVERED / FINDING + EXTERNAL-REQUIRED` **CARRY-FORWARD** | **EI4** requires every new renderer tranche to include bounded failure/degradation controls; native settlement still L5 | P0-023/P0-039/P0-048/P0-073/P0-074/P0-079; P1-146/P1-156/P1-199/P1-214 etc. |
 | C38 | Node/byte/time/resource budgets | RELEVANT | L2+L3 | local prepare/clone/resource deadline evidence | `RENDERER-COVERED / FINDING` **CARRY-FORWARD** | **EI4 supporting control** for PD tranches; no new standalone budget contract | P0-064/P0-065/P1-154/P1-160/P1-167/P1-173 etc. |
@@ -83,23 +86,28 @@ Legend:
 
 ## 3. Sweep metrics
 
-At the **family level** after first Cycle-2 triage:
+At the **family level** after T1/PD2 closure:
 
 - total required starting families: **46/46 triaged**;
 - family-level `NOT-TRIAGED`: **0**;
 - families carrying forward terminal required evidence: **31**;
 - families with at least one new stable-browser variant requiring revalidation: **15**;
 - explicit L5/external families remain bounded and visible: C17, C37, C41, C42, C44, C46 (mixed/local evidence where documented);
-- new unallocated P-code created by this sweep: **0**.
+- new unallocated P-code created by this sweep/T1: **0**;
+- terminal platform-delta variants completed in Cycle 2: **PD2 `ARTIFACT-COVERED / FINDING`**;
+- pending current-stable platform-delta variants: **PD1, PD3, PD4, PD5, PD6**;
+- PD7 remains current-stable out-of-scope/WATCH at this checkpoint.
 
-Therefore Cycle 2 is correctly **`DEEP-AUDIT-IN-PROGRESS`**: the denominator is visible, but 15 families contain nonterminal new-variant cells.
+Family counts do not drop when one of several variants closes. C14/C18/C33/C35 still contain another pending variant, so all 15 family rows correctly remain `REVALIDATION-REQUIRED` at family level.
+
+Therefore Cycle 2 is correctly **`DEEP-AUDIT-IN-PROGRESS`**: the denominator is visible, PD2 is terminal, and the remaining stable-browser deficits are explicit.
 
 ## 4. Platform-delta variant matrix
 
 | Variant | Stable/current status at 2026-08-31 | Families | Boundaries | Required evidence | Current state |
 |---|---|---|---|---|---|
 | **PD1** Scroll-triggered animations | Chrome 146 stable | C20/C29/C33/C35; C22 negative boundary | B2→B6 | L1 + L3+L4 | `REVALIDATION-REQUIRED` |
-| **PD2** Element-scoped/nested View Transitions + transition pseudo tree | Chrome 147 stable; pseudo JS access expanded by Chrome 152 | C14/C18/C33/C35 | B2→B6 | L1 + L3+L4 | `REVALIDATION-REQUIRED` |
+| **PD2** Element-scoped/nested View Transitions + transition pseudo tree | Chrome 147 stable; pseudo JS access expanded by Chrome 152 | C14/C18/C33/C35 | B2→B6 | L1 + L3+L4 | `ARTIFACT-COVERED / FINDING` — T1 complete on Chrome for Testing 152.0.7977.64 |
 | **PD3** `::backdrop` / `::scroll-marker` modern pseudo state | pseudo access expanded in Chrome 152; underlying visual surfaces relevant to current renderer | C14/C20/C25/C27 | B2→B6 | L1 + L3+L4 | `REVALIDATION-REQUIRED` |
 | **PD4** Scoped custom-element registries | Chrome 146 stable | C02/C03/C16/C18 | B2→B6 | L1 + L3+L4 for selection/visual claims | `REVALIDATION-REQUIRED` |
 | **PD5** CSS `text-fit` | Chrome 150 stable | C05/C07/C28/C29/C32 | B2→B6 | L1 + L3+L4 | `REVALIDATION-REQUIRED` |
@@ -117,86 +125,66 @@ External research changes **ranking**, not product truth by itself.
 | **EI3** resource/CSS dependency identity | C06–C10/C14/C21/C36/C45 | peer CSS rewrite + missing image/caption reports | historical resource findings remain terminal; prioritize closure, include nested dependency/offline checks |
 | **EI4** bounded termination | C37/C38, cross-cutting B2→B9 | peer hangs + archiving timeout practice | historical budget findings remain terminal; mandatory failure/degradation control for new tranches |
 
-## 6. Risk ranking after Coverage Sweep
+## 6. Risk ranking after T1
 
 Ranking applies to **nonterminal coverage cells first**, then to implementation closure candidates. It uses user impact, silent corruption/data loss, breadth, mission proximity, coverage deficit, external evidence and root-cause uncertainty.
 
-1. **T1 — PD2 View Transition active-state / physical render-cut fidelity** — high silent-corruption risk across generated pseudo state, composed tree, temporal state and B2→B6; entirely absent from Chromium-144 evidence.
-2. **T2 — PD3 modern top-layer/scroll-marker pseudo state** — directly visible generated/interaction state with selected-scope, top-layer and negative hover controls.
-3. **T3 — PD5/PD6 typography + pagination (`text-fit`, `page-margin-safety`)** — high physical-PDF/layout consequence and measurable L4 page/text/geometry outputs.
-4. **T4 — PD4 scoped custom-element registries** — selection/semantic identity risk across Shadow/frame and automatic/manual admission.
-5. **T5 — PD1 scroll-triggered animation** — temporal state tied to scroll/user boundary; must prove WebClip does not advance/reset admitted phase through preparation.
-6. **Implementation/closure priority after coverage deficits** — EI1 form current state/privacy, EI2 persisted-object equivalence, EI3 resource dependency identity, EI4 shared budget/termination, subject to canonical P-owner priority/severity.
-7. **PD7** remains watch until stable/current-target promotion.
+1. **T2 — PD3 modern top-layer/scroll-marker pseudo state** — directly visible generated/interaction state with selected-scope, top-layer and negative hover controls.
+2. **T3 — PD5/PD6 typography + pagination (`text-fit`, `page-margin-safety`)** — high physical-PDF/layout consequence and measurable L4 page/text/geometry outputs.
+3. **T4 — PD4 scoped custom-element registries** — selection/semantic identity risk across Shadow/frame and automatic/manual admission.
+4. **T5 — PD1 scroll-triggered animation** — temporal state tied to scroll/user boundary; must prove WebClip does not advance/reset admitted phase through preparation.
+5. **Implementation/closure priority after coverage deficits** — EI1 form current state/privacy, EI2 persisted-object equivalence, EI3 resource dependency identity, EI4 shared budget/termination, subject to canonical P-owner priority/severity.
+6. **PD7** remains watch until stable/current-target promotion.
 
 Tie-breaker: silent wrong artifact > explicit failure/hang where other risk is comparable.
 
-## 7. First deep-dive tranche envelope — T1
+## 7. Completed deep-dive tranche — T1 / PD2
 
 ### Surface
 
-**Element-scoped/nested View Transition admitted state -> physical PDF render cut**.
+**Document/element/concurrent/Shadow View Transition admitted state -> physical PDF render cut**.
 
-### Relevant families and boundaries
+### Required evidence reached
 
-- C14 pseudo/generated content;
-- C18 Shadow/composed tree;
-- C33 animations/transitions;
-- C35 capture/preparation/physical render cut;
-- B2 Admission -> B3 Capture -> B4 Static Materialization -> B5 Renderer -> B6 Physical Artifact.
+- L1 current source: no admitted View Transition pseudo-tree/phase snapshot, inert materialization or truthful degradation mechanism was found in current WebClip preparation/print path;
+- L3 current feature-capable managed browser: Chrome for Testing **152.0.7977.64**;
+- L4 actual PDF bytes/raster geometry/hash, not renderer-only screenshot evidence.
 
-### Contract invariants
+### Physical finding
 
-From current PDF contract:
+For every active transition variant with an admitted visual midpoint at `x=240`, the actual PDF serialized the final underlying DOM at `x=440`, and post-print transition animations were gone:
 
-- PDF is bound to admitted temporal/render state, not a later arbitrary print moment;
-- preparation may not silently substitute another temporal/document/render generation;
-- generated/pseudo state that materially changes the non-hover admitted presentation must be represented truthfully or degraded/unknown;
-- WebClip-owned preparation state must not become source user state;
-- inability to prove fidelity safely must not return silent full success.
+- document-scoped transition;
+- single element-scoped transition;
+- two concurrent element-scoped transitions;
+- Shadow/composed-scope element transition.
 
-### Required variants / controls
+Positive/negative controls remained discriminating: ordinary final-state baseline physically matched `x=440`, explicit Exclude remained absent, and hover-only control remained absent.
 
-1. baseline without View Transition — positive control;
-2. document-level or element-scoped stable non-transition state — positive control;
-3. active element-scoped transition at admission;
-4. nested/concurrent element transition where supported;
-5. transition inside Shadow/composed scope;
-6. selected Include with explicit Exclude descendant — authority boundary;
-7. hover-only overlay absent — negative contract control;
-8. mutation around print cut — temporal boundary;
-9. bounded timeout/failure — truthful degradation control;
-10. physical PDF text/pixels/geometry/hash, not renderer-only observation.
+Durable evidence: `AUDIT_CYCLE2_T1_VIEW_TRANSITION_RENDER_CUT_2026-08-31.md`.
 
-### Known owner/duplicate history to inspect before classification
+### Ownership
 
-Initial owner candidates are existing exact-generation/live-page/physical/temporal/representation owners (including P0-070, P0-075, P0-004, P1-187 and related composed/pseudo owners). **No new P-code is authorized by this matrix.** T1 must first inspect current registry/history and source paths, then classify any finding as duplicate/refinement versus independent root cause.
+No new P-code. The failure remains under **P0-070/P0-075/P0-004**, with existing narrower representation/pseudo/composed owners only supporting where applicable. `AUDIT_REGISTRY.md` remains unchanged.
 
-### Required evidence
+### Family effect
 
-- L1 current WebClip source handling of transition/pseudo/materialization state;
-- L3 **Chrome/Chromium supporting the stable View Transition feature under test**;
-- L4 physical PDF comparison;
-- L5 not required for the renderer-semantic claim itself; real unpacked extension remains a separate C46 boundary.
+PD2 is terminal `ARTIFACT-COVERED / FINDING`, but:
 
-### Termination envelope
+- C14 remains nonterminal for PD3;
+- C18 remains nonterminal for PD4;
+- C33 remains nonterminal for PD1;
+- C35 remains nonterminal for PD1.
 
-T1 is complete when:
+T1 is therefore **complete without changing the 31/15 family count**.
 
-- supported active transition variants have stable reproduction;
-- positive/negative/authority/failure controls distinguish the defect envelope;
-- physical artifact effect is proven or absence is proven at L4;
-- root-cause ownership is saturated/deduplicated;
-- unsupported/current-runner limitations are bounded rather than silently treated as PASS;
-- evidence/Matrix/History/Registry updates (Registry only if genuinely warranted) are durable and delivery-tail complete.
+## 8. Environment consequence and resolution
 
-## 8. Environment consequence discovered during sweep
+The local managed Chromium executable remains **144.0.7559.96** and cannot be assumed to implement all Chrome 146–152 stable semantics used by PD1–PD6.
 
-The currently available local managed Chromium executable is **144.0.7559.96**. It was sufficient for the prior campaign but cannot be assumed to implement all Chrome 146–152 stable semantics used by PD1–PD6.
+T1 did not infer current-feature evidence from that older runner. Instead, the managed CI probe downloaded and executed **Google Chrome for Testing 152.0.7977.64**, proving the current PD2 feature and physical PDF behavior on the required renderer generation.
 
-Therefore T1 must not claim current-feature L3/L4 PASS from Chromium 144. The next execution step is to obtain/use a safe managed current Chromium/Chrome-for-Testing build that actually supports the feature, or, if unavailable in the execution environment, record a bounded environment requirement while still completing L1/owner/source analysis.
-
-This environment limitation is a test-runner evidence boundary, not evidence that WebClip itself passes or fails T1.
+The same approach may be reused for later PD tranches when current stable browser semantics are required. Runner availability remains an evidence boundary, never a reason to downgrade a required L3/L4 claim to PASS.
 
 ## 9. Current campaign state
 
@@ -204,4 +192,6 @@ Cycle 2 remains:
 
 **`DEEP-AUDIT-IN-PROGRESS`**.
 
-Next action: T1 source/owner saturation plus a feature-capable managed-browser L3/L4 probe. If the current runner cannot support the feature, the tranche remains nonterminal with the exact missing evidence recorded; the campaign then proceeds only according to the policy's bounded-unknown/external/evidence rules, not by downgrading the requirement.
+T1/PD2 is terminal `ARTIFACT-COVERED / FINDING`.
+
+Next action: **T2 / PD3 — `::backdrop` / `::scroll-marker` modern pseudo/top-layer state -> physical PDF**, starting with current-source/owner saturation and then current-Chrome L3/L4 controls.
