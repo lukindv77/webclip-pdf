@@ -12,6 +12,8 @@ Stage-4 C24 inert-disclosure revalidation audited canonical `main`: `0ecfff217d8
 
 Stage-5 C02 SelectionSnapshot restore -> physical-PDF revalidation audited canonical `main`: `07df33f5d1ed572bd4da3083411aef9dd94d21c0`.
 
+Stage-6 C03 Main Content / auto candidate -> physical-PDF revalidation audited canonical `main`: `869c47b14254fdadded1e24dc6a6bfabafc049a1`.
+
 Purpose: первая фактическая реконструкция deep-audit Coverage Matrix из уже существующих durable audit evidence, registry/history и merged physical-browser tranches. Этот документ **не заменяет P-code owner/status authority**: `AUDIT_REGISTRY.md` остаётся единственным canonical authority. Coverage rows ниже фиксируют achieved evidence/outcome и должны обновляться после targeted tranches.
 
 Методика задаётся `AUDIT_COVERAGE_CAMPAIGN_POLICY.md`. PDF acceptance задаётся `WEBCLIP_PDF_FIDELITY_CONTRACT.md`.
@@ -45,7 +47,8 @@ Current authority/context:
 - C22/C23 targeted tranche / `AUDIT_USER_REACHED_DYNAMIC_SCROLL_2026-08-30_EVIDENCE.md` plus its two managed-Chromium physical probes;
 - C26 targeted tranche / `AUDIT_HOVER_EXCLUSION_CONTRACT_2026-08-30_EVIDENCE.md` plus `project_tools/audit_hover_exclusion_contract.py`;
 - C24 targeted tranche / `AUDIT_INERT_DISCLOSURE_CONTRACT_2026-08-30_EVIDENCE.md` plus `project_tools/audit_inert_disclosure_contract.py`;
-- C02 targeted tranche / `AUDIT_SELECTION_RESTORE_PHYSICAL_PDF_2026-08-31_EVIDENCE.md` plus `project_tools/audit_selection_restore_physical_pdf.py`.
+- C02 targeted tranche / `AUDIT_SELECTION_RESTORE_PHYSICAL_PDF_2026-08-31_EVIDENCE.md` plus `project_tools/audit_selection_restore_physical_pdf.py`;
+- C03 targeted tranche / `AUDIT_MAIN_CONTENT_PHYSICAL_PDF_2026-08-31_EVIDENCE.md` plus `project_tools/audit_main_content_physical_pdf.py`.
 
 Также использованы supplemental summaries из `AUDIT_DELTA_INDEX.md`, включая selection/admission, selected-only cascade, post-freeze render cut, print rollback, local prepare budgets, source URL minimization, PDF byte transfer receipt и связанные Yandex/Journal/recovery boundaries.
 
@@ -63,7 +66,9 @@ Historical evidence засчитывается только для того clai
 
 C22/C23, C26 и C24 теперь revalidated fresh targeted tranches: required L3+L4 evidence достигнуто и outcome классифицирован как FINDING. C22/C23 имеет independent owner P1-230; C26 уточняет existing P0-075/P0-070/P0-004; C24 revalidates existing P0-067/P1-212/P1-167/P0-075/P0-070/P0-004 with P1-004 supporting cross-origin parity. Ни C26, ни C24 не создают duplicate P1-231.
 
-C02 также теперь имеет targeted current-source L3+L4 closure до physical PDF. Его outcome — FINDING под existing P1-001/P0-080/P0-070/P0-075/P0-004 с P1-200/P1-171 supporting; новый P-code не требуется.
+C02 также имеет targeted current-source L3+L4 closure до physical PDF. Его outcome — FINDING под existing P1-001/P0-080/P0-070/P0-075/P0-004 с P1-200/P1-171 supporting; новый P-code не требуется.
+
+C03 теперь также закрывает B2→B6 до physical PDF. Outcome — FINDING под existing P1-160 с P0-080/P0-070/P0-075/P0-004 supporting. P1-228 остаётся manual hit-test/geometry owner и не дублируется C03.
 
 ## 3. Family-level current matrix
 
@@ -73,7 +78,7 @@ C02 также теперь имеет targeted current-source L3+L4 closure д�
 |---|---|---:|---|---|---|---|
 | C01 | Manual Include/Exclude / selected-scope authority | yes | L2+L3+L4 for saved PDF | selection/capture, selected-only cascade, save-freeze, physical PDF evidence | `ARTIFACT-COVERED / FINDING` | P0-004, P0-070, P0-075, selection-specific owners; preserve Exclude through every materialization path |
 | C02 | SelectionSnapshot restore -> admitted rendered target -> saved copy | yes | L3+L4 | fresh actual-content-script restore + physical Chromium PDF controls: stable/Exclude/same-origin-frame positives; hidden/opacity success without physical content; fixed-5000 decoy physically serialized; stale disconnected selection admits empty selected artifact | `ARTIFACT-COVERED / FINDING` | **P1-001/P0-080** primary; P0-070/P0-075/P0-004 supporting physical/generation boundary, P1-200/P1-171 supporting remote/session. Need sound bounded candidate set, rendered-target admission and exact generation revalidation through physical cut |
-| C03 | Main Content / auto candidate -> actual saved scope | yes | L3+L4 | selection/rendered-scope and auto-content evidence | `RENDERER-COVERED / PARTIAL` | P1-160/P1-228 family; needs explicit end-to-end artifact variants and boundary controls |
+| C03 | Main Content / auto candidate -> actual saved scope | yes | L3+L4 | fresh current-source + physical Chromium checkout probe: semantic article/hidden competitor/same-origin-frame positives; weak BODY fallback physically saves shell; equal-score candidates silently use DOM-order winner; post-auto replacement gives empty selected artifact; in-place mutation changes saved logical content | `ARTIFACT-COVERED / FINDING` | **P1-160** primary discovery/confidence/manual-fallback owner; P0-080/P0-070/P0-075/P0-004 supporting generation/physical consequences. P1-228 remains manual hit-test/geometry owner, not duplicate C03 owner |
 | C04 | Ordinary DOM/text baseline | yes | L2+L4 | PR #35 direct physical text/searchability controls | `ARTIFACT-COVERED / PASS-CONTROL` | baseline control only; does not imply layout/selection families PASS |
 | C05 | Geometry/layout | yes | L3+L4 | complex-layout, long-page, typography, viewport physical tranches | `ARTIFACT-COVERED / FINDING` | P0-004, P1-187 and supporting owners |
 | C06 | Colors/backgrounds/compositing | yes | L3+L4 | CSS visual dependency, frame CSS, post-freeze physical evidence | `ARTIFACT-COVERED / FINDING` | P1-003, P1-187, P0-004/P0-075 supporting boundaries |
@@ -86,7 +91,7 @@ C02 также теперь имеет targeted current-source L3+L4 closure д�
 | C13 | Form / renderer-owned controls | yes | L3+L4 | PR #35/#41/#42/#48 physical control/focus evidence | `ARTIFACT-COVERED / FINDING` | P1-187 plus generation/focus owners; flattened select/current-state gap proven |
 | C14 | Pseudo/generated content | yes | L3+L4 | saved-copy positive controls + CSS dependency/post-freeze evidence | `ARTIFACT-COVERED / FINDING` | P1-003/P1-187/P0-070 depending mechanism; resource and mutation parity remain broken |
 | C15 | Links / anchors / internal destinations | yes | L4 | PR #35 physical annotations/destinations + namespace evidence | `ARTIFACT-COVERED / FINDING` | P0-004, P1-187, P0-068/P1-213, safe-URI/privacy supporting owners |
-| C16 | Same-origin iframe | yes | L3+L4 | PR #35, #38–#47 frame/physical proxy evidence | `ARTIFACT-COVERED / FINDING` | P1-187, P0-068, P0-004, P0-070, P1-003 and related frame owners |
+| C16 | Same-origin iframe | yes | L3+L4 | PR #35, #38–#47 frame/physical proxy evidence plus C02/C03 admission positives | `ARTIFACT-COVERED / FINDING` | P1-187, P0-068, P0-004, P0-070, P1-003 and related frame owners |
 | C17 | Cross-origin iframe capture/print boundary | explicit-boundary | L3+L4 + L5 for real extension permission/session claims | remote-frame physical managed Chromium evidence | `ARTIFACT-COVERED / FINDING + EXTERNAL-REQUIRED` | P1-004, P1-171, P1-199/P1-200/P1-229; real permission/unpacked Chrome remains L5 |
 | C18 | Shadow DOM / slots / composed tree | yes | L3+L4 | PR #38 physical composed/rendered scope evidence | `ARTIFACT-COVERED / FINDING` | P0-004/P0-070/P0-075/P1-003/P1-160/P1-227/P1-228 etc. |
 | C19 | Ordinary long-page existing content | yes | L3+L4 | PR #37 complete-vs-clipped long-page controls | `ARTIFACT-COVERED / FINDING` | P0-004; current contract explicitly requires full pre-existing scroll content |
@@ -107,29 +112,29 @@ C02 также теперь имеет targeted current-source L3+L4 closure д�
 | C34 | Animated image/GIF frame | yes | L3+L4 | PR #45 physical second-frame -> first-frame PDF evidence | `ARTIFACT-COVERED / FINDING` | temporal/resource-generation owner set; exact current-frame receipt absent |
 | C35 | Mutation during preparation / `beforeprint` / physical render cut | yes | L3+L4 | post-freeze physical-render-cut evidence | `ARTIFACT-COVERED / FINDING` | P0-070, P0-075, P0-004; P1-003/P1-187 supporting |
 | C36 | Same locator/URL, different resource bytes/generation | yes | L2+L3+L4 | PR #46 + transfer/resource evidence | `ARTIFACT-COVERED / FINDING` | P0-070/P1-003/P1-187/P1-184 depending boundary |
-| C37 | Failure/retry/rollback/convergence | yes | L2; L3/L5 where browser/external settlement matters | print rollback/retry + extensive deterministic lifecycle evidence | `DETERMINISTIC/RENDERER-COVERED / FINDING + EXTERNAL-REQUIRED` | P0-023/P0-039/P0-048/P0-073/P0-074/P0-079, P1-146/P1-156/P1-199/P1-214 etc. |
-| C38 | Node/byte/time/resource budgets | yes | L2+L3 | local-prepare-budget, clone preflight, resource deadline evidence | `RENDERER-COVERED / FINDING` | P0-064/P0-065/P1-154/P1-167/P1-173 etc. |
+| C37 | Failure/retry/rollback/convergence | yes | L2; L3/L5 where browser/external settlement matters | print rollback/retry + extensive deterministic lifecycle evidence | `DETERMINISTIC/RENDERER-COVERED / FINDING + EXTERNAL-REQUIRED` | P0-023/P0-039/P0-048/P0-073/P0-074/P0-079, P1-146/P1-156/P1-199/P1-214 etc.; in-repo required evidence is present, native/external claims remain L5 |
+| C38 | Node/byte/time/resource budgets | yes | L2+L3 | local-prepare-budget, clone preflight, resource deadline evidence plus current C03 source revalidation of unshared auto-content work | `RENDERER-COVERED / FINDING` | P0-064/P0-065/P1-154/P1-160/P1-167/P1-173 etc.; required in-repo evidence present, findings active |
 | C39 | Privacy / data minimization | yes | L1+L2 plus L4/L5 where observable | source-URL physical PDF, SelectionSnapshot portability/privacy evidence | `ARTIFACT-COVERED / FINDING` | P0-066, P1-182 and supporting source/destination owners |
 | C40 | Physical PDF bytes / cache identity | yes | L4 | PDF byte/cache/transfer receipt evidence | `ARTIFACT-COVERED / FINDING` | P0-079, P0-070, P1-184/P0-023 supporting |
 | C41 | Local download physical settlement / native Save As | explicit-boundary | L5 for actual Chrome/native lifecycle claim | deterministic/model plus historical managed browser evidence | `EXTERNAL-REQUIRED / FINDING` | P0-039/P0-048/P1-146/P1-156/P1-169; real native boundary not current-main verified |
 | C42 | Yandex upload/object/public identity | explicit-boundary | L5 | deterministic/mocked/receipt evidence, current owners active | `EXTERNAL-REQUIRED / FINDING` | P0-022/P0-073/P0-074/P0-078/P0-079, P1-090/P1-164/P1-184/P1-195 etc. |
-| C43 | Journal / provenance / exact artifact linkage | yes | L2+L3, L5 for remote identity claims | deterministic Journal/recovery evidence + artifact receipt audits | `DETERMINISTIC/RENDERER-COVERED / FINDING` | P0-050/P0-070/P0-076/P1-182/P1-185/P1-186/P1-190 etc. |
-| C44 | Backup / import / recovery | yes | L2; L5 for real Yandex restore | deterministic import/backup/recovery evidence; active registry owners | `DETERMINISTIC-COVERED / FINDING + EXTERNAL-REQUIRED` | P0-013/P0-022/P0-077, P1-035/P1-076/P1-179/P1-183/P1-194 etc. |
+| C43 | Journal / provenance / exact artifact linkage | yes | L2+L3, L5 for remote identity claims | deterministic Journal/recovery evidence + artifact receipt audits | `DETERMINISTIC/RENDERER-COVERED / FINDING` | P0-050/P0-070/P0-076/P1-182/P1-185/P1-186/P1-190 etc.; in-repo required evidence present, remote exact-object claims remain L5 where applicable |
+| C44 | Backup / import / recovery | yes | L2; L5 for real Yandex restore | deterministic import/backup/recovery evidence; active registry owners | `DETERMINISTIC-COVERED / FINDING + EXTERNAL-REQUIRED` | P0-013/P0-022/P0-077, P1-035/P1-076/P1-179/P1-183/P1-194 etc.; deterministic requirement met, real Yandex restore remains L5 |
 | C45 | Later reading / reopened PDF usefulness | yes | L4 | PR #35 plus many physical artifact tranches | `ARTIFACT-COVERED / FINDING` | link/readability/form/frame/layout owners; later-reading family has direct evidence, not inferred success |
-| C46 | Real unpacked Chrome / optional permission UI / actual `chrome.debugger` extension path | explicit-boundary | L5 | historical managed evidence only; enterprise policy blocked real unpacked run | `EXTERNAL-REQUIRED / UNKNOWN` | release QA boundary; relevant active permission/frame/download owners remain open |
+| C46 | Real unpacked Chrome / optional permission UI / actual `chrome.debugger` extension path | explicit-boundary | L5 | historical managed evidence only; enterprise policy blocked real unpacked run | `EXTERNAL-REQUIRED / UNKNOWN` | release QA boundary; relevant active permission/frame/download owners remain open; UNKNOWN reason is explicit and bounded to L5 environment |
 
 ## 4. Что уже можно считать сильной стороной текущего audit evidence
 
 Реконструкция показывает, что проект уже имеет unusually deep engineering evidence для многих renderer/physical-PDF surfaces:
 
 - direct managed-Chromium `Page.printToPDF` physical probes используются не эпизодически, а во многих independent tranches;
-- layout/clipping/pagination, fonts, resources, frame flattening, responsive candidate identity, temporal state, focus, user-reached virtual-history, hover-exclusion, disclosure-expansion и SelectionSnapshot restore-to-artifact behavior проверены именно на physical PDF, а не только source/model level;
+- layout/clipping/pagination, fonts, resources, frame flattening, responsive candidate identity, temporal state, focus, user-reached virtual-history, hover-exclusion, disclosure-expansion, SelectionSnapshot restore-to-artifact и Main Content auto-admission проверены до physical PDF, а не только source/model level;
 - historical audits сохраняют positive/negative/rejected controls, что снижает риск повторного открытия отвергнутых broad hypotheses;
-- registry разделяет exact-generation, resource, frame, persistence, recovery и user-reached-history owners вместо одного неуправляемого «PDF fidelity bug».
+- registry разделяет exact-generation, resource, frame, persistence, recovery, auto-discovery и user-reached-history owners вместо одного неуправляемого «PDF fidelity bug».
 
-То есть главный текущий deficiency — не отсутствие глубины вообще, а **оставшиеся contract-specific gaps, ACTIVE findings и explicit L5 boundaries**.
+То есть главный текущий deficiency — не отсутствие глубины вообще, а **ACTIVE findings и explicit L5 boundaries**. После C03 больше нет очевидного CORE family, который в этой family-level matrix остаётся ниже собственного required in-repo evidence level; это утверждение ещё должно пройти отдельный Coverage Reconciliation gate перед project-wide state transition.
 
-## 5. Главные gaps после C22/C23, C26, C24 и C02 revalidation
+## 5. Главные findings после C22/C23, C26, C24, C02 и C03 revalidation
 
 ### G1 — user-driven dynamic-scroll / virtualized history — classified FINDING, owner P1-230
 
@@ -187,71 +192,71 @@ Fresh C02 tranche закрыл прежний renderer-only gap до B6:
 
 Root causes already belong to **P1-001** (restore/candidate/rendered admission) and **P0-080** (stale disconnected same-document selection), with **P0-070/P0-075/P0-004** supporting exact-generation/live-page/physical consequences and **P1-200/P1-171** remaining remote/session supporting owners. Новый P-code не выделяется.
 
-### G5 — Main Content end-to-end physical artifact coverage remains weaker than required
+### G5 — Main Content automatic authority -> physical PDF — classified FINDING under existing owners
 
-C03 remains `RENDERER-COVERED / PARTIAL`. Existing auto-content/source/rendered-scope evidence is substantial, but the campaign still lacks one current systematic L3+L4 tranche proving what the auto-selected candidate becomes in the final physical saved artifact across benign/adversarial candidate competition, nested/frame/environment variants and post-admission drift.
+Fresh C03 tranche закрыл последний явно weaker CORE admission-source gap:
+
+- strong semantic article beats unrelated shell and is physically preserved — positive control;
+- hidden semantic competitor does not win — positive control;
+- same-origin frame article can become exact physical selected scope — positive control;
+- when no credible main candidate exists, BODY can remain `best` after the `<900` fallback pass and is still returned because there is no final score floor; supporting model measured score 185, and physical output contains unrelated navigation/footer shell rather than degrading to manual choice;
+- two equally scored strong `<article>` candidates have no margin/ambiguity state, so DOM/Set iteration order silently chooses one physical saved scope;
+- post-auto replacement/disconnection retains stale selection authority and can yield no intended selected content;
+- in-place mutation of the selected Element changes the logical content serialized under the old automatic decision;
+- broad candidate scans/repeated descendant/body text work remain outside one shared discovery budget.
+
+Primary root cause is already **P1-160**: bounded auto-content discovery plus graceful manual fallback. **P0-080/P0-070/P0-075/P0-004** support generation/live-page/physical consequences. **P1-228** remains the distinct manual event-target/geometry owner and is not duplicated. Новый P-code не выделяется.
 
 ### G6 — L5 external boundaries остаются сознательно незакрыты
 
 Real unpacked Chrome, optional permission UI, native download/Save As и real external-storage API остаются `EXTERNAL-REQUIRED`, что согласуется с current `TEST_STATUS.md`/release policy. Это не должно ошибочно превращаться в managed PASS.
 
-## 6. Приоритет следующего deep-dive tranche после C02
+## 6. Следующий campaign step после C03: Coverage Reconciliation, не новый произвольный surface tranche
 
-После перевода C02 в `ARTIFACT-COVERED / FINDING` единственным оставшимся material in-repo CORE family gap с weaker-than-required end-to-end artifact evidence в текущем ranking является C03. Explicit L5 rows C41/C42/C46 нельзя закрыть managed evidence и поэтому они не вытесняют доступный in-repo coverage work.
+После перевода C03 в `ARTIFACT-COVERED / FINDING` текущая family-level matrix больше не содержит очевидного CORE row ниже собственного stated minimum in-repo evidence level:
 
-Следующий tranche рекомендуется:
+- fidelity/admission/render surfaces C01–C36 и C39–C40/C45 имеют required artifact evidence там, где contract требует L4;
+- C37 имеет L2/renderer evidence для in-repo failure/retry logic, а native/external settlement отдельно bounded как L5;
+- C38 требует L2+L3 и уже имеет deterministic/managed bounded-work evidence; findings остаются ACTIVE, но это не coverage deficit;
+- C43 требует L2+L3 для in-repo Journal/provenance integration и имеет deterministic/renderer evidence; remote exact-object claims остаются external where applicable;
+- C44 deterministic L2 requirement достигнут, real Yandex restore остаётся L5;
+- C41/C42/C46 являются explicit L5 cells и не могут быть закрыты managed evidence.
 
-### **C03 — Main Content / Auto Candidate → Final Physical PDF Contract Tranche**
+По `AUDIT_COVERAGE_CAMPAIGN_POLICY.md` следующий корректный шаг — **Coverage Reconciliation -> Final Synthesis candidate gate**, а не автоматическое углубление уже root-cause-saturated finding.
 
-Почему C03 теперь следующий:
+Coverage Reconciliation должен отдельно проверить:
 
-- это последний явно отмеченный CORE admission-source family с `RENDERER-COVERED / PARTIAL` вместо required L3+L4 artifact evidence;
-- auto-content is a user-triggered authority source: an incorrect or stale candidate can silently define the entire saved scope before renderer/resource checks;
-- current registry already has P1-160/P1-228 family ownership for bounded discovery/rendered-scope semantics, with P0-070/P0-075/P0-004 likely supporting generation/physical consequences;
-- safe deterministic fixtures can exercise the actual `detectMainContent()`/selection/save path without L5 external dependencies;
-- C02 just demonstrated that renderer-level selection success alone cannot be promoted to saved-artifact truth, so C03 must receive the same B2→B6 discipline rather than inferred closure.
+1. все 46 family rows имеют relevance/invariant/required evidence/outcome/owner or bounded external reason;
+2. нет material `NOT-TRIAGED`, `REVALIDATION-REQUIRED` или необъяснённого `UNKNOWN`;
+3. mixed rows C37/C43/C44 действительно разделяют in-repo terminal evidence и L5 subclaims, а не прячут незакрытый local gap;
+4. C46 `UNKNOWN` terminal только в смысле policy: причина external environment доказана, scope bounded, required next evidence записан;
+5. recent runtime/contract changes после соответствующих tranches не сделали evidence stale по Change Impact Map;
+6. all findings map to canonical owners without duplicate/unallocated observation;
+7. explicit external/user-intent research freshness requirement выполнен либо recorded as the only reason project-wide transition must wait;
+8. final synthesis может честно представить pipeline B1–B9 как `PROVEN / BROKEN / PARTIAL / EXTERNAL / INTENTIONAL-LIMITATION` без inference gaps.
 
-Предварительный envelope C03:
+Только после этого отдельного reconciliation gate допустим transition из `DEEP-AUDIT-IN-PROGRESS` в `DEEP-AUDIT-COVERAGE-COMPLETE`. Такой transition **не закрывает ACTIVE findings и не означает RELEASE-READY**.
 
-- semantic `article/main/[role=main]` positive candidate -> final physical marker;
-- fallback body/container candidate -> bounded truthful scope rather than whole unrelated shell;
-- competing article/sidebar/promo/link-dense candidates -> intended main content wins or selection truth degrades explicitly;
-- same-origin frame candidate -> physical parity and exact frame scope;
-- post-auto-selection replacement/disconnection before save -> no stale authority;
-- nested selected/excluded and selected-only physical controls;
-- bounded-work controls for large candidate sets/link text scans;
-- no inference of cross-origin/L5 permission closure from managed same-origin results.
+## 7. Campaign state after C03
 
-Required evidence: **L3+L4**, with L1 source proof and L2 deterministic candidate/budget controls where needed.
-
-After C03 the matrix must be reranked again rather than automatically declaring coverage complete: remaining RENDERER/DETERMINISTIC rows, explicit L5 cells and any newly decomposed material family cells still need conservative triage.
-
-## 7. Campaign state after C02
-
-Current project state remains:
+До отдельного Coverage Reconciliation project state остаётся:
 
 **`DEEP-AUDIT-IN-PROGRESS`**.
 
-C22/C23, C26, C24 and C02 are audit-complete at their required L3+L4 in the important sense that their outcome is terminal **FINDING**, not because implementation is fixed. P1-230 owns C22/C23 implementation acceptance; C26 refines existing P0-075/P0-070/P0-004; C24 refines existing P0-067/P1-212/P1-167/P0-075/P0-070/P0-004 with P1-004 supporting cross-origin parity; C02 refines existing P1-001/P0-080/P0-070/P0-075/P0-004 with P1-200/P1-171 supporting remote/session variants.
+C22/C23, C26, C24, C02 и C03 audit-complete at required L3+L4 в том смысле, что их outcomes terminal **FINDING**, а не потому что implementation исправлена. P1-230 owns C22/C23 implementation acceptance; C26 refines existing P0-075/P0-070/P0-004; C24 refines existing P0-067/P1-212/P1-167/P0-075/P0-070/P0-004 with P1-004 supporting; C02 refines existing P1-001/P0-080/P0-070/P0-075/P0-004 with P1-200/P1-171 supporting; C03 refines P1-160 with P0-080/P0-070/P0-075/P0-004 supporting.
 
-Coverage is still not complete because:
-
-- C03 retains weaker end-to-end physical coverage;
-- C46 remains `EXTERNAL-REQUIRED / UNKNOWN` and C41/C42 retain external L5 boundaries;
-- several other family rows intentionally remain deterministic/renderer-covered rather than artifact-complete where required level differs;
-- many proven FINDING owners remain ACTIVE;
-- family rows still need decomposition when a future tranche reveals materially distinct cells.
-
-Нельзя объявлять `DEEP-AUDIT-COVERAGE-COMPLETE`, пока эти nonterminal gaps не triage-нуты/доведены до required evidence и итоговая matrix не содержит material unexplained NOT-AUDITED областей.
+Coverage-complete transition ещё не сделан, потому что policy требует отдельный durable reconciliation/final synthesis gate, а не вывод из одной обновлённой строки matrix.
 
 ## 8. Следующий durable checkpoint
 
-Следующий targeted tranche должен быть C03 и обновить минимум:
+Следующий tranche должен быть **project-wide Coverage Reconciliation / Final Synthesis candidate** и обновить минимум:
 
-- achieved L3/L4 outcome for Main Content / auto candidate -> final physical PDF;
-- exact owner/duplicate classification against P1-160/P1-228 and adjacent generation/physical owners;
-- positive/negative/adversarial auto-candidate controls;
-- residual deterministic/renderer-only rows and explicit L5 gaps;
-- campaign ranking after C03.
+- terminal/nonterminal classification всех C01…C46 против policy completion gates;
+- residual mixed in-repo/external rows C37/C41/C42/C43/C44/C46;
+- staleness/Change Impact review после recent tranches;
+- root-cause ownership saturation / unallocated-observation check;
+- external user-intent freshness gate;
+- B1→B9 final synthesis;
+- project-wide state decision: остаётся `DEEP-AUDIT-IN-PROGRESS` либо переходит в `DEEP-AUDIT-COVERAGE-COMPLETE` с явным объяснением, почему ACTIVE findings и L5 boundaries этому не противоречат.
 
-После C03 нужно заново сравнить оставшиеся in-repo rows и explicit L5/other residual cells по текущему risk ranking.
+Нельзя объявлять `DEEP-AUDIT-CRITICAL-CLOSURE-COMPLETE` или `RELEASE-READY` из этого coverage transition: это отдельные gates.
