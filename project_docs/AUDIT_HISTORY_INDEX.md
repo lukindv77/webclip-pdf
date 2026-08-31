@@ -77,6 +77,22 @@ This is **C24 `ARTIFACT-COVERED / FINDING`**, but it does not establish an indep
 
 Therefore do **not** allocate P1-231 merely because C24 now has current-contract physical evidence. A future new owner requires a materially independent root cause, not another disclosure fixture or frame variant of these same mechanisms. Durable evidence: `AUDIT_INERT_DISCLOSURE_CONTRACT_2026-08-30_EVIDENCE.md` and `project_tools/audit_inert_disclosure_contract.py`.
 
+### Renderer-level SelectionSnapshot restore success is not final-artifact success — C02 stays under P1-001/P0-080 and existing physical owners
+
+Earlier SelectionSnapshot evidence proved locator confidence, remote toggle/session and bounded-candidate defects at the restore/renderer boundary. Do not promote those renderer-level successful counters to final saved-artifact truth.
+
+Fresh C02 L3/L4 revalidation on canonical `main = 07df33f5d1ed572bd4da3083411aef9dd94d21c0` drives the actual current `content.js` restore and selected-only preparation into physical Chromium PDF. It establishes the precise split:
+
+- stable visible Include after benign insertion reaches the intended physical PDF, restored Exclude stays absent, equal plausible candidates can fail closed, and same-origin framePath restore reaches physical output — positive controls;
+- a target with non-zero geometry but `visibility:hidden` can receive high-confidence successful restore while the intended text is absent from the physical PDF;
+- a target with non-zero geometry but `opacity:0` has the same false-success/final-artifact gap;
+- the fixed first-5000 tag candidate prefix can omit the known exact target, admit an in-prefix decoy with high confidence and physically serialize the decoy instead of the intended target;
+- after successful restore, same-document page replacement can disconnect the selected Element while `state.includes` still keeps a non-zero Include count; save admission proceeds but the physical selected artifact contains no intended live selected content.
+
+These are **C02 `ARTIFACT-COVERED / FINDING`**, but they do not establish a new independent root cause. Hidden/transparent and bounded-candidate confidence remain **P1-001**; disconnected/replaced same-document selection remains **P0-080**; exact-generation/live-hostile-page/physical consequences remain **P0-070/P0-075/P0-004**; **P1-200/P1-171** remain supporting remote/session/frame owners from earlier restore evidence.
+
+Do not allocate another late P1 solely because these already-owned restore/generation defects now have B6 physical proof. A future separate owner requires a materially independent restore-to-artifact mechanism after candidate admission and exact-generation fencing are implemented. Durable evidence: `AUDIT_SELECTION_RESTORE_PHYSICAL_PDF_2026-08-31_EVIDENCE.md` and `project_tools/audit_selection_restore_physical_pdf.py`.
+
 ## Status-history traps
 
 ### Historical closure PASS does not override later reopen
