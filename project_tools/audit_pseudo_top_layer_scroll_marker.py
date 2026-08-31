@@ -30,11 +30,12 @@ body { font: 20px Arial, sans-serif; }
 dialog { width:280px; height:120px; border:6px solid #000; color:#000; background:#fff; }
 dialog::backdrop { background: var(--bd, rgb(0,0,255)); }
 #excluded { display:none !important; }
+#hover-source { position:absolute; left:700px; top:500px; width:20px; height:20px; }
 #hover-only { display:none; }
-body:hover #hover-only { display:block; }
+#hover-source:hover + #hover-only { display:block; }
 </style>
 <dialog id="d">BACKDROP_CONTROL<span id="excluded">EXCLUDED_CONTROL</span></dialog>
-<div id="hover-only">HOVER_ONLY_MUST_BE_ABSENT</div>
+<div id="hover-source"></div><div id="hover-only">HOVER_ONLY_MUST_BE_ABSENT</div>
 <script>
 const d = document.getElementById('d');
 d.showModal();
@@ -81,8 +82,9 @@ body { font: 20px Arial, sans-serif; }
   padding:10px; background:rgb(0,255,0); z-index:20;
 }
 #excluded { display:none !important; }
+#hover-source { position:absolute; left:700px; top:500px; width:20px; height:20px; }
 #hover-only { display:none; position:absolute; left:400px; top:300px; color:#111; }
-body:hover #hover-only { display:block; }
+#hover-source:hover + #hover-only { display:block; }
 </style>
 <div id="label">SCROLL_MARKER_PHYSICAL_CONTROL</div>
 <div id="car" class="carousel">
@@ -91,7 +93,7 @@ body:hover #hover-only { display:block; }
   <div id="i3" class="item">THREE</div>
 </div>
 <div id="excluded">EXCLUDED_CONTROL</div>
-<div id="hover-only">HOVER_ONLY_MUST_BE_ABSENT</div>
+<div id="hover-source"></div><div id="hover-only">HOVER_ONLY_MUST_BE_ABSENT</div>
 <script>
 const car = document.getElementById('car');
 const items = [i1,i2,i3];
