@@ -205,6 +205,18 @@ def run(chromium: str, out_dir: pathlib.Path) -> dict:
         # Positive: equal plausible targets remain fail-closed while another stable Include permits physical save.
         amb_initial = "<div id='guard' class='box'>AMBIG_GUARD_MARKER</div><section class='box amb' role='article' aria-label='Ambiguous'>AMBIG_MARKER</section>"
         amb_snapshot = capture_snapshot(ctx, amb_initial, ["#guard", ".amb"])
+        # Strip structural/context tie-breakers from only the ambiguous locator so the
+        # control tests the current equal-score/margin fail-closed branch deterministically.
+        amb_locator = next(item for item in amb_snapshot["includes"] if item.get("tag") == "section")
+        amb_locator.update({
+            "cssPath": "",
+            "domPath": [],
+            "parentText": "",
+            "previousText": "",
+            "nextText": "",
+            "siblingIndex": -1,
+            "sameTagIndex": -1,
+        })
         amb_mutated = "<div id='guard' class='box'>AMBIG_GUARD_MARKER</div><section class='box amb' role='article' aria-label='Ambiguous'>AMBIG_MARKER</section><section class='box amb' role='article' aria-label='Ambiguous'>AMBIG_MARKER</section>"
         page, restore = restore_page(ctx, amb_mutated, amb_snapshot)
         artifact = physical_save(page, out_dir, "ambiguous_restore")
