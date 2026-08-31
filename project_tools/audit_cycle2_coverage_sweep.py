@@ -4,7 +4,7 @@
 This is an audit-process checker, not a product-runtime test. It verifies that
 Cycle-2 Matrix v2 keeps the complete C01..C46 denominator visible, records the
 expected Change-Impact revalidation set, and preserves explicit platform-delta
-states after the T1/PD2 physical revalidation checkpoint.
+states after the T1/PD2 and T2/PD3 physical revalidation checkpoints.
 """
 
 from __future__ import annotations
@@ -19,12 +19,9 @@ EXPECTED_REVALIDATION = {
     "C03",
     "C05",
     "C07",
-    "C14",
     "C16",
     "C18",
     "C20",
-    "C25",
-    "C27",
     "C28",
     "C29",
     "C32",
@@ -35,7 +32,7 @@ EXPECTED_REVALIDATION = {
 EXPECTED_PD = {
     "PD1": "REVALIDATION-REQUIRED",
     "PD2": "ARTIFACT-COVERED / FINDING",
-    "PD3": "REVALIDATION-REQUIRED",
+    "PD3": "ARTIFACT-COVERED / FINDING",
     "PD4": "REVALIDATION-REQUIRED",
     "PD5": "REVALIDATION-REQUIRED",
     "PD6": "REVALIDATION-REQUIRED",
@@ -98,14 +95,16 @@ def main() -> int:
             fail(f"{pd} must preserve state {required_state!r}: {matching[0]}")
 
     required_fragments = [
-        "families carrying forward terminal required evidence: **31**",
-        "families with at least one new stable-browser variant requiring revalidation: **15**",
-        "terminal platform-delta variants completed in Cycle 2: **PD2 `ARTIFACT-COVERED / FINDING`**",
-        "pending current-stable platform-delta variants: **PD1, PD3, PD4, PD5, PD6**",
+        "families with terminal required evidence under current Cycle-2 Change Impact: **34**",
+        "families with at least one new stable-browser variant requiring revalidation: **12**",
+        "remaining revalidation set: **C02, C03, C05, C07, C16, C18, C20, C28, C29, C32, C33, C35**",
+        "terminal platform-delta variants completed in Cycle 2: **PD2, PD3 — `ARTIFACT-COVERED / FINDING`**",
+        "pending current-stable platform-delta variants: **PD1, PD4, PD5, PD6**",
         "**`DEEP-AUDIT-IN-PROGRESS`**",
         "local managed Chromium executable remains **144.0.7559.96**",
         "Completed deep-dive tranche — T1 / PD2",
-        "Next action: **T2 / PD3",
+        "Completed deep-dive tranche — T2 / PD3",
+        "Next action: **T3 / PD5+PD6",
     ]
     for fragment in required_fragments:
         if fragment not in text:
@@ -114,7 +113,7 @@ def main() -> int:
     print(
         "cycle2 coverage sweep: OK; "
         f"families={len(rows)}, family_revalidation={len(revalidation)}, "
-        "pd2=artifact-covered/finding, pending_pd=5"
+        "pd2=pd3=artifact-covered/finding, pending_pd=4"
     )
     return 0
 
