@@ -33,14 +33,16 @@ jobs:
           unzip -q /tmp/chrome-headless-shell.zip -d /tmp/chrome152
           /tmp/chrome152/chrome-headless-shell-linux64/chrome-headless-shell --version
 
-      - name: Run physical View Transition probe
+      - name: Run physical View Transition probes
         shell: bash
         run: |
           set -euo pipefail
-          python project_tools/audit_view_transition_render_cut.py \
-            --chrome /tmp/chrome152/chrome-headless-shell-linux64/chrome-headless-shell \
-            --out /tmp/t1-results
+          chrome=/tmp/chrome152/chrome-headless-shell-linux64/chrome-headless-shell
+          python project_tools/audit_view_transition_render_cut.py --chrome "$chrome" --out /tmp/t1-results
+          python project_tools/audit_view_transition_shadow_scope.py --chrome "$chrome" --out /tmp/t1-shadow
           echo '--- results.json ---'
           cat /tmp/t1-results/results.json
+          echo '--- shadow-results.json ---'
+          cat /tmp/t1-shadow/shadow-results.json
           echo '--- retained artifact hashes ---'
-          sha256sum /tmp/t1-results/*.pdf /tmp/t1-results/*.png
+          sha256sum /tmp/t1-results/*.pdf /tmp/t1-results/*.png /tmp/t1-shadow/*.pdf /tmp/t1-shadow/*.png
