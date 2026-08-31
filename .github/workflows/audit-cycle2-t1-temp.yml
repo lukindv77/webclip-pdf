@@ -1,0 +1,46 @@
+name: Audit Cycle2 T1 temporary probe
+
+on:
+  push:
+    branches: [audit/cycle2-view-transition-render-cut-2026-08-31]
+
+permissions:
+  contents: read
+
+jobs:
+  t1-view-transition:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.14'
+
+      - name: Install probe dependencies and Chrome for Testing 152
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check playwright==1.55.0 PyMuPDF==1.26.4 Pillow==11.3.0
+          curl --fail --location --retry 3 \
+            https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.64/linux64/chrome-headless-shell-linux64.zip \
+            --output /tmp/chrome-headless-shell.zip
+          unzip -q /tmp/chrome-headless-shell.zip -d /tmp/chrome152
+          /tmp/chrome152/chrome-headless-shell-linux64/chrome-headless-shell --version
+
+      - name: Run physical View Transition probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          python project_tools/audit_view_transition_render_cut.py \
+            --chrome /tmp/chrome152/chrome-headless-shell-linux64/chrome-headless-shell \
+            --out /tmp/t1-results
+          echo '--- results.json ---'
+          cat /tmp/t1-results/results.json
+          echo '--- retained artifact hashes ---'
+          sha256sum /tmp/t1-results/*.pdf /tmp/t1-results/*.png
