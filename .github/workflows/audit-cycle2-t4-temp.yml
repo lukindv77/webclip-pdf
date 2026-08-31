@@ -1,0 +1,47 @@
+name: Audit Cycle2 T4 temporary probe
+
+on:
+  push:
+    branches: [audit/cycle2-scoped-custom-element-registry-2026-08-31]
+
+permissions:
+  contents: read
+
+jobs:
+  t4-scoped-custom-elements:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.14'
+
+      - name: Install probe dependencies and Chrome for Testing 152
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check playwright==1.55.0 PyMuPDF==1.26.4 Pillow==11.3.0
+          curl --fail --location --retry 3 \
+            https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.64/linux64/chrome-headless-shell-linux64.zip \
+            --output /tmp/chrome-headless-shell.zip
+          unzip -q /tmp/chrome-headless-shell.zip -d /tmp/chrome152
+          /tmp/chrome152/chrome-headless-shell-linux64/chrome-headless-shell --version
+          python -m py_compile project_tools/audit_scoped_custom_element_registry.py
+
+      - name: Run physical scoped-registry probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          python project_tools/audit_scoped_custom_element_registry.py \
+            --chrome /tmp/chrome152/chrome-headless-shell-linux64/chrome-headless-shell \
+            --out /tmp/t4-results
+          echo '--- results.json ---'
+          cat /tmp/t4-results/results.json
+          echo '--- retained artifact hashes ---'
+          sha256sum /tmp/t4-results/*.pdf /tmp/t4-results/*.png
