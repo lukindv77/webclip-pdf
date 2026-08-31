@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Deterministic guard for the Cycle-2 Coverage Sweep checkpoint.
+"""Deterministic guard for the current Cycle-2 Coverage Sweep checkpoint.
 
 This is an audit-process checker, not a product-runtime test. It verifies that
 Cycle-2 Matrix v2 keeps the complete C01..C46 denominator visible, records the
 expected Change-Impact revalidation set, and preserves explicit platform-delta
-states established by the 2026-08-31 sweep.
+states after the T1/PD2 physical revalidation checkpoint.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ EXPECTED_REVALIDATION = {
 
 EXPECTED_PD = {
     "PD1": "REVALIDATION-REQUIRED",
-    "PD2": "REVALIDATION-REQUIRED",
+    "PD2": "ARTIFACT-COVERED / FINDING",
     "PD3": "REVALIDATION-REQUIRED",
     "PD4": "REVALIDATION-REQUIRED",
     "PD5": "REVALIDATION-REQUIRED",
@@ -100,18 +100,21 @@ def main() -> int:
     required_fragments = [
         "families carrying forward terminal required evidence: **31**",
         "families with at least one new stable-browser variant requiring revalidation: **15**",
+        "terminal platform-delta variants completed in Cycle 2: **PD2 `ARTIFACT-COVERED / FINDING`**",
+        "pending current-stable platform-delta variants: **PD1, PD3, PD4, PD5, PD6**",
         "**`DEEP-AUDIT-IN-PROGRESS`**",
-        "Chromium executable is **144.0.7559.96**",
-        "First deep-dive tranche envelope — T1",
+        "local managed Chromium executable remains **144.0.7559.96**",
+        "Completed deep-dive tranche — T1 / PD2",
+        "Next action: **T2 / PD3",
     ]
     for fragment in required_fragments:
         if fragment not in text:
-            fail(f"missing required Cycle-2 sweep declaration: {fragment}")
+            fail(f"missing required Cycle-2 checkpoint declaration: {fragment}")
 
     print(
         "cycle2 coverage sweep: OK; "
-        f"families={len(rows)}, carry_forward={len(rows) - len(revalidation)}, "
-        f"revalidation={len(revalidation)}, pd_variants={len(EXPECTED_PD)}"
+        f"families={len(rows)}, family_revalidation={len(revalidation)}, "
+        "pd2=artifact-covered/finding, pending_pd=5"
     )
     return 0
 
