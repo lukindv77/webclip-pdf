@@ -10,7 +10,8 @@ Latest coverage checkpoints:
 
 - T1/PD2 evidence executed from canonical `main = ceefea2e9d779912b0cc0270762ff1748d678683` on Chrome for Testing 152.0.7977.64 and recorded in `AUDIT_CYCLE2_T1_VIEW_TRANSITION_RENDER_CUT_2026-08-31.md`;
 - T2/PD3 evidence executed from canonical `main = 73a6c6f6f21ae0a32f331234474823c63cbb7820` on Chrome for Testing 152.0.7977.64 and recorded in `AUDIT_CYCLE2_T2_PSEUDO_TOP_LAYER_SCROLL_MARKER_2026-08-31.md`;
-- T3/PD5+PD6 evidence executed from canonical `main = f10c28a8612a64367423d7b60c7b4ad824f91faf` on Chrome for Testing 152.0.7977.64 and recorded in `AUDIT_CYCLE2_T3_TEXT_FIT_PAGE_MARGIN_SAFETY_2026-08-31.md`.
+- T3/PD5+PD6 evidence executed from canonical `main = f10c28a8612a64367423d7b60c7b4ad824f91faf` on Chrome for Testing 152.0.7977.64 and recorded in `AUDIT_CYCLE2_T3_TEXT_FIT_PAGE_MARGIN_SAFETY_2026-08-31.md`;
+- T4/PD4 evidence executed from canonical `main = 7b70213ea28a74ed96372eff87905da59bc31e56` on Chrome for Testing 152.0.7977.64 and recorded in `AUDIT_CYCLE2_T4_SCOPED_CUSTOM_ELEMENT_REGISTRY_2026-08-31.md`.
 
 This is the current Coverage Sweep checkpoint of the second full deep-audit campaign. `AUDIT_REGISTRY.md` remains the only P-code owner/status authority. Cycle-1 evidence is reused only for exact claims that survive Change Impact; a new browser/platform variant does not invalidate unrelated historical evidence and historical evidence does not prove a newly introduced renderer semantic.
 
@@ -35,8 +36,8 @@ Legend:
 | ID | Surface family | Relevance | Required | Reusable strongest evidence | Cycle-2 coverage / outcome | Change Impact / next coverage cell | Owner / boundary context |
 |---|---|---|---|---|---|---|---|
 | C01 | Manual Include/Exclude / selected-scope authority | RELEVANT | L2+L3+L4 | selection/cascade/save-freeze/physical PDF | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | Exclude remains a required control in new renderer tranches | P0-004/P0-070/P0-075 + selection owners |
-| C02 | SelectionSnapshot restore -> admitted rendered target -> saved copy | RELEVANT | L3+L4 | content-script restore + physical decoy/hidden/stale/frame controls | `REVALIDATION-REQUIRED / FINDING retained` | **PD4** scoped custom-element registry locator/identity ambiguity | P1-001/P0-080; P0-070/P0-075/P0-004 support |
-| C03 | Main Content / auto candidate -> actual saved scope | RELEVANT | L3+L4 | current-source + physical main-content controls | `REVALIDATION-REQUIRED / FINDING retained` | **PD4** custom-element/shadow semantic-discovery identity | P1-160; P0-080/P0-070/P0-075/P0-004 support |
+| C02 | SelectionSnapshot restore -> admitted rendered target -> saved copy | RELEVANT | L3+L4 | content-script restore + physical decoy/hidden/stale/frame controls | `ARTIFACT-COVERED / FINDING` | **PD4 covered**: same ordinary host identity can restore registry A snapshot to registry B with zero ambiguity/failure; physical PDF follows B | P1-001/P0-080; P0-070/P0-075/P0-004 support |
+| C03 | Main Content / auto candidate -> actual saved scope | RELEVANT | L3+L4 | current-source + physical main-content controls | `ARTIFACT-COVERED / FINDING` | **PD4 covered**: stronger scoped-shadow main article is invisible to document-oriented auto discovery; physical PDF follows light-DOM decoy | P1-160; P0-080/P0-070/P0-075/P0-004 support |
 | C04 | Ordinary DOM/text baseline | RELEVANT | L2+L4 | searchable-text physical controls | `ARTIFACT-COVERED / PASS-CONTROL` **CARRY-FORWARD** | repeat as positive control where needed | baseline control |
 | C05 | Geometry/layout | RELEVANT | L3+L4 | complex layout/viewport/typography/long-page physical evidence | `ARTIFACT-COVERED / FINDING` | **PD5 covered**: identical admitted state can be refit 680→300 px by `beforeprint`; physical PDF follows ≈676→296 px | P0-070/P0-075/P0-004; P1-187 support |
 | C06 | Colors/backgrounds/compositing | RELEVANT | L3+L4 | CSS visual dependency/frame/post-freeze physical evidence | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | no independent new C06-only stable semantic gap | P1-003/P1-187/P0-004/P0-075 |
@@ -49,9 +50,9 @@ Legend:
 | C13 | Form / renderer-owned controls | RELEVANT | L3+L4 | physical renderer-control/focus evidence | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | EI1 remains implementation/closure priority, not a coverage deficit | P1-187 + generation/focus/privacy owners |
 | C14 | Pseudo/generated content | RELEVANT | L3+L4 | generated-content/resource/post-freeze physical evidence | `ARTIFACT-COVERED / FINDING` | **PD2 + PD3 covered**; no remaining Cycle-2 variant | P0-070/P0-075/P0-004; P1-003 support |
 | C15 | Links/anchors/internal destinations | RELEVANT | L4 | physical annotations/destinations + namespace evidence | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | no new link/PDF annotation semantic | P0-004/P1-187/P0-068/P1-213 + safe-URI/privacy owners |
-| C16 | Same-origin iframe | RELEVANT | L3+L4 | broad frame/physical evidence + admission positives | `REVALIDATION-REQUIRED / FINDING retained` | **PD4** scoped custom-element registry inside/alongside frame/shadow representation | P1-187/P0-068/P0-004/P0-070/P1-003 + frame owners |
+| C16 | Same-origin iframe | RELEVANT | L3+L4 | broad frame/physical evidence + admission positives | `ARTIFACT-COVERED / FINDING + PD4 PASS-CONTROL` | **PD4 covered**: same-origin selected frame with scoped-registry-only shadow render survives physical save; historical frame findings remain | P1-187/P0-068/P0-004/P0-070/P1-003 + frame owners |
 | C17 | Cross-origin iframe capture/print boundary | EXPLICIT-BOUNDARY | L3+L4 + L5 | remote-frame managed physical evidence | `ARTIFACT-COVERED / FINDING + EXTERNAL-REQUIRED` **CARRY-FORWARD** | real unpacked permission/session path stays L5 | P1-004/P1-171/P1-199/P1-200/P1-229 |
-| C18 | Shadow DOM/slots/composed tree | RELEVANT | L3+L4 | physical composed/rendered-scope evidence | `REVALIDATION-REQUIRED / FINDING retained + PD2 ARTIFACT-COVERED / FINDING` | **PD4 remains** for scoped custom-element registries | P0-004/P0-070/P0-075/P1-003/P1-160/P1-227/P1-228 etc. |
+| C18 | Shadow DOM/slots/composed tree | RELEVANT | L3+L4 | physical composed/rendered-scope evidence | `ARTIFACT-COVERED / FINDING` | **PD2 + PD4 covered**: manual scoped-shadow render positive, but scoped-shadow semantic discovery/registry identity remains defective | P0-004/P0-070/P0-075/P1-003/P1-160/P1-227/P1-228 etc. |
 | C19 | Ordinary long-page existing content | RELEVANT | L3+L4 | complete-vs-clipped long-page physical controls | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | no new ordinary-scroll contract | P0-004 |
 | C20 | Nested scroll / retained scrollports | RELEVANT | L3+L4 | physical slice/current-scroll + dynamic nested controls | `REVALIDATION-REQUIRED / FINDING retained + PD3 ARTIFACT-COVERED / FINDING` | **PD1 remains** for scroll-triggered animation; PD7 WATCH | P0-070/P0-075/P0-004; P1-187 support |
 | C21 | Lazy/offscreen resources already belonging to content | RELEVANT | L3+L4 | deferred/resource-readiness physical evidence | `ARTIFACT-COVERED / FINDING` **CARRY-FORWARD** | EI3 priority only | P1-003/P1-167 + representation owners |
@@ -83,23 +84,23 @@ Legend:
 
 ## 3. Sweep metrics
 
-At the **family level** after T3/PD5+PD6 closure:
+At the **family level** after T4/PD4 closure:
 
 - total required starting families: **46/46 triaged**;
 - family-level `NOT-TRIAGED`: **0**;
-- families with terminal required evidence under current Cycle-2 Change Impact: **38**;
-- families with at least one new stable-browser variant requiring revalidation: **8**;
-- remaining revalidation set: **C02, C03, C16, C18, C20, C29, C33, C35**;
+- families with terminal required evidence under current Cycle-2 Change Impact: **42**;
+- families with at least one new stable-browser variant requiring revalidation: **4**;
+- remaining revalidation set: **C20, C29, C33, C35**;
 - explicit L5/external families remain bounded and visible: C17, C37, C41, C42, C44, C46;
-- new unallocated P-code created by Cycle-2 T1/T2/T3: **0**;
-- terminal finding platform-delta variants: **PD2, PD3, PD5 — `ARTIFACT-COVERED / FINDING`**;
+- new unallocated P-code created by Cycle-2 T1/T2/T3/T4: **0**;
+- terminal finding platform-delta variants: **PD2, PD3, PD4, PD5 — `ARTIFACT-COVERED / FINDING`**;
 - terminal bounded pass-control platform variant: **PD6 — `ARTIFACT-COVERED / PASS-CONTROL (virtual PDF target)`**;
-- pending current-stable platform-delta variants: **PD1, PD4**;
+- pending current-stable platform-delta variant: **PD1**;
 - PD7 remains current-stable out-of-scope/WATCH at this checkpoint.
 
-C05, C07, C28 and C32 become family-terminal after T3. C29 remains nonterminal because independent PD1 is still pending. C02/C03/C16/C18 remain PD4 deficits; C20/C29/C33/C35 remain PD1 deficits.
+C02, C03 and C18 become family-terminal after T4 through PD4 physical findings. C16 becomes family-terminal for current Change Impact with its historical FINDING retained and a bounded same-origin PD4 PASS-control. C20/C29/C33/C35 remain nonterminal solely because PD1 is pending.
 
-Therefore Cycle 2 remains correctly **`DEEP-AUDIT-IN-PROGRESS`** with eight explicit family deficits.
+Therefore Cycle 2 remains correctly **`DEEP-AUDIT-IN-PROGRESS`** with four explicit family deficits.
 
 ## 4. Platform-delta variant matrix
 
@@ -108,7 +109,7 @@ Therefore Cycle 2 remains correctly **`DEEP-AUDIT-IN-PROGRESS`** with eight expl
 | **PD1** Scroll-triggered animations | Chrome 146 stable | C20/C29/C33/C35; C22 negative boundary | B2→B6 | L1 + L3+L4 | `REVALIDATION-REQUIRED` |
 | **PD2** Element-scoped/nested View Transitions + transition pseudo tree | Chrome 147 stable; pseudo JS access expanded by Chrome 152 | C14/C18/C33/C35 | B2→B6 | L1 + L3+L4 | `ARTIFACT-COVERED / FINDING` — T1 complete on Chrome for Testing 152.0.7977.64 |
 | **PD3** `::backdrop` / `::scroll-marker` modern pseudo state | current stable; pseudo JS access expanded in Chrome 152 | C14/C20/C25/C27 | B2→B6 | L1 + L3+L4 | `ARTIFACT-COVERED / FINDING` — T2 complete on Chrome for Testing 152.0.7977.64 |
-| **PD4** Scoped custom-element registries | Chrome 146 stable | C02/C03/C16/C18 | B2→B6 | L1 + L3+L4 | `REVALIDATION-REQUIRED` |
+| **PD4** Scoped custom-element registries | Chrome 146 stable | C02/C03/C16/C18 | B2→B6 | L1 + L3+L4 | `ARTIFACT-COVERED / FINDING` — T4 proves wrong-registry SelectionSnapshot restore and scoped-shadow Main Content blindness; same-origin scoped frame is a bounded PASS-control |
 | **PD5** CSS `text-fit` | Chrome 150 stable | C05/C07/C28/C29/C32 | B2→B6 | L1 + L3+L4 | `ARTIFACT-COVERED / FINDING` — T3 stable positive plus admitted-state geometry/page-count substitution on Chrome 152 |
 | **PD6** print `page-margin-safety` | Chrome 150-era print semantic | C32 | B5→B6 | L1 + L3+L4 | `ARTIFACT-COVERED / PASS-CONTROL (virtual PDF target)` — descriptor parsed; none/clamp/add identical physical virtual-PDF geometry, ordinary margin control discriminates |
 | **PD7** single-axis scroll-container combinations affecting sticky ancestry | Chrome 153 beta at research date | C20/C29/C30/C31 if promoted | B3→B6 | future L3+L4 | `OUT-OF-SCOPE (current stable target) / WATCH` |
@@ -124,14 +125,13 @@ External research changes ranking, not product truth by itself.
 | **EI3** resource/CSS dependency identity | C06–C10/C14/C21/C36/C45 | peer CSS/resource loss | historical findings terminal; prioritize closure |
 | **EI4** bounded termination | C37/C38, B2→B9 | peer hangs/timeout practice | mandatory failure/degradation control for new tranches |
 
-## 6. Risk ranking after T3
+## 6. Risk ranking after T4
 
 Ranking applies to nonterminal coverage cells before implementation closure candidates.
 
-1. **T4 — PD4 scoped custom-element registries** — selection/semantic identity risk across Shadow/frame and automatic/manual admission.
-2. **T5 — PD1 scroll-triggered animation** — temporal state tied to scroll/user boundary; must prove preparation does not advance/reset admitted phase.
-3. **Implementation/closure priority after coverage deficits** — EI1 form current state/privacy, EI2 persisted-object equivalence, EI3 resource dependency identity, EI4 shared budget/termination, subject to canonical P-owner priority/severity.
-4. **PD7** remains watch until current-target promotion.
+1. **T5 — PD1 scroll-triggered animation** — temporal state tied to scroll/user boundary; must prove preparation does not advance/reset admitted phase.
+2. **Implementation/closure priority after coverage deficits** — EI1 form current state/privacy, EI2 persisted-object equivalence, EI3 resource dependency identity, EI4 shared budget/termination, subject to canonical P-owner priority/severity.
+3. **PD7** remains watch until current-target promotion.
 
 Tie-breaker: silent wrong artifact > explicit failure/hang where comparable.
 
@@ -159,20 +159,37 @@ Durable evidence: `AUDIT_CYCLE2_T3_TEXT_FIT_PAGE_MARGIN_SAFETY_2026-08-31.md`.
 
 T3 advances family coverage from **34/12** to **38 terminal / 8 revalidation**.
 
-## 10. Environment consequence and resolution
+## 10. Completed deep-dive tranche — T4 / PD4
+
+Chrome 152 confirms constructible/scoped registries and independent registry semantics for otherwise identical ordinary hosts.
+
+Physical controls prove:
+
+- manually selected top-level scoped Shadow content prints correctly;
+- a SelectionSnapshot captured from red registry A restores cleanly to same-light-identity blue registry B with `ambiguousIncludes = 0`, and the physical PDF contains B rather than A;
+- Main Content chooses a weaker light-DOM decoy when the stronger semantic `article[role=main]` exists only in a scoped/nested Shadow tree;
+- same-origin selected-frame scoped-registry-only rendering survives the physical frame path as a bounded PASS-control.
+
+PD4 is terminal **`ARTIFACT-COVERED / FINDING`** under existing P1-001/P0-080 and P1-160 roots with P0-070/P0-075/P0-004 support. No new P-code is allocated.
+
+Durable evidence: `AUDIT_CYCLE2_T4_SCOPED_CUSTOM_ELEMENT_REGISTRY_2026-08-31.md`.
+
+T4 advances family coverage from **38/8** to **42 terminal / 4 revalidation**.
+
+## 11. Environment consequence and resolution
 
 The local managed Chromium executable remains **144.0.7559.96** and cannot be assumed to implement Chrome 146–152 semantics used by PD1–PD6.
 
-T1, T2 and T3 therefore use managed CI that downloads and executes **Google Chrome for Testing 152.0.7977.64** for current-feature physical evidence. Runner availability is an evidence boundary, never a reason to downgrade required L3/L4 evidence.
+T1, T2, T3 and T4 therefore use managed CI that downloads and executes **Google Chrome for Testing 152.0.7977.64** for current-feature physical evidence. Runner availability is an evidence boundary, never a reason to downgrade required L3/L4 evidence.
 
-## 11. Current campaign state
+## 12. Current campaign state
 
 Cycle 2 remains:
 
 **`DEEP-AUDIT-IN-PROGRESS`**.
 
-T1/PD2, T2/PD3 and T3/PD5 are terminal `ARTIFACT-COVERED / FINDING`; T3/PD6 is terminal `ARTIFACT-COVERED / PASS-CONTROL (virtual PDF target)`.
+T1/PD2, T2/PD3, T3/PD5 and T4/PD4 are terminal `ARTIFACT-COVERED / FINDING`; T3/PD6 is terminal `ARTIFACT-COVERED / PASS-CONTROL (virtual PDF target)`.
 
-Current family metrics: **38 terminal / 8 revalidation**.
+Current family metrics: **42 terminal / 4 revalidation**.
 
-Next action: **T4 / PD4 — scoped custom-element registries across C02/C03/C16/C18**, with current-source/owner saturation followed by current-Chrome L3/L4 selection/semantic/physical-PDF controls.
+Next action: **T5 / PD1 — scroll-triggered animations across C20/C29/C33/C35**, with C22 retained as the negative logical-content boundary and current-source/owner saturation followed by current-Chrome L3/L4 physical-PDF controls.
