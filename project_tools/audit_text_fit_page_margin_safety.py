@@ -60,7 +60,7 @@ for (let i=1; i<=22; i++) {
 window.__setMutation = (enabled) => {
   if (!enabled) return;
   addEventListener('beforeprint', () => {
-    document.documentElement.style.setProperty('--fit-width', '340px');
+    document.documentElement.style.setProperty('--fit-width', '300px');
   }, {once:true});
 };
 window.__state = () => {
