@@ -1,5 +1,7 @@
 'use strict';
 
+// Integrated-main regression: keep P0-067 injection/worker bindings compatible
+// with independently merged guards while preserving the single activation owner.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
