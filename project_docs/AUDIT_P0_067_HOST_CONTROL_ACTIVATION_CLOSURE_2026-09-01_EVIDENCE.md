@@ -213,3 +213,7 @@ The accepted evidence proves that WebClip's own PDF preparation no longer invoke
 `DEEP-AUDIT-COVERAGE-COMPLETE` remains true, but broader critical closure remains incomplete.
 
 `RELEASE_READINESS.md` remains **NOT READY**. No manifest version, build, tag or GitHub Release is changed by this tranche.
+
+## 9. Delivery note
+
+The first PR Integrity attempt failed only because the original PR body mentioned unrelated residual P-codes and the machine-readable contract checker conservatively treated those mentions as declared owners. PR metadata was narrowed to the single affected owner before this docs-only commit. No runtime, deterministic-test, Chrome-harness, manifest, build or release file changed after the accepted evidence head.
