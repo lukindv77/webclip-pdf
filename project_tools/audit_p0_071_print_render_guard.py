@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 """Current-Chrome physical closure harness for P0-071.
 
-Proves three separate claims against the checked-out implementation:
-1. the real MV3 service-worker environment can install pdf-print-guard.js over
-   chrome.debugger.sendCommand (the install marker is set only after assignment
-   is verified);
-2. disabling page script execution before the print render cut prevents hostile
-   beforeprint from replacing a prepared safe link;
-3. the exact bounded DOM scan used by the guard removes an already-mutated
-   unsafe href from the physical PDF representation and restores live DOM only
-   after printing.
+The harness is source-bound to the checked-out guard and proves:
+- a real MV3 service worker can install the chrome.debugger.sendCommand guard;
+- page-owned beforeprint cannot replace a prepared safe link after script freeze;
+- already-mutated javascript:/data: hrefs, including open Shadow DOM and a
+  same-origin frame, are absent from the actual physical PDF representation;
+- temporarily removed live hrefs are restored before page scripts resume.
 
-This is engineering closure evidence, not final unpacked release QA.
+Engineering evidence only; this is not final unpacked release QA.
 """
 from __future__ import annotations
 
@@ -19,13 +16,10 @@ import argparse
 import base64
 import contextlib
 import hashlib
-import http.server
 import json
 import os
 import pathlib
-import socketserver
 import tempfile
-import threading
 import time
 from typing import Any
 
@@ -36,7 +30,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 GUARD_JS = ROOT / "pdf-print-guard.js"
 BOOTSTRAP_JS = ROOT / "journal-text-filter.js"
 SERVICE_WORKER_JS = ROOT / "service-worker.js"
-
 SAFE_URI = "https://safe.example/article?id=42#section"
 MUTATED_JS_URI = "javascript:window.__P0_071_EXECUTED=1"
 MUTATED_DATA_URI = "data:text/html,P0_071_RENDER_CUT"
@@ -55,7 +48,7 @@ def assert_current_source() -> dict[str, str]:
     guard = GUARD_JS.read_text(encoding="utf-8")
     bootstrap = BOOTSTRAP_JS.read_text(encoding="utf-8")
     worker = SERVICE_WORKER_JS.read_text(encoding="utf-8")
-    guard_required = [
+    required = [
         "const MAX_PRINT_LINKS = 20_000;",
         "new Set(['http', 'https', 'mailto', 'tel'])",
         "Emulation.setScriptExecutionDisabled",
@@ -63,13 +56,14 @@ def assert_current_source() -> dict[str, str]:
         "query: 'a[href], area[href]'",
         "DOM.removeAttribute",
         "DOM.setAttributeValue",
+        "Frontend nodeId values are scoped to the enabled DOM agent",
         "method !== 'Page.printToPDF'",
         "WEBCLIP_PDF_LINK_BUDGET_EXCEEDED",
         "__webclipPdfPrintGuardInstalled",
     ]
-    for fragment in guard_required:
+    for fragment in required:
         if fragment not in guard:
-            raise AssertionError(f"current pdf-print-guard.js no longer matches P0-071 closure harness: {fragment}")
+            raise AssertionError(f"pdf-print-guard.js no longer matches P0-071 harness: {fragment}")
     if "importScripts('pdf-print-guard.js')" not in bootstrap:
         raise AssertionError("worker-only bootstrap no longer loads pdf-print-guard.js")
     if "'journal-text-filter.js'" not in worker.splitlines()[0]:
@@ -82,11 +76,11 @@ def assert_current_source() -> dict[str, str]:
 
 
 def href_scheme(raw: object) -> str:
+    import re
     value = str(raw or "").strip()
     if not value or value.startswith(("#", "/", "./", "../")):
         return ""
     probe = "".join(ch for ch in value[:256] if not (ord(ch) <= 0x20 or ord(ch) == 0x7F))
-    import re
     match = re.match(r"^([a-z][a-z0-9+.-]*):", probe, re.I)
     return match.group(1).lower() if match else ""
 
@@ -104,9 +98,9 @@ def attribute_value(attributes: object, name: str) -> str | None:
     return None
 
 
-def print_pdf_stream(session, *, print_background: bool = True) -> bytes:
+def print_pdf_stream(session) -> bytes:
     result = session.send("Page.printToPDF", {
-        "printBackground": print_background,
+        "printBackground": True,
         "transferMode": "ReturnAsStream",
         "preferCSSPageSize": True,
     })
@@ -131,10 +125,13 @@ def print_pdf_stream(session, *, print_background: bool = True) -> bytes:
 
 
 def sanitize_actual_representation(session) -> list[dict[str, Any]]:
+    """Mirror pdf-print-guard.js and intentionally leave DOM enabled on success."""
     search_id = ""
+    dom_enabled = False
     changed: list[dict[str, Any]] = []
     try:
         session.send("DOM.enable")
+        dom_enabled = True
         session.send("DOM.getDocument", {"depth": 0, "pierce": True})
         search = session.send("DOM.performSearch", {
             "query": "a[href], area[href]",
@@ -164,19 +161,17 @@ def sanitize_actual_representation(session) -> list[dict[str, Any]]:
         for row in reversed(changed):
             with contextlib.suppress(Exception):
                 session.send("DOM.setAttributeValue", {"nodeId": row["nodeId"], "name": "href", "value": row["href"]})
+        if dom_enabled:
+            with contextlib.suppress(Exception):
+                session.send("DOM.disable")
         raise
     finally:
         if search_id:
             with contextlib.suppress(Exception):
                 session.send("DOM.discardSearchResults", {"searchId": search_id})
-        with contextlib.suppress(Exception):
-            session.send("DOM.disable")
 
 
 def restore_actual_representation(session, changed: list[dict[str, Any]]) -> None:
-    if not changed:
-        return
-    session.send("DOM.enable")
     try:
         for row in changed:
             session.send("DOM.setAttributeValue", {"nodeId": row["nodeId"], "name": "href", "value": row["href"]})
@@ -188,26 +183,41 @@ def restore_actual_representation(session, changed: list[dict[str, Any]]) -> Non
 def guarded_print(page: Page) -> tuple[bytes, list[dict[str, Any]]]:
     session = page.context.new_cdp_session(page)
     changed: list[dict[str, Any]] = []
-    disabled = False
+    scripts_disabled = False
+    primary_error: BaseException | None = None
+    pdf_bytes = b""
     try:
         session.send("Page.enable")
         session.send("Emulation.setScriptExecutionDisabled", {"value": True})
-        disabled = True
+        scripts_disabled = True
         changed = sanitize_actual_representation(session)
-        return print_pdf_stream(session), changed
+        pdf_bytes = print_pdf_stream(session)
+        return pdf_bytes, changed
+    except BaseException as error:
+        primary_error = error
+        raise
     finally:
-        if disabled:
-            with contextlib.suppress(Exception):
+        cleanup_error: BaseException | None = None
+        if scripts_disabled:
+            try:
                 restore_actual_representation(session, changed)
-            with contextlib.suppress(Exception):
+            except BaseException as error:
+                cleanup_error = error
+            try:
                 session.send("Emulation.setScriptExecutionDisabled", {"value": False})
+            except BaseException as error:
+                cleanup_error = cleanup_error or error
         session.detach()
+        if primary_error is None and cleanup_error is not None:
+            raise cleanup_error
 
 
 def inspect_pdf(pdf_bytes: bytes) -> dict[str, Any]:
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     links: list[dict[str, Any]] = []
+    texts: list[str] = []
     for page_index, page in enumerate(doc):
+        texts.append(page.get_text("text"))
         for item in page.get_links():
             links.append({
                 "page": page_index,
@@ -220,7 +230,7 @@ def inspect_pdf(pdf_bytes: bytes) -> dict[str, Any]:
         "pages": len(doc),
         "links": links,
         "pdf_sha256": sha256_bytes(pdf_bytes),
-        "text_sha256": sha256_bytes("\n".join(page.get_text("text") for page in doc).encode("utf-8")),
+        "text_sha256": sha256_bytes("\n".join(texts).encode("utf-8")),
     }
 
 
@@ -230,28 +240,28 @@ def uris(case: dict[str, Any]) -> list[str]:
 
 def fixture_html() -> str:
     frame_doc = "<a id='frameUnsafe' href='data:text/html,P0_071_FRAME'>FRAME_UNSAFE</a>"
-    return f"""<!doctype html>
-<html><head><meta charset='utf-8'><base href='https://safe.example/'></head>
-<body>
-  <h1>P0-071 closure fixture</h1>
-  <a id='target' href='{SAFE_URI}'>TARGET_SAFE</a>
-  <a id='mailto' href='mailto:person@example.test'>MAIL_SAFE</a>
-  <a id='tel' href='tel:+1234567890'>TEL_SAFE</a>
-  <a id='fragment' href='#bottom'>FRAGMENT_SAFE</a>
-  <div id='shadowHost'></div>
-  <iframe id='frame' srcdoc={json.dumps(frame_doc)}></iframe>
-  <div style='height:80px'></div><div id='bottom'>BOTTOM</div>
-  <script>
-    window.__beforePrintCount = 0;
-    const host = document.getElementById('shadowHost');
-    const root = host.attachShadow({{mode:'open'}});
-    root.innerHTML = `<a id='shadowUnsafe' href={json.dumps(SHADOW_JS_URI)}>SHADOW_UNSAFE</a>`;
-    window.addEventListener('beforeprint', () => {{
-      window.__beforePrintCount += 1;
-      document.getElementById('target').setAttribute('href', {json.dumps(MUTATED_JS_URI)});
-    }});
-  </script>
-</body></html>"""
+    return f"""<!doctype html><html><head><meta charset='utf-8'><base href='https://safe.example/'></head><body>
+<h1>P0-071 closure fixture</h1>
+<a id='target' href='{SAFE_URI}'>TARGET_SAFE</a>
+<a id='mailto' href='mailto:person@example.test'>MAIL_SAFE</a>
+<a id='tel' href='tel:+1234567890'>TEL_SAFE</a>
+<a id='fragment' href='#bottom'>FRAGMENT_SAFE</a>
+<div id='shadowHost'></div>
+<iframe id='frame' srcdoc={json.dumps(frame_doc)}></iframe>
+<div style='height:80px'></div><div id='bottom'>BOTTOM</div>
+<script>
+window.__beforePrintCount = 0;
+const root = document.getElementById('shadowHost').attachShadow({{mode:'open'}});
+root.innerHTML = `<a id='shadowUnsafe' href={json.dumps(SHADOW_JS_URI)}>SHADOW_UNSAFE</a>`;
+window.addEventListener('beforeprint', () => {{
+  window.__beforePrintCount += 1;
+  document.getElementById('target').setAttribute('href', {json.dumps(MUTATED_JS_URI)});
+}});
+</script></body></html>"""
+
+
+def wait_fixture(page: Page) -> None:
+    page.wait_for_function("document.getElementById('frame').contentDocument?.getElementById('frameUnsafe')")
 
 
 def run_physical(browser: Browser, output_dir: pathlib.Path) -> dict[str, Any]:
@@ -259,155 +269,121 @@ def run_physical(browser: Browser, output_dir: pathlib.Path) -> dict[str, Any]:
 
     page = browser.new_page(viewport={"width": 1000, "height": 700})
     page.set_content(fixture_html(), wait_until="load")
-    page.wait_for_function("document.getElementById('frame').contentDocument?.getElementById('frameUnsafe')")
+    wait_fixture(page)
     baseline_pdf = page.pdf(format="A4", print_background=True)
     (output_dir / "baseline_beforeprint_mutation.pdf").write_bytes(baseline_pdf)
     baseline = inspect_pdf(baseline_pdf)
     baseline["beforeprint_count"] = page.evaluate("window.__beforePrintCount")
-    baseline["live_target_href"] = page.eval_on_selector("#target", "el => el.getAttribute('href')")
-    if MUTATED_JS_URI not in uris(baseline):
-        raise AssertionError(f"baseline control did not serialize hostile beforeprint URI: {uris(baseline)}")
-    if baseline["beforeprint_count"] != 1:
-        raise AssertionError(f"baseline beforeprint control did not execute exactly once: {baseline['beforeprint_count']}")
+    if MUTATED_JS_URI not in uris(baseline) or baseline["beforeprint_count"] != 1:
+        raise AssertionError(f"baseline control did not serialize hostile beforeprint URI: {baseline}")
     results["baseline_beforeprint_mutation"] = baseline
     page.close()
 
     page = browser.new_page(viewport={"width": 1000, "height": 700})
     page.set_content(fixture_html(), wait_until="load")
-    page.wait_for_function("document.getElementById('frame').contentDocument?.getElementById('frameUnsafe')")
+    wait_fixture(page)
     guarded_pdf, changed = guarded_print(page)
     (output_dir / "guarded_beforeprint.pdf").write_bytes(guarded_pdf)
     guarded = inspect_pdf(guarded_pdf)
     guarded["changed_hrefs"] = [str(item["href"]) for item in changed]
     guarded["beforeprint_count"] = page.evaluate("window.__beforePrintCount")
-    guarded["live_target_href_after_restore"] = page.eval_on_selector("#target", "el => el.getAttribute('href')")
+    guarded["target_href_after_restore"] = page.eval_on_selector("#target", "el => el.getAttribute('href')")
     guarded["shadow_href_after_restore"] = page.evaluate("document.getElementById('shadowHost').shadowRoot.getElementById('shadowUnsafe').getAttribute('href')")
     guarded["frame_href_after_restore"] = page.evaluate("document.getElementById('frame').contentDocument.getElementById('frameUnsafe').getAttribute('href')")
     guarded_uris = uris(guarded)
-    if MUTATED_JS_URI in guarded_uris or MUTATED_DATA_URI in guarded_uris or SHADOW_JS_URI in guarded_uris or FRAME_DATA_URI in guarded_uris:
+    unsafe = {MUTATED_JS_URI, MUTATED_DATA_URI, SHADOW_JS_URI, FRAME_DATA_URI}
+    if any(uri in unsafe for uri in guarded_uris):
         raise AssertionError(f"guarded physical PDF retained unsafe URI: {guarded_uris}")
     if SAFE_URI not in guarded_uris:
         raise AssertionError(f"guarded beforeprint control lost prepared safe URI: {guarded_uris}")
     if guarded["beforeprint_count"] != 0:
         raise AssertionError(f"page-owned beforeprint executed despite script freeze: {guarded['beforeprint_count']}")
     if SHADOW_JS_URI not in guarded["changed_hrefs"] or FRAME_DATA_URI not in guarded["changed_hrefs"]:
-        raise AssertionError(f"bounded actual-representation scan missed Shadow/frame unsafe href: {guarded['changed_hrefs']}")
+        raise AssertionError(f"bounded scan missed Shadow/frame unsafe href: {guarded['changed_hrefs']}")
     if guarded["shadow_href_after_restore"] != SHADOW_JS_URI or guarded["frame_href_after_restore"] != FRAME_DATA_URI:
-        raise AssertionError("live Shadow/frame hrefs were not restored after physical print")
+        raise AssertionError(f"live Shadow/frame hrefs were not restored: {guarded}")
     results["guarded_beforeprint_and_nested"] = guarded
     page.close()
 
     page = browser.new_page(viewport={"width": 1000, "height": 700})
     page.set_content(fixture_html(), wait_until="load")
-    page.wait_for_function("document.getElementById('frame').contentDocument?.getElementById('frameUnsafe')")
+    wait_fixture(page)
     page.eval_on_selector("#target", f"(el) => el.setAttribute('href', {json.dumps(MUTATED_DATA_URI)})")
     already_pdf, changed = guarded_print(page)
     (output_dir / "guarded_already_mutated.pdf").write_bytes(already_pdf)
     already = inspect_pdf(already_pdf)
     already["changed_hrefs"] = [str(item["href"]) for item in changed]
     already["beforeprint_count"] = page.evaluate("window.__beforePrintCount")
-    already["live_target_href_after_restore"] = page.eval_on_selector("#target", "el => el.getAttribute('href')")
-    already_uris = uris(already)
-    if MUTATED_DATA_URI in already_uris or MUTATED_JS_URI in already_uris:
-        raise AssertionError(f"already-mutated unsafe URI reached physical PDF: {already_uris}")
+    already["target_href_after_restore"] = page.eval_on_selector("#target", "el => el.getAttribute('href')")
+    if MUTATED_DATA_URI in uris(already) or MUTATED_JS_URI in uris(already):
+        raise AssertionError(f"already-mutated unsafe URI reached physical PDF: {already}")
     if MUTATED_DATA_URI not in already["changed_hrefs"]:
-        raise AssertionError(f"actual-representation sanitizer did not identify already-mutated target: {already['changed_hrefs']}")
-    if already["live_target_href_after_restore"] != MUTATED_DATA_URI:
-        raise AssertionError("already-mutated live href was not restored after guarded print")
-    if already["beforeprint_count"] != 0:
-        raise AssertionError("beforeprint executed in already-mutated guarded case")
+        raise AssertionError(f"sanitizer missed already-mutated target: {already}")
+    if already["target_href_after_restore"] != MUTATED_DATA_URI or already["beforeprint_count"] != 0:
+        raise AssertionError(f"already-mutated cleanup/script-freeze mismatch: {already}")
     results["guarded_already_mutated"] = already
     page.close()
-
     return results
 
 
-class QuietHandler(http.server.SimpleHTTPRequestHandler):
-    def log_message(self, _format: str, *_args: object) -> None:
-        pass
-
-
-@contextlib.contextmanager
-def local_http_root(root: pathlib.Path):
-    handler = lambda *args, **kwargs: QuietHandler(*args, directory=str(root), **kwargs)
-    with socketserver.TCPServer(("127.0.0.1", 0), handler) as server:
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            host, port = server.server_address
-            yield f"http://{host}:{port}/fixture.html"
-        finally:
-            server.shutdown()
-            thread.join(timeout=5)
-
-
 def run_extension_install_proof(p: Playwright, chrome: pathlib.Path, output_dir: pathlib.Path, *, headed: bool) -> dict[str, Any]:
-    fixture_root = output_dir / "extension-fixture-site"
-    fixture_root.mkdir(parents=True, exist_ok=True)
-    (fixture_root / "fixture.html").write_text("<!doctype html><title>P0-071 extension install proof</title><p>fixture</p>", encoding="utf-8")
     extension = output_dir / "extension-fixture"
     extension.mkdir(parents=True, exist_ok=True)
     (extension / "pdf-print-guard.js").write_bytes(GUARD_JS.read_bytes())
     (extension / "sw.js").write_text("importScripts('pdf-print-guard.js');\n", encoding="utf-8")
-    manifest = {
+    (extension / "manifest.json").write_text(json.dumps({
         "manifest_version": 3,
         "name": "WebClip P0-071 guard install proof",
         "version": "1.0.0",
         "permissions": ["debugger", "tabs"],
         "background": {"service_worker": "sw.js"},
-    }
-    (extension / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    }), encoding="utf-8")
 
-    user_data = output_dir / "chrome-profile"
-    args = [
-        f"--disable-extensions-except={extension}",
-        f"--load-extension={extension}",
-        "--disable-dev-shm-usage",
-        "--no-first-run",
-        "--no-default-browser-check",
-    ]
     context: BrowserContext | None = None
-    with local_http_root(fixture_root) as fixture_url:
-        try:
-            context = p.chromium.launch_persistent_context(
-                str(user_data),
-                executable_path=str(chrome),
-                headless=not headed,
-                args=args,
-            )
-            page = context.pages[0] if context.pages else context.new_page()
-            page.goto(fixture_url, wait_until="load")
-            deadline = time.monotonic() + 15
-            worker = None
-            while time.monotonic() < deadline:
-                workers = context.service_workers
-                if workers:
-                    worker = workers[0]
-                    break
-                time.sleep(0.1)
-            if worker is None:
-                raise AssertionError("Chrome did not expose the MV3 service worker for P0-071 install proof")
-            proof = worker.evaluate("""() => ({
-              marker: globalThis.__webclipPdfPrintGuardInstalled === true,
-              guard: Boolean(globalThis.WebClipPdfPrintGuard),
-              sendCommandType: typeof chrome?.debugger?.sendCommand,
-              safeSchemes: Array.from(globalThis.WebClipPdfPrintGuard?.SAFE_SCHEMES || [])
-            })""")
-            if not proof.get("marker") or not proof.get("guard") or proof.get("sendCommandType") != "function":
-                raise AssertionError(f"real MV3 worker did not install the P0-071 chrome.debugger guard: {proof}")
-            if proof.get("safeSchemes") != ["http", "https", "mailto", "tel"]:
-                raise AssertionError(f"real MV3 worker guard exported unexpected safe schemes: {proof}")
-            return proof
-        finally:
-            if context is not None:
-                context.close()
+    try:
+        context = p.chromium.launch_persistent_context(
+            str(output_dir / "chrome-profile"),
+            executable_path=str(chrome),
+            headless=not headed,
+            args=[
+                f"--disable-extensions-except={extension}",
+                f"--load-extension={extension}",
+                "--disable-dev-shm-usage",
+                "--no-first-run",
+                "--no-default-browser-check",
+            ],
+        )
+        deadline = time.monotonic() + 15
+        worker = None
+        while time.monotonic() < deadline:
+            workers = context.service_workers
+            if workers:
+                worker = workers[0]
+                break
+            time.sleep(0.1)
+        if worker is None:
+            raise AssertionError("Chrome did not expose the MV3 worker for P0-071 install proof")
+        proof = worker.evaluate("""() => ({
+          marker: globalThis.__webclipPdfPrintGuardInstalled === true,
+          guard: Boolean(globalThis.WebClipPdfPrintGuard),
+          sendCommandType: typeof chrome?.debugger?.sendCommand,
+          safeSchemes: Array.from(globalThis.WebClipPdfPrintGuard?.SAFE_SCHEMES || [])
+        })""")
+        if not proof.get("marker") or not proof.get("guard") or proof.get("sendCommandType") != "function":
+            raise AssertionError(f"real MV3 worker did not install the P0-071 guard: {proof}")
+        if proof.get("safeSchemes") != ["http", "https", "mailto", "tel"]:
+            raise AssertionError(f"real MV3 worker guard exported unexpected schemes: {proof}")
+        return proof
+    finally:
+        if context is not None:
+            context.close()
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--chrome", default=os.environ.get("CHROME_BIN", ""))
     parser.add_argument("--output", type=pathlib.Path, default=None)
-    parser.add_argument("--headed-extension", action="store_true", help="launch extension proof headed (use under xvfb-run in CI)")
+    parser.add_argument("--headed-extension", action="store_true")
     args = parser.parse_args()
     if not args.chrome:
         raise AssertionError("Chrome executable is required via --chrome or CHROME_BIN")
