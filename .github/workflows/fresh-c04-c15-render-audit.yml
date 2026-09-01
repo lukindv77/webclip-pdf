@@ -46,6 +46,9 @@ jobs:
           text = fresh.read_text(encoding='utf-8')
           text = text.replace("'SVG_C10_MARKER',", "")
           text = text.replace("'C10InlineSvg':art['pixels']['magenta']>100 and 'SVG_C10_MARKER' in text", "'C10InlineSvg':art['pixels']['magenta']>100")
+          text = text.replace("settled['pixels']['red']>100 and settled['pixels']['blue']>100", "settled['pixels']['red']>500 and settled['pixels']['blue']>500")
+          text = text.replace("immediate['pixels']['blue']<100 and settled['pixels']['blue']>100", "immediate['pixels']['blue']<500 and settled['pixels']['blue']>500")
+          text = text.replace("'canvasBluePresent':art['pixels']['blue']>100", "'canvasBluePresent':art['pixels']['blue']>500")
           fresh.write_text(text, encoding='utf-8')
 
           p071 = Path('project_tools/audit_p0_071_print_render_guard.py')
