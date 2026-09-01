@@ -1,0 +1,67 @@
+name: Audit P0-077 Registry sync temporary
+
+on:
+  push:
+    branches:
+      - fix/p0-077-journal-restore-envelope-2026-09-01
+
+permissions:
+  contents: write
+
+jobs:
+  sync-status:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Synchronize Registry and index
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "c4ffe0311e8d3337ad634d52e8482f4d42886a78"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-p0-077-status-temp.yml"
+          python - <<'PY'
+          from pathlib import Path
+
+          registry_path = Path('project_docs/AUDIT_REGISTRY.md')
+          registry = registry_path.read_text(encoding='utf-8')
+          active = "| P0-077 | ACTIVE | WebClip must never report a successful self-generated backup/export that the same version cannot restore because byte/count/per-entry envelopes disagree. |"
+          if registry.count(active) != 1:
+              raise SystemExit(f'expected one P0-077 ACTIVE row, found {registry.count(active)}')
+          registry = registry.replace(active + '\n', '', 1)
+          terminal = "## P0 — special terminal state\n\n| Code | Status | Resolution |\n|---|---|---|\n"
+          if registry.count(terminal) != 1:
+              raise SystemExit('terminal P0 table marker mismatch')
+          done = "| P0-077 | DONE | Full-Journal self-export and same-version restore now share one versioned envelope: 50 MiB UTF-8 / 50 MiB chars / 100,000 entries / 8 MiB per serialized entry. Worker bootstrap clamps import options, replaces the legacy 4 MiB export batch reader with an 8 MiB envelope reader, and rejects + cleans staged export receipts above the same-version byte/count boundary before local/Yandex success. Existing records are neither deleted nor truncated. See `AUDIT_P0_077_JOURNAL_RESTORE_ENVELOPE_CLOSURE_2026-09-01_EVIDENCE.md`. |"
+          registry = registry.replace(terminal, terminal + done + '\n', 1)
+          registry_path.write_text(registry, encoding='utf-8')
+
+          index_path = Path('project_docs/README_INDEX.md')
+          index = index_path.read_text(encoding='utf-8')
+          heading = '## Functional Closure Sweep evidence\n\n'
+          if index.count(heading) != 1:
+              raise SystemExit('Functional Closure Sweep heading mismatch')
+          evidence = '- `AUDIT_P0_077_JOURNAL_RESTORE_ENVELOPE_CLOSURE_2026-09-01_EVIDENCE.md` — same-version Journal self-restore envelope closure: export success is capped to 50 MiB UTF-8 / 100,000 entries, 4–8 MiB valid single records remain exportable, and import options cannot widen beyond the shared versioned envelope. **P0-077 is DONE.**\n'
+          if evidence not in index:
+              index = index.replace(heading, heading + evidence, 1)
+          tools = '## Current audit tools\n\n'
+          if index.count(tools) != 1:
+              raise SystemExit('Current audit tools heading mismatch')
+          tool = '- `project_tools/test_p0_077_journal_restore_envelope.js` — deterministic P0-077 regression for byte/count/per-entry same-version restore boundaries, real guarded cursor batching, staging cleanup and import-option clamping.\n'
+          if tool not in index:
+              index = index.replace(tools, tools + tool, 1)
+          index_path.write_text(index, encoding='utf-8')
+          PY
+          rm .github/workflows/audit-p0-077-status-temp.yml
+          git diff --check
+          printf '%s\n' ".github/workflows/audit-p0-077-status-temp.yml" "project_docs/AUDIT_REGISTRY.md" "project_docs/README_INDEX.md" | sort > /tmp/expected
+          git diff --name-only | sort > /tmp/actual
+          diff -u /tmp/expected /tmp/actual
+          git config user.name lukindv77
+          git config user.email lukindv@gmail.com
+          git add -A
+          git commit -m 'docs: mark P0-077 Journal restore envelope done'
+          git push origin HEAD:fix/p0-077-journal-restore-envelope-2026-09-01
