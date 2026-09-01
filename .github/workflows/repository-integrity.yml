@@ -47,11 +47,17 @@ jobs:
       - name: Repository growth hygiene self-test
         run: python project_tools/test_repository_hygiene.py
 
-      - name: Final audit-delta retirement self-test
+      - name: Final research-delta retirement self-test
         run: python project_tools/test_final_delta_retirement.py
 
       - name: Staged evidence compaction self-test
         run: python project_tools/test_staged_evidence_compaction.py
+
+      - name: Research terminology contract
+        run: python project_tools/check_research_terminology.py
+
+      - name: Research terminology checker self-test
+        run: python project_tools/test_research_terminology.py
 
       - name: Context/bootstrap contract
         run: python project_tools/check_context_contract.py
