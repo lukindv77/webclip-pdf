@@ -48,6 +48,12 @@ Stronger states remain false/currently unclaimed:
 
 Explicit residual external families remain C17, C37, C41, C42, C44 and C46. C46 remains `EXTERNAL-REQUIRED / UNKNOWN`; this is a bounded L5 evidence boundary, not a hidden audit gap.
 
+## Functional Closure Sweep evidence
+
+After Cycle-2 coverage completion, new audit work is risk-ranked against existing ACTIVE Registry owners rather than extending coverage for its own sake.
+
+- `AUDIT_FUNCTIONAL_P0_004_SELECTED_ANCESTOR_2026-09-01.md` — current Chrome-152 physical re-check of P0-004. Exact product selected-only print CSS still allows an unselected ordinary ancestor to clip selected content (2 pages → 1; bottom sentinel lost) and inject its red/blue/magenta presentation into the PDF. A test-only normalization control restores complete selected output and removes ancestor paint. **P0-004 remains ACTIVE; no new P-code.**
+
 ## Main Cycle-2 evidence
 
 - `AUDIT_COVERAGE_CYCLE2_FINAL_SYNTHESIS_2026-09-01.md` — final B1→B9 synthesis, terminality, staleness, external freshness, ownership and residual-risk decision.
@@ -63,6 +69,7 @@ Historical consolidated evidence remains in `AUDIT_EVIDENCE.md`, `AUDIT_RETIRED_
 
 ## Current audit tools
 
+- `project_tools/audit_selected_ancestor_presentation.py` — functional P0-004 Chrome-152 physical regression: extracts exact current selected-only CSS from `content.js`, checks selected-content completeness and unselected ancestor presentation, and includes an explicit test-only causal discriminator.
 - `project_tools/audit_cycle2_final_reconciliation.py` — deterministic final guard: C01…C46 terminality, zero revalidation, explicit L5/C46 UNKNOWN, synthesis/release separation, canonical-owner presence and git-based Cycle-2 runtime/contract staleness check.
 - `project_tools/audit_cycle2_coverage_sweep.py` — deterministic final Matrix guard for 46/0 and PD1–PD7 states.
 - `project_tools/audit_scroll_triggered_animation.py` — T5 Chrome-152 physical probe.
