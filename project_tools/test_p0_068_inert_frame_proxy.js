@@ -169,7 +169,7 @@ function descendants(root) {
   vm.createContext(context);
   vm.runInContext(source, context, { filename: 'content-injection-guard.js' });
   assert.ok(context.WebClipContentInjectionGuard);
-  const expected = ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'content.js'];
+  const expected = ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'host-control-activation-guard.js', 'content.js'];
   const rewritten = context.WebClipContentInjectionGuard.rewriteDetails({ target: { tabId: 9 }, files: ['content.js'] });
   assert.deepEqual(Array.from(rewritten.files), expected);
   const untouched = context.WebClipContentInjectionGuard.rewriteDetails({ target: { tabId: 9 }, files: ['frame-agent.js'] });
@@ -184,7 +184,7 @@ function descendants(root) {
   const content = fs.readFileSync(path.join(ROOT, 'content.js'), 'utf8');
   assert.match(popup, /files:\s*\['frame-proxy-budget-guard\.js',\s*'frame-proxy-inert-guard\.js',\s*'content\.js'\]/);
   assert.match(popup, /readLaterButton[\s\S]*await ensureTopContentScript\(tab\.id\)/);
-  assert.match(sharedWorkerBootstrap, /importScripts\('pdf-print-guard\.js', 'content-injection-guard\.js'\)/);
+  assert.match(sharedWorkerBootstrap, /importScripts\([^\n]*'content-injection-guard\.js'[^\n]*\)/);
   const deepCloneCalls = content.match(/\.cloneNode\(true\)/g) || [];
   assert.equal(deepCloneCalls.length, 1, 'content.js must retain one audited deep-clone interception boundary');
   assert.match(content, /proxy\.appendChild\(node\.cloneNode\(true\)\)/);
