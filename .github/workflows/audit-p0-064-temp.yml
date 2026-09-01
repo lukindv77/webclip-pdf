@@ -1,0 +1,56 @@
+name: Audit P0-064 temporary closure
+
+on:
+  push:
+    branches: [fix/p0-064-frame-proxy-preflight-2026-09-01]
+
+permissions:
+  contents: read
+
+jobs:
+  p0-064-closure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.14'
+
+      - name: Deterministic guard regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check frame-proxy-inert-guard.js
+          node project_tools/test_p0_068_inert_frame_proxy.js
+          node project_tools/test_p0_064_frame_proxy_budget.js
+          python -m py_compile project_tools/audit_p0_064_frame_proxy_budget.py
+
+      - name: Install browser harness dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check playwright==1.55.0
+          curl -fsSLo /tmp/chrome.zip https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.64/linux64/chrome-headless-shell-linux64.zip
+          unzip -q /tmp/chrome.zip -d /tmp/chrome
+
+      - name: Chrome 152 pre-allocation proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python project_tools/audit_p0_064_frame_proxy_budget.py \
+            --chrome /tmp/chrome/chrome-headless-shell-linux64/chrome-headless-shell \
+            --output /tmp/p0-064-evidence
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: p0-064-frame-proxy-budget-evidence
+          path: /tmp/p0-064-evidence
+          if-no-files-found: warn
