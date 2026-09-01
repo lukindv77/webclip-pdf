@@ -21,16 +21,16 @@
 
 `project_docs/PRIORITIES_P0_P1_P2.md` is only a compatibility pointer. The former `AUDIT_CONSOLIDATION_INDEX.md` supplement was merged into the registry and retired.
 
-Important permanent reservations include P0-079/P0-080, P1-195…P1-225, explicit historical P1-072…P1-131 reservations and P2-009/P2-010. Absence from a compact table or one family document never makes a number free.
+Important permanent reservations include P0-079/P0-080, P1-195…P1-230, explicit historical P1-072…P1-131 reservations and P2-009/P2-010. Absence from a compact table or one family document never makes a number free.
 
 ## Evidence layers
 
-The standalone audit-delta layer has completed lossless retirement. The former 189 current `AUDIT_DELTA_*.md` files were embedded verbatim into 11 family evidence documents, each source identified by original filename and SHA-256, and then removed from the working tree. Earlier consolidated families remain alongside them. Exact originals also remain in Git history.
+The legacy standalone audit-delta layer has completed lossless retirement for the former 189 current `AUDIT_DELTA_*.md` files: their source text was embedded verbatim into 11 family evidence documents, each source identified by original filename and SHA-256, and then removed from the working tree. One explicitly temporary current delta may remain while active analysis is being folded into durable evidence; `project_docs/AUDIT_DELTA_INDEX.md` is authoritative for whether such a temporary delta currently exists. Exact originals remain in Git history.
 
 Use current evidence by role:
 
 - `project_docs/AUDIT_REGISTRY.md` — current owner/status authority;
-- `project_docs/AUDIT_DELTA_INDEX.md` — navigation across consolidated audit families;
+- `project_docs/AUDIT_DELTA_INDEX.md` — navigation across consolidated audit families and any explicitly temporary current delta;
 - `project_docs/AUDIT_FAMILY_*_EVIDENCE.md` — detailed family source proof, deterministic schedules, corrections, positive controls and acceptance boundaries;
 - `project_docs/AUDIT_HISTORY_INDEX.md` — corrections, retractions, dedup decisions and negative findings;
 - `project_docs/AUDIT_EVIDENCE.md` — historical implementation/browser proof;
@@ -54,7 +54,7 @@ PRs that change runtime or canonical audit evidence are checked by `project_tool
 
 ## Retired historical narratives
 
-Current `main` intentionally does not carry separate working copies of root `P*_CLOSURE.md`, `STATIC_CHECKS_*.md`, `DEEP_AUDIT_2026-08-25.md`, `QA_STATUS_0_9_9.md`, `PROJECT_RECOVERY.md`, `AUDIT_CONSOLIDATION_INDEX.md`, dated handoff folders or standalone historical `AUDIT_DELTA_*.md` after lossless family consolidation.
+Current `main` intentionally does not carry separate working copies of root `P*_CLOSURE.md`, `STATIC_CHECKS_*.md`, `DEEP_AUDIT_2026-08-25.md`, `QA_STATUS_0_9_9.md`, `PROJECT_RECOVERY.md`, `AUDIT_CONSOLIDATION_INDEX.md`, dated handoff folders or retired standalone historical `AUDIT_DELTA_*.md` after lossless family consolidation.
 
 Their exact history remains recoverable through Git.
 

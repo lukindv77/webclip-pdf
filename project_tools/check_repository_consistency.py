@@ -160,7 +160,7 @@ def check_registry_numbering(result: CheckResult) -> None:
         result.error("duplicate canonical registry rows: " + ", ".join(duplicates))
 
     mandatory = {"P0-079", "P0-080"}
-    mandatory.update(f"P1-{n:03d}" for n in range(195, 226))
+    mandatory.update(f"P1-{n:03d}" for n in range(195, 231))
     missing = sorted(mandatory - set(rows))
     if missing:
         result.error("mandatory late/reserved owners missing from registry rows: " + ", ".join(missing))
