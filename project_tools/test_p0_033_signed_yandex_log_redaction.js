@@ -132,7 +132,7 @@ const OTHER = 'https://example.com/private/path?token=x#fragment';
 })();
 
 (function repositoryWiringAndSourceBinding() {
-  assert.match(workerSource, /^importScripts\('public-suffix\.js', 'journal-import-stream\.js', 'journal-text-filter\.js'\);/);
+  assert.match(workerSource, /^importScripts\('public-suffix\.js', 'journal-import-stream\.js', 'journal-text-filter\.js'(?:, [^)]*)?\);/);
   assert.match(bootstrapSource, /importScripts\('pdf-print-guard\.js', 'content-injection-guard\.js', 'operation-log-redaction-guard\.js'\)/);
   assert.match(workerSource, /function safeUrlForOperationLog\(value\)/);
   assert.match(workerSource, /host === 'disk\.yandex\.net' \|\| host\.endsWith\('\.disk\.yandex\.net'\)/);
