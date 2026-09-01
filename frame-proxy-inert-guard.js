@@ -5,12 +5,22 @@
   // only for the print-only flattened same-origin iframe body proxy. Replace
   // that deep clone in the extension isolated world with an inert mirror that
   // cannot construct/upgrade custom elements or connect nested active contexts.
-  const INSTALL_MARKER = '__webclipFrameProxyInertCloneGuardV1';
-  const PROTOTYPE_MARKER = '__webclipFrameProxyInertCloneGuardInstalledV1';
+  //
+  // P0-064: the same boundary must reject an oversized frame body before the
+  // call-site spread allocates [...sourceBody.childNodes] and before any deep
+  // inert target nodes are constructed. The NodeList guard therefore preflights
+  // the frame body first; cloneNodeInert independently enforces the same budget.
+  const INSTALL_MARKER = '__webclipFrameProxyInertCloneGuardV2';
+  const PROTOTYPE_MARKER = '__webclipFrameProxyInertCloneGuardInstalledV2';
+  const NODELIST_MARKER = '__webclipFrameProxyBudgetNodeListGuardInstalledV1';
   const HTML_NS = 'http://www.w3.org/1999/xhtml';
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const NEUTRALIZED_TAG_ATTR = 'data-webclip-neutralized-tag';
   const FLATTENED_FRAME_ATTR = 'data-webclip-pdf-flattened-frame';
+  const FRAME_PROXY_MAX_SOURCE_NODES = 5_000;
+  const FRAME_PROXY_MAX_TEXT_CHARS = 2_000_000;
+  const FRAME_PROXY_MAX_SOURCE_UTF8_BYTES = 8_000_000;
+  const FRAME_PROXY_BUDGET_ERROR = 'WEBCLIP_FRAME_PROXY_BUDGET_EXCEEDED';
   const ACTIVE_HTML_TAGS = new Set([
     'script', 'iframe', 'frame', 'object', 'embed', 'applet', 'portal',
     'fencedframe', 'audio', 'video', 'link', 'style', 'meta', 'base'
@@ -25,8 +35,15 @@
     'action', 'formaction', 'formenctype', 'formmethod', 'formtarget',
     'target', 'download', 'ping', 'autofocus', 'autoplay', 'contenteditable'
   ]);
+  const approvedBodies = new WeakMap();
   const stats = {
     installedRealms: 0,
+    guardedFrameBodyIterators: 0,
+    preflightChecks: 0,
+    preflightFailures: 0,
+    preflightNodes: 0,
+    preflightTextChars: 0,
+    preflightUtf8Bytes: 0,
     deepElementClones: 0,
     neutralizedActiveElements: 0,
     neutralizedCustomElements: 0,
@@ -40,6 +57,118 @@
 
   function lower(value) {
     return String(value || '').toLowerCase();
+  }
+
+  function boundedUtf8Length(value, remaining) {
+    const text = String(value == null ? '' : value);
+    const limit = Math.max(0, Number(remaining) || 0);
+    let bytes = 0;
+    for (let index = 0; index < text.length; index += 1) {
+      const code = text.charCodeAt(index);
+      if (code <= 0x7f) bytes += 1;
+      else if (code <= 0x7ff) bytes += 2;
+      else if (code >= 0xd800 && code <= 0xdbff && index + 1 < text.length) {
+        const next = text.charCodeAt(index + 1);
+        if (next >= 0xdc00 && next <= 0xdfff) {
+          bytes += 4;
+          index += 1;
+        } else bytes += 3;
+      } else bytes += 3;
+      if (bytes > limit) return limit + 1;
+    }
+    return bytes;
+  }
+
+  function budgetError(report, dimension) {
+    const error = new Error(
+      `Flattened frame source exceeds ${dimension} budget: ` +
+      `nodes=${report.nodes}/${FRAME_PROXY_MAX_SOURCE_NODES}, ` +
+      `textChars=${report.textChars}/${FRAME_PROXY_MAX_TEXT_CHARS}, ` +
+      `utf8Bytes=${report.utf8Bytes}/${FRAME_PROXY_MAX_SOURCE_UTF8_BYTES}`
+    );
+    error.code = FRAME_PROXY_BUDGET_ERROR;
+    error.dimension = dimension;
+    error.report = Object.freeze({ ...report });
+    return error;
+  }
+
+  function addUtf8Budget(report, value, dimension = 'bytes') {
+    const remaining = FRAME_PROXY_MAX_SOURCE_UTF8_BYTES - report.utf8Bytes;
+    const added = boundedUtf8Length(value, remaining);
+    report.utf8Bytes += added;
+    if (report.utf8Bytes > FRAME_PROXY_MAX_SOURCE_UTF8_BYTES) throw budgetError(report, dimension);
+  }
+
+  function nextDepthFirstNode(root, current) {
+    if (current?.firstChild) return current.firstChild;
+    let node = current;
+    while (node && node !== root) {
+      if (node.nextSibling) return node.nextSibling;
+      node = node.parentNode;
+    }
+    return null;
+  }
+
+  function preflightFrameBody(root) {
+    if (!root || Number(root.nodeType) !== 1) throw new TypeError('Frame proxy preflight requires an Element root.');
+    stats.preflightChecks += 1;
+    const report = { nodes: 0, textChars: 0, utf8Bytes: 0 };
+    let node = root;
+    while (node) {
+      report.nodes += 1;
+      if (report.nodes > FRAME_PROXY_MAX_SOURCE_NODES) throw budgetError(report, 'nodes');
+      const nodeType = Number(node.nodeType || 0);
+      if (nodeType === 1) {
+        addUtf8Budget(report, node.localName || node.tagName || '', 'bytes');
+        const attributes = node.attributes;
+        const count = Math.max(0, Number(attributes?.length) || 0);
+        for (let index = 0; index < count; index += 1) {
+          const attribute = attributes[index];
+          if (!attribute) continue;
+          addUtf8Budget(report, attribute.name || '', 'bytes');
+          addUtf8Budget(report, attribute.value || '', 'bytes');
+        }
+      } else if (nodeType === 3 || nodeType === 8) {
+        const data = String(node.data ?? node.nodeValue ?? '');
+        if (nodeType === 3) {
+          report.textChars += data.length;
+          if (report.textChars > FRAME_PROXY_MAX_TEXT_CHARS) throw budgetError(report, 'textChars');
+        }
+        addUtf8Budget(report, data, 'bytes');
+      }
+      node = nextDepthFirstNode(root, node);
+    }
+    stats.preflightNodes = report.nodes;
+    stats.preflightTextChars = report.textChars;
+    stats.preflightUtf8Bytes = report.utf8Bytes;
+    return Object.freeze({ ...report });
+  }
+
+  function sourceBudgetRoot(source) {
+    const body = source?.ownerDocument?.body;
+    if (body && Number(body.nodeType) === 1) return body;
+    return Number(source?.nodeType) === 1 ? source : null;
+  }
+
+  function ensureSourceBudget(source) {
+    const root = sourceBudgetRoot(source);
+    if (!root) throw new TypeError('Cannot budget a flattened frame source without an Element root.');
+    const cached = approvedBodies.get(root);
+    if (cached) return cached;
+    let report;
+    try {
+      report = preflightFrameBody(root);
+    } catch (error) {
+      stats.preflightFailures += 1;
+      throw error;
+    }
+    approvedBodies.set(root, report);
+    const clear = () => approvedBodies.delete(root);
+    try {
+      if (typeof queueMicrotask === 'function') queueMicrotask(clear);
+      else Promise.resolve().then(clear);
+    } catch (_) {}
+    return report;
   }
 
   function isAutonomousCustomElement(element) {
@@ -104,7 +233,7 @@
     }
   }
 
-  function cloneNodeInert(source, deep = false) {
+  function cloneNodeInertUnchecked(source, deep = false) {
     const ownerDoc = source?.ownerDocument || globalThis.document;
     const nodeType = Number(source?.nodeType || 0);
     if (!ownerDoc) throw new TypeError('Cannot inert-clone a node without ownerDocument.');
@@ -126,12 +255,14 @@
       }
       copySafeAttributes(source, target, neutralized);
       if (deep) {
-        for (const child of Array.from(source.childNodes || [])) {
-          // Script/style text is author code/CSS and must not become visible
-          // text inside its neutral placeholder. Other descendants are mirrored.
+        let child = source.firstChild || null;
+        while (child) {
+          const next = child.nextSibling || null;
           const sourceTag = lower(source.localName || source.tagName);
-          if ((sourceTag === 'script' || sourceTag === 'style') && Number(child?.nodeType) === 3) continue;
-          try { target.appendChild(cloneNodeInert(child, true)); } catch (_) {}
+          if (!((sourceTag === 'script' || sourceTag === 'style') && Number(child?.nodeType) === 3)) {
+            try { target.appendChild(cloneNodeInertUnchecked(child, true)); } catch (_) {}
+          }
+          child = next;
         }
       }
       return target;
@@ -141,8 +272,11 @@
     if (nodeType === 11) {
       const fragment = ownerDoc.createDocumentFragment();
       if (deep) {
-        for (const child of Array.from(source.childNodes || [])) {
-          try { fragment.appendChild(cloneNodeInert(child, true)); } catch (_) {}
+        let child = source.firstChild || null;
+        while (child) {
+          const next = child.nextSibling || null;
+          try { fragment.appendChild(cloneNodeInertUnchecked(child, true)); } catch (_) {}
+          child = next;
         }
       }
       return fragment;
@@ -151,44 +285,92 @@
     throw new TypeError(`Unsupported inert clone nodeType: ${nodeType}`);
   }
 
-  function installIntoWindow(win) {
-    const NodeCtor = win?.Node;
-    const proto = NodeCtor?.prototype;
-    if (!proto || proto[PROTOTYPE_MARKER]) return false;
-    const nativeCloneNode = proto.cloneNode;
-    if (typeof nativeCloneNode !== 'function') return false;
+  function cloneNodeInert(source, deep = false) {
+    if (Boolean(deep) && Number(source?.nodeType) === 1) ensureSourceBudget(source);
+    return cloneNodeInertUnchecked(source, deep);
+  }
 
-    const guardedCloneNode = function guardedWebClipCloneNode(deep) {
-      if (Boolean(deep) && Number(this?.nodeType) === 1) {
-        stats.deepElementClones += 1;
-        return cloneNodeInert(this, true);
+  function installBodyNodeListGuard(win) {
+    const NodeListCtor = win?.NodeList;
+    const proto = NodeListCtor?.prototype;
+    const iteratorSymbol = win?.Symbol?.iterator || Symbol.iterator;
+    if (!proto || proto[NODELIST_MARKER]) return false;
+    const nativeIterator = proto[iteratorSymbol];
+    if (typeof nativeIterator !== 'function') return false;
+    const guardedIterator = function guardedFrameBodyChildNodesIterator() {
+      const body = win?.document?.body;
+      if (body) {
+        let bodyChildren = null;
+        try { bodyChildren = body.childNodes; } catch (_) { bodyChildren = null; }
+        if (bodyChildren && this === bodyChildren) {
+          stats.guardedFrameBodyIterators += 1;
+          ensureSourceBudget(body);
+        }
       }
-      return nativeCloneNode.call(this, Boolean(deep));
+      return nativeIterator.call(this);
     };
     try {
-      Object.defineProperty(proto, 'cloneNode', {
-        value: guardedCloneNode,
+      Object.defineProperty(proto, iteratorSymbol, {
+        value: guardedIterator,
         configurable: true,
         enumerable: false,
         writable: true
       });
-      Object.defineProperty(proto, PROTOTYPE_MARKER, {
+      Object.defineProperty(proto, NODELIST_MARKER, {
         value: true,
         configurable: false,
         enumerable: false,
         writable: false
       });
-      stats.installedRealms += 1;
       return true;
     } catch (_) {
       return false;
     }
   }
 
+  function installIntoWindow(win, { frameRealm = false } = {}) {
+    const NodeCtor = win?.Node;
+    const proto = NodeCtor?.prototype;
+    if (!proto) return false;
+    let installed = false;
+    if (!proto[PROTOTYPE_MARKER]) {
+      const nativeCloneNode = proto.cloneNode;
+      if (typeof nativeCloneNode === 'function') {
+        const guardedCloneNode = function guardedWebClipCloneNode(deep) {
+          if (Boolean(deep) && Number(this?.nodeType) === 1) {
+            stats.deepElementClones += 1;
+            ensureSourceBudget(this);
+            return cloneNodeInertUnchecked(this, true);
+          }
+          return nativeCloneNode.call(this, Boolean(deep));
+        };
+        try {
+          Object.defineProperty(proto, 'cloneNode', {
+            value: guardedCloneNode,
+            configurable: true,
+            enumerable: false,
+            writable: true
+          });
+          Object.defineProperty(proto, PROTOTYPE_MARKER, {
+            value: true,
+            configurable: false,
+            enumerable: false,
+            writable: false
+          });
+          installed = true;
+        } catch (_) {}
+      }
+    }
+    if (frameRealm) installBodyNodeListGuard(win);
+    if (installed) stats.installedRealms += 1;
+    return installed;
+  }
+
   function patchSameOriginFrameRealms(rootDoc = globalThis.document, visited = new Set()) {
     if (!rootDoc || visited.has(rootDoc)) return;
     visited.add(rootDoc);
-    try { installIntoWindow(rootDoc.defaultView || globalThis.window); } catch (_) {}
+    const isTopDocument = rootDoc === globalThis.document;
+    try { installIntoWindow(rootDoc.defaultView || globalThis.window, { frameRealm: !isTopDocument }); } catch (_) {}
     let frames = [];
     try { frames = Array.from(rootDoc.querySelectorAll('iframe, frame')); } catch (_) { frames = []; }
     for (const frame of frames) {
@@ -227,6 +409,13 @@
     FLATTENED_FRAME_ATTR,
     NEUTRALIZED_TAG_ATTR,
     ACTIVE_HTML_TAGS: Object.freeze([...ACTIVE_HTML_TAGS]),
+    FRAME_PROXY_MAX_SOURCE_NODES,
+    FRAME_PROXY_MAX_TEXT_CHARS,
+    FRAME_PROXY_MAX_SOURCE_UTF8_BYTES,
+    FRAME_PROXY_BUDGET_ERROR,
+    boundedUtf8Length,
+    preflightFrameBody,
+    ensureSourceBudget,
     isAutonomousCustomElement,
     shouldNeutralizeElement,
     neutralElementName,
