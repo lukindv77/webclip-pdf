@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p c07-artifacts
-          python project_tools/audit_fresh_c07_fonts_typography.py --out-dir c07-artifacts | tee c07-result.json
+          python project_tools/audit_fresh_c07_fonts_typography_accept.py --out-dir c07-artifacts | tee c07-result.json
 
       - name: Upload C07 evidence artifacts
         if: always()
