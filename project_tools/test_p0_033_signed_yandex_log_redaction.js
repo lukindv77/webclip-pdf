@@ -96,6 +96,41 @@ const OTHER = 'https://example.com/private/path?token=x#fragment';
   }
 })();
 
+(function classicWorkerHoistingControl() {
+  const context = { URL };
+  context.globalThis = context;
+  context.importScripts = (name) => {
+    assert.equal(name, 'operation-log-redaction-guard.js');
+    vm.runInContext(guardSource, context, { filename: name });
+  };
+  vm.createContext(context);
+  const workerShape = `
+    importScripts('operation-log-redaction-guard.js');
+    function safeUrlForOperationLog(value) {
+      const url = new URL(String(value || ''));
+      const host = url.hostname.toLowerCase();
+      if (host === 'disk.yandex.net' || host.endsWith('.disk.yandex.net')) return \`${'${url.origin}'}/[REDACTED_SIGNED_PATH]\`;
+      return \`${'${url.origin}'}${'${url.pathname}'}\`;
+    }
+    function sanitizeOperationLogValue(value, key = '', depth = 0) {
+      if (typeof value === 'string' && /url|href|link|uri/i.test(String(key || ''))) return safeUrlForOperationLog(value);
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const out = {};
+        for (const [childKey, childValue] of Object.entries(value)) out[childKey] = sanitizeOperationLogValue(childValue, childKey, depth + 1);
+        return out;
+      }
+      return value;
+    }
+    globalThis.__bootstrapResult = {
+      direct: safeUrlForOperationLog(${JSON.stringify(RU)}),
+      nested: sanitizeOperationLogValue({ signedHref: ${JSON.stringify(RU_SUB)} }, 'metadata').signedHref
+    };
+  `;
+  vm.runInContext(workerShape, context, { filename: 'service-worker-shape.js' });
+  assert.equal(context.__bootstrapResult.direct, 'https://downloader.disk.yandex.ru/[REDACTED_SIGNED_PATH]');
+  assert.equal(context.__bootstrapResult.nested, 'https://downloader12h.disk.yandex.ru/[REDACTED_SIGNED_PATH]');
+})();
+
 (function repositoryWiringAndSourceBinding() {
   assert.match(workerSource, /^importScripts\('public-suffix\.js', 'journal-import-stream\.js', 'journal-text-filter\.js'\);/);
   assert.match(bootstrapSource, /importScripts\('pdf-print-guard\.js', 'content-injection-guard\.js', 'operation-log-redaction-guard\.js'\)/);
