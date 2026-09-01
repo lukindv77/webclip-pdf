@@ -34,7 +34,8 @@
     strippedDuplicateIdentity: 0,
     strippedRelationshipAttributes: 0,
     strippedActionAttributes: 0,
-    disabledFormControls: 0
+    disabledFormControls: 0,
+    inertElements: 0
   };
 
   function lower(value) {
@@ -93,6 +94,9 @@
     }
     if (neutralized) {
       try { target.setAttribute(NEUTRALIZED_TAG_ATTR, lower(source?.localName || source?.tagName)); } catch (_) {}
+    }
+    if (String(target?.namespaceURI || HTML_NS) === HTML_NS) {
+      try { target.setAttribute('inert', ''); stats.inertElements += 1; } catch (_) {}
     }
     const tag = lower(source?.localName || source?.tagName);
     if (FORM_CONTROL_TAGS.has(tag)) {
