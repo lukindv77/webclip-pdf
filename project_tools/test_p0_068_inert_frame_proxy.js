@@ -169,19 +169,20 @@ function descendants(root) {
   vm.createContext(context);
   vm.runInContext(source, context, { filename: 'content-injection-guard.js' });
   assert.ok(context.WebClipContentInjectionGuard);
+  const expected = ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'content.js'];
   const rewritten = context.WebClipContentInjectionGuard.rewriteDetails({ target: { tabId: 9 }, files: ['content.js'] });
-  assert.deepEqual(Array.from(rewritten.files), ['frame-proxy-inert-guard.js', 'content.js']);
+  assert.deepEqual(Array.from(rewritten.files), expected);
   const untouched = context.WebClipContentInjectionGuard.rewriteDetails({ target: { tabId: 9 }, files: ['frame-agent.js'] });
   assert.deepEqual(Array.from(untouched.files), ['frame-agent.js']);
   context.chrome.scripting.executeScript({ target: { tabId: 9 }, files: ['content.js'] });
-  assert.deepEqual(Array.from(calls.at(-1).files), ['frame-proxy-inert-guard.js', 'content.js']);
+  assert.deepEqual(Array.from(calls.at(-1).files), expected);
 })();
 
 (function testRepositoryWiringAndSingleCloneBoundary() {
   const popup = fs.readFileSync(path.join(ROOT, 'popup.js'), 'utf8');
   const sharedWorkerBootstrap = fs.readFileSync(path.join(ROOT, 'journal-text-filter.js'), 'utf8');
   const content = fs.readFileSync(path.join(ROOT, 'content.js'), 'utf8');
-  assert.match(popup, /files:\s*\['frame-proxy-inert-guard\.js',\s*'content\.js'\]/);
+  assert.match(popup, /files:\s*\['frame-proxy-budget-guard\.js',\s*'frame-proxy-inert-guard\.js',\s*'content\.js'\]/);
   assert.match(popup, /readLaterButton[\s\S]*await ensureTopContentScript\(tab\.id\)/);
   assert.match(sharedWorkerBootstrap, /importScripts\('pdf-print-guard\.js', 'content-injection-guard\.js'\)/);
   const deepCloneCalls = content.match(/\.cloneNode\(true\)/g) || [];
