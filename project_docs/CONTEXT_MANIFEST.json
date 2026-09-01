@@ -24,6 +24,8 @@
       "project_docs/GITHUB_WORKFLOW.md"
     ],
     "audit": [
+      "project_docs/AUDIT_FULL_RESTART_2026-09-01_BASELINE.md",
+      "project_docs/AUDIT_FULL_RESTART_SWEEP1_SOURCE_2026-09-01.md",
       "project_docs/AUDIT_HISTORY_INDEX.md",
       "project_docs/AUDIT_EVIDENCE.md",
       "project_docs/AUDIT_FORMAT_NEUTRAL_CAPTURE_RESEARCH_EVIDENCE.md",
