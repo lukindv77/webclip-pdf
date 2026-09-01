@@ -124,7 +124,7 @@ function append(parent, child) {
   vm.createContext(context);
   vm.runInContext(injection, context, { filename: 'content-injection-guard.js' });
   const rewritten = context.WebClipContentInjectionGuard.rewriteDetails({ files: ['content.js'], target: { tabId: 1 } });
-  assert.deepEqual(Array.from(rewritten.files), ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'content.js']);
+  assert.deepEqual(Array.from(rewritten.files), ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'host-control-activation-guard.js', 'content.js']);
   assert.match(popup, /files:\s*\['frame-proxy-budget-guard\.js',\s*'frame-proxy-inert-guard\.js',\s*'content\.js'\]/);
 
   assert.match(content, /for \(const node of \[\.\.\.sourceBody\.childNodes\]\)/, 'budget getter must execute before top-level NodeList spread');
