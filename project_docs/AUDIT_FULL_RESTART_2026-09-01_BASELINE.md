@@ -64,9 +64,9 @@ All 46 previously identified material families are retained as coverage coordina
 
 | ID | Surface family | Restart state |
 |---|---|---|
-| C01 | Manual Include/Exclude / selected-scope authority | `NOT-TRIAGED / UNKNOWN` |
-| C02 | SelectionSnapshot restore -> admitted rendered target -> saved copy | `NOT-TRIAGED / UNKNOWN` |
-| C03 | Main Content / auto candidate -> actual saved scope | `NOT-TRIAGED / UNKNOWN` |
+| C01 | Manual Include/Exclude / selected-scope authority | `L4-REVALIDATED / FINDING (P1-154)` |
+| C02 | SelectionSnapshot restore -> admitted rendered target -> saved copy | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-001, P0-080)` |
+| C03 | Main Content / auto candidate -> actual saved scope | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-160, P0-070/P0-075/P0-080)` |
 | C04 | Ordinary DOM/text baseline | `NOT-TRIAGED / UNKNOWN` |
 | C05 | Geometry/layout | `NOT-TRIAGED / UNKNOWN` |
 | C06 | Colors/backgrounds/compositing | `NOT-TRIAGED / UNKNOWN` |
@@ -79,7 +79,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C13 | Form / renderer-owned controls | `NOT-TRIAGED / UNKNOWN` |
 | C14 | Pseudo/generated content | `NOT-TRIAGED / UNKNOWN` |
 | C15 | Links / anchors / internal destinations | `NOT-TRIAGED / UNKNOWN` |
-| C16 | Same-origin iframe | `NOT-TRIAGED / UNKNOWN` |
+| C16 | Same-origin iframe | `PARTIAL / L4 POSITIVE CONTROLS` |
 | C17 | Cross-origin iframe capture/print boundary | `NOT-TRIAGED / UNKNOWN` |
 | C18 | Shadow DOM / slots / composed tree | `NOT-TRIAGED / UNKNOWN` |
 | C19 | Ordinary long-page existing content | `NOT-TRIAGED / UNKNOWN` |
@@ -98,12 +98,12 @@ All 46 previously identified material families are retained as coverage coordina
 | C32 | Pagination / physical page breaks | `NOT-TRIAGED / UNKNOWN` |
 | C33 | CSS/WAAPI animations/transitions | `NOT-TRIAGED / UNKNOWN` |
 | C34 | Animated image/GIF frame | `NOT-TRIAGED / UNKNOWN` |
-| C35 | Mutation during preparation / beforeprint / physical render cut | `NOT-TRIAGED / UNKNOWN` |
+| C35 | Mutation during preparation / beforeprint / physical render cut | `PARTIAL / L4 FINDING` |
 | C36 | Same locator/URL, different resource bytes/generation | `NOT-TRIAGED / UNKNOWN` |
 | C37 | Failure/retry/rollback/convergence | `NOT-TRIAGED / UNKNOWN` |
 | C38 | Node/byte/time/resource budgets | `NOT-TRIAGED / UNKNOWN` |
 | C39 | Privacy / data minimization | `NOT-TRIAGED / UNKNOWN` |
-| C40 | Physical PDF bytes / cache identity | `NOT-TRIAGED / UNKNOWN` |
+| C40 | Physical PDF bytes / cache identity | `L2-REVALIDATED / FINDING (P0-023, P0-079)` |
 | C41 | Local download physical settlement / native Save As | `NOT-TRIAGED / UNKNOWN` |
 | C42 | Yandex upload/object/public identity | `NOT-TRIAGED / UNKNOWN` |
 | C43 | Journal / provenance / exact artifact linkage | `NOT-TRIAGED / UNKNOWN` |
@@ -150,6 +150,12 @@ Fresh L1 inspection of current `manifest.json` and `popup.js` re-demonstrates an
 This is not a new owner. It is a fresh restart revalidation of existing **P0-045 ACTIVE**. Required next evidence for this row remains source-complete worker-side authority review plus fresh L2/L5 controls before any closure claim.
 
 Affected restart coordinates currently remain nonterminal: C17, C39, C43/C44 contextual shared-state surfaces, and C46 real extension/private-context behavior.
+
+## Fresh continuation checkpoint — selection and generation
+
+`AUDIT_FULL_RESTART_SELECTION_GENERATION_2026-09-01.md` records the accepted current Chrome 152 / deterministic tranche for C01–C03 plus narrow C16/C35 controls and C40 cache-generation authority. Its accepted external execution is workflow run `33500051622`, job `99831050769`, exact evidence head `d82f31f264c43ea1015cc1acc1c40ed390f33e6d`, conclusion SUCCESS.
+
+The matrix above advances only those specifically exercised coordinates. No historical result is implicitly promoted and no P-owner status changes through this coverage update.
 
 ## Delivery rule
 
