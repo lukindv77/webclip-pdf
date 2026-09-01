@@ -9,18 +9,21 @@ const ROOT = path.resolve(__dirname, '..');
 const guardSource = fs.readFileSync(path.join(ROOT, 'host-control-activation-guard.js'), 'utf8');
 const injectionSource = fs.readFileSync(path.join(ROOT, 'content-injection-guard.js'), 'utf8');
 
-class FakeHTMLElement {
-  constructor(root = null) {
-    this.root = root;
-    this.nativeClicks = 0;
-    this.id = '';
-  }
-  getRootNode() { return this.root; }
-  closest(selector) { return selector === '#webclip-pdf-extension-root' && this.id === 'webclip-pdf-extension-root' ? this : null; }
-  click() { this.nativeClicks += 1; return 'native-click'; }
-}
-
 function makeGuardContext() {
+  // Each VM models a distinct browser realm. Use a fresh HTMLElement prototype
+  // per VM so the guard's intentionally non-configurable install marker cannot
+  // leak between deterministic cases.
+  class ContextHTMLElement {
+    constructor(root = null) {
+      this.root = root;
+      this.nativeClicks = 0;
+      this.id = '';
+    }
+    getRootNode() { return this.root; }
+    closest(selector) { return selector === '#webclip-pdf-extension-root' && this.id === 'webclip-pdf-extension-root' ? this : null; }
+    click() { this.nativeClicks += 1; return 'native-click'; }
+  }
+
   const document = {
     documentElement: {},
     querySelectorAll() { return []; },
@@ -28,7 +31,7 @@ function makeGuardContext() {
   };
   const context = {
     console,
-    HTMLElement: FakeHTMLElement,
+    HTMLElement: ContextHTMLElement,
     document,
     window: null,
     MutationObserver: class { observe() {} },
