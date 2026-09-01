@@ -135,7 +135,7 @@ This failed attempt is retained as useful closure evidence rather than hidden, b
 
 ## 6. Change Impact after accepted browser head
 
-After accepted physical evidence head `84b0f471fe80c8fab0f0670edf1da8968e3c353a`, the only subsequent branch change before this durable closure record was deletion of the temporary browser-evidence workflow. No runtime, deterministic test or harness behavior changed. Therefore the accepted Chrome 152 evidence remains applicable to the final PR head unless a later runtime/test/harness change is introduced.
+After accepted physical evidence head `84b0f471fe80c8fab0f0670edf1da8968e3c353a`, the only subsequent branch changes before delivery are deletion of the temporary browser-evidence workflow plus durable evidence/Registry documentation. No runtime, deterministic test or harness behavior changed. Therefore the accepted Chrome 152 evidence remains applicable to the final PR head unless a later runtime/test/harness change is introduced.
 
 ## 7. Owner conclusion
 
@@ -150,3 +150,7 @@ This closure is deliberately narrow. It does **not** close:
 Those remain governed by their canonical Registry status and evidence.
 
 Release readiness is unchanged. `RELEASE_READINESS.md` remains **NOT READY** and this engineering closure does not create a build, tag or GitHub Release.
+
+## 8. PR change-contract correction
+
+PR #76 initially named neighboring owner codes in its explanatory status-boundary text. The repository checker correctly treats every P-code in the PR body as a declared affected owner, so that metadata made the first Repository Integrity run fail before product tests. The PR body was corrected to declare only `P0-071`; neighboring broader owners remain described as unchanged without being declared as affected owners. This documentation-only synchronization does not change runtime/test/harness behavior or invalidate the accepted Chrome 152 closure evidence.
