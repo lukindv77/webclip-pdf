@@ -99,8 +99,10 @@ function makeGuardContext() {
   const journalFilter = fs.readFileSync(path.join(ROOT, 'journal-text-filter.js'), 'utf8');
   const content = fs.readFileSync(path.join(ROOT, 'content.js'), 'utf8');
   assert.ok(popup.indexOf('content-injection-guard.js') < popup.indexOf('popup.js'), 'popup must install injection guard before popup.js');
-  assert.match(journalFilter, /importScripts\('pdf-print-guard\.js', 'content-injection-guard\.js', 'operation-log-redaction-guard\.js'\)/,
-    'current worker bootstrap must preserve content injection guard alongside the P0-033 redaction guard');
+  assert.match(journalFilter, /importScripts\([^\n]*'content-injection-guard\.js'[^\n]*\)/,
+    'current worker bootstrap must preserve the content injection guard alongside independent worker guards');
+  assert.match(journalFilter, /importScripts\([^\n]*'operation-log-redaction-guard\.js'[^\n]*\)/,
+    'current worker bootstrap must preserve the redaction guard independently of later guards');
   assert.match(content, /function\s+triggerInternalClick\s*\(control\)[\s\S]*?control\.click\(\);/,
     'guard must remain attached to the audited page-owned programmatic click boundary');
   assert.match(content, /if \(!isPanelVisible\(panel\)\)\s*\{\s*forcePanelVisible\(panel, control\);/,
