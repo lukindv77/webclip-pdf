@@ -189,7 +189,7 @@ C06 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004,
 
 ## Fresh continuation checkpoint — focused C07 fonts/typography
 
-`AUDIT_FULL_RESTART_C07_FONTS_TYPOGRAPHY_2026-09-01.md` records the accepted focused C07 physical tranche. Its accepted execution is Chrome for Testing `152.0.7977.64`, workflow run `33512505056`, job `99871391807`, exact evidence head `1b6a36b60adb6aa0f7e01cd962489bd3ae0915d7`, conclusion SUCCESS, artifact `9802235490`, artifact ZIP digest `sha256:d233fe0a85d964a9c073e963861c86fe5fc42dcd89c69f2042a103b8f6d9a87d`.
+`AUDIT_FULL_RESTART_C07_FONTS_TYPOGRAPHY_2026-09-01.md` records the accepted focused C07 physical tranche. Its accepted execution is Chrome for Testing `152.0.7977.64`, workflow run `33512505056`, job `99871390761`, exact evidence head `1b6a36b60adb6aa0f7e01cd962489bd3ae0915d7`, conclusion SUCCESS, artifact `9802235490`, artifact ZIP digest `sha256:d233fe0a85d964a9c073e963861c86fe5fc42dcd89c69f2042a103b8f6d9a87d`.
 
 Top-document physical controls preserve font-size relationships, bold/italic state, letter spacing, line height, serif/monospace family metrics, decoration/text-shadow/stroke raster signal, multilingual text and current Chrome `text-wrap:balance` support. A delayed ordinary webfont is correctly awaited and embedded; an intentionally missing webfont is truthfully reported failed with fallback output.
 
