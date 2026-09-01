@@ -1,23 +1,32 @@
 (() => {
   'use strict';
 
-  // P0-023: the tab-scoped retry cache may only be consumed by the exact
-  // content-document generation that produced it. URL equality is not a
-  // document-generation receipt (same-URL reload/replacement is distinct).
-  const INSTALL_MARKER = '__webclipPdfCacheDocumentGenerationGuardV1';
+  // P0-023: a tab-scoped retry cache is usable only by the exact content
+  // document generation that produced it. This helper is loaded by a small
+  // service-worker bootstrap before service-worker.js, records sender identity
+  // with an ordinary Chrome listener, then wraps the worker's normal global
+  // cache functions after service-worker.js has loaded. It never rewrites the
+  // Chrome Event API itself.
+  const OBSERVER_INSTALL_MARKER = '__webclipPdfCacheDocumentGenerationObserverV2';
+  const FUNCTION_INSTALL_MARKER = '__webclipPdfCacheDocumentGenerationFunctionsV2';
   const RECEIPT_PREFIX = 'webclipPdfCacheDocumentReceipt:';
   const MAX_DOCUMENT_ID_CHARS = 256;
   const GENERATE_TYPE = 'WEBCLIP_SEND_PDF_TO_YANDEX';
-  const RETRY_TYPES = new Set(['WEBCLIP_RETRY_PDF_TO_YANDEX', 'WEBCLIP_DOWNLOAD_CACHED_PDF']);
+  const RETRY_TYPE = 'WEBCLIP_RETRY_PDF_TO_YANDEX';
+  const DOWNLOAD_TYPE = 'WEBCLIP_DOWNLOAD_CACHED_PDF';
   const INVALIDATE_TYPE = 'WEBCLIP_INVALIDATE_PDF_CACHE';
-  const listenerWrappers = new WeakMap();
+  const OBSERVED_TYPES = new Set([GENERATE_TYPE, RETRY_TYPE, DOWNLOAD_TYPE, INVALIDATE_TYPE]);
+  const pendingIdentityQueues = new Map();
   const stats = {
+    observedMessages: 0,
+    consumedIdentities: 0,
     generationAdmissions: 0,
     receiptCommits: 0,
     receiptClears: 0,
     retryAdmissions: 0,
     retryRejections: 0,
-    missingDocumentId: 0
+    missingDocumentId: 0,
+    functionWrappersInstalled: 0
   };
 
   function normalizeTabId(value) {
@@ -84,9 +93,7 @@
       stats.missingDocumentId += 1;
       throw makeGenerationError('WEBCLIP_PDF_CACHE_DOCUMENT_ID_REQUIRED', 'Не удалось доказать поколение документа для PDF retry-cache. Сформируйте PDF заново.');
     }
-    await storageSession(chromeApi).set({
-      [key]: { tabId, documentId, committedAt: Date.now() }
-    });
+    await storageSession(chromeApi).set({ [key]: { tabId, documentId, committedAt: Date.now() } });
     stats.receiptCommits += 1;
     return { tabId, documentId };
   }
@@ -112,126 +119,128 @@
     return receipt;
   }
 
-  function sendGuardError(sendResponse, error) {
-    try {
-      sendResponse({
-        ok: false,
-        code: String(error?.code || 'WEBCLIP_PDF_CACHE_DOCUMENT_MISMATCH'),
-        error: String(error?.message || error || 'PDF retry-cache rejected')
-      });
-    } catch (_) {}
+  function queueKey(type, tabId) {
+    return `${String(type || '')}:${normalizeTabId(tabId)}`;
   }
 
-  function invokeAfterAdmission(listener, thisArg, message, sender, sendResponse, admissionPromise) {
-    Promise.resolve(admissionPromise).then(() => {
-      let responseSent = false;
-      const guardedSendResponse = (value) => {
-        responseSent = true;
-        return sendResponse(value);
-      };
-      try {
-        const result = listener.call(thisArg, message, sender, guardedSendResponse);
-        if (result && typeof result.then === 'function') {
-          Promise.resolve(result).then((value) => {
-            if (!responseSent && value !== undefined) sendResponse(value);
-          }, (error) => {
-            if (!responseSent) sendGuardError(sendResponse, error);
-          });
-        }
-      } catch (error) {
-        if (!responseSent) sendGuardError(sendResponse, error);
-      }
-    }, (error) => sendGuardError(sendResponse, error));
+  function enqueueIdentity(type, identity) {
+    const tabId = normalizeTabId(identity?.tabId);
+    if (!OBSERVED_TYPES.has(String(type || '')) || !tabId) return false;
+    const key = queueKey(type, tabId);
+    const queue = pendingIdentityQueues.get(key) || [];
+    queue.push({ tabId, documentId: normalizeDocumentId(identity?.documentId) });
+    // The product listener consumes the matching identity synchronously in the
+    // same dispatch turn. A small cap is only a fail-safe against unrelated
+    // synthetic messages that never enter one of the wrapped product functions.
+    if (queue.length > 32) queue.splice(0, queue.length - 32);
+    pendingIdentityQueues.set(key, queue);
+    stats.observedMessages += 1;
     return true;
   }
 
-  function invokeGeneration(listener, thisArg, message, sender, sendResponse, chromeApi) {
-    const identity = senderIdentity(sender);
-    stats.generationAdmissions += 1;
-    if (!identity.tabId || !identity.documentId) {
+  function consumeIdentity(type, tabId) {
+    const key = queueKey(type, tabId);
+    const queue = pendingIdentityQueues.get(key) || [];
+    const identity = queue.shift() || null;
+    if (queue.length) pendingIdentityQueues.set(key, queue);
+    else pendingIdentityQueues.delete(key);
+    if (identity) stats.consumedIdentities += 1;
+    return identity;
+  }
+
+  function requireIdentity(type, tabId) {
+    const identity = consumeIdentity(type, tabId);
+    if (!identity || !identity.documentId) {
       stats.missingDocumentId += 1;
-      sendGuardError(sendResponse, makeGenerationError('WEBCLIP_PDF_CACHE_DOCUMENT_ID_REQUIRED', 'Не удалось доказать поколение документа перед формированием retry-cache.'));
-      return false;
+      throw makeGenerationError('WEBCLIP_PDF_CACHE_DOCUMENT_ID_REQUIRED', 'Не удалось доказать поколение документа для операции с PDF retry-cache.');
     }
-
-    // Clear the old generation before entering a new generation attempt. If the
-    // new attempt never commits a cache, the old tab:<id> record stays unusable.
-    return invokeAfterAdmission(listener, thisArg, message, sender, (response) => {
-      const cached = response?.cached === true;
-      const settlement = cached ? commitReceipt(identity, chromeApi) : clearReceipt(identity.tabId, chromeApi);
-      Promise.resolve(settlement).then(
-        () => sendResponse(response),
-        (error) => sendGuardError(sendResponse, error)
-      );
-    }, clearReceipt(identity.tabId, chromeApi));
+    return identity;
   }
 
-  function wrapListener(listener, chromeApi) {
-    if (listenerWrappers.has(listener)) return listenerWrappers.get(listener);
-    const wrapped = function webclipPdfCacheGenerationListener(message, sender, sendResponse) {
-      const type = String(message?.type || '');
-      if (type === GENERATE_TYPE) {
-        return invokeGeneration(listener, this, message, sender, sendResponse, chromeApi);
-      }
-      if (RETRY_TYPES.has(type)) {
-        const identity = senderIdentity(sender);
-        return invokeAfterAdmission(listener, this, message, sender, sendResponse, assertCurrentReceipt(identity, chromeApi));
-      }
-      if (type === INVALIDATE_TYPE) {
-        const identity = senderIdentity(sender);
-        return invokeAfterAdmission(listener, this, message, sender, sendResponse, clearReceipt(identity.tabId, chromeApi));
-      }
-      return listener.call(this, message, sender, sendResponse);
-    };
-    listenerWrappers.set(listener, wrapped);
-    return wrapped;
-  }
-
-  function installMethod(target, name, replacement) {
-    try {
-      target[name] = replacement;
-      if (target[name] === replacement) return true;
-    } catch (_) {}
-    try {
-      Object.defineProperty(target, name, { value: replacement, configurable: true, enumerable: true, writable: false });
-      return target[name] === replacement;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function install(chromeApi = globalThis.chrome) {
-    if (globalThis[INSTALL_MARKER]) return { installed: true, alreadyInstalled: true };
+  function installObserver(chromeApi = globalThis.chrome) {
+    if (globalThis[OBSERVER_INSTALL_MARKER]) return { installed: true, alreadyInstalled: true };
     storageSession(chromeApi);
     const event = chromeApi?.runtime?.onMessage;
     if (!event || typeof event.addListener !== 'function') {
       throw makeGenerationError('WEBCLIP_PDF_CACHE_GENERATION_GUARD_UNAVAILABLE', 'runtime.onMessage недоступен для PDF generation guard.');
     }
-    const rawAdd = event.addListener.bind(event);
-    const rawRemove = typeof event.removeListener === 'function' ? event.removeListener.bind(event) : null;
-    const rawHas = typeof event.hasListener === 'function' ? event.hasListener.bind(event) : null;
-    if (!installMethod(event, 'addListener', (listener) => rawAdd(typeof listener === 'function' ? wrapListener(listener, chromeApi) : listener))) {
-      throw makeGenerationError('WEBCLIP_PDF_CACHE_GENERATION_GUARD_UNAVAILABLE', 'Не удалось установить PDF generation guard.');
+    event.addListener((message, sender) => {
+      const type = String(message?.type || '');
+      if (OBSERVED_TYPES.has(type)) enqueueIdentity(type, senderIdentity(sender));
+      return false;
+    });
+    globalThis[OBSERVER_INSTALL_MARKER] = true;
+    return { installed: true };
+  }
+
+  function installFunctionGuards(workerGlobal = globalThis, chromeApi = globalThis.chrome) {
+    if (workerGlobal[FUNCTION_INSTALL_MARKER]) return { installed: true, alreadyInstalled: true };
+    storageSession(chromeApi);
+    const originalGenerate = workerGlobal.generatePdfAndUploadToYandex;
+    const originalRetry = workerGlobal.retryCachedPdfUploadToYandex;
+    const originalDownload = workerGlobal.downloadCachedPdf;
+    const originalDelete = workerGlobal.deleteCachedPdf;
+    if (typeof originalGenerate !== 'function' || typeof originalRetry !== 'function' || typeof originalDownload !== 'function' || typeof originalDelete !== 'function') {
+      throw makeGenerationError('WEBCLIP_PDF_CACHE_GENERATION_GUARD_UNAVAILABLE', 'Функции PDF retry-cache недоступны для generation guard.');
     }
-    if (rawRemove) installMethod(event, 'removeListener', (listener) => rawRemove(listenerWrappers.get(listener) || listener));
-    if (rawHas) installMethod(event, 'hasListener', (listener) => rawHas(listenerWrappers.get(listener) || listener));
-    globalThis[INSTALL_MARKER] = true;
+
+    workerGlobal.generatePdfAndUploadToYandex = async function guardedGeneratePdfAndUploadToYandex(tabId, ...args) {
+      const identity = requireIdentity(GENERATE_TYPE, tabId);
+      stats.generationAdmissions += 1;
+      await clearReceipt(tabId, chromeApi);
+      try {
+        const result = await originalGenerate.call(this, tabId, ...args);
+        if (result?.cached === true) await commitReceipt(identity, chromeApi);
+        else await clearReceipt(tabId, chromeApi);
+        return result;
+      } catch (error) {
+        await clearReceipt(tabId, chromeApi).catch(() => {});
+        throw error;
+      }
+    };
+
+    workerGlobal.retryCachedPdfUploadToYandex = async function guardedRetryCachedPdfUploadToYandex(tabId, ...args) {
+      const identity = requireIdentity(RETRY_TYPE, tabId);
+      await assertCurrentReceipt(identity, chromeApi);
+      return originalRetry.call(this, tabId, ...args);
+    };
+
+    workerGlobal.downloadCachedPdf = async function guardedDownloadCachedPdf(tabId, ...args) {
+      const identity = requireIdentity(DOWNLOAD_TYPE, tabId);
+      await assertCurrentReceipt(identity, chromeApi);
+      return originalDownload.call(this, tabId, ...args);
+    };
+
+    workerGlobal.deleteCachedPdf = async function guardedDeleteCachedPdf(tabId, ...args) {
+      try {
+        return await originalDelete.call(this, tabId, ...args);
+      } finally {
+        await clearReceipt(tabId, chromeApi).catch(() => {});
+      }
+    };
+
+    workerGlobal[FUNCTION_INSTALL_MARKER] = true;
+    stats.functionWrappersInstalled = 4;
     return { installed: true };
   }
 
   globalThis.WebClipPdfCacheDocumentGenerationGuard = Object.freeze({
     RECEIPT_PREFIX,
     GENERATE_TYPE,
-    RETRY_TYPES: Object.freeze([...RETRY_TYPES]),
+    RETRY_TYPE,
+    DOWNLOAD_TYPE,
     INVALIDATE_TYPE,
     normalizeDocumentId,
     receiptKey,
+    senderIdentity,
+    enqueueIdentity,
+    consumeIdentity,
     readReceipt,
     clearReceipt,
     commitReceipt,
     assertCurrentReceipt,
-    install,
+    installObserver,
+    installFunctionGuards,
     stats
   });
-  globalThis.__webclipPdfCacheDocumentGenerationInstallResult = install();
 })();
