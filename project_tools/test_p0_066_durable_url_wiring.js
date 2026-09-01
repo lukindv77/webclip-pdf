@@ -26,8 +26,9 @@ assert.match(worker, /WebClipDurableUrlPolicy\.migratePdfCacheDbV4\(db, tx, even
 assert.doesNotMatch(worker, /src:\s*String\(locator\.src \|\| ''\)\.slice/, 'snapshot src plaintext must not persist');
 assert.doesNotMatch(worker, /href:\s*String\(locator\.href \|\| ''\)\.slice/, 'snapshot href plaintext must not persist');
 
-assert.match(injection, /'host-control-activation-guard\.js',\s*DURABLE_URL_HELPER_FILE/, 'P0-066 policy must load after host-control guard and before content.js');
 assert.match(injection, /const DURABLE_URL_HELPER_FILE = 'durable-url-policy\.js';/);
+assert.match(injection, /REQUIRED_PREFIX = Object\.freeze\(\[BUDGET_HELPER_FILE, INERT_HELPER_FILE, HOST_CONTROL_HELPER_FILE, DURABLE_URL_HELPER_FILE\]\)/,
+  'P0-066 policy must load after host-control guard and before content.js');
 assert.ok(injection.indexOf('DURABLE_URL_HELPER_FILE') < injection.indexOf("CONTENT_FILE = 'content.js'"));
 
 assert.match(content, /const durableUrlPolicy = globalThis\.WebClipDurableUrlPolicy;/);
