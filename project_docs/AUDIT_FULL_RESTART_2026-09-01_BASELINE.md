@@ -67,7 +67,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C01 | Manual Include/Exclude / selected-scope authority | `L4-REVALIDATED / FINDING (P1-154)` |
 | C02 | SelectionSnapshot restore -> admitted rendered target -> saved copy | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-001, P0-080)` |
 | C03 | Main Content / auto candidate -> actual saved scope | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-160, P0-070/P0-075/P0-080)` |
-| C04 | Ordinary DOM/text baseline | `NOT-TRIAGED / UNKNOWN` |
+| C04 | Ordinary DOM/text baseline | `L4-REVALIDATED / PASS` |
 | C05 | Geometry/layout | `NOT-TRIAGED / UNKNOWN` |
 | C06 | Colors/backgrounds/compositing | `NOT-TRIAGED / UNKNOWN` |
 | C07 | Fonts/typography | `NOT-TRIAGED / UNKNOWN` |
@@ -156,6 +156,14 @@ Affected restart coordinates currently remain nonterminal: C17, C39, C43/C44 con
 `AUDIT_FULL_RESTART_SELECTION_GENERATION_2026-09-01.md` records the accepted current Chrome 152 / deterministic tranche for C01–C03 plus narrow C16/C35 controls and C40 cache-generation authority. Its accepted external execution is workflow run `33500051622`, job `99831050769`, exact evidence head `d82f31f264c43ea1015cc1acc1c40ed390f33e6d`, conclusion SUCCESS.
 
 The matrix above advances only those specifically exercised coordinates. No historical result is implicitly promoted and no P-owner status changes through this coverage update.
+
+## Fresh continuation checkpoint — focused C04 ordinary DOM/text
+
+`AUDIT_FULL_RESTART_C04_ORDINARY_DOM_TEXT_2026-09-01.md` records the accepted focused C04 physical tranche. Its accepted execution is Chrome for Testing `152.0.7977.64`, workflow run `33503006214`, job `99840444990`, exact evidence head `3e55ab8a9c3965aedc9d3ad20ecc1b432f28d364`, conclusion SUCCESS.
+
+Six physical PDF cases cover ordinary nested block/inline text, Cyrillic text, nested and inline Exclude behavior, `<br>`/`<pre>`/displayed entity text, visible heading/list/table-cell text order and multiple independent Includes. No C04-specific failure was observed, so C04 advances to `L4-REVALIDATED / PASS` within that explicit ordinary-DOM/text boundary.
+
+A concurrent docs-only PR #109 recorded broader C04–C15 observations while this focused C04 evidence was being executed. Those broader observations remain available as supporting/reference evidence, but this matrix deliberately advances **only C04** under the current one-major-audit-task-per-session rule. C05 and every later untested sequential coordinate remain unchanged here.
 
 ## Delivery rule
 
