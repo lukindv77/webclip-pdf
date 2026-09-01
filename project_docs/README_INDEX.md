@@ -50,6 +50,7 @@ Explicit residual external families remain C17, C37, C41, C42, C44 and C46. C46 
 
 ## Functional Closure Sweep evidence
 
+- `AUDIT_P0_033_SIGNED_YANDEX_LOG_REDACTION_CLOSURE_2026-09-01_EVIDENCE.md` — deterministic closure of signed Yandex Disk transport URL confidentiality in OperationLog. `.disk.yandex.net` and `.disk.yandex.ru` capability URLs now retain only origin + a constant redacted path in direct and nested metadata. **P0-033 is DONE.**
 After Cycle-2 coverage completion, new audit work is risk-ranked against existing ACTIVE Registry owners rather than extending coverage for its own sake.
 
 - `AUDIT_P0_064_FRAME_PROXY_BUDGET_CLOSURE_2026-09-01_EVIDENCE.md` — current Chrome-152 closure of flattened same-origin iframe materialization admission. A pointer-based preflight executes before complete `childNodes` materialization/deep clone/full descendant arrays; 5,001-node, 2,000,001-text-unit and 8,388,609-estimated-byte controls all reject with zero deep-clone delta, while an under-budget proxy remains physically printable. The same run revalidates the inert-proxy behavior under budget-first bootstrap. **P0-064 is DONE.**
@@ -75,6 +76,7 @@ Historical consolidated evidence remains in `AUDIT_EVIDENCE.md`, `AUDIT_RETIRED_
 
 ## Current audit tools
 
+- `project_tools/test_p0_033_signed_yandex_log_redaction.js` — deterministic P0-033 failure/closure regression for direct/nested signed Yandex URL redaction and classic-worker bootstrap binding order.
 - `project_tools/audit_p0_064_frame_proxy_budget.py` — P0-064 Chrome-152 closure harness for pre-clone node/text/estimated-byte admission, unrelated-DOM negative controls and under-budget physical PDF output.
 - `project_tools/test_p0_064_frame_proxy_budget.js` — deterministic P0-064 preflight limits, fail-before-clone ordering and budget→inert→content injection regression.
 - `project_tools/audit_p0_068_inert_frame_proxy.py` — P0-068/P1-213 Chrome-152 physical closure/revalidation harness with native deep-clone failure control, real MV3 isolated-world injection proof, active-context/lifecycle/network side-effect checks and physical PDF positive controls.

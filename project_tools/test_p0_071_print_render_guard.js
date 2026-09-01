@@ -14,7 +14,7 @@ const bootstrapSource = fs.readFileSync(path.join(ROOT, 'journal-text-filter.js'
 
 assert.match(workerSource, /importScripts\([^\n]*'journal-text-filter\.js'/, 'service worker must synchronously load the worker bootstrap');
 assert.match(bootstrapSource, /typeof importScripts === 'function'/, 'shared Journal helper must keep the bootstrap worker-only');
-assert.match(bootstrapSource, /importScripts\('pdf-print-guard\.js',\s*'content-injection-guard\.js'\)/, 'worker bootstrap must load the P0-071 guard first before later security bootstraps and service-worker body execution');
+assert.match(bootstrapSource, /importScripts\('pdf-print-guard\.js',\s*'content-injection-guard\.js',\s*'operation-log-redaction-guard\.js'\)/, 'worker bootstrap must load the P0-071 guard first before later security bootstraps and service-worker body execution');
 
 const installRawCalls = [];
 const sandbox = {
