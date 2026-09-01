@@ -44,6 +44,9 @@ jobs:
       - name: Final audit-delta retirement self-test
         run: python project_tools/test_final_delta_retirement.py
 
+      - name: Staged evidence compaction self-test
+        run: python project_tools/test_staged_evidence_compaction.py
+
       - name: Context/bootstrap contract
         run: python project_tools/check_context_contract.py
 
