@@ -1,0 +1,61 @@
+name: Fresh C08 raster images audit (temporary)
+
+on:
+  push:
+    branches:
+      - research/c08-raster-images-2026-09-02
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  fresh-c08-raster-images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.14'
+
+      - name: Install audit dependencies
+        run: python -m pip install --disable-pip-version-check playwright==1.55.0 pymupdf==1.26.4 pillow==11.3.0
+
+      - name: Install pinned Chrome for Testing
+        run: |
+          set -euo pipefail
+          mkdir -p .chrome
+          curl -fsSLo .chrome/chrome.zip https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.64/linux64/chrome-linux64.zip
+          unzip -q .chrome/chrome.zip -d .chrome
+          .chrome/chrome-linux64/chrome --version
+          git rev-parse HEAD
+          sha256sum content.js frame-proxy-budget-guard.js frame-proxy-inert-guard.js host-control-activation-guard.js
+
+      - name: C08 focused physical probe
+        env:
+          CHROMIUM_BIN: ${{ github.workspace }}/.chrome/chrome-linux64/chrome
+        run: |
+          set -euo pipefail
+          mkdir -p c08-artifacts
+          python project_tools/audit_fresh_c08_raster_images.py --out-dir c08-artifacts | tee c08-result.json
+
+      - name: Upload C08 evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: c08-raster-images-${{ github.sha }}
+          path: |
+            c08-result.json
+            c08-artifacts/*.json
+            c08-artifacts/*.pdf
+            c08-artifacts/*.png
+          if-no-files-found: warn
+          retention-days: 7
