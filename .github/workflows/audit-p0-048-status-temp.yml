@@ -1,0 +1,62 @@
+name: Audit P0-048 registry sync temporary
+
+on:
+  push:
+    branches:
+      - fix/p0-048-local-download-identity-2026-09-01
+
+permissions:
+  contents: write
+
+jobs:
+  sync-status:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Synchronize Registry and index
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          registry_path = Path('project_docs/AUDIT_REGISTRY.md')
+          registry = registry_path.read_text(encoding='utf-8')
+          active = "| P0-048 | ACTIVE | Local-download fallback identity is ambiguous; one physical `downloadId` cannot be heuristically claimed/overwritten by multiple intents. |"
+          if registry.count(active) != 1:
+              raise SystemExit(f'expected one P0-048 ACTIVE row, found {registry.count(active)}')
+          registry = registry.replace(active + '\n', '', 1)
+          marker = "| P0-039 | DONE | Unknown local-download outcomes no longer lose their only durable checkpoint when Chrome Download history disappears after 24 hours. Both unbound and bound TTL paths transition into a bounded `unknown` / `manual-resolution` state preserving metadata and operationId, skip ordinary retry batches, remain late-settlement resolvable, and never fabricate Journal success. Deterministic evidence passed at run `33469941122` / job `99737473577`. See `AUDIT_P0_039_LOCAL_DOWNLOAD_UNKNOWN_RECOVERY_CLOSURE_2026-09-01_EVIDENCE.md`. |"
+          if registry.count(marker) != 1:
+              raise SystemExit('P0-039 terminal insertion marker mismatch')
+          done = "| P0-048 | DONE | Automatic local-download fallback no longer assigns one physical `downloadId` by first-match filename/size heuristics. Exact Blob URL remains primary; fallback requires a unique candidate for the current intent and unique intent ownership for that candidate across the bounded active intent set. Numeric binding atomically refuses a different operation's existing owner instead of overwriting it. Deterministic committed-source evidence passed at run `33470987867` / job `99740532019`. See `AUDIT_P0_048_LOCAL_DOWNLOAD_IDENTITY_CLOSURE_2026-09-01_EVIDENCE.md`. |"
+          registry = registry.replace(marker, marker + '\n' + done, 1)
+          registry_path.write_text(registry, encoding='utf-8')
+
+          index_path = Path('project_docs/README_INDEX.md')
+          index = index_path.read_text(encoding='utf-8')
+          heading = '## Functional Closure Sweep evidence\n\n'
+          if index.count(heading) != 1:
+              raise SystemExit('Functional Closure Sweep heading mismatch')
+          evidence_bullet = '- `AUDIT_P0_048_LOCAL_DOWNLOAD_IDENTITY_CLOSURE_2026-09-01_EVIDENCE.md` — deterministic closure of local-download fallback identity ambiguity: exact Blob URL remains primary, filename/size fallback requires unique intent↔DownloadItem ownership, and numeric downloadId binding is transactional no-overwrite. **P0-048 is DONE.**\n'
+          if evidence_bullet not in index:
+              index = index.replace(heading, heading + evidence_bullet, 1)
+
+          tools = '## Current audit tools\n\n'
+          if index.count(tools) != 1:
+              raise SystemExit('Current audit tools heading mismatch')
+          tool_bullet = '- `project_tools/test_p0_048_local_download_identity.js` — deterministic P0-048 regression for exact Blob URL precedence, ambiguous filename/size fallback, unique active-intent ownership and atomic numeric downloadId collision refusal.\n'
+          if tool_bullet not in index:
+              index = index.replace(tools, tools + tool_bullet, 1)
+          index_path.write_text(index, encoding='utf-8')
+          PY
+          git diff --check
+          git config user.name lukindv77
+          git config user.email lukindv@gmail.com
+          git add project_docs/AUDIT_REGISTRY.md project_docs/README_INDEX.md
+          git diff --cached --quiet && exit 1
+          git commit -m 'docs: mark P0-048 local download identity done'
+          git push origin HEAD:fix/p0-048-local-download-identity-2026-09-01
