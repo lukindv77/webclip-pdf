@@ -57,15 +57,15 @@ Interruption-safe staged evidence is being compacted separately. Completed stage
 - `AUDIT_DEFERRED_VIRTUALIZED_MATERIALIZATION_2026-08-30_EVIDENCE.md`
 - `AUDIT_LONGPAGE_TOPLAYER_PAGINATION_2026-08-30_EVIDENCE.md`
 - `AUDIT_LONGPAGE_TOPLAYER_PAGINATION_FINAL_2026-08-30_EVIDENCE.md`
-- `AUDIT_REPLACED_RESOURCE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md` — compact current representation of Blocks 1–56; the three original checkpoint blobs are recoverable from pre-compaction Git and verified in CI.
-- `AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_FINAL_2026-08-30_EVIDENCE.md` — compact current representation of Blocks 1–56; the four original checkpoint blobs are recoverable from pre-compaction Git and verified in CI.
+- `AUDIT_REPLACED_RESOURCE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md` — compact current representation of Blocks 1–56; original checkpoint blobs are recoverable from pre-compaction Git and verified in CI.
+- `AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_FINAL_2026-08-30_EVIDENCE.md` — compact current representation of Blocks 1–56; original checkpoint blobs are recoverable from pre-compaction Git and verified in CI.
+- `AUDIT_FLATTENED_DOCUMENT_NAMESPACE_FINAL_2026-08-30_EVIDENCE.md` — compact current representation of Blocks 1–56 with historical status wording reconciled to current Registry; original checkpoint blobs are recoverable from pre-compaction Git and verified in CI.
 
 ### Interruption-safe staged evidence series still retained in the working tree
 
-These series remain candidates for separately proven lossless compaction. Their presence is navigation, not status authority.
+One series remains for separately proven lossless compaction. Its presence is navigation, not status authority.
 
 - `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_2026-08-30_EVIDENCE.md`, `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_STAGE3_2026-08-30_EVIDENCE.md`, `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md`
-- `AUDIT_FLATTENED_DOCUMENT_NAMESPACE_2026-08-30_EVIDENCE.md`, `AUDIT_FLATTENED_DOCUMENT_NAMESPACE_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_FLATTENED_DOCUMENT_NAMESPACE_STAGE3_2026-08-30_EVIDENCE.md`, `AUDIT_FLATTENED_DOCUMENT_NAMESPACE_FINAL_2026-08-30_EVIDENCE.md`
 
 ## Historical and closure evidence
 

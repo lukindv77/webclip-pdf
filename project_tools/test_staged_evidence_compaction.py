@@ -41,6 +41,23 @@ SERIES = (
         ),
         "blocks": 56,
     },
+    {
+        "name": "flattened-document-namespace",
+        "source_commit": "69eeb8a45800dbd21e2f2150ef772f81167c55d7",
+        "consolidated": "project_docs/AUDIT_FLATTENED_DOCUMENT_NAMESPACE_FINAL_2026-08-30_EVIDENCE.md",
+        "sources": {
+            "project_docs/AUDIT_FLATTENED_DOCUMENT_NAMESPACE_2026-08-30_EVIDENCE.md": "f27442b95e2528c63c0a0e974a5a26c8c69f859c",
+            "project_docs/AUDIT_FLATTENED_DOCUMENT_NAMESPACE_STAGE2_2026-08-30_EVIDENCE.md": "f083b46aa6260fd19dfc446275592890582ce960",
+            "project_docs/AUDIT_FLATTENED_DOCUMENT_NAMESPACE_STAGE3_2026-08-30_EVIDENCE.md": "8ca747bfea509f3da38098cf109f04d541395d39",
+            "project_docs/AUDIT_FLATTENED_DOCUMENT_NAMESPACE_FINAL_2026-08-30_EVIDENCE.md": "ea57fb2663a9b12036ced7c9465defc5102f7466",
+        },
+        "retired": (
+            "project_docs/AUDIT_FLATTENED_DOCUMENT_NAMESPACE_2026-08-30_EVIDENCE.md",
+            "project_docs/AUDIT_FLATTENED_DOCUMENT_NAMESPACE_STAGE2_2026-08-30_EVIDENCE.md",
+            "project_docs/AUDIT_FLATTENED_DOCUMENT_NAMESPACE_STAGE3_2026-08-30_EVIDENCE.md",
+        ),
+        "blocks": 56,
+    },
 )
 
 
