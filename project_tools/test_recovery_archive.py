@@ -57,6 +57,10 @@ def assert_clean_build(clone: pathlib.Path) -> None:
             "source/service-worker.js",
             "source/content.js",
             "source/project_tools/build_recovery_archive.py",
+            "project_docs/USER_REQUIREMENTS.md",
+            "project_docs/DECISIONS_AND_RATIONALE.md",
+            "project_docs/COMPREHENSIVE_PROJECT_RESEARCH_POLICY.md",
+            "project_docs/SESSION_EXECUTION_AND_INTERRUPTION_SAFETY_POLICY.md",
             "project_docs/RESEARCH_REGISTRY.md",
             "project_docs/BUILD_AND_RECOVERY_RULES.md",
             "project_docs/RESTORE_PROMPT.md",
@@ -65,6 +69,8 @@ def assert_clean_build(clone: pathlib.Path) -> None:
         missing = sorted(required - names)
         if missing:
             raise AssertionError("recovery archive missing required files: " + ", ".join(missing))
+        if "project_docs/CHANGELOG_AND_RATIONALE.md" in names:
+            raise AssertionError("retired requirement-change history returned to current recovery archive")
 
         hash_lines = zf.read("FILE_HASHES.sha256").decode("utf-8").splitlines()
         if not hash_lines:
