@@ -39,9 +39,37 @@ const backupError = document.getElementById('backupError');
 
 const manifest = chrome.runtime.getManifest();
 versionEl.textContent = `Версия расширения: ${manifest.version}`;
-loadBackupStatus();
+void initializePopupContext();
 
+async function initializePopupContext() {
+  try {
+    const tab = await getActiveSourceTab();
+    if (tab?.incognito !== false) {
+      renderPrivateBackupStatus();
+      return;
+    }
+    await loadBackupStatus();
+  } catch (_) {
+    renderPrivateBackupStatus();
+  }
+}
 
+function renderPrivateBackupStatus() {
+  backupState.textContent = 'Приватный режим · статус резервной копии скрыт.';
+  backupLastSuccess.textContent = 'скрыто';
+  backupLastFailure.textContent = 'скрыто';
+  backupError.textContent = '';
+  backupPanel.classList.remove('problem');
+}
+
+function assertRegularTabContext(tab, actionLabel = 'Эта операция WebClip') {
+  if (tab?.incognito !== false) {
+    const error = new Error(`${actionLabel} недоступна в режиме инкогнито.`);
+    error.code = 'WEBCLIP_PRIVATE_CONTEXT_BLOCKED';
+    throw error;
+  }
+  return tab;
+}
 
 async function loadBackupStatus() {
   try {
@@ -209,7 +237,7 @@ grantFrameAccessButton?.addEventListener('click', async () => {
   statusEl.textContent = '';
   grantFrameAccessButton.disabled = true;
   try {
-    const tab = await getActiveSourceTab();
+    const tab = assertRegularTabContext(await getActiveSourceTab(), 'Выдача доступа к iframe');
     if (!isHttpPageUrl(tab.url)) throw new Error('Доступ к iframe можно выдать только на страницах http:// и https://.');
     const origins = await collectCrossOriginFrameOrigins(tab.id);
     if (!origins.length) {
@@ -289,7 +317,7 @@ startButton.addEventListener('click', async () => {
     }
 
     await ensureTopContentScript(tab.id);
-    await enableGrantedFrameAgents(tab.id);
+    if (tab.incognito === false) await enableGrantedFrameAgents(tab.id);
 
     await chrome.tabs.sendMessage(tab.id, { type: 'WEBCLIP_START_SELECTION' });
     window.close();
