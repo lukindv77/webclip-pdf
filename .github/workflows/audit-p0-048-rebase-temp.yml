@@ -20,6 +20,8 @@ jobs:
       - name: Integrate fresh main and resolve only Registry overlap
         run: |
           set -euo pipefail
+          git config user.name lukindv77
+          git config user.email lukindv@gmail.com
           git fetch origin main
           set +e
           git merge --no-commit --no-ff origin/main
@@ -55,7 +57,5 @@ jobs:
           git diff --check --cached
           node --check service-worker.js
           node project_tools/test_p0_048_local_download_identity.js
-          git config user.name lukindv77
-          git config user.email lukindv@gmail.com
           git commit -m 'audit: integrate fresh main into P0-048 closure'
           git push origin HEAD:fix/p0-048-local-download-identity-2026-09-01
