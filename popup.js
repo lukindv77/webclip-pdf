@@ -169,7 +169,7 @@ function frameHostPermissionPattern(origin) {
 
 async function ensureTopContentScript(tabId) {
   await readPopupExtensionApiBounded(
-    () => chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }),
+    () => chrome.scripting.executeScript({ target: { tabId }, files: ['frame-proxy-inert-guard.js', 'content.js'] }),
     'Подключение WebClip к текущей странице'
   );
 }
@@ -245,7 +245,7 @@ readLaterButton.addEventListener('click', async () => {
   try {
     const tab = await getActiveSourceTab();
     if (!/^https?:\/\//i.test(tab.url || '')) throw new Error('«Прочитать позже» доступно для страниц http:// и https://.');
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+    await ensureTopContentScript(tab.id);
     const result = await chrome.tabs.sendMessage(tab.id, { type: 'WEBCLIP_COMMAND', command: 'read-later' });
     if (result?.ok === false) throw new Error(result.error || 'Не удалось запустить «Прочитать позже».');
     window.close();
