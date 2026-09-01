@@ -52,7 +52,6 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 | P0-065 | ACTIVE | Offscreen Blob creation needs count/byte reservation **before** large Blob materialization, not only after creation. |
 | P0-066 | ACTIVE | One durable/display URL confidentiality sanitizer must cover source URLs, locator URLs and imported/public metadata; secrets/userinfo/non-durable schemes cannot persist. |
 | P0-067 | ACTIVE | PDF preparation must not synthesize real host-page control activation (`click`, submit/navigation side effects). |
-| P0-068 | ACTIVE | Flattened iframe print representation must be inert before insertion; no live nested browsing/plugin/custom-element/duplicate-identity side effects. |
 | P0-069 | ACTIVE | Deleting a Journal entry with a public Yandex link requires explicit publication outcome; local deletion cannot silently strand public access/control. |
 | P0-070 | ACTIVE | User save authority is exact full-document generation from command admission through print/cache/download/upload/Journal finalization. |
 | P0-072 | ACTIVE | Bulk clear/replace cannot treat deletion of checkpoints as cancellation of already admitted non-cancellable external side effects. |
@@ -70,6 +69,7 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 | Code | Status | Resolution |
 |---|---|---|
 | P0-019 | SUPERSEDED | Historical rule “every user build contains a full recovery archive” was intentionally replaced on 2026-08-29 by Git-first recovery: exact commit SHA is canonical WIP snapshot, annotated release tag points to exact released commit, optional recovery ZIP is a separate offline artifact. See `BUILD_AND_RECOVERY_RULES.md`. |
+| P0-068 | DONE | Flattened same-origin iframe print representation is made inert before live top-document insertion by an isolated-world inert-clone guard. Chrome for Testing 152 physical evidence at run `33465846960` / job `99725415291` proved native deep clone executes custom-element lifecycle, inline handler and nested iframe/object loads, while the guarded representation has zero active tags/handlers/duplicate identity/action attributes, zero host lifecycle/handler/nested/object deltas, preserves ordinary selected text/table content and Exclude semantics in a physical PDF, and does not patch the host main world. See `AUDIT_P0_068_INERT_FRAME_PROXY_CLOSURE_2026-09-01_EVIDENCE.md`. |
 | P0-071 | DONE | Actual `Page.printToPDF` representation is guarded at the render cut: page scripts are frozen, a bounded CDP DOM scan removes unsafe link schemes across top document/open Shadow/same-origin frame representation, safe links remain, live hrefs are restored before DOM teardown, and Chrome for Testing 152 physical PDF evidence at run `33463569910` / job `99718684840` proved hostile `beforeprint`, Shadow, frame and already-mutated `javascript:`/`data:` annotations do not reach the PDF. See `AUDIT_P0_071_PRINT_RENDER_GUARD_CLOSURE_2026-09-01_EVIDENCE.md`. |
 
 ## P1 — current ACTIVE owners before late-number stream
@@ -136,10 +136,11 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 | Code | Status | Resolution |
 |---|---|---|
 | P1-181 | MERGED → P1-209 | Both describe the same extension-page version-refresh root cause: success/version marker is committed before enumeration/reload/ack repair actually succeeds. P1-209 is the single current owner; P1-181 remains permanently reserved as historical duplicate. |
+| P1-213 | MERGED → P0-068 | The narrower late wording “flattened same-origin iframe print proxy must be inert before live insertion” is the same root cause already owned by P0-068. Current Chrome 152 closure directly covers active nested browsing/plugin/custom-element/duplicate-identity behavior, so P0-068 is the single canonical owner and P1-213 remains permanently reserved. See `AUDIT_P0_068_INERT_FRAME_PROXY_CLOSURE_2026-09-01_EVIDENCE.md`. |
 
 ## P1 — late current ACTIVE owners P1-195…P1-229
 
-Every code in this range is occupied and ACTIVE.
+Every code in this range remains occupied. All are ACTIVE except `P1-213`, which is `MERGED → P0-068` above.
 
 | Code | Status | Single current owner / root cause |
 |---|---|---|
@@ -161,7 +162,6 @@ Every code in this range is occupied and ACTIVE.
 | P1-210 | ACTIVE | Lost/rejected outer user-operation transport response means unknown; UI reconciles worker-issued durable receipt read-only instead of starting blind fresh operation. |
 | P1-211 | ACTIVE | Deleted comment tombstones need one lifecycle across retention/search/export/import and portable capacity debt; deleted payload cannot consume active capacity forever. |
 | P1-212 | ACTIVE | Print preparation must not synthesize activation of page-owned controls merely to reveal content. |
-| P1-213 | ACTIVE | Flattened same-origin iframe print proxy must be inert before live insertion. |
 | P1-214 | ACTIVE | Multi-frame remote print prepare/restore needs exact partial-success rollback receipts and actual restore settlement per child/generation. |
 | P1-215 | ACTIVE | Import staging displayed in a live destructive confirmation needs owner/lease; generic age cleanup cannot reclaim it while confirmation owns it. |
 | P1-216 | ACTIVE | Legacy and modern Journal rows share one derived URL identity domain for view/clear/delete/stats/templates; missing persisted urlKey cannot create ghost scope. |
