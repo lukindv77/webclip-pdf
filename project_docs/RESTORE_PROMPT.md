@@ -23,7 +23,7 @@
 - current rationale — `DECISIONS_AND_RATIONALE.md`;
 - P-code owner/status — только `RESEARCH_REGISTRY.md`;
 - research navigation — `RESEARCH_DELTA_INDEX.md`;
-- detailed research proof — relevant consolidated family/history/cross-cutting evidence;
+- detailed research proof — `RESEARCH_FAMILY_*_EVIDENCE.md` + relevant history/cross-cutting evidence;
 - current test truth — `TEST_STATUS.md` + applicable exact execution evidence;
 - release truth — `RELEASE_READINESS.md`.
 
