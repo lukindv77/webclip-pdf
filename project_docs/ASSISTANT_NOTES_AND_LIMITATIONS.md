@@ -1,116 +1,134 @@
-# Замечания разработчика/ассистента и ограничения
+# Текущие технические ограничения и замечания — WebClip PDF
 
-## Chrome sandbox
+Status: **CANONICAL CURRENT LIMITATIONS**
 
-Обычное Chrome Extension не имеет произвольного чтения/записи `C:\...` и не может использовать каталог установки как общую runtime-базу. Для произвольной папки нужен File System Access API с выбором пользователя либо Native Messaging/local helper.
+Этот документ фиксирует только ограничения, актуальные для текущего состояния проекта. Он не является журналом версий или историей изменения требований. Исторические формулировки доступны через Git history и не должны использоваться для реконструкции current requirements.
 
-## Каталог установленного расширения
+## Chrome sandbox и каталог расширения
 
-Не использовать его как рабочую изменяемую базу журнала. При разработке unpacked-файлы существуют в папке пользователя, но runtime Chrome Extension не должен рассчитывать на прямую запись в неё.
+Обычное Chrome Extension не имеет произвольного чтения/записи файловой системы и не должно использовать каталог установленного расширения как изменяемую runtime-базу. Для произвольной пользовательской папки потребовался бы отдельный browser-supported file access flow либо Native Messaging/local helper.
 
-## IndexedDB и extension ID
+**Следствие:** Journal, operational state и настройки хранятся в предназначенных для extension storage mechanisms, а не в installation directory.
 
-IndexedDB и `chrome.storage.local` связаны с origin расширения. Если расширение загрузить как другую копию с другим extension ID, старые данные автоматически не переедут. Поэтому экспорт/импорт журнала — важный P1.
+## IndexedDB / storage и extension identity
 
-## PDF через debugger permission
+IndexedDB и `chrome.storage.*` принадлежат origin/identity установленного расширения. Другая независимая extension identity не получает автоматический доступ к данным предыдущей установки.
 
-`Page.printToPDF` требует `chrome.debugger`. Chrome может показывать пользователю индикатор подключения debugger. Это ожидаемое побочное действие текущей архитектуры.
+**Следствие:** переносимые export/import flows нужны для данных и настроек, которые пользователь должен переносить между профилями/установками.
+
+## `chrome.debugger` / `Page.printToPDF`
+
+Текущий PDF pipeline использует `chrome.debugger` и Chrome DevTools Protocol `Page.printToPDF`. Chrome может показывать пользователю индикатор подключения debugger.
+
+**Следствие:** это видимая browser permission/runtime boundary текущей архитектуры и должна учитываться в UX и real Chrome QA.
 
 ## Статическая природа PDF
 
-Видео, canvas, сложные интерактивные виджеты, iframe, Shadow DOM и нестандартные компоненты попадут в PDF настолько, насколько Chromium способен их статически отрисовать. «Все элементы» означает все доступные в печатном представлении элементы областей «Включены»; невозможно гарантировать интерактивное поведение всех виджетов внутри PDF.
+PDF является статическим архивным представлением. Видео, canvas, сложные интерактивные widgets, iframe, Shadow DOM, animations и custom components сохраняются только настолько, насколько текущая capture/representation architecture и Chromium способны корректно представить их в статическом render cut.
 
-## lazy loading и offline
+**Следствие:** «сохранить содержимое» не означает сохранить интерактивное runtime-поведение приложения внутри PDF. Fidelity оценивается по `WEBCLIP_PDF_FIDELITY_CONTRACT.md`.
 
-Перед печатью P1-003 bounded-пытается подготовить lazy images, CSS backgrounds и используемые fonts выбранного контента (15 s / 500 tasks / bounded concurrency). Если ресурс недоступен, он попадает в `resourceReport`, но PDF всё равно может быть сформирован без него. Это по-прежнему **не** полноценный self-contained snapshot всех сетевых ресурсов: WebClip не скачивает/встраивает произвольные response bytes и не превращает страницу в offline bundle.
+## Bounded resource preparation не является offline bundling
 
-## Раскрытие спойлеров
+Перед печатью WebClip bounded-подготавливает lazy images, CSS backgrounds и используемые fonts выбранного содержимого. Действуют ограниченные task/scan/concurrency/deadline boundaries.
 
-Раскрытие использует набор семантических и эвристических признаков. Некоторые нестандартные виджеты могут не раскрыться. Скрипт старается не нажимать небезопасные submit/external controls, но универсально определить «спойлер» на произвольном сайте невозможно.
+WebClip при этом не становится произвольным сетевым crawler и не скачивает все response bytes страницы в self-contained offline bundle.
+
+**Следствие:** недоступный внешний ресурс может остаться отсутствующим в PDF и должен отражаться в truthful resource diagnostics, а не маскироваться как гарантированно embedded resource.
+
+## Disclosure / spoilers
+
+Универсально определить безопасный «спойлер» произвольного приложения невозможно. Текущая архитектура допускает только безопасную native/inert/static representation и не даёт WebClip право выполнять arbitrary page-owned click/submit/navigation/business logic.
+
+**Следствие:** часть нестандартного скрытого контента может потребовать пользовательского действия или остаться явно ограниченной, если безопасная статическая representation недоступна.
 
 ## «Основной контент» и «Найти рекламу»
 
-Обе функции эвристические. «Основной контент» может выбрать неидеальный контейнер. «Найти рекламу» — только подсказка и принципиально не создаёт области «Исключены» автоматически.
+Обе функции эвристические.
 
-## Яндекс OAuth
+- «Основной контент» может предложить неидеальный container.
+- «Найти рекламу» только подсвечивает кандидатов и не создаёт области «Исключены» автоматически.
 
-Access token хранится в `chrome.storage.local`. Для личного прототипа это приемлемо, но это не эквивалент защищённого credential vault. Client Secret нельзя считать секретом внутри расширения, поэтому он не используется.
+**Следствие:** пользователь сохраняет authority над итоговым selection state.
 
-## Refresh token
+## Yandex OAuth credentials
 
-Текущая архитектура намеренно не выполняет автоматический refresh, если для этого потребуется Client Secret. При истечении access token пользователь проходит авторизацию снова.
+Access/session credentials browser extension не эквивалентны hardware/OS credential vault. Client Secret не используется как встроенный extension secret, потому что распространяемый extension package доступен пользователю и secret из него извлекаем.
 
-## Public suffix
+Текущая архитектура не должна строить refresh-flow, требующий встроенного Client Secret; при необходимости повторной авторизации используется поддерживаемый user-visible OAuth flow.
 
-Функция домена до третьего уровня использует обычное разбиение меток и небольшой встроенный набор популярных составных suffix (`co.uk` и т.п.). Это не полный Public Suffix List, поэтому редкие доменные зоны могут классифицироваться неидеально.
+**Следствие:** credential lifetime, storage scope, redaction и account/root identity остаются defensive-security boundaries.
 
-## Имя файла и Unicode
+## Public Suffix List
 
-Лимит 100 применяется к JavaScript string length, а не к байтовой длине UTF-8/UTF-16 на файловой системе. Для практического использования это соответствует пользовательскому требованию «100 символов», но не является байтовым ограничением ОС.
+Проект использует bundled Public Suffix List resolver, генерируемый `project_tools/build_public_suffix_js.py` из `public_suffix_list.dat`; текущий `public-suffix.js` явно идентифицирует этот источник.
 
-## Retry-кэш
+**Ограничение:** bundled PSL является snapshot внутри конкретного Git commit и не обновляется сам по сети во время работы extension.
 
-Кэш привязан к `tabId`. Если вкладка закрывается, service worker удаляет кэш. Если URL вкладки поменялся без закрытия, текущая версия не добавляет отдельную проверку соответствия кэша новой странице при retry; UI WebClip обычно остаётся связан с исходной вкладкой.
+**Следствие:** корректность для новых/изменённых public suffix rules зависит от своевременного обновления source dataset и регенерации bundled resolver обычным reviewed project change.
 
-## Журнал
+## Имя файла и символы
 
-Журнал хранит recipe, а не неизменяемую копию DOM. Если сайт изменился, восстановление может быть частичным. Пользователь должен проверить восстановленные рамки перед новым сохранением.
+Лимит имени WebClip задаётся на уровне пользовательского правила количества символов и browser/JavaScript normalization. Это не универсальная гарантия одинакового byte-length ограничения для всех файловых систем.
 
-## Recovery-архив
+**Следствие:** filename contract ориентирован на переносимость и ограничение длины, но не заменяет правила конкретной ОС/файловой системы.
 
-Recovery zip должен создаваться **после всех изменений исходников и документов**. Нельзя копировать recovery zip предыдущей версии. Версия внутри архива, manifest и имя архива должны совпадать.
+## Retry / operation identity
 
-## Cross-URL шаблоны
+Retry одного сохранения должен использовать operation-owned PDF bytes, но asynchronous browser/storage/network boundaries могут иметь unknown settlement и generation/identity risks.
 
-Одинаковый домен не гарантирует одинаковый DOM. Поэтому перенос областей «Включены/Исключены» между URL является удобным шаблоном, а не гарантированно точным селектором. Нельзя молча считать восстановление корректным: интерфейс должен предупреждать пользователя, особенно если используются fallback-признаки локатора.
+Current owner/status таких границ определяется только `RESEARCH_REGISTRY.md`; этот документ не переопределяет их состояние.
 
-## Frame-aware ограничения (0.8+)
+**Следствие:** timeout не считается доказательством cancellation/rollback, а weak path/size/tab identity не должна автоматически превращать неизвестный результат в verified success.
 
-Same-origin iframe доступны напрямую. Cross-origin iframe могут требовать отдельного content-script execution с host permission; текущая реализация не обещает полный DOM-доступ к произвольному cross-origin frame. Печатный результат iframe зависит от возможностей Chromium; расширение снимает типовые ограничения высоты/overflow, но это не полный независимый HTML rehydration engine.
+## Journal restore — recipe, а не immutable DOM snapshot
 
-## Background backup (0.9)
+Selection snapshot хранит данные, достаточные для повторного поиска областей, но страница может измениться между сохранениями.
 
-`chrome.alarms` не является real-time scheduler. При закрытом Chrome alarm не исполняется; overdue-check при `onStartup`/service-worker start обеспечивает модель «выполнить при первой возможности». Точность пользовательской настройки — минуты, но фактический запуск зависит от жизненного цикла Chrome/ОС.
+**Следствие:** restore может быть partial/ambiguous и должен fail-closed или явно сообщать confidence/limitations; пользователь проверяет восстановленный selection перед новым сохранением.
 
-Фоновый backup не делает локальный журнал зависимым от Яндекс Диска: ошибка upload не меняет IndexedDB journal. Каждая успешная попытка создаёт отдельный полный JSON snapshot; предыдущие удалённые версии не изменяются.
+## Frame-aware ограничения
 
-## Service folders
+Same-origin frames доступны в рамках browser DOM rules. Cross-origin frames требуют применимого user-granted host permission и frame agent; exact document/frame identity должна быть доказана.
 
-`Upload` и `Backup/Journal` являются зарезервированными WebClipper именами внутри выбранного rootPath; внутри `Journal` WebClipper создаёт месячные подпапки `MM-YYYY`. Пользователь не выбирает их отдельно. Если в пути уже существует ресурс не типа каталога или Яндекс API запрещает создание, операция завершается явной ошибкой.
+**Следствие:** WebClip не обещает обход Same-Origin Policy или гарантированный DOM-доступ к любому cross-origin frame. Navigation/reload/frame reuse могут требовать re-handshake/reconciliation.
 
-## Confirmation code
+## Background scheduling
 
-9-значный код — UX-защита от случайного destructive action, а не криптографическая аутентификация. Он генерируется в extension page через `crypto.getRandomValues` и проверяется только для текущего dialog.
+`chrome.alarms` не является real-time scheduler и не выполняется, когда соответствующая browser execution environment недоступна.
 
-## Context menu
+**Следствие:** background backup использует overdue/retry reconciliation и семантику «выполнить при первой возможности», а не обещание запуска в точную секунду.
 
-Контекстное меню является дополнительным входом в те же handlers. Некоторые действия (например import/массовая очистка journal) выполняются на странице журнала, потому что требуют file picker или 9-значного dialog; контекстное меню предоставляет доступ к этой странице, а не дублирует опасную логику в service worker.
+## `beforeunload` — защита от случайного закрытия, не запрет
 
+Browser `beforeunload` может показать системное предупреждение, но окончательное решение о закрытии/перезагрузке остаётся за браузером/пользователем.
 
-## Backup versioning 0.9.2
+**Следствие:** UI должен описывать механизм как best-effort protection from accidental interruption, а не как абсолютную блокировку вкладки.
 
-Не возвращать схему одного перезаписываемого `WebClip_Journal_Backup.json`. Новая модель — append-only версии в `Journal/MM-YYYY`. Import с Yandex обязан начинаться со списка файлов и явного выбора пользователя.
+## `publicUrl` и публикация Yandex resource
 
+Сохранённый `publicUrl` требует публикации ресурса и делает его доступным обладателю ссылки до снятия публикации.
 
-## Дополнения 0.9.3
+**Следствие:** настройка должна быть явно понятна пользователю; `publicUrl` нельзя считать private credential-free locator без privacy impact.
 
-- `beforeunload` не даёт расширению абсолютного запрета на закрытие вкладки: Chrome показывает системное предупреждение и окончательное решение остаётся за пользователем. Поэтому формулировка UI — «защита от случайного закрытия», а не гарантированная блокировка браузера.
-- `publicUrl` Яндекс Диска требует публикации ресурса. Это делает PDF доступным любому обладателю ссылки до снятия публикации. Настройка включена по умолчанию в соответствии с требованием устойчивой ссылки; UI обязан явно предупреждать об этом.
-- Журнал хранит также `remotePath` как путь **на момент сохранения**. После переименования/перемещения он может устареть; для открытия используется `publicUrl`.
-- Action badge рассчитывается из успешных journal entries, а не из наличия файлов на Диске. Если журнал был вручную повреждён/очищен, индикатор отражает именно локально известную историю.
-- Tab-specific цвет и badge требуют permission `tabs`, добавленного в 0.9.3.
+## Journal отражает локально подтверждённую историю
 
+Action icon/badge и Journal строятся на локально сохранённых verified operation records, а не на непрерывном live inventory всего Яндекс Диска.
 
-## Дополнения 0.9.4
+**Следствие:** ручное удаление/повреждение локальной истории или внешнее изменение remote resource может привести к расхождению с фактическим состоянием Диска; recovery/reconciliation не должен скрывать такую неопределённость.
 
-- Action indicator intentionally ignores `destination=download`. Он показывает состояние удалённого архива Яндекс Диска, а не факт локальной печати.
-- Live-update журнала строится на runtime-сообщении после commit IndexedDB. Если страница журнала выгружена/закрыта, при следующем открытии данные читаются заново из IndexedDB.
-- Поиск доменов — UI-фильтр in-memory и не меняет IndexedDB.
+## Extension pages после reload/update
 
-## Extension-context после reload/update — 0.9.5
+При reload/update unpacked extension Chrome может инвалидировать JavaScript context уже открытой `chrome-extension://` страницы, хотя старый DOM визуально ещё остаётся на экране.
 
-При обновлении распакованного расширения Chrome инвалидирует JavaScript-контекст уже открытых `chrome-extension://...` страниц. Вкладка визуально может оставаться открытой и показывать старый DOM, но больше не обязана общаться с новым service worker. Поэтому 0.9.5 при обнаружении смены `manifest.version` перезагружает открытые страницы самого расширения. Дополнительно журнал слушает revision-сигнал в `chrome.storage.local` и события focus/visibility/pageshow.
+**Следствие:** открытые extension pages должны reload/reconnect либо явно сигнализировать stale context; молчаливое продолжение работы на старом execution context недопустимо.
 
-## Диагностика журнала 0.9.7
+## Recovery artifact
 
-Если прямое чтение IndexedDB и выборка service worker возвращают разное число записей, journal.js выбирает более полную выборку и пишет `WebClip journal: расхождение источников` в Console страницы журнала. Это диагностический fallback; после подтверждения стабильности архитектуры его можно упростить.
+Offline recovery ZIP является опциональным derived disaster-recovery artifact exact clean Git commit, а не обязательной частью каждой пользовательской сборки и не параллельным source of truth.
+
+**Следствие:** если recovery artifact создаётся, он строится после фиксации exact clean commit, содержит source identity/hashes и проверяется как representation этого commit. Обычная разработка восстанавливается из fresh GitHub `main` и current baseline.
+
+## Источник истины для открытых ограничений
+
+Этот файл описывает технические ограничения по роли. Если ограничение связано с конкретным research owner/finding, его current status определяется `RESEARCH_REGISTRY.md` и applicable fresh evidence. Историческая формулировка или старый PASS не изменяют current status.
