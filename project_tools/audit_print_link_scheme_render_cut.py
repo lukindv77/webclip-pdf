@@ -65,7 +65,11 @@ def fixture_html(mutation: str | None) -> str:
         mutation_js = f"document.getElementById('target').setAttribute('href', {json.dumps(mutation)});"
     return f"""<!doctype html>
 <html>
-<head><meta charset="utf-8"><title>P0-071 render-cut link fixture</title></head>
+<head>
+  <meta charset="utf-8">
+  <base href="https://example.com/">
+  <title>P0-071 render-cut link fixture</title>
+</head>
 <body>
   <main id="selected">
     <h1>P0-071 render-cut link fixture</h1>
