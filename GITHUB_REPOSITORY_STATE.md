@@ -5,7 +5,7 @@
 ## Working policy
 
 - Always fresh-fetch `main` before analysis or write operations.
-- Normal changes are PR-first: fresh `main` -> work branch -> PR -> exact-head CI -> reviewed merge.
+- Normal changes are PR-first: fresh `main` -> work branch -> PR -> exact-head CI -> reviewed squash merge.
 - `main` intentionally remains `protected=false`; repository stays private and the project does not move to GitHub Pro/public solely for branch protection.
 - Current runtime remains Manifest V3 / `0.9.8` / Chrome >=118 until real release QA and an explicit release decision.
 - Stable P-numbers are never reused, including DONE/MERGED/SUPERSEDED codes.
@@ -27,10 +27,14 @@ Important permanent reservations include P0-079/P0-080, P1-195…P1-230, explici
 
 The standalone `AUDIT_DELTA_*.md` working layer has completed lossless retirement. The former 189-delta layer was embedded into family/cross-cutting evidence. The final temporary selection/capture delta was then embedded verbatim into `project_docs/AUDIT_RETIRED_DELTA_EVIDENCE.md` with its original filename, historical source commit and exact Git blob hash; `project_tools/test_final_delta_retirement.py` compares that embedded byte sequence against the historical Git source on every repository-integrity run. Exact originals also remain recoverable through Git history.
 
+Interruption-safe staged evidence is compacted independently rather than deleted as if the FINAL checkpoint contained earlier blocks. A completed staged compaction must retain a current semantic block map plus exact historical source commit/blob receipts. `project_tools/test_staged_evidence_compaction.py` verifies those receipts and prevents retired checkpoint paths from silently returning.
+
+The renderer-owned replaced-resource convergence series is the first completed staged compaction: its original Blocks 1–20 / 21–36 / 37–56 checkpoints are represented by one current `AUDIT_REPLACED_RESOURCE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md`, while all three original blobs remain byte-for-byte recoverable from Git history. Three staged series remain explicitly listed in `AUDIT_DELTA_INDEX.md` for later separately proven compaction.
+
 Use current evidence by role:
 
 - `project_docs/AUDIT_REGISTRY.md` — current owner/status authority;
-- `project_docs/AUDIT_DELTA_INDEX.md` — compact navigation across consolidated audit families and supplemental durable evidence;
+- `project_docs/AUDIT_DELTA_INDEX.md` — compact navigation across consolidated audit families, supplemental durable evidence and remaining staged series;
 - `project_docs/AUDIT_FAMILY_*_EVIDENCE.md` — detailed family source proof, deterministic schedules, corrections, positive controls and acceptance boundaries;
 - `project_docs/AUDIT_HISTORY_INDEX.md` — corrections, retractions, dedup decisions and negative findings;
 - `project_docs/AUDIT_EVIDENCE.md` — historical implementation/browser proof;
@@ -77,6 +81,7 @@ See `project_docs/BUILD_AND_RECOVERY_RULES.md` and `project_docs/GITHUB_WORKFLOW
 
 - repository consistency plus self-test;
 - final audit-delta byte-for-byte retirement self-test;
+- staged evidence compaction provenance self-test;
 - immutable GitHub Actions pin/read-only workflow/Dependabot-scope validation + self-test;
 - exact PR runtime/audit change-contract validation on pull requests + self-test;
 - release-readiness schema/status validation + self-test;
@@ -102,16 +107,17 @@ The release gate does not build, tag, publish or modify GitHub Releases.
 
 ## Accepted GitHub administrative posture
 
-Explicit project decision:
+Explicit project decision and current repository settings:
 
 - repository remains private;
 - GitHub Pro is not adopted for branch protection;
 - repository is not made public for branch protection;
-- `main` remains `protected=false`.
+- `main` remains `protected=false`;
+- normal PR integration permits **squash merge only**; merge commits and rebase merge are disabled;
+- `delete_branch_on_merge=true` remains enabled;
+- legacy remote refs were reconciled and physically removed on 2026-09-01; outside an active PR/work branch, `main` is the only retained branch.
 
-This is therefore not an open cleanup defect. Safety relies on PR-first discipline, exact-head CI and re-check before merge, no normal direct writes/force updates to `main`, exact Git history and recovery provenance.
-
-GitHub repository setting `delete_branch_on_merge` is currently `true`. Newly merged work branches are therefore removed automatically by GitHub when applicable. Older remote refs that predate or escaped automatic deletion remain non-authoritative and must be reconciled separately: delete them only after proving that no unique useful runtime/audit state would be lost and that the former exact head is preserved in PR/Git history.
+This is therefore not an open cleanup defect. Safety relies on PR-first discipline, exact-head CI and re-check before merge, squash-only integration, automatic branch deletion, no normal direct writes/force updates to `main`, exact Git history and recovery provenance.
 
 ## Build artifacts and historical Releases
 
