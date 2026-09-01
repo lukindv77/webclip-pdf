@@ -7,7 +7,8 @@ import subprocess
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 EN = "au" + "dit"
 RU = "".join(chr(x) for x in (0x430, 0x443, 0x434, 0x438, 0x442))
-SKIP = {"project_tools/migrate_comprehensive_research_terminology.py"}
+ROOT_DOCS = {"README.md", "GITHUB_REPOSITORY_STATE.md"}
+PREFIXES = ("project_docs/", "project_tools/", ".github/")
 
 
 def tracked_paths(root: pathlib.Path) -> list[pathlib.Path]:
@@ -15,11 +16,15 @@ def tracked_paths(root: pathlib.Path) -> list[pathlib.Path]:
     return [root / p.decode("utf-8") for p in raw.split(b"\0") if p]
 
 
+def in_scope(rel: str) -> bool:
+    return rel in ROOT_DOCS or rel.startswith(PREFIXES)
+
+
 def findings(root: pathlib.Path = ROOT) -> list[str]:
     out: list[str] = []
     for path in tracked_paths(root):
         rel = path.relative_to(root).as_posix()
-        if rel in SKIP:
+        if not in_scope(rel):
             continue
         folded_path = rel.casefold()
         if EN in folded_path or RU in folded_path:
