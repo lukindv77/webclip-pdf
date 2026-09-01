@@ -85,7 +85,8 @@ function testP1087OwnExtensionIdentityGate() {
   assert.strictEqual(context.isOwn({}), false, 'missing byExtensionId must fail closed');
 
   const recovery = section('async function reconcilePendingLocalDownloads', 'async function appendJournalEntry');
-  assert(recovery.includes('.filter(isOwnExtensionDownload).find((candidate) => {'), 'P1-087: intent/fallback candidates must be ownership-filtered before URL/name/size matching');
+  assert(recovery.includes('downloads: (Array.isArray(matches) ? matches : []).filter(isOwnExtensionDownload)'), 'P1-087: intent/fallback candidates must be ownership-filtered before identity classification');
+  assert(recovery.includes('WebClipLocalDownloadIdentity?.chooseUniqueDownloadForIntent'), 'P1-087: ownership-filtered fallback candidates must flow through the unique identity classifier');
   assert(recovery.includes('matches.find(isOwnExtensionDownload) || null'), 'P1-087: bound downloadId reconciliation must reject foreign DownloadItem');
 
   const expectedFilename = 'same.pdf';
