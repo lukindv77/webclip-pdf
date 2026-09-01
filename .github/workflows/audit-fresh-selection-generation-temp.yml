@@ -35,24 +35,64 @@ jobs:
           .chrome/chrome-linux64/chrome --version
           git rev-parse HEAD
 
+      - name: Normalize legacy audit-harness Playwright viewport call
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for rel in [
+              'project_tools/audit_selection_restore_physical_pdf.py',
+              'project_tools/audit_main_content_physical_pdf.py',
+          ]:
+              path = Path(rel)
+              text = path.read_text(encoding='utf-8')
+              old = 'page = ctx.new_page(viewport={"width": 1100, "height": 800})'
+              new = 'page = ctx.new_page()\n    page.set_viewport_size({"width": 1100, "height": 800})'
+              count = text.count(old)
+              if count < 1:
+                  raise SystemExit(f'expected legacy viewport call missing: {rel}')
+              path.write_text(text.replace(old, new), encoding='utf-8')
+              print(f'{rel}: normalized {count} legacy viewport call(s)')
+          PY
+
       - name: C01 live selection versus durable snapshot physical probe
+        id: c01
+        continue-on-error: true
         env:
           CHROMIUM_BIN: ${{ github.workspace }}/.chrome/chrome-linux64/chrome
         run: |
           python project_tools/audit_fresh_c01_selection_snapshot_cap.py
 
       - name: C02 SelectionSnapshot restore physical probe
+        id: c02
+        continue-on-error: true
         env:
           CHROMIUM_BIN: ${{ github.workspace }}/.chrome/chrome-linux64/chrome
         run: |
           python project_tools/audit_selection_restore_physical_pdf.py
 
       - name: C03 Main Content physical probe
+        id: c03
+        continue-on-error: true
         env:
           CHROMIUM_BIN: ${{ github.workspace }}/.chrome/chrome-linux64/chrome
         run: |
           python project_tools/audit_main_content_physical_pdf.py
 
       - name: PDF cache document/operation generation authority
+        id: cache
+        continue-on-error: true
         run: |
           python project_tools/audit_pdf_cache_generation_authority.py
+
+      - name: Audit probe gate
+        env:
+          C01: ${{ steps.c01.outcome }}
+          C02: ${{ steps.c02.outcome }}
+          C03: ${{ steps.c03.outcome }}
+          CACHE: ${{ steps.cache.outcome }}
+        run: |
+          printf 'C01=%s\nC02=%s\nC03=%s\nCACHE=%s\n' "$C01" "$C02" "$C03" "$CACHE"
+          test "$C01" = success
+          test "$C02" = success
+          test "$C03" = success
+          test "$CACHE" = success
