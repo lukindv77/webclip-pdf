@@ -1,0 +1,53 @@
+name: Deliver P0-067 registry transition temporary
+
+on:
+  push:
+    branches: [fix/p0-067-host-control-activation-2026-09-01]
+
+permissions:
+  contents: write
+
+jobs:
+  registry-transition:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact P0-067 status transition and remove temporary workflow
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('project_docs/AUDIT_REGISTRY.md')
+          text = path.read_text(encoding='utf-8')
+          active = '| P0-067 | ACTIVE | PDF preparation must not synthesize real host-page control activation (`click`, submit/navigation side effects). |'
+          done = '| P0-067 | DONE | WebClip content-script injection now installs an isolated-world host-control activation guard before `content.js`: page-owned programmatic `.click()` is blocked before native activation in top and accessible same-origin frame realms, while WebClip Shadow-DOM controls remain allowed and the page main world remains native. Chrome for Testing 152 run `33469545801` / job `99736317876` proved the real PDF-preparation path has host `clicks=0` / `submits=0`, reaches one `WEBCLIP_GENERATE_PDF`, keeps the existing linked disclosure panel printable, and produces a one-page physical PDF containing the disclosure sentinel. See `AUDIT_P0_067_HOST_CONTROL_ACTIVATION_CLOSURE_2026-09-01_EVIDENCE.md`. |'
+          anchor = '| P0-068 | DONE |'
+
+          if text.count(active) != 1:
+              raise SystemExit(f'expected exactly one P0-067 ACTIVE row, found {text.count(active)}')
+          if done in text:
+              raise SystemExit('P0-067 DONE row already present')
+          if text.count(anchor) != 1:
+              raise SystemExit(f'expected exactly one P0-068 DONE anchor, found {text.count(anchor)}')
+
+          text = text.replace(active + '\n', '', 1)
+          text = text.replace(anchor, done + '\n' + anchor, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          rm .github/workflows/deliver-p0-067-registry-temp.yml
+          git diff --check
+          grep -F '| P0-067 | DONE |' project_docs/AUDIT_REGISTRY.md
+          if grep -Fq '| P0-067 | ACTIVE |' project_docs/AUDIT_REGISTRY.md; then
+            echo 'P0-067 ACTIVE row remains' >&2
+            exit 1
+          fi
+          git config user.name 'lukindv77'
+          git config user.email 'lukindv@gmail.com'
+          git add project_docs/AUDIT_REGISTRY.md .github/workflows/deliver-p0-067-registry-temp.yml
+          git commit -m 'audit: close P0-067 host control activation'
+          git push origin HEAD:fix/p0-067-host-control-activation-2026-09-01
