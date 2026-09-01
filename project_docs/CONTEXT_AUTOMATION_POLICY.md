@@ -10,7 +10,7 @@ Status: **CANONICAL / PERMANENT**
 - current requirements/technical conditions — `USER_REQUIREMENTS.md`;
 - current rationale — `DECISIONS_AND_RATIONALE.md`;
 - P-owner/status — только `RESEARCH_REGISTRY.md`;
-- research proof/navigation — relevant consolidated evidence + `RESEARCH_DELTA_INDEX.md`;
+- research proof/navigation — `RESEARCH_FAMILY_*_EVIDENCE.md`, relevant history/cross-cutting evidence + `RESEARCH_DELTA_INDEX.md`;
 - current automated/test narrative — `TEST_STATUS.md` + exact applicable execution evidence;
 - release truth — `RELEASE_READINESS.md`.
 
@@ -68,38 +68,38 @@ GitHub Actions must not be the default debugger for syntax/static/deterministic 
 ### Handoff protocol
 
 1. Fresh-fetch `main`, зафиксировать exact current SHA и проверить current post-merge integrity state.
-2. Проверить open PR, open Issues, branches и durable commits/evidence.
+2. Проверить open Pull Request, open Issue, branches и durable commits/evidence.
 3. Не закрывать P-owner, не менять research status, не объявлять acceptance/DONE и не выполнять release только ради перехода.
-4. Если незавершённая работа уже находится в open PR, использовать его как durable resume point; PR body должен отражать exact head, scope и remaining work.
+4. Если незавершённая работа уже находится в open Pull Request, использовать его как durable resume point; PR body должен отражать exact head, scope и remaining work.
 5. Если полезная branch имеет commits без PR, сохранить exact head и открыть PR/checkpoint, когда это необходимо для предотвращения потери work state.
 6. Если существенный контекст невозможно безопасно сохранить PR/branch и без checkpoint он потеряется, допускается open Issue/checkpoint как working context; Issue не становится status authority и не резервирует P-code автоматически.
 7. Проверить, что `CONTEXT_MANIFEST.json`, `RESTORE_PROMPT.md`, current baseline и применимые policy docs не устарели из-за уже принятого изменения.
 8. Выдать пользователю стартовый prompt следующего чата, требующий fresh GitHub bootstrap и продолжение от фактического durable state.
 9. Новый чат не предполагает, что старый tranche завершён; он сначала проверяет GitHub.
 
-## Постоянные правила автоматизации
+## 14 постоянных правил автоматизации
 
 ### 1. Context bootstrap
 
 `CONTEXT_MANIFEST.json` — machine navigation; `RESTORE_PROMPT.md` — краткий restore procedure. Они не дублируют owner/test/release status.
 
-### 2. Current requirements baseline
+### 2. P work index
 
-Automation должна направлять обычную разработку/research к `USER_REQUIREMENTS.md` + `DECISIONS_AND_RATIONALE.md`, а не к historical requirement chain.
+Любой `P_WORK_INDEX`/`p_context` может быть только navigation `P-code -> current evidence/source/tests/external acceptance/related owners`. Current P-status всегда читается из `RESEARCH_REGISTRY.md`.
 
-### 3. P work navigation
+### 3. Research coverage matrix
 
-Любой `P_WORK_INDEX`/`p_context`/derived matrix может быть только navigation. Current P-status всегда читается из `RESEARCH_REGISTRY.md`.
+Derived matrix `P-code -> evidence -> source -> tests -> external verification` используется для обнаружения coverage gaps и не меняет owner status автоматически.
 
-### 4. Differential review
+### 4. Differential research
 
-Для PR анализировать exact `base...head`, sensitive/trust-boundary surfaces, relevant owners и test/evidence impact. Derived result не меняет Registry автоматически.
+Для runtime/research PR анализировать exact `base...head`, sensitive/trust-boundary surfaces, relevant owners и test/evidence impact. Derived result не меняет Registry автоматически.
 
-### 5. Local-first research execution
+### 5. Local-first research split
 
 Deterministic/static/model checks выполняются локально, если это возможно. Remote Actions evidence запускается только по environment need или mandatory gate. Семантическое **Комплексное исследование проекта** выполняется по fresh current state и не переносится в CI как автоматический LLM authority.
 
-### 6. Reproducible schedules
+### 6. Seeded race/concurrency sweeps
 
 Race/concurrency/generation/late-settlement findings должны иметь воспроизводимые schedules/seeds/fixtures, когда такой класс доказательства применим.
 
@@ -123,15 +123,15 @@ Derived `cluster/related/depends_on` помогают планировать р�
 
 Не создавать GitHub Issues массово из Registry. Issue используется только для реальной незавершённой работы, нового finding или handoff checkpoint.
 
-### 12. PR review
+### 12. PR review automation
 
 Перед merge требуется exact current head/base review и canonical PR contract. Если автоматического trigger нет, review выполняется доступным способом; нельзя притворяться, что event automation существует.
 
-### 13. Post-merge review
+### 13. Post-merge review automation
 
 После merge проверять exact canonical `main`, post-merge Repository Integrity, actual remaining work и current baseline consistency.
 
-### 14. GitHub health review
+### 14. Regular GitHub health review
 
 Периодически/по trigger выполнять read-only health review: `main`, branches, open PR/Issues, workflow/pins, context manifest, broken references, Registry/research indexes и release provenance. При отсутствии drift cleanup commit не создавать.
 
