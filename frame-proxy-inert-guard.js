@@ -99,11 +99,32 @@
     if (report.utf8Bytes > FRAME_PROXY_MAX_SOURCE_UTF8_BYTES) throw budgetError(report, dimension);
   }
 
+  function firstChildOf(node) {
+    if (!node) return null;
+    if ('firstChild' in node) return node.firstChild || null;
+    return node.childNodes?.[0] || null;
+  }
+
+  function nextSiblingOf(node) {
+    if (!node) return null;
+    if ('nextSibling' in node) return node.nextSibling || null;
+    const parent = node.parentNode;
+    const siblings = parent?.childNodes;
+    if (!siblings || typeof siblings.length !== 'number') return null;
+    const count = Math.max(0, Number(siblings.length) || 0);
+    for (let index = 0; index < count; index += 1) {
+      if (siblings[index] === node) return siblings[index + 1] || null;
+    }
+    return null;
+  }
+
   function nextDepthFirstNode(root, current) {
-    if (current?.firstChild) return current.firstChild;
+    const child = firstChildOf(current);
+    if (child) return child;
     let node = current;
     while (node && node !== root) {
-      if (node.nextSibling) return node.nextSibling;
+      const sibling = nextSiblingOf(node);
+      if (sibling) return sibling;
       node = node.parentNode;
     }
     return null;
@@ -255,9 +276,9 @@
       }
       copySafeAttributes(source, target, neutralized);
       if (deep) {
-        let child = source.firstChild || null;
+        let child = firstChildOf(source);
         while (child) {
-          const next = child.nextSibling || null;
+          const next = nextSiblingOf(child);
           const sourceTag = lower(source.localName || source.tagName);
           if (!((sourceTag === 'script' || sourceTag === 'style') && Number(child?.nodeType) === 3)) {
             try { target.appendChild(cloneNodeInertUnchecked(child, true)); } catch (_) {}
@@ -272,9 +293,9 @@
     if (nodeType === 11) {
       const fragment = ownerDoc.createDocumentFragment();
       if (deep) {
-        let child = source.firstChild || null;
+        let child = firstChildOf(source);
         while (child) {
-          const next = child.nextSibling || null;
+          const next = nextSiblingOf(child);
           try { fragment.appendChild(cloneNodeInertUnchecked(child, true)); } catch (_) {}
           child = next;
         }
