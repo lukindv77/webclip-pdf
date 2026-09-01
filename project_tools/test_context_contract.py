@@ -30,8 +30,8 @@ def main() -> None:
     data = module.load_manifest()
 
     bad = copy.deepcopy(data)
-    bad["authorities"]["audit_status"] = "project_docs/PRIORITIES_P0_P1_P2.md"
-    assert_has(module.validate_manifest(bad), "authority audit_status")
+    bad["authorities"]["research_status"] = "project_docs/PRIORITIES_P0_P1_P2.md"
+    assert_has(module.validate_manifest(bad), "authority research_status")
 
     bad = copy.deepcopy(data)
     bad["handoff"]["trigger_phrase"] = "some other phrase"
@@ -51,7 +51,7 @@ def main() -> None:
     restore = (ROOT / "project_docs" / "RESTORE_PROMPT.md").read_text(encoding="utf-8")
     policy = (ROOT / "project_docs" / "CONTEXT_AUTOMATION_POLICY.md").read_text(encoding="utf-8")
     errors = module.validate_restore_and_policy(
-        restore + "\nчитать `project_docs/AUDIT_DELTA_*.md`\n",
+        restore + "\nчитать `project_docs/RESEARCH_DELTA_*.md`\n",
         policy,
     )
     assert_has(errors, "retired/currently-invalid instruction")

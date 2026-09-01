@@ -114,7 +114,7 @@
 3. Для релиза точный tested commit фиксируется annotated release tag; пользовательский extension ZIP строится из этого commit/tag.
 4. Вкладывать полный recovery/source ZIP внутрь каждой пользовательской сборки **не требуется** — прежнее правило superseded как P0-019.
 5. При необходимости offline/disaster recovery создаётся отдельный recovery ZIP только из clean exact commit. Его metadata фиксирует source commit/tag, а manifest — SHA-256 файлов; dirty tree должен быть отвергнут builder-ом.
-6. Актуальные audit/status/evidence документы хранятся в Git и остаются синхронизированы с текущим `main`; исторические версии сохраняет Git history.
+6. Актуальные research/status/evidence документы хранятся в Git и остаются синхронизированы с текущим `main`; исторические версии сохраняет Git history.
 
 ## Frame-aware страницы и iframe
 

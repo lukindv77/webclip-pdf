@@ -1,6 +1,6 @@
 # WebClip copy architecture policy
 
-This document is a permanent product/architecture requirement. It does **not** define current P-code status; `AUDIT_REGISTRY.md` remains the sole status/owner authority.
+This document is a permanent product/architecture requirement. It does **not** define current P-code status; `RESEARCH_REGISTRY.md` remains the sole status/owner authority.
 
 ## Project mission authority
 
@@ -55,7 +55,7 @@ Its contract combines two requirements:
 
 This means pagination or static materialization may legitimately differ from the literal viewport rectangle, but it must not silently substitute a different responsive variant, page generation, unrelated layout, resource generation or hidden-content policy merely because Chromium print geometry is different.
 
-At minimum PDF fidelity auditing must cover:
+At minimum PDF fidelity researching must cover:
 
 - desktop/mobile/orientation/container-query and viewport-unit state;
 - zoom/transforms/frame geometry;
@@ -115,8 +115,8 @@ The current PDF hybrid is defined by `WEBCLIP_PDF_FIDELITY_CONTRACT.md`; this do
 
 Completeness warnings and degradation should be durable with the saved record where useful. Success means a truthful copy under the selected mode's contract, not merely that a file was produced.
 
-## Audit rule
+## Research rule
 
-Deep audit must continue to test the shared capture boundary independently from individual output renderers, then test each renderer's own fidelity contract. For current PDF, `WEBCLIP_PDF_FIDELITY_CONTRACT.md` is the normative PDF-specific acceptance reference.
+Deep research must continue to test the shared capture boundary independently from individual output renderers, then test each renderer's own fidelity contract. For current PDF, `WEBCLIP_PDF_FIDELITY_CONTRACT.md` is the normative PDF-specific acceptance reference.
 
 A finding caused by capture/provenance should be fixed once at the shared layer where possible; a PDF-only pagination/rendering/static-materialization defect remains a PDF-specific owner/acceptance case.

@@ -102,7 +102,7 @@ function makeGuardContext() {
   assert.match(journalFilter, /importScripts\('pdf-print-guard\.js', 'content-injection-guard\.js', 'operation-log-redaction-guard\.js'\)/,
     'current worker bootstrap must preserve content injection guard alongside the P0-033 redaction guard');
   assert.match(content, /function\s+triggerInternalClick\s*\(control\)[\s\S]*?control\.click\(\);/,
-    'guard must remain attached to the audited page-owned programmatic click boundary');
+    'guard must remain attached to the researched page-owned programmatic click boundary');
   assert.match(content, /if \(!isPanelVisible\(panel\)\)\s*\{\s*forcePanelVisible\(panel, control\);/,
     'blocked page activation must still fall back to static visibility materialization');
 })();

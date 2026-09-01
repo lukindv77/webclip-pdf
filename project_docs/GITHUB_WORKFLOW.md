@@ -12,7 +12,7 @@ Default branch: `main`.
 
 ## PR-first working policy
 
-Normal development, audit, documentation and repository-maintenance changes use:
+Normal development, research, documentation and repository-maintenance changes use:
 
 `fresh main -> work branch -> Pull Request -> exact-head CI -> reviewed merge`
 
@@ -31,20 +31,20 @@ Compensating process controls:
 
 Direct modification of `main` is reserved for explicitly documented emergency recovery after a separate user decision. `protected=false` is not permission to bypass PR-first workflow.
 
-The detailed P-owner lifecycle is defined in `AUDIT_CHANGE_WORKFLOW.md`.
+The detailed P-owner lifecycle is defined in `RESEARCH_CHANGE_WORKFLOW.md`.
 
 ## Machine-readable PR change contract
 
 `project_tools/check_pr_change_contract.py` compares the exact PR base/head diff and the PR body.
 
-When a PR changes product runtime (`manifest.json`, root extension JS/HTML/CSS/assets) or canonical audit registry/evidence, the PR must select exactly one machine marker:
+When a PR changes product runtime (`manifest.json`, root extension JS/HTML/CSS/assets) or canonical research registry/evidence, the PR must select exactly one machine marker:
 
-- `audit-impact: none` — runtime change does not change any P-owner/status/acceptance contract;
-- `audit-impact: owner` — one or more P-owners are affected and are listed explicitly.
+- `research-impact: none` — runtime change does not change any P-owner/status/acceptance contract;
+- `research-impact: owner` — one or more P-owners are affected and are listed explicitly.
 
-Every runtime change also requires a concrete `audit-rationale:`. Placeholder/empty/`none`/`n/a` explanations fail closed.
+Every runtime change also requires a concrete `research-rationale:`. Placeholder/empty/`none`/`n/a` explanations fail closed.
 
-For `audit-impact: owner`:
+For `research-impact: owner`:
 
 - durable family/history/registry evidence must change in the same PR;
 - declared P-code must occur in the changed durable evidence;
@@ -52,15 +52,15 @@ For `audit-impact: owner`:
 - every declared P-code must occur in the source of the changed deterministic test;
 - `test-impact: external-only` is incompatible with changing a deterministic test in the same PR.
 
-If `AUDIT_REGISTRY.md` changes, a second durable audit evidence/history file is mandatory in the same PR.
+If `RESEARCH_REGISTRY.md` changes, a second durable research evidence/history file is mandatory in the same PR.
 
 If `manifest.json` changes, `RELEASE_READINESS.md` and `TEST_STATUS.md` must change in the same PR.
 
-The `external-only` marker is an explicit audited exception, not a generic waiver from deterministic testing.
+The `external-only` marker is an explicit researched exception, not a generic waiver from deterministic testing.
 
 ## Правила синхронизации
 
-- В GitHub отправляются production code, current project docs, active audit evidence/indexes and `project_tools`.
+- В GitHub отправляются production code, current project docs, active research evidence/indexes and `project_tools`.
 - Исторические отчёты, уже lossless-консолидированные в current evidence/history registries, не обязаны оставаться отдельными файлами в working tree: Git history сохраняет их оригинал.
 - Не коммитить OAuth/session tokens, `.env`, private keys, browser profiles, caches, temporary logs или generated recovery archives.
 - `.gitignore` является частью security boundary и проверяется consistency gate.
@@ -95,9 +95,9 @@ Permanent operating rules:
 2. **Actions remain mandatory at delivery boundaries.** A normal PR still requires one green `repository-integrity` run for the exact reviewed PR head and one green post-merge `repository-integrity` run for the exact resulting canonical `main`. These two gates are not removed merely to save Actions minutes.
 3. **Remote browser evidence is exception-driven.** GitHub-hosted Chrome/OS execution is used when the acceptance claim requires L3/L4/L5 evidence that the local environment cannot honestly supply—for example current Chrome renderer semantics, physical PDF evidence, a runner-specific platform boundary or another explicitly external environment. Lower-level deterministic checks do not move to Actions merely because a remote runner is convenient.
 4. **No CI-as-debugger loop by default.** Intermediate commits should be batched into a coherent locally preflighted head before push where practical. Every push must have a durable reason; repeated tiny pushes solely to discover ordinary syntax/checker failures are process noise.
-5. **Reuse evidence under Change Impact.** Existing physical/browser evidence is not rerun automatically when relevant runtime, contract, browser semantics and fixture assumptions are unchanged. `AUDIT_COVERAGE_CAMPAIGN_POLICY.md` Change Impact rules decide when revalidation is required.
-6. **Avoid one-off workflows when a reusable path exists.** Browser/audit runs should prefer an existing parameterized or otherwise reusable workflow. A temporary workflow is justified only when the required environment/evidence cannot be expressed through the current permanent workflows; it must be removed before the final mergeable PR head unless separately promoted by an explicit infrastructure decision that also updates the repository-hygiene guard.
-7. **Path/scope selectivity for heavy checks.** New heavy workflows must use the narrowest truthful trigger/change-impact scope practical. Documentation-only or audit-tooling-only changes must not cause unrelated Chrome/PDF/Yandex evidence reruns unless their change impact actually invalidates that evidence.
+5. **Reuse evidence under Change Impact.** Existing physical/browser evidence is not rerun automatically when relevant runtime, contract, browser semantics and fixture assumptions are unchanged. `RESEARCH_COVERAGE_CAMPAIGN_POLICY.md` Change Impact rules decide when revalidation is required.
+6. **Avoid one-off workflows when a reusable path exists.** Browser/research runs should prefer an existing parameterized or otherwise reusable workflow. A temporary workflow is justified only when the required environment/evidence cannot be expressed through the current permanent workflows; it must be removed before the final mergeable PR head unless separately promoted by an explicit infrastructure decision that also updates the repository-hygiene guard.
+7. **Path/scope selectivity for heavy checks.** New heavy workflows must use the narrowest truthful trigger/change-impact scope practical. Documentation-only or research-tooling-only changes must not cause unrelated Chrome/PDF/Yandex evidence reruns unless their change impact actually invalidates that evidence.
 8. **Caching is allowed only as an execution optimization.** Safe caches for immutable browser archives, language packages or build dependencies may reduce Actions minutes, but a cache hit never changes the acceptance/evidence requirement and must not become a second source of truth.
 9. **Local limitation must be explicit.** If the available local browser/runtime is too old or otherwise unsuitable, it may be used for lower-level development controls but must not be cited as current-feature evidence. The required remote/current environment is then a deliberate evidence run, not a reason to move the whole development loop into CI.
 10. **Optimization must not weaken truthfulness.** Actions minimization may reduce duplicate executions, pushes and runner minutes; it must not skip an evidence layer required by the claim, bypass exact-SHA verification, weaken TOCTOU, suppress post-merge validation or convert an external/unknown boundary into a synthetic PASS.
@@ -108,11 +108,11 @@ Target operating shape: the large majority of checker/test development happens b
 
 `.github/workflows/repository-integrity.yml` запускается на push/PR в `main` и вручную. Он подтверждает:
 
-1. repository/audit organization через `project_tools/check_repository_consistency.py` + self-test;
+1. repository/research organization через `project_tools/check_repository_consistency.py` + self-test;
 2. bounded repository growth через `project_tools/check_repository_hygiene.py` + self-test;
-3. lossless final audit-delta retirement и staged-evidence compaction provenance;
+3. lossless final research-delta retirement и staged-evidence compaction provenance;
 4. immutable GitHub Actions pins, read-only workflow permissions and low-noise Dependabot scope через `check_ci_pins.py` + self-test;
-5. exact PR runtime/audit contract через `check_pr_change_contract.py` + self-test на PR;
+5. exact PR runtime/research contract через `check_pr_change_contract.py` + self-test на PR;
 6. корректность структуры `RELEASE_READINESS.md` через `check_release_readiness.py status` — статус `NOT READY` здесь допустим;
 7. JavaScript syntax для tracked `.js`;
 8. deterministic `project_tools/test_*.js`;
@@ -160,14 +160,14 @@ Gate fail-closed проверяет `RELEASE_READINESS.md`: real unpacked Chrome
 1. **Одно смысловое изменение — один рабочий PR.** Перед началом работы выполняется fresh-fetch `main` и GitHub inventory: current `main` SHA, branches и open PR. В обычном режиме одновременно ведётся не более одного активного проектного PR; единственное штатное исключение — один автоматический Dependabot PR.
 2. **Open PR означает реального кандидата на merge.** PR не используется как долговременный архив или provenance storage. Если эксперимент/WIP не должен merge-иться, его exact head SHA и назначение фиксируются в PR/Git history, PR закрывается без merge, а branch удаляется. PR по уже DONE owner не остаётся открытым без нового доказанного regression/root.
 3. **Одна задача/owner — максимум одна текущая рабочая ветка.** Параллельная ветка того же root допустима только при явной координации; иначе перед новой работой сначала reconciliate существующий branch/PR. После squash merge head branch автоматически удаляется (`delete_branch_on_merge=true`).
-4. **Для runtime обязателен audit-contract.** Любое изменение runtime получает `audit-impact` и конкретный `audit-rationale`. При затронутом owner указываются P-код, durable evidence и deterministic regression test либо обоснованный `test-impact: external-only`.
+4. **Для runtime обязателен research-contract.** Любое изменение runtime получает `research-impact` и конкретный `research-rationale`. При затронутом owner указываются P-код, durable evidence и deterministic regression test либо обоснованный `test-impact: external-only`.
 5. **После каждого merge обязателен push-run canonical `main`.** Green PR-head сам по себе недостаточен. Если post-merge `repository-integrity` красный, новая разработка не начинается до возврата `main` в green state.
-6. **Audit evidence не размножается без необходимости.** Перед новым standalone evidence-файлом проверяется существующий `AUDIT_FAMILY_*`, supplemental evidence и history layer. Новый файл создаётся только когда существующий durable слой не может сохранить доказательство без потери смысла; status authority при этом остаётся только в `AUDIT_REGISTRY.md`.
-7. **Temporary audit delta жёстко ограничен.** В current tree одновременно допустим максимум один `AUDIT_DELTA_*.md` кроме index. Он существует только во время активного анализа, обязан быть проиндексирован и после стабилизации finding складывается lossless в durable evidence/history вместо превращения во второй status ledger.
-8. **Staged evidence — только interruption-safety механизм.** Одновременно допустима максимум одна активная staged-family. Каждый `*_STAGE<n>_*_EVIDENCE.md` обязан быть явно перечислен в `AUDIT_DELTA_INDEX.md`. После завершения tranche checkpoints должны быть compacted в durable FINAL/семейный evidence с exact historical commit/blob provenance и deterministic recovery check; завершённая серия не остаётся BASE/STAGE-набором в current tree.
+6. **Research evidence не размножается без необходимости.** Перед новым standalone evidence-файлом проверяется существующий `RESEARCH_FAMILY_*`, supplemental evidence и history layer. Новый файл создаётся только когда существующий durable слой не может сохранить доказательство без потери смысла; status authority при этом остаётся только в `RESEARCH_REGISTRY.md`.
+7. **Temporary research delta жёстко ограничен.** В current tree одновременно допустим максимум один `RESEARCH_DELTA_*.md` кроме index. Он существует только во время активного анализа, обязан быть проиндексирован и после стабилизации finding складывается lossless в durable evidence/history вместо превращения во второй status ledger.
+8. **Staged evidence — только interruption-safety механизм.** Одновременно допустима максимум одна активная staged-family. Каждый `*_STAGE<n>_*_EVIDENCE.md` обязан быть явно перечислен в `RESEARCH_DELTA_INDEX.md`. После завершения tranche checkpoints должны быть compacted в durable FINAL/семейный evidence с exact historical commit/blob provenance и deterministic recovery check; завершённая серия не остаётся BASE/STAGE-набором в current tree.
 9. **Final mergeable tree содержит только утверждённые permanent workflows.** Текущая permanent allowlist: `repository-integrity.yml` и `release-gate.yml`. Temporary physical/browser workflow допустим на промежуточной evidence-ветке, но обязан быть удалён до final PR head. Новый permanent workflow требует отдельного явного infrastructure decision и синхронного обновления hygiene guard.
 10. **Dependabot остаётся месячным и только для GitHub Actions.** Auto-merge не используется. Каждый grouped update проходит exact diff review, оценку major-version implications и полный CI. Exact Action SHA хранится только в executable workflow source, а не дублируется в narrative docs.
-11. **Issues создаются только для реальной незавершённой работы или нового finding.** Исторический `AUDIT_REGISTRY` не переносится задним числом в сотни Issues; registry остаётся authority по P-owner/status.
+11. **Issues создаются только для реальной незавершённой работы или нового finding.** Исторический `RESEARCH_REGISTRY` не переносится задним числом в сотни Issues; registry остаётся authority по P-owner/status.
 12. **Health review выполняется по порогу и при нарушении инварианта.** Плановый review — после каждых **12 merged project PR** либо раз в **3 месяца**, что наступит раньше. Внеплановый review выполняется сразу, если обнаружены stale/diverged branches, provenance-only/open PR, competing PR одного root, temporary workflow на final head, >1 temporary delta, >1 staged-family, broken evidence navigation или Registry/state/checker drift. Если drift отсутствует, cleanup commit не создаётся.
 13. **Исторические evidence не удаляются по календарю.** Git history не переписывается через BFG/filter-repo ради уборки. Retirement отдельного evidence/artifact допускается только после доказанного lossless переноса уникального содержания и фиксации recovery provenance.
 14. **Release остаётся отдельным явно санкционированным событием.** Требуются explicit release decision, актуальный `RELEASE_READINESS.md`, real unpacked Chrome QA, real Yandex E2E, review release-critical owners и ручной release gate; build/tag/Release выполняются только после этого отдельным действием.

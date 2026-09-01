@@ -1,8 +1,8 @@
 # WebClip — primary PDF fidelity contract
 
-Этот документ задаёт постоянный product/architecture contract текущего основного PDF-режима WebClip. Он конкретизирует `PROJECT_MISSION_AND_DEFENSIVE_SECURITY_POLICY.md` и `WEBCLIP_COPY_ARCHITECTURE_POLICY.md` для PDF и является нормативной основой для deep-audit criteria, реализации и regression verification PDF pipeline.
+Этот документ задаёт постоянный product/architecture contract текущего основного PDF-режима WebClip. Он конкретизирует `PROJECT_MISSION_AND_DEFENSIVE_SECURITY_POLICY.md` и `WEBCLIP_COPY_ARCHITECTURE_POLICY.md` для PDF и является нормативной основой для deep-research criteria, реализации и regression verification PDF pipeline.
 
-`AUDIT_REGISTRY.md` остаётся единственным current authority по P-code owner/status. Этот документ сам по себе не меняет P-code status/owner и не утверждает, что текущая реализация уже соответствует всем перечисленным требованиям.
+`RESEARCH_REGISTRY.md` остаётся единственным current authority по P-code owner/status. Этот документ сам по себе не меняет P-code status/owner и не утверждает, что текущая реализация уже соответствует всем перечисленным требованиям.
 
 ## 1. Scope: PDF является гибридом fidelity и completeness
 
@@ -239,7 +239,7 @@ Fidelity относится к фактически admitted representation, а 
 
 ## 19. Transformation classes текущего PDF-режима
 
-Для deep audit и implementation используются четыре класса:
+Для deep research и implementation используются четыре класса:
 
 1. **Representation-only** — pagination, scaling и другие format-level изменения без смены semantics: разрешены.
 2. **Static flattening** — ordinary/nested scroll expansion, controlled fixed/sticky flattening, inert control representation: разрешены при сохранении ordering/fidelity.
@@ -250,7 +250,7 @@ Fidelity относится к фактически admitted representation, а 
 
 Техническое завершение capture/DOM preparation/`printToPDF` не является достаточным доказательством success.
 
-Deep audit и acceptance должны, где свойство observable только после rendering, проверять physical PDF bytes/raster/text/links/page count и другие relevant artifact properties.
+Deep research и acceptance должны, где свойство observable только после rendering, проверять physical PDF bytes/raster/text/links/page count и другие relevant artifact properties.
 
 Если preview/preparation выглядели корректно, но persisted/local/Yandex artifact содержит другое или неполное содержание, операция не соответствует этому contract.
 
@@ -268,9 +268,9 @@ Deep audit и acceptance должны, где свойство observable тол
 
 Каждый из них должен иметь собственную semantics и не должен скрыто менять contract текущего PDF.
 
-## 22. Deep-audit rule
+## 22. Deep-research rule
 
-При глубоком аудите PDF каждый relevant surface должен проверяться относительно этого contract, а не относительно неопределённого критерия «похоже на страницу».
+При глубоком исследовании PDF каждый relevant surface должен проверяться относительно этого contract, а не относительно неопределённого критерия «похоже на страницу».
 
 Особое внимание обязательно уделяется границам:
 
@@ -288,4 +288,4 @@ Deep audit и acceptance должны, где свойство observable тол
 - physical artifact identity;
 - truthful degraded/partial/unknown receipts.
 
-External user-intent/peer-product research по `AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md` остаётся обязательным входом deep audit и product discovery, но изменить этот fidelity contract оно может только через отдельное явное product decision пользователя, durably зафиксированное в project policy.
+External user-intent/peer-product research по `RESEARCH_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md` остаётся обязательным входом deep research и product discovery, но изменить этот fidelity contract оно может только через отдельное явное product decision пользователя, durably зафиксированное в project policy.

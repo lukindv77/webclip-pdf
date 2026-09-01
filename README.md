@@ -9,7 +9,7 @@ Chrome Manifest V3 extension для сохранения выбранного с
 - минимальный Chrome `118`
 - `0.9.9` остаётся WIP и **не является выпущенной версией**
 
-Номер runtime определяется `manifest.json`. Audit/docs progress сам по себе не меняет version/build/tag/Release.
+Номер runtime определяется `manifest.json`. Research/docs progress сам по себе не меняет version/build/tag/Release.
 
 ## Основные возможности
 
@@ -21,7 +21,7 @@ Chrome Manifest V3 extension для сохранения выбранного с
 - опциональная загрузка PDF и резервных копий Journal на Яндекс Диск;
 - OperationLog/receipts и recovery/reconciliation механизмы для асинхронных операций.
 
-Часть архитектурных границ остаётся open audit backlog. `AUDIT_REGISTRY.md`, а не этот README, является authority по их статусам.
+Часть архитектурных границ остаётся open research backlog. `RESEARCH_REGISTRY.md`, а не этот README, является authority по их статусам.
 
 ## Установка для разработки/QA
 
@@ -45,16 +45,16 @@ GitHub Actions workflow `Repository integrity` запускает:
 
 Отдельный ручной workflow `Release gate` повторяет deterministic/recovery проверки для exact candidate SHA/version и затем fail-closed требует текущий real Chrome/Yandex/release-decision evidence. Он **не** строит и не публикует Release.
 
-## Документация и аудит
+## Документация и исследование
 
 Начинать с `project_docs/README_INDEX.md`.
 
 Ключевые документы:
 
-- `project_docs/AUDIT_REGISTRY.md` — единый current P-code/status/owner registry;
-- `project_docs/AUDIT_CHANGE_WORKFLOW.md` — жизненный цикл finding/P-owner/implementation/evidence/PR;
-- `project_docs/AUDIT_DELTA_INDEX.md` — навигация по consolidated audit families;
-- `project_docs/AUDIT_FAMILY_*_EVIDENCE.md` — подробные family evidence;
+- `project_docs/RESEARCH_REGISTRY.md` — единый current P-code/status/owner registry;
+- `project_docs/RESEARCH_CHANGE_WORKFLOW.md` — жизненный цикл finding/P-owner/implementation/evidence/PR;
+- `project_docs/RESEARCH_DELTA_INDEX.md` — навигация по consolidated research families;
+- `project_docs/RESEARCH_FAMILY_*_EVIDENCE.md` — подробные family evidence;
 - `project_docs/ARCHITECTURE.md` — архитектура;
 - `project_docs/USER_REQUIREMENTS.md` — требования;
 - `project_docs/TEST_STATUS.md` — current test/release truth;
@@ -71,3 +71,7 @@ GitHub Actions workflow `Repository integrity` запускает:
 `lukindv77/webclip-pdf` / `main` — canonical working source. Перед анализом или записью нужно fresh-fetch `main`. Exact commit SHA идентифицирует WIP snapshot; release source должен быть привязан к exact tested commit и annotated release tag.
 
 Репозиторий намеренно остаётся private, а `main` — `protected=false`; обычные изменения поэтому проходят PR-first с exact-head CI и повторной TOCTOU-проверкой непосредственно перед merge.
+
+## Comprehensive Project Research
+
+Project-wide engineering research is governed by `project_docs/COMPREHENSIVE_PROJECT_RESEARCH_POLICY.md`. It covers requirements, architecture, implementation conformity, standards, technical debt, performance, reliability, defensive security, maintainability, dependencies, risks, improvement alternatives, architecture recommendations, comparable products, user expectations, usage trends and user stories.

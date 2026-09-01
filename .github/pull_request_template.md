@@ -15,25 +15,25 @@ Describe the exact purpose of this change and the intended files/subsystems.
 - [ ] This open PR is a real merge candidate, not provenance/archive storage.
 - [ ] This PR has one bounded purpose/root and does not duplicate an already active branch/PR for the same owner without explicit coordination.
 - [ ] The final PR tree contains no temporary workflow; only approved permanent workflows remain unless this PR explicitly changes infrastructure policy and its guard.
-- [ ] At most one temporary `AUDIT_DELTA_*.md` exists, and any active staged evidence belongs to at most one indexed staged-family.
+- [ ] At most one temporary `RESEARCH_DELTA_*.md` exists, and any active staged evidence belongs to at most one indexed staged-family.
 - [ ] Completed staged checkpoints were compacted losslessly into durable evidence instead of being retained as BASE/STAGE noise.
 - [ ] The head branch is disposable after squash merge; `delete_branch_on_merge=true` is expected to remove it automatically.
 
-## Audit / P-owner safety
+## Research / P-owner safety
 
-- [ ] `AUDIT_REGISTRY.md` remains the single owner/status authority and P-numbers were not reused.
-- [ ] I followed `project_docs/AUDIT_CHANGE_WORKFLOW.md` for any new/refined finding.
+- [ ] `RESEARCH_REGISTRY.md` remains the single owner/status authority and P-numbers were not reused.
+- [ ] I followed `project_docs/RESEARCH_CHANGE_WORKFLOW.md` for any new/refined finding.
 - [ ] Duplicate/root-cause check was performed before allocating a new P-code, or no new P-code is allocated.
-- [ ] New/changed durable audit evidence is in the correct family/history document; no acceptance detail exists only in Issue/PR/chat.
+- [ ] New/changed durable research evidence is in the correct family/history document; no acceptance detail exists only in Issue/PR/chat.
 - [ ] Historical PASS evidence is not described as a current rerun unless it actually ran on the relevant exact SHA.
 - [ ] Requirements/architecture/test documentation was updated where the implementation contract changed, or no contract changed.
 
-### Machine-readable audit impact
+### Machine-readable research impact
 
-For any runtime or canonical audit/evidence change, select **exactly one**:
+For any runtime or canonical research/evidence change, select **exactly one**:
 
-- [ ] `audit-impact: none` — no P-owner/status/acceptance contract is affected.
-- [ ] `audit-impact: owner` — one or more P-owners are affected; list them below and update durable audit evidence in this PR.
+- [ ] `research-impact: none` — no P-owner/status/acceptance contract is affected.
+- [ ] `research-impact: owner` — one or more P-owners are affected; list them below and update durable research evidence in this PR.
 
 P-owner(s) affected, or `none`:
 
@@ -41,13 +41,13 @@ P-owner(s) affected, or `none`:
 
 For **every runtime change**, replace the placeholder below with a concrete explanation of why no existing owner/invariant is affected, or how the declared owner(s) are affected:
 
-`audit-rationale: <replace with concrete rationale>`
+`research-rationale: <replace with concrete rationale>`
 
-If `audit-impact: owner` changes runtime and no deterministic regression test is appropriate, select this explicit escape hatch and keep the required real boundary in durable evidence:
+If `research-impact: owner` changes runtime and no deterministic regression test is appropriate, select this explicit escape hatch and keep the required real boundary in durable evidence:
 
 - [ ] `test-impact: external-only` — acceptance requires real Chrome/Yandex/other external verification; no suitable deterministic test is being added by this PR.
 
-When deterministic tests are added for `audit-impact: owner`, each declared P-code must appear in the changed test source. The PR gate validates these markers against the actual changed-file set. Do not check `external-only` merely to avoid writing a deterministic test.
+When deterministic tests are added for `research-impact: owner`, each declared P-code must appear in the changed test source. The PR gate validates these markers against the actual changed-file set. Do not check `external-only` merely to avoid writing a deterministic test.
 
 ## Validation
 

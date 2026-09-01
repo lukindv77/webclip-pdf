@@ -217,13 +217,13 @@ Action summary для URL вычисляется только по `destination 
 `failures` ограничен 40 элементами; resource labels — 500 символов. Для HTTP(S) диагностический URL сохраняется только как `origin + pathname`, без query/hash. `data:` и `blob:` заменяются `[data-url]` / `[blob-url]`. Старые Journal entries без `resourceReport` остаются валидными и не получают фиктивный `0/0` report при import.
 
 
-## Recovery metadata added by audit
+## Recovery metadata added by research
 
 Journal entries may temporarily contain `readMovePendingAt`, `readMoveSourcePath`, `readMoveTargetPath`, `readMoveOperationId`, `readMoveLastError` while `Прочитать позже → Прочитано` is not fully finalized. These fields are cleared after successful local finalization and are preserved on import/export for recovery.
 
 `chrome.storage.local.webclipPendingJournalAppends` is a bounded recovery queue for the narrow failure window after a file has already been physically saved but the corresponding Journal append cannot be committed. Each pending item uses a stable `journalEntryId`/`journalCreatedAt`, making replay idempotent. It contains no OAuth token or signed upload URL.
 
-## Audit additions: pending local downloads / transfer chunks
+## Research additions: pending local downloads / transfer chunks
 
 ### `WebClipJournal.pendingDownloads`
 
@@ -248,7 +248,7 @@ Stored as `meta[key=webclipJournalBackupLease].value`; acquisition is a single r
 
 
 
-## Audit state additions — 2026-08-24
+## Research state additions — 2026-08-24
 
 ### `webclipJournalStatsDirty` v2
 

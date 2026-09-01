@@ -14,6 +14,6 @@ assert(sw.includes("if (senderKind !== 'extension') throw new Error('Состо�
 assert(sw.includes('navigator.storage.persisted()'), 'health report must expose current persistence status when supported');
 assert(optionsJs.includes('navigator.storage.persist()'), 'persistence must be an explicit user action from an extension page');
 assert(optionsHtml.includes('id="storageHealthStatus"') && optionsHtml.includes('id="requestStoragePersistence"'), 'storage health/persistence controls must exist in options UI');
-assert.strictEqual(manifest.version, '0.9.8', 'audit checkpoint must not bump manifest version');
+assert.strictEqual(manifest.version, '0.9.8', 'research checkpoint must not bump manifest version');
 
 console.log('Storage health/persist policy tests OK');

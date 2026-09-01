@@ -259,7 +259,7 @@ State в `journalBackupState` хранит общие timestamps и отдель
 
 Новые Yandex entries содержат identity/locator context `accountUid`, `rootPath`, `resourceId`, `publicUrl`, `remotePath`. Перед destructive locate сохранённые account/root сверяются с текущими и mismatch fail-closed. При известном `resourceId` path-only кандидат не принимается; exact `publicUrl` служит secondary identity только когда candidate не вернул `resource_id`, но не перекрывает конфликтующий ID. JSON export/import сохраняет поля; legacy entries без новых полей остаются совместимыми. Shared delete→Trash последовательность не изменена.
 
-## Audit hardening: durable local downloads and bounded journal UI (2026-08-24)
+## Research hardening: durable local downloads and bounded journal UI (2026-08-24)
 
 ### Local Chrome downloads
 
@@ -280,7 +280,7 @@ Local PDF download is modeled as a durable state transition instead of assuming 
 
 New journal export chunks are stored in `WebClipOffscreenTransfers` as `Blob` values rather than UTF-16 strings. The offscreen document builds the final download/upload Blob from Blob parts. Legacy staging records with `text` remain readable.
 
-### Audit durability additions (2026-08-24)
+### Research durability additions (2026-08-24)
 
 - `WebClipJournal` schema v7 retains `pendingRemoteSaves` and adds `importStaging` for pre-side-effect Yandex save checkpoints. A checkpoint progresses `prepared → remote-verified → journal appended/removed`; clear/import cancels it in the same DB domain.
 - Journal `meta` is the authority for the exclusive backup lease; acquire/renew/release are IndexedDB transactions, not storage.local compare-after-write.
@@ -289,7 +289,7 @@ New journal export chunks are stored in `WebClipOffscreenTransfers` as `Blob` va
 
 
 
-### Audit durability/security checkpoint — P0-049…053 / P1-051…053
+### Research durability/security checkpoint — P0-049…053 / P1-051…053
 
 - Journal append sourced from `pendingDownloads` or `pendingRemoteSaves` re-validates the source checkpoint inside the same IndexedDB transaction as the entry write. A concurrent clear/import therefore cancels the stale append instead of resurrecting data.
 - `urlStats` dirty state is a bounded multi-token state in `storage.local`; individual successful mutations remove only their token. Full rebuild clears the state only when no newer marker revision appeared during the rebuild.
@@ -314,7 +314,7 @@ New journal export chunks are stored in `WebClipOffscreenTransfers` as `Blob` va
 `P1-145` adds a UI-side latest-wins admission queue for OperationLog detail reads. The Options page permits at most one actually unresolved detail runtime RPC and retains only the latest not-yet-started selection. Replacing a queued selection resolves it locally without sending `WEBCLIP_OPERATION_LOG_GET`. The 30-second UI deadline is not treated as cancellation: the active slot remains occupied until the underlying `chrome.runtime.sendMessage` settles, preventing several multi-MB detail responses from accumulating after local timeouts. Generation fencing remains authoritative for late active responses, so stale detail data cannot become the selected/export target.
 
 
-## Audit invariants — late Chrome API settlement, storage health and event ownership
+## Research invariants — late Chrome API settlement, storage health and event ownership
 
 - **Non-cancellable Chrome API side effects:** a local `Promise.race` timeout is not treated as cancellation. `chrome.offscreen.closeDocument()` remains tracked until its real settlement, and a replacement offscreen cannot be created while a late close is pending. `chrome.debugger.attach/detach` use the same reconciliation principle: retries are blocked until the previous transition actually settles; a late successful attach is detached.
 - **Blob-backed downloads:** automatic PDF downloads remain service-worker-owned; native `saveAs:true` exports are page-owned by `journal.html` / `options.html` (P1-079/P1-080). Blob URLs are released on terminal `complete/interrupted` through page cleanup plus the worker watchdog; otherwise the worker 15-minute deadline performs state check + best-effort cancel before revoke. Offscreen keeps a 16-minute fallback TTL if both owners disappear. Count/byte budgets remain 12 URLs / 256 MiB.

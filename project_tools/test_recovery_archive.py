@@ -57,7 +57,7 @@ def assert_clean_build(clone: pathlib.Path) -> None:
             "source/service-worker.js",
             "source/content.js",
             "source/project_tools/build_recovery_archive.py",
-            "project_docs/AUDIT_REGISTRY.md",
+            "project_docs/RESEARCH_REGISTRY.md",
             "project_docs/BUILD_AND_RECOVERY_RULES.md",
             "project_docs/RESTORE_PROMPT.md",
         }

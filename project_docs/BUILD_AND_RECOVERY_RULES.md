@@ -21,7 +21,7 @@ GitHub Release и пользовательский ZIP являются прои
 
 При фактическом выпуске новой версии:
 
-1. Завершить runtime/docs изменения и applicable audit owners.
+1. Завершить runtime/docs изменения и applicable research owners.
 2. Выполнить требуемые tests/real QA; historical PASS не заменяет текущий gate.
 3. Обновить `manifest.json` version только после release decision.
 4. Обновить актуальные project docs и changelog.
@@ -34,7 +34,7 @@ GitHub Release и пользовательский ZIP являются прои
 11. Если создаётся GitHub Release, прикрепить артефакты и `SHA256SUMS` к тому же release tag; в описании указать exact full commit SHA и статус подписи tag.
 12. После публикации независимо перепроверить, что tag указывает на ожидаемый commit, checksums совпадают с загруженными assets, а manifest/runtime version соответствует release metadata.
 
-Git commit сам по себе не является релизом и не требует изменения manifest version. Docs/audit cleanup не является основанием для нового tag/Release.
+Git commit сам по себе не является релизом и не требует изменения manifest version. Docs/research cleanup не является основанием для нового tag/Release.
 
 ## Отдельный recovery artifact
 
@@ -63,7 +63,7 @@ Offline `source/` — резервная копия конкретного Git c
 1. Открыть canonical repository `lukindv77/webclip-pdf`.
 2. Разрешить требуемый exact commit/tag.
 3. Проверить commit SHA и, для официального signed-tag релиза, подпись tag.
-4. Прочитать `project_docs/RESTORE_PROMPT.md`, `README_INDEX.md`, current audit/test registries и архитектуру.
+4. Прочитать `project_docs/RESTORE_PROMPT.md`, `README_INDEX.md`, current research/test registries и архитектуру.
 5. Считать Git tree этого commit единственным exact source snapshot.
 6. Для release assets сверить `SHA256SUMS` с фактическими файлами.
 
@@ -84,7 +84,7 @@ Dated handoff не является состоянием проекта и не 
 - считать recovery/handoff archive более актуальным, чем Git commit;
 - выпускать два source snapshots одной версии без доказанной byte identity;
 - создавать release/recovery из dirty tree как официальный exact snapshot;
-- менять manifest version только из-за docs/audit commit;
+- менять manifest version только из-за docs/research commit;
 - выдавать generated ZIP как релиз до требуемого real Chrome/Yandex release QA;
 - заявлять signed/verified release provenance без фактически проверенной подписи;
 - публиковать release asset без checksum, если он входит в официальный набор релиза.

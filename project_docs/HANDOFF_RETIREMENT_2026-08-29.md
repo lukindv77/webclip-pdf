@@ -8,11 +8,11 @@ The handoff was anchored to `e42e4bbb08f00b6717b59e3ec94693e03eb1cda6` and expli
 
 Since that checkpoint, the repository has:
 
-- consolidated current P-code status/ownership into `project_docs/AUDIT_REGISTRY.md`;
+- consolidated current P-code status/ownership into `project_docs/RESEARCH_REGISTRY.md`;
 - added and reserved P1-218…P1-225 after the handoff's P1-217 endpoint;
 - migrated historical implementation/test evidence into compact evidence ledgers;
 - retired the old large `PRIORITIES_P0_P1_P2.md` table into a compatibility pointer;
-- retired broad/correction audit deltas after lossless evidence migration;
+- retired broad/correction research deltas after lossless evidence migration;
 - adopted Git-first recovery architecture and a current `RESTORE_PROMPT.md`;
 - added repository-integrity automation.
 
@@ -23,10 +23,10 @@ Therefore the handoff's restoration order and owner list are materially stale.
 Unique useful handoff content remains available in current sources:
 
 - repository/runtime identity and release truth -> `GITHUB_REPOSITORY_STATE.md`, `TEST_STATUS.md`, `manifest.json`;
-- architecture invariants -> `ARCHITECTURE.md`, `DECISIONS_AND_RATIONALE.md`, `RESTORE_PROMPT.md` and current audit evidence;
-- current P-code owners -> `AUDIT_REGISTRY.md`;
-- detailed root cause/acceptance -> current `AUDIT_DELTA_*` and `AUDIT_DELTA_INDEX.md`;
-- corrections/negative duplicate decisions -> `AUDIT_HISTORY_INDEX.md`;
+- architecture invariants -> `ARCHITECTURE.md`, `DECISIONS_AND_RATIONALE.md`, `RESTORE_PROMPT.md` and current research evidence;
+- current P-code owners -> `RESEARCH_REGISTRY.md`;
+- detailed root cause/acceptance -> current `RESEARCH_DELTA_*` and `RESEARCH_DELTA_INDEX.md`;
+- corrections/negative duplicate decisions -> `RESEARCH_HISTORY_INDEX.md`;
 - historical commits -> Git history;
 - session restart procedure -> `RESTORE_PROMPT.md`.
 
