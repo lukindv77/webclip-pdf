@@ -99,9 +99,78 @@
   });
 })();
 
+(() => {
+  'use strict';
+
+  // P0-077: one versioned envelope is the maximum promise made by a
+  // self-generated full Journal backup and by same-version restore paths.
+  const MIB = 1024 * 1024;
+  const VERSION = 1;
+  const MAX_BYTES = 50 * MIB;
+  const MAX_TOTAL_CHARS = 50 * MIB;
+  const MAX_ENTRIES = 100000;
+  const MAX_ENTRY_CHARS = 8 * MIB;
+
+  function error(code, message) {
+    const value = new Error(message);
+    value.code = code;
+    return value;
+  }
+
+  function assertEntryChars(value) {
+    const chars = Math.max(0, Math.floor(Number(value) || 0));
+    if (chars > MAX_ENTRY_CHARS) {
+      throw error('JOURNAL_RESTORE_ENTRY_TOO_LARGE', 'Одна запись журнала превышает restore-envelope текущей версии.');
+    }
+    return chars;
+  }
+
+  function assertExportReceipt(receipt = {}) {
+    const totalBytes = Math.max(0, Math.floor(Number(receipt.totalBytes) || 0));
+    const totalChars = Math.max(0, Math.floor(Number(receipt.totalChars) || 0));
+    const entryCount = Math.max(0, Math.floor(Number(receipt.entryCount) || 0));
+    if (totalBytes > MAX_BYTES) {
+      throw error('JOURNAL_EXPORT_RESTORE_BYTES_LIMIT', 'Сформированная резервная копия превышает byte-limit same-version restore envelope.');
+    }
+    if (totalChars > MAX_TOTAL_CHARS) {
+      throw error('JOURNAL_EXPORT_RESTORE_CHARS_LIMIT', 'Сформированная резервная копия превышает char-limit same-version restore envelope.');
+    }
+    if (entryCount > MAX_ENTRIES) {
+      throw error('JOURNAL_EXPORT_RESTORE_ENTRY_COUNT_LIMIT', 'Сформированная резервная копия содержит больше записей, чем same-version restore envelope.');
+    }
+    return Object.freeze({ totalBytes, totalChars, entryCount });
+  }
+
+  function clampImportOptions(options = {}) {
+    const source = options && typeof options === 'object' ? options : {};
+    const bounded = (value, maximum) => {
+      const numeric = Math.floor(Number(value) || 0);
+      return numeric > 0 ? Math.min(numeric, maximum) : maximum;
+    };
+    return {
+      ...source,
+      maxTotalChars: bounded(source.maxTotalChars, MAX_TOTAL_CHARS),
+      maxEntryChars: bounded(source.maxEntryChars, MAX_ENTRY_CHARS),
+      maxEntries: bounded(source.maxEntries, MAX_ENTRIES)
+    };
+  }
+
+  globalThis.WebClipJournalRestoreEnvelope = Object.freeze({
+    VERSION,
+    MAX_BYTES,
+    MAX_TOTAL_CHARS,
+    MAX_ENTRIES,
+    MAX_ENTRY_CHARS,
+    assertEntryChars,
+    assertExportReceipt,
+    clampImportOptions
+  });
+})();
+
 // service-worker.js imports this shared helper synchronously. Keep worker-only
 // security bootstraps here so extension pages using the journal filter remain
 // unchanged while guards are installed before ordinary worker code runs.
 if (typeof importScripts === 'function' && typeof document === 'undefined') {
   importScripts('pdf-print-guard.js', 'content-injection-guard.js', 'operation-log-redaction-guard.js');
+  importScripts('journal-restore-envelope-guard.js');
 }

@@ -50,6 +50,7 @@ Explicit residual external families remain C17, C37, C41, C42, C44 and C46. C46 
 
 ## Functional Closure Sweep evidence
 
+- `AUDIT_P0_077_JOURNAL_RESTORE_ENVELOPE_CLOSURE_2026-09-01_EVIDENCE.md` — same-version Journal self-restore envelope closure: export success is capped to 50 MiB UTF-8 / 100,000 entries, 4–8 MiB valid single records remain exportable, and import options cannot widen beyond the shared versioned envelope. **P0-077 is DONE.**
 - `AUDIT_P0_048_LOCAL_DOWNLOAD_IDENTITY_CLOSURE_2026-09-01_EVIDENCE.md` — deterministic closure of local-download fallback identity ambiguity: exact Blob URL remains primary, filename/size fallback requires unique intent↔DownloadItem ownership, and numeric downloadId binding is transactional no-overwrite. **P0-048 is DONE.**
 - `AUDIT_P0_039_LOCAL_DOWNLOAD_UNKNOWN_RECOVERY_CLOSURE_2026-09-01_EVIDENCE.md` — deterministic closure of unknown automatic local-download recovery: missing Chrome history after TTL now preserves bounded manual-resolution metadata/operation evidence instead of deleting it, with no false Journal success. **P0-039 is DONE.**
 - `AUDIT_P0_033_SIGNED_YANDEX_LOG_REDACTION_CLOSURE_2026-09-01_EVIDENCE.md` — deterministic closure of signed Yandex Disk transport URL confidentiality in OperationLog. `.disk.yandex.net` and `.disk.yandex.ru` capability URLs now retain only origin + a constant redacted path in direct and nested metadata. **P0-033 is DONE.**
@@ -78,6 +79,7 @@ Historical consolidated evidence remains in `AUDIT_EVIDENCE.md`, `AUDIT_RETIRED_
 
 ## Current audit tools
 
+- `project_tools/test_p0_077_journal_restore_envelope.js` — deterministic P0-077 regression for byte/count/per-entry same-version restore boundaries, real guarded cursor batching, staging cleanup and import-option clamping.
 - `project_tools/test_p0_048_local_download_identity.js` — deterministic P0-048 regression for exact Blob URL precedence, ambiguous filename/size fallback, unique active-intent ownership and atomic numeric downloadId collision refusal.
 - `project_tools/test_p0_039_local_download_dead_letter.js` — deterministic P0-039 regression for both TTL paths, bounded unknown/manual-resolution state, metadata preservation, maintenance exclusion and late exact settlement compatibility.
 - `project_tools/test_p0_033_signed_yandex_log_redaction.js` — deterministic P0-033 failure/closure regression for direct/nested signed Yandex URL redaction and classic-worker bootstrap binding order.
