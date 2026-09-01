@@ -138,9 +138,6 @@ def main() -> None:
                 private_url = base_url + "?ctx=private"
                 normal_page = normal_context.new_page()
                 normal_page.goto(normal_url, wait_until="load")
-                private_context = browser.new_context()
-                private_page = private_context.new_page()
-                private_page.goto(private_url, wait_until="load")
 
                 worker = wait_until(
                     lambda: next((w for w in normal_context.service_workers if w.url.startswith(f"chrome-extension://{extension_id}/")), None),
@@ -150,11 +147,28 @@ def main() -> None:
                 allowed_incognito = worker.evaluate("async () => await chrome.extension.isAllowedIncognitoAccess()")
                 assert allowed_incognito is True, "extension must be physically enabled in Incognito"
 
+                private_created = worker.evaluate("""async (url) => {
+                  const win = await chrome.windows.create({url, incognito:true, focused:true});
+                  const tabs = await chrome.tabs.query({windowId:win.id});
+                  const tab = tabs.find((item) => item.url === url) || tabs[0] || null;
+                  return {windowId:win.id, tab};
+                }""", private_url)
+                private_tab = private_created.get("tab") if isinstance(private_created, dict) else None
+                assert private_tab and private_tab.get("incognito") is True, private_created
+
+                private_context = wait_until(
+                    lambda: next((ctx for ctx in browser.contexts if ctx is not normal_context and any(page.url == private_url for page in ctx.pages)), None),
+                    "real Chrome Incognito browser context",
+                    timeout=20,
+                )
+                private_page = next(page for page in private_context.pages if page.url == private_url)
+
                 tabs = worker.evaluate("async () => await chrome.tabs.query({})")
                 regular_tab = next((tab for tab in tabs if tab.get("url") == normal_url), None)
-                private_tab = next((tab for tab in tabs if tab.get("url") == private_url), None)
                 assert regular_tab and regular_tab.get("incognito") is False, tabs
-                assert private_tab and private_tab.get("incognito") is True, tabs
+                private_fresh = worker.evaluate("async (id) => await chrome.tabs.get(id)", private_tab["id"])
+                assert private_fresh.get("incognito") is True and private_fresh.get("url") == private_url, private_fresh
+                private_tab = private_fresh
 
                 worker.evaluate(f"""() => {{
                   globalThis.__p0045 = {{ journalReads: 0, backupReads: 0, frameExecs: 0, actionColors: [] }};
@@ -176,7 +190,7 @@ def main() -> None:
                       retryMinutes: 15,
                       lastBackgroundSuccessAt: Date.now() - 1000,
                       lastBackgroundFailureAt: Date.now() - 2000,
-                      lastBackgroundError: {json.dumps(NORMAL_HISTORY_MARKER)},
+                      lastBackgroundError: "P0_045_NORMAL_HISTORY_MARKER",
                       hasCurrentProblem: true,
                       rootPath: '/P0_045_NORMAL_ROOT',
                       folderPath: '/P0_045_NORMAL_ROOT/Backup',
