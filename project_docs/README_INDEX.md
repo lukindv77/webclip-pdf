@@ -52,6 +52,7 @@ Explicit residual external families remain C17, C37, C41, C42, C44 and C46. C46 
 
 After Cycle-2 coverage completion, new audit work is risk-ranked against existing ACTIVE Registry owners rather than extending coverage for its own sake.
 
+- `AUDIT_P0_064_FRAME_PROXY_BUDGET_CLOSURE_2026-09-01_EVIDENCE.md` — current Chrome-152 closure of flattened same-origin iframe materialization admission. A pointer-based preflight executes before complete `childNodes` materialization/deep clone/full descendant arrays; 5,001-node, 2,000,001-text-unit and 8,388,609-estimated-byte controls all reject with zero deep-clone delta, while an under-budget proxy remains physically printable. The same run revalidates the inert-proxy behavior under budget-first bootstrap. **P0-064 is DONE.**
 - `AUDIT_P0_068_INERT_FRAME_PROXY_CLOSURE_2026-09-01_EVIDENCE.md` — current Chrome-152 closure of the flattened same-origin iframe active-clone root. Native deep cloning demonstrably executes custom-element lifecycle, inline handler and nested iframe/object loads; the isolated-world inert mirror prevents those effects before live insertion while preserving ordinary selected text/table and Exclude behavior in the physical PDF. **P0-068 is DONE; duplicate P1-213 is MERGED → P0-068.**
 - `AUDIT_P0_071_PRINT_RENDER_GUARD_CLOSURE_2026-09-01_EVIDENCE.md` — current Chrome-152 closure of actual printed URI-scheme safety at the `Page.printToPDF` render cut. **P0-071 is DONE.**
 - `AUDIT_FUNCTIONAL_P0_071_PRINT_LINK_SCHEME_RENDER_CUT_2026-09-01.md` — historical pre-fix Chrome-152 finding that proved page-owned `beforeprint` could substitute `javascript:`/`data:` URI annotations. Its then-current `ACTIVE` conclusion is superseded by the later direct closure record above; Registry current status is `DONE`.
@@ -74,7 +75,9 @@ Historical consolidated evidence remains in `AUDIT_EVIDENCE.md`, `AUDIT_RETIRED_
 
 ## Current audit tools
 
-- `project_tools/audit_p0_068_inert_frame_proxy.py` — P0-068/P1-213 Chrome-152 physical closure harness with native deep-clone failure control, real MV3 isolated-world injection proof, active-context/lifecycle/network side-effect checks and physical PDF positive controls.
+- `project_tools/audit_p0_064_frame_proxy_budget.py` — P0-064 Chrome-152 closure harness for pre-clone node/text/estimated-byte admission, unrelated-DOM negative controls and under-budget physical PDF output.
+- `project_tools/test_p0_064_frame_proxy_budget.js` — deterministic P0-064 preflight limits, fail-before-clone ordering and budget→inert→content injection regression.
+- `project_tools/audit_p0_068_inert_frame_proxy.py` — P0-068/P1-213 Chrome-152 physical closure/revalidation harness with native deep-clone failure control, real MV3 isolated-world injection proof, active-context/lifecycle/network side-effect checks and physical PDF positive controls.
 - `project_tools/test_p0_068_inert_frame_proxy.js` — deterministic inert-clone and injection-order regression for the single audited `content.js` deep-clone boundary.
 - `project_tools/audit_print_link_scheme_render_cut.py` — historical functional P0-071 Chrome-152 finding harness; current closure is guarded by `audit_p0_071_print_render_guard.py`.
 - `project_tools/audit_p0_071_print_render_guard.py` — current P0-071 Chrome-152 physical closure harness for actual printed URI-scheme safety.
