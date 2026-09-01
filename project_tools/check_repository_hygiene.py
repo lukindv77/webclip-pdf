@@ -23,9 +23,38 @@ PERMANENT_WORKFLOWS = {
     "release-gate.yml",
 }
 
+# Frozen staged checkpoints that pre-date the 2026-09-01 steady-state hygiene
+# contract. They are historical cleanup debt, not active working series. Their
+# exact names are grandfathered only so the new guard can prevent further growth
+# without forcing unrelated lossless compaction into this policy PR.
+LEGACY_STAGED_FILES = {
+    "AUDIT_FLATTENED_CSS_NAMED_ENVIRONMENT_STAGE2_2026-08-30_EVIDENCE.md",
+    "AUDIT_FLATTENED_CSS_NAMED_ENVIRONMENT_STAGE3_2026-08-30_EVIDENCE.md",
+    "AUDIT_FOCUS_INTERACTION_STATE_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "AUDIT_FOCUS_INTERACTION_STATE_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
+    "AUDIT_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE2_2026-08-30_EVIDENCE.md",
+    "AUDIT_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE3_2026-08-30_EVIDENCE.md",
+    "AUDIT_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE4_2026-08-30_EVIDENCE.md",
+    "AUDIT_RESPONSIVE_IMAGE_CAPTURE_IDENTITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "AUDIT_RESPONSIVE_IMAGE_CAPTURE_IDENTITY_STAGE3_2026-08-30_EVIDENCE.md",
+    "AUDIT_RESPONSIVE_REPLACED_MEDIA_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "AUDIT_RESPONSIVE_REPLACED_MEDIA_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
+    "AUDIT_TEMPORAL_RENDER_STATE_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "AUDIT_TEMPORAL_RENDER_STATE_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
+    "AUDIT_TYPOGRAPHY_LAYOUT_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "AUDIT_TYPOGRAPHY_LAYOUT_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
+    "AUDIT_VIEWPORT_ENVIRONMENT_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "AUDIT_VIEWPORT_ENVIRONMENT_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
+}
+
 STAGED_RE = re.compile(
     r"^(?P<family>AUDIT_.+)_STAGE\d+_\d{4}-\d{2}-\d{2}_EVIDENCE\.md$"
 )
+LEGACY_STAGED_FAMILIES = {
+    STAGED_RE.match(name).group("family")
+    for name in LEGACY_STAGED_FILES
+    if STAGED_RE.match(name)
+}
 
 
 def inspect_tree(root: pathlib.Path) -> list[str]:
@@ -50,7 +79,7 @@ def inspect_tree(root: pathlib.Path) -> list[str]:
             + ", ".join(deltas)
         )
 
-    staged: list[tuple[str, str]] = []
+    active_staged: list[tuple[str, str]] = []
     for path in sorted(docs.glob("AUDIT_*_STAGE*_EVIDENCE.md")):
         match = STAGED_RE.match(path.name)
         if not match:
@@ -58,17 +87,27 @@ def inspect_tree(root: pathlib.Path) -> list[str]:
                 f"repository hygiene: staged evidence path has unsupported naming: project_docs/{path.name}"
             )
             continue
-        staged.append((match.group("family"), path.name))
+
+        family = match.group("family")
         if path.name not in index_text:
             errors.append(
-                f"repository hygiene: active staged checkpoint is not indexed in AUDIT_DELTA_INDEX.md: {path.name}"
+                f"repository hygiene: staged checkpoint is not indexed in AUDIT_DELTA_INDEX.md: {path.name}"
             )
 
-    staged_families = sorted({family for family, _ in staged})
-    if len(staged_families) > 1:
+        if path.name in LEGACY_STAGED_FILES:
+            continue
+        if family in LEGACY_STAGED_FAMILIES:
+            errors.append(
+                f"repository hygiene: frozen legacy staged family gained a new checkpoint: {path.name}"
+            )
+            continue
+        active_staged.append((family, path.name))
+
+    active_families = sorted({family for family, _ in active_staged})
+    if len(active_families) > 1:
         errors.append(
             "repository hygiene: more than one active staged evidence family is retained: "
-            + ", ".join(staged_families)
+            + ", ".join(active_families)
         )
 
     actual_workflows = sorted(
