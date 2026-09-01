@@ -6,7 +6,7 @@ This file is **navigation only**. Current P-code status and single-owner authori
 
 The standalone `AUDIT_DELTA_*.md` working layer is fully retired in the current tree. The former 189-delta layer was embedded losslessly into family/cross-cutting evidence; the final temporary selection/capture delta is preserved verbatim in `AUDIT_RETIRED_DELTA_EVIDENCE.md` with exact Git provenance and a byte-for-byte CI self-test.
 
-No standalone audit delta is a current status authority. If a future temporary delta is created during active analysis, it must be indexed here until it is folded losslessly into durable evidence under `AUDIT_CHANGE_WORKFLOW.md`.
+Interruption-safe staged evidence is being compacted separately. Completed staged compactions retain a compact current semantic document plus exact historical source commit/blob receipts verified by `project_tools/test_staged_evidence_compaction.py`. No staged checkpoint is a status authority.
 
 ## Primary evidence families
 
@@ -29,8 +29,6 @@ No standalone audit delta is a current status authority. If a future temporary d
 | 15 | Broad revalidation / cross-cutting inventories | `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` | cross-cutting historical controls | previously consolidated |
 
 ## Supplemental durable evidence
-
-The following current documents preserve audit tranches that are useful outside a single family. Their detailed narratives are intentionally not duplicated in this navigation index.
 
 ### Selection, scope and frame topology
 
@@ -59,13 +57,13 @@ The following current documents preserve audit tranches that are useful outside 
 - `AUDIT_DEFERRED_VIRTUALIZED_MATERIALIZATION_2026-08-30_EVIDENCE.md`
 - `AUDIT_LONGPAGE_TOPLAYER_PAGINATION_2026-08-30_EVIDENCE.md`
 - `AUDIT_LONGPAGE_TOPLAYER_PAGINATION_FINAL_2026-08-30_EVIDENCE.md`
+- `AUDIT_REPLACED_RESOURCE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md` — compact current representation of Blocks 1–56; the three original checkpoint blobs are recoverable from pre-compaction `main` and verified in CI.
 
-### Interruption-safe staged evidence series retained in the working tree
+### Interruption-safe staged evidence series still retained in the working tree
 
-These series still contain staged source evidence and are candidates for a later, separately proven lossless compaction. Their presence here is navigation, not status authority.
+These series remain candidates for separately proven lossless compaction. Their presence is navigation, not status authority.
 
 - `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_2026-08-30_EVIDENCE.md`, `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_STAGE3_2026-08-30_EVIDENCE.md`, `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md`
-- `AUDIT_REPLACED_RESOURCE_CONVERGENCE_2026-08-30_EVIDENCE.md`, `AUDIT_REPLACED_RESOURCE_CONVERGENCE_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_REPLACED_RESOURCE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md`
 - `AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_2026-08-30_EVIDENCE.md`, `AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_STAGE3_2026-08-30_EVIDENCE.md`, `AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_FINAL_2026-08-30_EVIDENCE.md`
 - `AUDIT_FLATTENED_DOCUMENT_NAMESPACE_2026-08-30_EVIDENCE.md`, `AUDIT_FLATTENED_DOCUMENT_NAMESPACE_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_FLATTENED_DOCUMENT_NAMESPACE_STAGE3_2026-08-30_EVIDENCE.md`, `AUDIT_FLATTENED_DOCUMENT_NAMESPACE_FINAL_2026-08-30_EVIDENCE.md`
 
