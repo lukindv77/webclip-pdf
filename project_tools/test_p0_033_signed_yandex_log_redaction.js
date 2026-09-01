@@ -25,25 +25,22 @@ function currentShapeSafeUrl(value) {
 }
 
 function makeContext() {
-  const context = {
-    URL,
-    safeUrlForOperationLog: currentShapeSafeUrl,
-    sanitizeOperationLogValue(value, key = '', depth = 0) {
-      if (depth > 6) return '[TRUNCATED]';
-      if (typeof value === 'string') {
-        if (/url|href|link|uri/i.test(String(key || ''))) return globalThis.safeUrlForOperationLog(value);
-        return value;
-      }
-      if (Array.isArray(value)) return value.map((item) => globalThis.sanitizeOperationLogValue(item, key, depth + 1));
-      if (value && typeof value === 'object') {
-        const out = {};
-        for (const [childKey, childValue] of Object.entries(value)) {
-          out[childKey] = globalThis.sanitizeOperationLogValue(childValue, childKey, depth + 1);
-        }
-        return out;
-      }
+  const context = { URL, safeUrlForOperationLog: currentShapeSafeUrl };
+  context.sanitizeOperationLogValue = function sanitizeOperationLogValue(value, key = '', depth = 0) {
+    if (depth > 6) return '[TRUNCATED]';
+    if (typeof value === 'string') {
+      if (/url|href|link|uri/i.test(String(key || ''))) return context.safeUrlForOperationLog(value);
       return value;
     }
+    if (Array.isArray(value)) return value.map((item) => context.sanitizeOperationLogValue(item, key, depth + 1));
+    if (value && typeof value === 'object') {
+      const out = {};
+      for (const [childKey, childValue] of Object.entries(value)) {
+        out[childKey] = context.sanitizeOperationLogValue(childValue, childKey, depth + 1);
+      }
+      return out;
+    }
+    return value;
   };
   context.globalThis = context;
   vm.createContext(context);
