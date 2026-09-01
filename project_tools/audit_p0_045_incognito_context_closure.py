@@ -156,12 +156,12 @@ def main() -> None:
                 private_tab = private_created.get("tab") if isinstance(private_created, dict) else None
                 assert private_tab and private_tab.get("incognito") is True, private_created
 
-                private_context = wait_until(
-                    lambda: next((ctx for ctx in browser.contexts if ctx is not normal_context and any(page.url == private_url for page in ctx.pages)), None),
-                    "real Chrome Incognito browser context",
+                private_page = wait_until(
+                    lambda: next((page for ctx in browser.contexts for page in ctx.pages if page.url == private_url), None),
+                    "real Chrome Incognito page target",
                     timeout=20,
                 )
-                private_page = next(page for page in private_context.pages if page.url == private_url)
+                private_context = private_page.context
 
                 tabs = worker.evaluate("async () => await chrome.tabs.query({})")
                 regular_tab = next((tab for tab in tabs if tab.get("url") == normal_url), None)
@@ -190,7 +190,7 @@ def main() -> None:
                       retryMinutes: 15,
                       lastBackgroundSuccessAt: Date.now() - 1000,
                       lastBackgroundFailureAt: Date.now() - 2000,
-                      lastBackgroundError: "P0_045_NORMAL_HISTORY_MARKER",
+                      lastBackgroundError: {json.dumps(NORMAL_HISTORY_MARKER)},
                       hasCurrentProblem: true,
                       rootPath: '/P0_045_NORMAL_ROOT',
                       folderPath: '/P0_045_NORMAL_ROOT/Backup',
