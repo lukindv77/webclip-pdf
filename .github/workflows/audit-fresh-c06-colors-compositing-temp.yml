@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p c06-artifacts
-          python project_tools/audit_fresh_c06_colors_compositing.py --out-dir c06-artifacts | tee c06-result.json
+          python project_tools/audit_fresh_c06_colors_compositing_accept.py --out-dir c06-artifacts | tee c06-result.json
 
       - name: Upload C06 evidence artifacts
         if: always()
