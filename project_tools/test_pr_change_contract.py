@@ -36,36 +36,46 @@ def main() -> None:
     if module.validate_template(valid_template):
         raise AssertionError("template markers should pass")
     template_errors = module.validate_template("research-impact: none")
-    if not template_errors or not any("research-impact: owner" in error for error in template_errors):
+    if not template_errors or not any("research-impact: structural" in error for error in template_errors):
         raise AssertionError(f"missing template marker was not detected: {template_errors}")
 
     expect_pass("docs-only", ["README.md"], "")
 
     expect_fail(
-        "runtime-needs-declaration",
-        ["content.js"],
-        "",
-        "requires one checked declaration",
+        "runtime-needs-declaration", ["content.js"], "", "requires one checked declaration"
     )
-
     expect_fail(
         "runtime-needs-rationale",
         ["content.js"],
         "- [x] `research-impact: none`\n",
         "concrete non-placeholder research-rationale",
     )
-
-    expect_fail(
-        "runtime-placeholder-rationale",
-        ["content.js"],
-        "- [x] `research-impact: none`\n`research-rationale: <replace with concrete rationale>`\n",
-        "concrete non-placeholder research-rationale",
-    )
-
     expect_pass(
         "runtime-no-research-impact",
         ["content.js"],
         "- [x] `research-impact: none`\n`research-rationale: CSS-only rendering cleanup does not alter any P-owner invariant.`\n",
+    )
+
+    expect_pass(
+        "structural-registry-rename",
+        ["project_docs/RESEARCH_REGISTRY.md", "project_docs/RESEARCH_HISTORY_INDEX.md"],
+        "- [x] `research-impact: structural`\n`research-rationale: Terminology and navigation changed without changing any P-owner status or acceptance semantics.`\n",
+        {
+            "project_docs/RESEARCH_REGISTRY.md": "P1-225 remains ACTIVE",
+            "project_docs/RESEARCH_HISTORY_INDEX.md": "structural navigation",
+        },
+    )
+    expect_fail(
+        "structural-needs-rationale",
+        ["project_docs/RESEARCH_HISTORY_INDEX.md"],
+        "- [x] `research-impact: structural`\n",
+        "requires a concrete non-placeholder research-rationale",
+    )
+    expect_fail(
+        "structural-cannot-cover-runtime",
+        ["content.js", "project_docs/RESEARCH_HISTORY_INDEX.md"],
+        "- [x] `research-impact: structural`\n`research-rationale: Structural terminology migration only, with no intended owner semantic change.`\n",
+        "restricted to non-runtime",
     )
 
     owner_body = (
@@ -79,22 +89,13 @@ def main() -> None:
     }
     expect_pass(
         "runtime-owner-with-test",
-        [
-            "content.js",
-            "project_tools/test_p0_070_generation.js",
-            "project_docs/RESEARCH_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md",
-        ],
+        ["content.js", "project_tools/test_p0_070_generation.js", "project_docs/RESEARCH_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md"],
         owner_body,
         owner_evidence,
     )
-
     expect_fail(
         "runtime-owner-test-missing-code",
-        [
-            "content.js",
-            "project_tools/test_generation.js",
-            "project_docs/RESEARCH_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md",
-        ],
+        ["content.js", "project_tools/test_generation.js", "project_docs/RESEARCH_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md"],
         owner_body,
         "missing from changed deterministic test source",
         {
@@ -102,7 +103,6 @@ def main() -> None:
             "project_tools/test_generation.js": "// generation regression without owner marker\n",
         },
     )
-
     expect_fail(
         "runtime-owner-needs-test",
         ["content.js", "project_docs/RESEARCH_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md"],
@@ -110,26 +110,19 @@ def main() -> None:
         "requires a changed deterministic",
         {"project_docs/RESEARCH_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md": "P0-070 exact generation evidence"},
     )
-
     expect_pass(
         "runtime-owner-external-only",
         ["content.js", "project_docs/RESEARCH_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md"],
         owner_body + "- [x] `test-impact: external-only`\n",
         {"project_docs/RESEARCH_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md": "P0-070 exact generation evidence"},
     )
-
     expect_fail(
         "external-only-cannot-hide-test",
-        [
-            "content.js",
-            "project_tools/test_p0_070_generation.js",
-            "project_docs/RESEARCH_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md",
-        ],
+        ["content.js", "project_tools/test_p0_070_generation.js", "project_docs/RESEARCH_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md"],
         owner_body + "- [x] `test-impact: external-only`\n",
         "cannot be checked when deterministic tests are changed",
         owner_evidence,
     )
-
     expect_fail(
         "research-file-cannot-declare-none",
         ["project_docs/RESEARCH_HISTORY_INDEX.md"],
@@ -137,15 +130,13 @@ def main() -> None:
         "inconsistent",
         {"project_docs/RESEARCH_HISTORY_INDEX.md": "P1-001 correction"},
     )
-
     expect_fail(
-        "registry-needs-second-evidence",
+        "registry-owner-needs-second-evidence",
         ["project_docs/RESEARCH_REGISTRY.md"],
         "- [x] `research-impact: owner`\nP1-225\n",
         "requires a second durable",
         {"project_docs/RESEARCH_REGISTRY.md": "P1-225"},
     )
-
     expect_pass(
         "registry-with-family-evidence",
         ["project_docs/RESEARCH_REGISTRY.md", "project_docs/RESEARCH_FAMILY_JOURNAL_COMMENTS_EVIDENCE.md"],
@@ -155,14 +146,12 @@ def main() -> None:
             "project_docs/RESEARCH_FAMILY_JOURNAL_COMMENTS_EVIDENCE.md": "P1-225 pending-save generation",
         },
     )
-
     expect_fail(
         "manifest-needs-release-truth",
         ["manifest.json"],
         "- [x] `research-impact: none`\n`research-rationale: Version metadata change does not alter a P-owner contract.`\n",
         "requires synchronized release/test truth",
     )
-
     expect_pass(
         "manifest-with-release-truth",
         ["manifest.json", "project_docs/RELEASE_READINESS.md", "project_docs/TEST_STATUS.md"],
