@@ -27,6 +27,7 @@ import fitz
 from playwright.sync_api import BrowserContext, Page, Playwright, sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+BUDGET_GUARD = ROOT / "frame-proxy-budget-guard.js"
 FRAME_GUARD = ROOT / "frame-proxy-inert-guard.js"
 INJECTION_GUARD = ROOT / "content-injection-guard.js"
 POPUP = ROOT / "popup.js"
@@ -39,6 +40,7 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def assert_current_source() -> dict[str, str]:
+    budget_guard = BUDGET_GUARD.read_text(encoding="utf-8")
     frame_guard = FRAME_GUARD.read_text(encoding="utf-8")
     injection = INJECTION_GUARD.read_text(encoding="utf-8")
     popup = POPUP.read_text(encoding="utf-8")
@@ -57,15 +59,18 @@ def assert_current_source() -> dict[str, str]:
     for fragment in required_guard:
         if fragment not in frame_guard:
             raise AssertionError(f"frame-proxy-inert-guard.js missing closure invariant: {fragment}")
-    if "frame-proxy-inert-guard.js" not in injection or "content.js" not in injection:
-        raise AssertionError("worker content-injection guard no longer prepends inert helper")
-    if "files: ['frame-proxy-inert-guard.js', 'content.js']" not in popup:
-        raise AssertionError("popup no longer injects inert helper before content.js")
+    if "P0-064" not in budget_guard or "guardedWebClipChildNodes" not in budget_guard:
+        raise AssertionError("frame budget guard is not the reviewed P0-064 admission layer")
+    if "frame-proxy-budget-guard.js" not in injection or "frame-proxy-inert-guard.js" not in injection or "content.js" not in injection:
+        raise AssertionError("worker content-injection guard no longer prepends budget and inert helpers")
+    if "files: ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'content.js']" not in popup:
+        raise AssertionError("popup no longer injects budget then inert helpers before content.js")
     if "importScripts('pdf-print-guard.js', 'content-injection-guard.js')" not in bootstrap:
         raise AssertionError("service-worker bootstrap no longer loads content-injection guard")
     if content.count(".cloneNode(true)") != 1 or "proxy.appendChild(node.cloneNode(true))" not in content:
         raise AssertionError("content.js deep-clone interception boundary changed; re-audit required")
     return {
+        "budget_guard_sha256": sha256_bytes(BUDGET_GUARD.read_bytes()),
         "frame_guard_sha256": sha256_bytes(FRAME_GUARD.read_bytes()),
         "injection_guard_sha256": sha256_bytes(INJECTION_GUARD.read_bytes()),
         "popup_sha256": sha256_bytes(POPUP.read_bytes()),
@@ -265,10 +270,11 @@ def inspect_pdf(pdf_bytes: bytes) -> dict[str, Any]:
 def build_extension_fixture(output_dir: pathlib.Path) -> pathlib.Path:
     extension = output_dir / "extension-fixture"
     extension.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(BUDGET_GUARD, extension / BUDGET_GUARD.name)
     shutil.copy2(FRAME_GUARD, extension / FRAME_GUARD.name)
     shutil.copy2(INJECTION_GUARD, extension / INJECTION_GUARD.name)
     (extension / "content.js").write_text(
-        "document.documentElement.dataset.webclipGuardBeforeContent = String(Boolean(globalThis.WebClipFrameProxyInertGuard));\n",
+        "document.documentElement.dataset.webclipGuardBeforeContent = String(Boolean(globalThis.WebClipFrameProxyBudgetGuard && globalThis.WebClipFrameProxyInertGuard));\n",
         encoding="utf-8",
     )
     (extension / "sw.js").write_text("importScripts('content-injection-guard.js');\n", encoding="utf-8")
@@ -396,7 +402,7 @@ def main() -> int:
             tab_id = inject_product_guards(worker, f"{base}/top?nonce=guarded")
             guard_before_content = page.get_attribute("html", "data-webclip-guard-before-content")
             if guard_before_content != "true":
-                raise AssertionError(f"content.js ran before inert helper: {guard_before_content!r}")
+                raise AssertionError(f"content.js ran before budget/inert helpers: {guard_before_content!r}")
             main_clone_native_after = bool(page.evaluate("String(Node.prototype.cloneNode).includes('[native code]')"))
             if not main_clone_native_before or not main_clone_native_after:
                 raise AssertionError("isolated-world guard leaked Node.prototype patch into host main world")
