@@ -69,7 +69,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C03 | Main Content / auto candidate -> actual saved scope | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-160, P0-070/P0-075/P0-080)` |
 | C04 | Ordinary DOM/text baseline | `L4-REVALIDATED / PASS` |
 | C05 | Geometry/layout | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004)` |
-| C06 | Colors/backgrounds/compositing | `NOT-TRIAGED / UNKNOWN` |
+| C06 | Colors/backgrounds/compositing | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004, P1-003)` |
 | C07 | Fonts/typography | `NOT-TRIAGED / UNKNOWN` |
 | C08 | Raster images / crop/object-fit | `NOT-TRIAGED / UNKNOWN` |
 | C09 | Responsive images / picture/srcset/currentSrc | `NOT-TRIAGED / UNKNOWN` |
@@ -174,6 +174,18 @@ Fifteen physical PDF cases cover ordinary flow, flex, grid, inline fragmentation
 Fourteen cases are positive controls. `body_width_context` specifically demonstrates that root width normalization can change absolute CSS widths while preserving the selected/ancestor ratio in the physical PDF, so it is not misclassified as a defect. `body_transform_context` independently revalidates existing **P0-004 ACTIVE**: removing a page-owned ancestor transform changes the selected/ancestor geometry ratio materially beyond uniform page scaling. No new P-code is allocated.
 
 C05 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004)` within the explicit C05 boundary. C06 and every later untested sequential coordinate remain unchanged here.
+
+## Fresh continuation checkpoint — focused C06 colors/backgrounds/compositing
+
+`AUDIT_FULL_RESTART_C06_COLORS_COMPOSITING_2026-09-01.md` records the accepted focused C06 physical tranche. Its accepted execution is Chrome for Testing `152.0.7977.64`, workflow run `33509590358`, job `99861754609`, exact evidence head `9e811cad5f7487651e51771602566ca13dbb78a1`, conclusion SUCCESS, artifact `9801146456`, artifact ZIP digest `sha256:af1622014f81f61d12a63abc101f8427d5517eb999a808f2a85f5044d4b007cf`.
+
+Fresh positive controls physically preserve solid backgrounds, internal alpha compositing, gradients, borders/radius, box shadow, opacity, `filter:invert(1)`, internal `mix-blend-mode:screen`, and delayed `background-image` readiness. An outside-scope negative control confirms that arbitrary unselected colored content remains excluded.
+
+Two independent compositing cases revalidate existing **P0-004 ACTIVE**. A selected semi-transparent red region changes from purple over the source blue root backdrop to pink over the normalized white print backdrop. A selected red `mix-blend-mode:screen` region changes from the source blended `[240,93,240]` appearance when its required blue sibling backdrop is visible to a different physical PDF appearance after that unselected dependency is hidden. Historical/current reconciliation confirms that P0-004 already owns unselected sibling/stacking/compositing/backdrop dependencies; no new P-code is allocated.
+
+A delayed `background-image` positive control blocks preparation for about 3.2 seconds and physically renders after the current scanner admits it. In contrast, delayed `border-image-source` preparation returns in about 0.2 seconds with a clean report, its immediate PDF has zero red border-image pixels, and after settlement the same prepared page has `149480` red pixels. This independently revalidates existing **P1-003 ACTIVE** final visual-resource graph/readiness ownership.
+
+C06 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004, P1-003)` within the explicit C06 boundary. C07 and every later untested sequential coordinate remain unchanged here.
 
 ## Delivery rule
 
