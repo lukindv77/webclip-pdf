@@ -38,6 +38,9 @@ jobs:
       - name: Repository consistency
         run: python project_tools/check_repository_consistency.py
 
+      - name: Repository consistency self-test
+        run: python project_tools/test_repository_consistency.py
+
       - name: Context/bootstrap contract
         run: python project_tools/check_context_contract.py
 
