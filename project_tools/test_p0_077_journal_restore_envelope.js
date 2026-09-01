@@ -122,6 +122,60 @@ assert.strictEqual(widened.maxDepth, 32);
   assert.strictEqual(context.__importOptions.maxEntryChars, envelope.MAX_ENTRY_CHARS);
   assert.strictEqual(context.__importOptions.maxEntries, envelope.MAX_ENTRIES);
 
+  function makeCursorDb(serializedPayloadChars) {
+    const entry = { id: 'large-entry', title: 'x'.repeat(serializedPayloadChars), journalComments: [] };
+    return {
+      close() {},
+      transaction() {
+        const tx = {
+          objectStore() {
+            return {
+              openCursor() {
+                const request = { result: null, onsuccess: null, onerror: null };
+                let delivered = false;
+                const dispatch = () => Promise.resolve().then(() => {
+                  if (delivered) {
+                    request.result = null;
+                    if (request.onsuccess) request.onsuccess();
+                    Promise.resolve().then(() => tx.oncomplete && tx.oncomplete());
+                    return;
+                  }
+                  delivered = true;
+                  request.result = {
+                    value: entry,
+                    primaryKey: entry.id,
+                    key: entry.id,
+                    continue() { dispatch(); }
+                  };
+                  if (request.onsuccess) request.onsuccess();
+                });
+                dispatch();
+                return request;
+              }
+            };
+          },
+          abort() { Promise.resolve().then(() => tx.onabort && tx.onabort()); },
+          oncomplete: null,
+          onerror: null,
+          onabort: null,
+          error: null
+        };
+        return tx;
+      }
+    };
+  }
+
+  context.openJournalDb = async () => makeCursorDb(4 * 1024 * 1024 + 1024);
+  const largeBatch = await context.readJournalEntryBatch('', 250, Date.now() + 5000);
+  assert.strictEqual(largeBatch.items.length, 1, 'entry above legacy 4 MiB must remain exportable');
+  assert(largeBatch.items[0].length > 4 * 1024 * 1024);
+
+  context.openJournalDb = async () => makeCursorDb(8 * 1024 * 1024 + 1024);
+  await assert.rejects(
+    () => context.readJournalEntryBatch('', 250, Date.now() + 5000),
+    (error) => error && error.code === 'JOURNAL_RESTORE_ENTRY_TOO_LARGE'
+  );
+
   context.__stageReceipt = {
     stagingKey: 'ok-stage',
     totalBytes: envelope.MAX_BYTES,
