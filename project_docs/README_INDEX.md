@@ -2,77 +2,74 @@
 
 Рекомендуемый порядок чтения текущего проекта:
 
-1. `CONTEXT_MANIFEST.json` — machine-readable bootstrap: canonical authorities, task profiles и постоянный handoff trigger.
-2. `RESTORE_PROMPT.md` — короткая инструкция восстановления контекста только из свежего GitHub `main`.
-3. `CONTEXT_AUTOMATION_POLICY.md` — постоянные правила перехода между чатами, audit/development automation и ограничения против второго source of truth.
+1. `CONTEXT_MANIFEST.json` — machine-readable bootstrap: canonical authorities, task profiles и handoff trigger.
+2. `RESTORE_PROMPT.md` — восстановление контекста только из свежего GitHub `main`.
+3. `CONTEXT_AUTOMATION_POLICY.md` — правила audit/development handoff без второго source of truth.
 4. `AUDIT_REGISTRY.md` — **единый current registry P-кодов, owners и статусов**.
-5. `AUDIT_COVERAGE_CYCLE2_MATRIX_2026-08-31.md` — current Cycle-2 Coverage Sweep / Matrix v2: после T1…T5 **46 families terminal / 0 Change-Impact revalidation**. PD1–PD5 закрыты как `ARTIFACT-COVERED / FINDING`, PD6 как bounded `ARTIFACT-COVERED / PASS-CONTROL (virtual PDF target)`; финальная Cycle-2 reconciliation ещё обязательна до объявления coverage completion.
-6. `AUDIT_CYCLE2_T5_SCROLL_TRIGGERED_ANIMATION_2026-09-01.md` — T5/PD1 current-Chrome physical evidence: одинаковый admitted green/final scroll-trigger state сохраняется в stable whole-body control, но selected-only materialization может сдвинуть view-trigger из active range и reset его в red/origin до PDF; nested-scroll и no-user-scroll controls ограничивают вывод.
-7. `AUDIT_CYCLE2_T4_SCOPED_CUSTOM_ELEMENT_REGISTRY_2026-08-31.md` — T4/PD4 current-Chrome physical evidence: SelectionSnapshot молча восстанавливает same-light-identity registry A→B без ambiguity, Main Content игнорирует сильнейший scoped-shadow article; manual top-level Shadow и same-origin scoped frame являются положительными физическими controls.
-8. `AUDIT_CYCLE2_T3_TEXT_FIT_PAGE_MARGIN_SAFETY_2026-08-31.md` — T3/PD5+PD6 current-Chrome physical evidence: одинаковый admitted `text-fit` state может быть молча refit 680→300 px через host `beforeprint`, физический PDF меняет text geometry и pagination 2→1; `page-margin-safety` корректно парсится и не создаёт unsafe inset на virtual PDF target.
-9. `AUDIT_CYCLE2_T2_PSEUDO_TOP_LAYER_SCROLL_MARKER_2026-08-31.md` — T2/PD3 current-Chrome physical evidence: stable `::backdrop`/`::scroll-marker` печатаются корректно, но page-owned `beforeprint` может молча подменить admitted backdrop и active marker/visible content.
-10. `AUDIT_CYCLE2_T1_VIEW_TRANSITION_RENDER_CUT_2026-08-31.md` — T1/PD2 current-Chrome physical evidence: document/element/concurrent/Shadow View Transition midpoint не сохраняется в PDF.
-11. `AUDIT_COVERAGE_CYCLE2_KICKOFF_2026-08-31.md` — second full deep-audit campaign start: fresh baseline, platform/external Change Impact variants, initial risk ranking и `DEEP-AUDIT-IN-PROGRESS` state.
-12. `AUDIT_EXTERNAL_USER_INTENT_BASELINE_2026-08-31.md` — current substantive external user-intent/product-discovery baseline for Cycle 2.
-13. `AUDIT_COVERAGE_FINAL_SYNTHESIS_2026-08-31.md` — final synthesis **previous Cycle 1**; его `DEEP-AUDIT-COVERAGE-COMPLETE` исторически истинно для первой кампании, но не означает completion Cycle 2.
-14. `AUDIT_COVERAGE_RECONSTRUCTION_2026-08-30.md` — Cycle-1 family-level C01…C46 Coverage Matrix и targeted revalidation history.
-15. `AUDIT_COVERAGE_CAMPAIGN_POLICY.md` — обязательная методика systematic deep audit, evidence ladder L1–L5 и project-wide completion gates.
-16. `AUDIT_DELTA_INDEX.md` — навигация по полностью консолидированным audit families.
-17. `AUDIT_CHANGE_WORKFLOW.md` — жизненный цикл finding / P-owner / implementation / evidence / PR / status transition.
-18. `TEST_STATUS.md` — текущая правда о тестах/release gate; historical PASS не является current rerun.
-19. `RELEASE_READINESS.md` — machine-readable current release-readiness declaration; `NOT READY` является нормальным WIP-состоянием.
-20. `PROJECT_OVERVIEW.md` — назначение проекта и основные инварианты.
-21. `USER_REQUIREMENTS.md` — актуальные требования и явно отмеченные superseded правила.
-22. `ARCHITECTURE.md` — компоненты, current implemented behavior и открытые audit boundaries.
-23. `DECISIONS_AND_RATIONALE.md` — архитектурные решения и superseded historical decisions.
-24. `DATA_MODELS.md` — IndexedDB/storage/snapshot/receipt models.
-25. `TEST_PLAN.md` — regression plan и Git-first recovery gate.
-26. `BUILD_AND_RECOVERY_RULES.md` — release/recovery/provenance architecture.
-27. `GITHUB_WORKFLOW.md` — PR-first working policy, accepted `protected=false` posture, integrity/release gates.
-28. `RELEASE_HISTORY_INDEX.md` — inventory и retention policy исторических evidence-bearing GitHub Releases/tags.
-29. `CHANGELOG_AND_RATIONALE.md` — история функциональных изменений.
-30. `ASSISTANT_NOTES_AND_LIMITATIONS.md` — технические ограничения.
+5. `AUDIT_COVERAGE_CYCLE2_FINAL_SYNTHESIS_2026-09-01.md` — current project-wide Cycle-2 Coverage Reconciliation / Final Synthesis: **`DEEP-AUDIT-COVERAGE-COMPLETE`**, при этом critical closure не заявлен и `RELEASE_READINESS.md` остаётся `NOT READY`.
+6. `AUDIT_COVERAGE_CYCLE2_MATRIX_2026-08-31.md` — final reconciled Cycle-2 Matrix: **46/46 terminal, 0 revalidation**; PD1–PD5 `ARTIFACT-COVERED / FINDING`, PD6 bounded virtual-PDF PASS-control, PD7 WATCH; explicit L5 set C17/C37/C41/C42/C44/C46, C46 bounded UNKNOWN.
+7. `AUDIT_CYCLE2_T5_SCROLL_TRIGGERED_ANIMATION_2026-09-01.md` — T5/PD1 current-Chrome physical evidence: identical admitted green/final scroll-trigger state can be reset by selected-only geometry before PDF; nested-scroll and no-user-scroll controls bound the finding.
+8. `AUDIT_CYCLE2_T4_SCOPED_CUSTOM_ELEMENT_REGISTRY_2026-08-31.md` — T4/PD4 physical evidence: wrong-registry SelectionSnapshot restore and scoped-shadow Main Content blindness; Shadow/frame controls.
+9. `AUDIT_CYCLE2_T3_TEXT_FIT_PAGE_MARGIN_SAFETY_2026-08-31.md` — T3/PD5+PD6: admitted `text-fit` geometry/pagination substitution and bounded virtual-PDF `page-margin-safety` control.
+10. `AUDIT_CYCLE2_T2_PSEUDO_TOP_LAYER_SCROLL_MARKER_2026-08-31.md` — T2/PD3: admitted `::backdrop`/`::scroll-marker` state can be changed at print cut.
+11. `AUDIT_CYCLE2_T1_VIEW_TRANSITION_RENDER_CUT_2026-08-31.md` — T1/PD2: admitted View Transition midpoint serializes as final underlying DOM state.
+12. `AUDIT_COVERAGE_CYCLE2_KICKOFF_2026-08-31.md` — Cycle-2 campaign start, initial platform/external Change Impact and risk ranking.
+13. `AUDIT_EXTERNAL_USER_INTENT_BASELINE_2026-08-31.md` — substantive external research baseline used by Cycle 2.
+14. `AUDIT_COVERAGE_FINAL_SYNTHESIS_2026-08-31.md` — previous **Cycle 1** final synthesis; historical for that campaign only.
+15. `AUDIT_COVERAGE_RECONSTRUCTION_2026-08-30.md` — Cycle-1 C01…C46 matrix and tranche history.
+16. `AUDIT_COVERAGE_CAMPAIGN_POLICY.md` — mandatory deep-audit methodology, evidence ladder and project-wide completion gates.
+17. `AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md` — external research/freshness contract.
+18. `AUDIT_DELTA_INDEX.md` — navigation across consolidated audit families.
+19. `AUDIT_CHANGE_WORKFLOW.md` — finding/owner/implementation/evidence/PR lifecycle.
+20. `AUDIT_HISTORY_INDEX.md` — corrections, retractions, dedup and product/security decisions.
+21. `TEST_STATUS.md` — current test/release-gate truth; historical PASS is not a current rerun.
+22. `RELEASE_READINESS.md` — fail-closed current release declaration; currently `NOT READY`.
+23. `PROJECT_OVERVIEW.md` — project purpose and invariants.
+24. `USER_REQUIREMENTS.md` — current requirements and explicit supersessions.
+25. `WEBCLIP_PDF_FIDELITY_CONTRACT.md` — current PDF fidelity/authority contract.
+26. `ARCHITECTURE.md` — components, implemented behavior and open boundaries.
+27. `DECISIONS_AND_RATIONALE.md` — architecture/product decisions and superseded history.
+28. `DATA_MODELS.md` — IndexedDB/storage/snapshot/receipt models.
+29. `TEST_PLAN.md` — regression plan and Git-first recovery gate.
+30. `BUILD_AND_RECOVERY_RULES.md` — release/recovery/provenance architecture.
+31. `GITHUB_WORKFLOW.md` — PR-first workflow, integrity and release gates.
+32. `RELEASE_HISTORY_INDEX.md` — historical evidence-bearing release/tag retention.
+33. `CHANGELOG_AND_RATIONALE.md` — functional change history.
+34. `ASSISTANT_NOTES_AND_LIMITATIONS.md` — technical limitations.
 
-## Audit evidence
+## Current audit state
 
-Standalone `AUDIT_DELTA_*.md` больше не являются рабочим слоем current tree. Все ранее существовавшие delta прошли lossless family retirement; исходный Markdown сохранён в family evidence с исходным именем и SHA-256, а полный historical state дополнительно остаётся в Git history.
+Cycle 2 is now **`DEEP-AUDIT-COVERAGE-COMPLETE`** after the separate final reconciliation. This means all material current campaign families are terminal at required evidence or explicit bounded external/out-of-scope state. It does **not** mean the findings are fixed.
 
-Основные evidence/history документы:
+Stronger states remain false/currently unclaimed:
 
-- `AUDIT_COVERAGE_CYCLE2_MATRIX_2026-08-31.md` — current Cycle-2 Coverage Matrix. Все C01…C46 triaged; после T5 **46 families terminal, 0 revalidation**. PD1/PD2/PD3/PD4/PD5 `ARTIFACT-COVERED / FINDING`; PD6 bounded virtual-PDF PASS-CONTROL; PD7 WATCH. Campaign всё ещё `DEEP-AUDIT-IN-PROGRESS` до отдельной final reconciliation;
-- `AUDIT_CYCLE2_T5_SCROLL_TRIGGERED_ANIMATION_2026-09-01.md` — durable T5 evidence on Chrome for Testing 152.0.7977.64. Stable-body и selection-only controls имеют одинаковый admitted target hash и green/final state. Selected-only preparation скрывает 1000px predecessor, переносит view-trigger y=50→≈-758, reset-ит animation 220→0 и физический PDF становится red/origin. Nested-scroll final state сохраняется; без user scroll новый логический batch не создаётся. Existing P0-070/P0-075/P0-004 с P1-230 support покрывают finding; Registry unchanged;
-- `AUDIT_CYCLE2_T4_SCOPED_CUSTOM_ELEMENT_REGISTRY_2026-08-31.md` — durable T4 evidence on Chrome 152: registry A→B SelectionSnapshot identity substitution и scoped-shadow Main Content blindness; manual Shadow/frame controls;
-- `AUDIT_CYCLE2_T3_TEXT_FIT_PAGE_MARGIN_SAFETY_2026-08-31.md` — durable T3 evidence: `text-fit` admitted-vs-render-cut substitution и bounded `page-margin-safety` virtual-PDF control;
-- `AUDIT_CYCLE2_T2_PSEUDO_TOP_LAYER_SCROLL_MARKER_2026-08-31.md` — durable T2 evidence: admitted backdrop/marker state can change at `beforeprint`;
-- `AUDIT_CYCLE2_T1_VIEW_TRANSITION_RENDER_CUT_2026-08-31.md` — durable T1 evidence: admitted View Transition midpoint serializes as final DOM state;
-- `AUDIT_COVERAGE_CYCLE2_KICKOFF_2026-08-31.md` — current campaign start and PD/EI variant definitions;
-- `AUDIT_EXTERNAL_USER_INTENT_BASELINE_2026-08-31.md` — current external research baseline and product-opportunity discovery evidence;
-- `AUDIT_COVERAGE_FINAL_SYNTHESIS_2026-08-31.md` — final project-wide Cycle-1 decision; it does not automatically prove Cycle-2 completion;
-- `AUDIT_COVERAGE_RECONSTRUCTION_2026-08-30.md` — detailed Cycle-1 family-level Coverage Matrix and tranche history;
-- `AUDIT_HISTORY_INDEX.md` — corrections, retractions, dedup/product-security decisions;
-- `AUDIT_EVIDENCE.md` — historical implementation/browser proof;
-- `AUDIT_RETIRED_DELTA_EVIDENCE.md` — retired correction/positive-control deltas;
-- `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` — broad revalidation/implementation taxonomy;
-- `AUDIT_FAMILY_*_EVIDENCE.md` — consolidated family source proof, schedules, corrections, positive controls and acceptance boundaries;
-- targeted `AUDIT_*_2026-08-30/31_EVIDENCE.md` files — retained L3/L4 physical tranches;
-- `TEST_EVIDENCE.md` — historical test/browser checkpoints.
+- `DEEP-AUDIT-CRITICAL-CLOSURE-COMPLETE` — not claimed; ACTIVE P0/P1 owners remain in `AUDIT_REGISTRY.md`;
+- `RELEASE-READY` — not claimed; `RELEASE_READINESS.md` remains `NOT READY` and real unpacked Chrome/native/Yandex evidence is pending.
 
-Current audit tools:
+Explicit residual external families remain C17, C37, C41, C42, C44 and C46. C46 remains `EXTERNAL-REQUIRED / UNKNOWN`; this is a bounded L5 evidence boundary, not a hidden audit gap.
 
-- `project_tools/audit_scroll_triggered_animation.py` — reproducible T5 Chrome-152 probe for scroll-trigger feature support, stable vs selected-only trigger-state fidelity, nested-scroll breadth and no-auto-scroll C22 boundary;
-- `project_tools/audit_scoped_custom_element_registry.py` — reproducible T4 probe for scoped-registry feature support, SelectionSnapshot registry identity, Main Content scoped-shadow discovery and same-origin frame representation;
-- `project_tools/audit_text_fit_page_margin_safety.py` — T3 probe for CSS `text-fit` admitted-vs-physical geometry/page count plus `page-margin-safety` virtual-PDF controls;
-- `project_tools/audit_pseudo_top_layer_scroll_marker.py` — T2 probe for native `::backdrop` and active `::scroll-marker` admission-vs-physical-PDF state;
-- `project_tools/audit_view_transition_render_cut.py` — T1 probe for document, element and concurrent View Transition admission-vs-physical-PDF geometry;
-- `project_tools/audit_view_transition_shadow_scope.py` — T1 Shadow/composed-scope View Transition probe;
-- `project_tools/audit_cycle2_coverage_sweep.py` — deterministic process guard for current Cycle-2 C01…C46 denominator, expected **zero-family** revalidation set and PD1–PD7 states after T1…T5; final synthesis remains a separate gate;
-- `project_tools/audit_coverage_reconciliation.py` — deterministic historical guard for completed Cycle-1 C01…C46 reconciliation.
+## Main Cycle-2 evidence
 
-`CONTEXT_MANIFEST.json` — только машинная навигация; он не хранит competing current status.
-`CONTEXT_AUTOMATION_POLICY.md` — process contract для chat handoff/audit/development automation; он не заменяет registry/evidence.
-`AUDIT_DELTA_INDEX.md` — только навигация по consolidated families, не status registry.
-`PRIORITIES_P0_P1_P2.md` — compatibility pointer на `AUDIT_REGISTRY.md`.
-`AUDIT_CHANGE_WORKFLOW.md` — process contract; Issue/PR не заменяют registry/evidence.
-`GITHUB_WORKFLOW.md` — canonical private remote, PR-first process, automated integrity gate и manual release gate.
-`RELEASE_READINESS.md` — fail-closed release declaration, проверяемая `project_tools/check_release_readiness.py`.
-`RELEASE_HISTORY_INDEX.md` — retention authority for existing historical pre-release artifacts; it does not promote them to current releases.
+- `AUDIT_COVERAGE_CYCLE2_FINAL_SYNTHESIS_2026-09-01.md` — final B1→B9 synthesis, terminality, staleness, external freshness, ownership and residual-risk decision.
+- `AUDIT_COVERAGE_CYCLE2_MATRIX_2026-08-31.md` — final 46-family denominator and PD/EI disposition.
+- `AUDIT_CYCLE2_T5_SCROLL_TRIGGERED_ANIMATION_2026-09-01.md` — PD1.
+- `AUDIT_CYCLE2_T4_SCOPED_CUSTOM_ELEMENT_REGISTRY_2026-08-31.md` — PD4.
+- `AUDIT_CYCLE2_T3_TEXT_FIT_PAGE_MARGIN_SAFETY_2026-08-31.md` — PD5/PD6.
+- `AUDIT_CYCLE2_T2_PSEUDO_TOP_LAYER_SCROLL_MARKER_2026-08-31.md` — PD3.
+- `AUDIT_CYCLE2_T1_VIEW_TRANSITION_RENDER_CUT_2026-08-31.md` — PD2.
+- `AUDIT_EXTERNAL_USER_INTENT_BASELINE_2026-08-31.md` — external user-intent/platform input.
+
+Historical consolidated evidence remains in `AUDIT_EVIDENCE.md`, `AUDIT_RETIRED_DELTA_EVIDENCE.md`, `AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md`, `AUDIT_FAMILY_*_EVIDENCE.md`, targeted `AUDIT_*_EVIDENCE.md` files and `TEST_EVIDENCE.md`.
+
+## Current audit tools
+
+- `project_tools/audit_cycle2_final_reconciliation.py` — deterministic final guard: C01…C46 terminality, zero revalidation, explicit L5/C46 UNKNOWN, synthesis/release separation, canonical-owner presence and git-based Cycle-2 runtime/contract staleness check.
+- `project_tools/audit_cycle2_coverage_sweep.py` — deterministic final Matrix guard for 46/0 and PD1–PD7 states.
+- `project_tools/audit_scroll_triggered_animation.py` — T5 Chrome-152 physical probe.
+- `project_tools/audit_scoped_custom_element_registry.py` — T4 Chrome-152 physical probe.
+- `project_tools/audit_text_fit_page_margin_safety.py` — T3 physical probe.
+- `project_tools/audit_pseudo_top_layer_scroll_marker.py` — T2 physical probe.
+- `project_tools/audit_view_transition_render_cut.py` and `audit_view_transition_shadow_scope.py` — T1 physical probes.
+- `project_tools/audit_coverage_reconciliation.py` — historical Cycle-1 reconciliation guard.
+
+`CONTEXT_MANIFEST.json` is navigation only; it does not compete with Registry/Matrix/synthesis status. `PRIORITIES_P0_P1_P2.md` remains a compatibility pointer to `AUDIT_REGISTRY.md`. No audit coverage decision creates a build/tag/Release.
