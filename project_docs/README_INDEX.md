@@ -52,6 +52,7 @@ Explicit residual external families remain C17, C37, C41, C42, C44 and C46. C46 
 
 After Cycle-2 coverage completion, new audit work is risk-ranked against existing ACTIVE Registry owners rather than extending coverage for its own sake.
 
+- `AUDIT_FUNCTIONAL_P0_023_P0_079_PDF_CACHE_AUTHORITY_2026-09-01.md` — exact-source deterministic re-check of the shared mutable PDF retry-cache boundary. Current `pdfCacheKey(tabId)` is `tab:<id>`; a same-tab document replacement makes an old retry resolve the newer document (P0-023), while a later same-tab save can overwrite the slot before offscreen dereference so transfer op-A resolves op-B bytes (P0-079). **Both owners remain ACTIVE; no new P-code.**
 - `AUDIT_FUNCTIONAL_P0_004_SELECTED_ANCESTOR_2026-09-01.md` — current Chrome-152 physical re-check of P0-004. Exact product selected-only print CSS still allows an unselected ordinary ancestor to clip selected content (2 pages → 1; bottom sentinel lost) and inject its red/blue/magenta presentation into the PDF. A test-only normalization control restores complete selected output and removes ancestor paint. **P0-004 remains ACTIVE; no new P-code.**
 
 ## Main Cycle-2 evidence
@@ -69,6 +70,7 @@ Historical consolidated evidence remains in `AUDIT_EVIDENCE.md`, `AUDIT_RETIRED_
 
 ## Current audit tools
 
+- `project_tools/audit_pdf_cache_generation_authority.py` — functional P0-023/P0-079 deterministic regression bound to exact current `service-worker.js`/`offscreen.js`: proves same-tab document-generation replacement and save-operation byte substitution through the mutable `tab:<id>` cache slot.
 - `project_tools/audit_selected_ancestor_presentation.py` — functional P0-004 Chrome-152 physical regression: extracts exact current selected-only CSS from `content.js`, checks selected-content completeness and unselected ancestor presentation, and includes an explicit test-only causal discriminator.
 - `project_tools/audit_cycle2_final_reconciliation.py` — deterministic final guard: C01…C46 terminality, zero revalidation, explicit L5/C46 UNKNOWN, synthesis/release separation, canonical-owner presence and git-based Cycle-2 runtime/contract staleness check.
 - `project_tools/audit_cycle2_coverage_sweep.py` — deterministic final Matrix guard for 46/0 and PD1–PD7 states.
