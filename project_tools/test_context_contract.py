@@ -34,6 +34,18 @@ def main() -> None:
     assert_has(module.validate_manifest(bad), "authority research_status")
 
     bad = copy.deepcopy(data)
+    bad["authorities"]["requirements_current"] = "project_docs/PROJECT_OVERVIEW.md"
+    assert_has(module.validate_manifest(bad), "authority requirements_current")
+
+    bad = copy.deepcopy(data)
+    bad["authorities"]["decisions_current"] = "project_docs/RESEARCH_HISTORY_INDEX.md"
+    assert_has(module.validate_manifest(bad), "authority decisions_current")
+
+    bad = copy.deepcopy(data)
+    bad["historical_requirements_policy"]["ordinary_work_must_not_reconstruct_current_state_from_history"] = False
+    assert_has(module.validate_manifest(bad), "must not reconstruct")
+
+    bad = copy.deepcopy(data)
     bad["handoff"]["trigger_phrase"] = "some other phrase"
     assert_has(module.validate_manifest(bad), "trigger phrase")
 
@@ -55,6 +67,9 @@ def main() -> None:
         policy,
     )
     assert_has(errors, "retired/currently-invalid instruction")
+
+    errors = module.validate_restore_and_policy(restore.replace("USER_REQUIREMENTS.md", "requirements"), policy)
+    assert_has(errors, "RESTORE_PROMPT.md missing context marker")
 
     errors = module.validate_restore_and_policy(restore, policy.replace("14 постоянных правил автоматизации", "rules"))
     assert_has(errors, "permanent policy marker")
