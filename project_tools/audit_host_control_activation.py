@@ -171,9 +171,16 @@ def main() -> int:
             raise AssertionError(f"WebClip download command failed: {download}")
 
         # This is WebClip UI, not the host control. Its handler enters the real
-        # downloadPdf() -> prepareForPrint() path in the exact content.js.
+        # downloadPdf() -> prepareForPrint() path in the exact content.js. The
+        # UI event handler intentionally does not await downloadPdf(), so the
+        # harness waits independently for both the host side effect and the
+        # later runtime generate message before evaluating the completed path.
         page.get_by_role("button", name="Сформировать PDF").click()
         page.wait_for_function("window.__host.submits > 0", timeout=5000)
+        page.wait_for_function(
+            "window.__webclipRuntimeMessages.some((m) => m && m.type === 'WEBCLIP_GENERATE_PDF')",
+            timeout=15000,
+        )
         page.wait_for_timeout(100)
 
         after = page.evaluate("JSON.parse(JSON.stringify(__host))")
