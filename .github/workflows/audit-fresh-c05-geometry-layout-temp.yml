@@ -36,13 +36,13 @@ jobs:
           git rev-parse HEAD
           sha256sum content.js
 
-      - name: C05 geometry/layout diagnostic probe
+      - name: C05 geometry/layout accepted probe
         env:
           CHROMIUM_BIN: ${{ github.workspace }}/.chrome/chrome-linux64/chrome
         run: |
           set -euo pipefail
           mkdir -p c05-artifacts
-          python project_tools/audit_fresh_c05_geometry_layout.py --out-dir c05-artifacts | tee c05-result.json
+          python project_tools/audit_fresh_c05_geometry_layout_accept.py --out-dir c05-artifacts | tee c05-result.json
 
       - name: Upload C05 evidence artifacts
         if: always()
