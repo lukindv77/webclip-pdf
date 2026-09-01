@@ -70,7 +70,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C04 | Ordinary DOM/text baseline | `L4-REVALIDATED / PASS` |
 | C05 | Geometry/layout | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004)` |
 | C06 | Colors/backgrounds/compositing | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004, P1-003)` |
-| C07 | Fonts/typography | `NOT-TRIAGED / UNKNOWN` |
+| C07 | Fonts/typography | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-003, P1-187)` |
 | C08 | Raster images / crop/object-fit | `NOT-TRIAGED / UNKNOWN` |
 | C09 | Responsive images / picture/srcset/currentSrc | `NOT-TRIAGED / UNKNOWN` |
 | C10 | SVG visual state/resources | `NOT-TRIAGED / UNKNOWN` |
@@ -186,6 +186,18 @@ Two independent compositing cases revalidate existing **P0-004 ACTIVE**. A selec
 A delayed `background-image` positive control blocks preparation for about 3.2 seconds and physically renders after the current scanner admits it. In contrast, delayed `border-image-source` preparation returns in about 0.2 seconds with a clean report, its immediate PDF has zero red border-image pixels, and after settlement the same prepared page has `149480` red pixels. This independently revalidates existing **P1-003 ACTIVE** final visual-resource graph/readiness ownership.
 
 C06 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004, P1-003)` within the explicit C06 boundary. C07 and every later untested sequential coordinate remain unchanged here.
+
+## Fresh continuation checkpoint — focused C07 fonts/typography
+
+`AUDIT_FULL_RESTART_C07_FONTS_TYPOGRAPHY_2026-09-01.md` records the accepted focused C07 physical tranche. Its accepted execution is Chrome for Testing `152.0.7977.64`, workflow run `33512505056`, job `99871391807`, exact evidence head `1b6a36b60adb6aa0f7e01cd962489bd3ae0915d7`, conclusion SUCCESS, artifact `9802235490`, artifact ZIP digest `sha256:d233fe0a85d964a9c073e963861c86fe5fc42dcd89c69f2042a103b8f6d9a87d`.
+
+Top-document physical controls preserve font-size relationships, bold/italic state, letter spacing, line height, serif/monospace family metrics, decoration/text-shadow/stroke raster signal, multilingual text and current Chrome `text-wrap:balance` support. A delayed ordinary webfont is correctly awaited and embedded; an intentionally missing webfont is truthfully reported failed with fallback output.
+
+A focused `unicode-range` fixture exposes a current **P1-003 ACTIVE** readiness gap. The selected text starts with more than the bounded 64-character font sample and ends in Cyrillic. Preparation returns in about 0.216 seconds with a clean attempted=loaded=1 report while the required Cyrillic face remains loading. The immediate physical PDF omits the selected logical text; after the same prepared page settles, the Cyrillic face loads, the selected text appears using `DejaVuSerif`, and the PDF SHA changes. The final accepted discriminator requires that exact physical before/after loss, so the finding is not based on report vocabulary alone.
+
+Two same-origin flattened-frame controls freshly revalidate **P1-187 ACTIVE**. Basic explicitly copied typography remains intact, while advanced text shadow/stroke, word spacing, kerning, OpenType feature/ligature state, RTL/bidi semantics and rendered width change in the proxy. A separate frame-local `@font-face` is ready in the child but lost as effective font authority after flattening; the physical PDF falls back to `LiberationSans` and changes width materially. These are one secondary-representation root, not new owners per CSS property.
+
+C07 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-003, P1-187)` within the explicit C07 boundary. C08 and every later untested sequential coordinate remain unchanged here.
 
 ## Delivery rule
 
