@@ -55,7 +55,6 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 | P0-068 | ACTIVE | Flattened iframe print representation must be inert before insertion; no live nested browsing/plugin/custom-element/duplicate-identity side effects. |
 | P0-069 | ACTIVE | Deleting a Journal entry with a public Yandex link requires explicit publication outcome; local deletion cannot silently strand public access/control. |
 | P0-070 | ACTIVE | User save authority is exact full-document generation from command admission through print/cache/download/upload/Journal finalization. |
-| P0-071 | ACTIVE | Safe URI schemes must be enforced on the **actual printed representation**, including hostile `beforeprint`/post-sanitization mutation. |
 | P0-072 | ACTIVE | Bulk clear/replace cannot treat deletion of checkpoints as cancellation of already admitted non-cancellable external side effects. |
 | P0-073 | ACTIVE | Remote-save completion/recovery is immutable account/root scoped; unresolved operation A cannot be rebound to account/root B. |
 | P0-074 | ACTIVE | Long Yandex operation uses one immutable auth/account/root/config/publication operation context and generation; later stages cannot switch global context. |
@@ -71,6 +70,7 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 | Code | Status | Resolution |
 |---|---|---|
 | P0-019 | SUPERSEDED | Historical rule “every user build contains a full recovery archive” was intentionally replaced on 2026-08-29 by Git-first recovery: exact commit SHA is canonical WIP snapshot, annotated release tag points to exact released commit, optional recovery ZIP is a separate offline artifact. See `BUILD_AND_RECOVERY_RULES.md`. |
+| P0-071 | DONE | Actual `Page.printToPDF` representation is guarded at the render cut: page scripts are frozen, a bounded CDP DOM scan removes unsafe link schemes across top document/open Shadow/same-origin frame representation, safe links remain, live hrefs are restored before DOM teardown, and Chrome for Testing 152 physical PDF evidence at run `33463569910` / job `99718684840` proved hostile `beforeprint`, Shadow, frame and already-mutated `javascript:`/`data:` annotations do not reach the PDF. See `AUDIT_P0_071_PRINT_RENDER_GUARD_CLOSURE_2026-09-01_EVIDENCE.md`. |
 
 ## P1 — current ACTIVE owners before late-number stream
 
