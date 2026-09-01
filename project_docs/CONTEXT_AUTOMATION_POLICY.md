@@ -1,112 +1,61 @@
 # Permanent context / research / development automation policy
 
-Этот документ фиксирует постоянные правила использования GitHub как машиночитаемой памяти проекта WebClip PDF. Он **не является** источником текущего статуса P-кодов, тестов или релиза.
+Status: **CANONICAL / PERMANENT**
 
-Canonical authorities остаются:
+Этот документ задаёт правила использования GitHub как durable project memory WebClip PDF и правила перехода между инструментальными сессиями/чатами. Он не создаёт отдельный status registry.
 
-- source/WIP tree — fresh `main` exact commit SHA;
-- P-owner/status — `RESEARCH_REGISTRY.md`;
-- detailed research proof — consolidated `RESEARCH_FAMILY_*_EVIDENCE.md` + history/cross-cutting evidence;
-- current automated test truth — exact GitHub Actions run + `TEST_STATUS.md` как current narrative;
+## Current authorities
+
+- source/WIP tree — fresh GitHub `main` exact SHA;
+- current requirements/technical conditions — `USER_REQUIREMENTS.md`;
+- current rationale — `DECISIONS_AND_RATIONALE.md`;
+- P-owner/status — только `RESEARCH_REGISTRY.md`;
+- research proof/navigation — relevant consolidated evidence + `RESEARCH_DELTA_INDEX.md`;
+- current automated/test narrative — `TEST_STATUS.md` + exact applicable execution evidence;
 - release truth — `RELEASE_READINESS.md`.
 
-## Постоянная продуктовая цель WebClip PDF и обязательные правила глубокого исследования
+Historical requirement revisions, old chats, dated handoffs and retired functional changelog не являются current authority. Они извлекаются из Git history только для конкретной provenance/regression/root-cause задачи.
 
-Главная цель существования WebClip PDF — **максимально качественно, точно и удобно позволять пользователю выделять нужную область веб-страницы, снимать максимально faithful копию выбранного содержимого и сохранять её для последующего чтения и/или долгосрочного архивного хранения**. PDF, Journal, backup/recovery, cloud storage, permissions, UI и остальные подсистемы оцениваются в том числе по тому, насколько они поддерживают эту основную цель.
+## Current-baseline automation rule
 
-### Selection fidelity — корректное и удобное выделение
+Новая сессия не должна «собирать» текущее состояние требований по истории. Bootstrap обязан сначала прочитать фактический `CONTEXT_MANIFEST.json`, `USER_REQUIREMENTS.md` и `DECISIONS_AND_RATIONALE.md` из fresh `main`.
 
-Глубокий исследование обязан рассматривать пользовательское выделение как критический продуктовый контракт. Нужно проверять не только работу UI рамки/области, но и соответствие между тем, **что пользователь фактически видел и выбрал**, и тем, **что затем было захвачено и сохранено**.
+Если accepted requirement/decision изменён, current baseline и применимые architecture/policy docs должны быть синхронизированы обычным PR-first способом; chat-only delta не считается durable project state.
 
-Обязательные классы проверки включают как минимум:
+## Комплексное исследование проекта
 
-- viewport/scroll, long pages и nested scrolling containers;
-- browser zoom, CSS zoom, `devicePixelRatio`, transforms и разные coordinate spaces;
-- fixed/sticky/overlay элементы и layout shifts;
-- lazy loading, delayed rendering и динамически меняющийся DOM;
-- SPA navigation, same-URL document replacement и stale selection state;
-- iframe, cross-origin frame boundaries, frame/document identity и reload/navigation;
-- shadow DOM и компоненты со сложной геометрией;
-- изменение страницы между выбором, capture, print/render и сохранением;
-- корректное восстановление страницы после любых временных mutation, применённых расширением.
+Каноническое понятие: **«Комплексное исследование, оценка и проработка проекта и его архитектуры»**.
 
-Любое существенное расхождение между пользовательским намерением `я выделил это` и фактическим результатом `расширение сохранило другое` считается существенным WebClipping finding и должно анализироваться на root cause/owner.
+Для каждого существенного research-вопроса действует `COMPREHENSIVE_PROJECT_RESEARCH_POLICY.md`:
 
-### Archival fidelity — качество и точность сохранённой копии
+- fresh current WebClip source/architecture/requirements inspection;
+- mandatory multi-source external research;
+- аналоги и vendor materials;
+- public GitHub/GitLab implementations;
+- issues/discussions/postmortems;
+- standards/browser/platform docs;
+- форумы/Reddit/пользовательский опыт, когда релевантно;
+- внешние решения используются как hypotheses/known failure modes/options, а не automatic requirements;
+- окончательный вывод проверяется против fresh WebClip `main`.
 
-Успешный API call, download или наличие PDF-файла сами по себе не доказывают успех WebClipping. Исследование обязан оценивать конечный результат как архивную копию конкретного состояния страницы и проверять, насколько она пригодна для последующего чтения и хранения.
+Security scope — defensive security / защитный архитектурный анализ only.
 
-Проверка должна включать как минимум:
+## Инструментальные окна и interruption safety
 
-- полноту и порядок текста;
-- изображения, background images, SVG, canvas и другие визуальные ресурсы;
-- layout, размеры, переносы, clipping/overflow и page breaks;
-- fonts, styles, colors и существенные визуальные свойства;
-- links и пригодность результата для последующего чтения;
-- content outside viewport и long-page completeness;
-- fixed/sticky content, чтобы он не терялся и не дублировался ошибочно;
-- iframe/content boundaries там, где capture технически и по permissions допустим;
-- отсутствие временных служебных DOM/style artifacts самого расширения;
-- отсутствие случайной модификации исходной страницы после завершения операции;
-- соответствие сохранённой копии именно той logical page/document generation, которую пользователь намеревался зафиксировать.
+`SESSION_EXECUTION_AND_INTERRUPTION_SAFETY_POLICY.md` обязателен для длинной работы.
 
-Ключевой invariant глубокого исследования:
+Если полный качественный scope не помещается в текущую инструментальную сессию, он разбивается на несколько interruption-safe sessions/tranches с exact durable GitHub resume points. Количество сессий не является метрикой успеха; полнота, точность и доказательность имеют приоритет.
 
-**Selection intent -> captured source state -> rendered archival copy должны относиться к одной и той же логической версии документа, frame identity и выбранной области либо система обязана честно сигнализировать degraded/unknown/retry вместо выдачи неточного результата как успешного.**
+## Local-first automation policy
 
-### Обязательное внешнее исследование WebClipping
+Automation and verification use local/built-in tools first whenever they can truthfully verify the required claim.
 
-Глубокий исследование **обязан регулярно изучать опыт других разработчиков, вендоров и пользователей похожего WebClipping/WebArchiving функционала**, а не ограничиваться внутренним кодом проекта.
+GitHub Actions are used only when:
 
-При релевантных вопросах нужно использовать внешнее исследование, включая глубокое исследование нескольких независимых источников, и изучать:
+1. required environment/physical/external evidence cannot be honestly obtained locally; or
+2. the run is an explicitly mandatory independent delivery/release gate.
 
-- архитектуры и технические подходы других WebClipping/WebArchiving решений;
-- доступный open-source код, алгоритмы capture/snapshot/render/serialization и их trade-offs;
-- issues, bug reports, discussions, postmortems и известные browser/platform limitations;
-- пользовательские истории, complaints, usability problems и ожидания от clipping/archive fidelity;
-- подходы к area selection, full-page capture, DOM snapshotting, print pipelines, offline copies, iframe/shadow DOM, dynamic/lazy content и long-page rendering;
-- поведение решений уровня browser extensions, archival tools и vendor clipping products там, где сравнение помогает обнаружить пропущенный failure mode или более сильную архитектуру.
-
-Внешняя реализация не считается автоматически правильной. Чужой опыт используется как источник гипотез и известных failure modes, после чего вывод обязательно проверяется против fresh `main`, текущей архитектуры и фактического поведения WebClip PDF.
-
-Если исследование обнаруживает:
-
-1. конкретный дефект/риск текущей реализации — выполнить обычный duplicate/root-cause check и привязать finding к существующему owner либо предложить новый owner по принятому процессу;
-2. архитектурное улучшение, необходимое для fidelity/reliability основной WebClipping функции — вынести пользователю конкретное предложение с преимуществами, рисками и местом изменения;
-3. новую продуктовую возможность, способную заметно улучшить selection UX, capture fidelity, archive readability или долговечность результата — предложить пользователю и, если это действительно новая accepted backlog-работа, оформить как P2 только после проверки `RESEARCH_REGISTRY.md`, family evidence, history и Git на отсутствие существующего owner/duplicate.
-
-### Поведение глубокого исследования относительно основной цели
-
-Приоритизация findings должна учитывать продуктовый impact. При прочих равных дефект, который способен привести к неверному выделению, неполному/неточному capture, потере части страницы, сохранению не той document generation или созданию misleading archival copy, имеет более высокий вес, чем внутренний дефект сопоставимой технической сложности, не влияющий на основное назначение расширения.
-
-Глубокий исследование должен активно пытаться опровергать предположения реализации через controlled schedules: reorder, timeout, late settlement, worker restart, navigation/reload, frame reuse, permission revoke/regrant, account/root switch, DOM/layout change, clear/import races и stale UI. Цель — установить, какие invariants действительно гарантируются кодом, а какие только предполагаются.
-
-### Defensive security scope — конфиденциальность, целостность, хранение и передача данных
-
-Вопросы безопасности в глубоком исследовании WebClip PDF рассматриваются **только как defensive security / защитный архитектурный анализ**. Цель — определить, насколько проект защищает данные пользователя и учетные данные расширения при хранении, обработке и передаче во внешние сервисы/API.
-
-В security-scope входят:
-
-- конфиденциальность и целостность PDF, SelectionSnapshot, Journal, backup/recovery, cache, OperationLog, настроек и иной extension-owned информации;
-- безопасное хранение OAuth/access credentials, account/root/config context и иных секретов расширения с корректным разделением session/durable lifetime и минимально необходимой retention;
-- минимизация, redaction и отсутствие случайной долговременной фиксации чувствительных URL, metadata, locator-context, диагностических или пользовательских данных;
-- передача файлов и метаданных во внешние сервисы/API только в рамках ожидаемого endpoint/account/root/operation context, с проверяемой транспортной и operation identity;
-- недопущение смешивания данных, credentials, cache/recovery authority или результатов между вкладками, document/application generations, операциями, аккаунтами и внешними target contexts;
-- целостность backup/export/import, upload/download/retry/recovery receipts и честное различение verified / unknown / failed settlement;
-- безопасная обработка redirects, signed/capability URLs, внешних API-ответов и credential-bearing запросов без раскрытия учетных данных в durable metadata, URL или diagnostics;
-- корректное удаление, lifecycle/retention и восстановление данных без ложного утверждения об удалении или успешном сохранении.
-
-Не входят в scope и не должны становиться задачами исследования:
-
-- поиск или разработка способов эксплуатации уязвимостей;
-- создание exploit/PoC для проникновения или обхода защитных механизмов;
-- обход авторизации, подбор способов взлома сервисов или получение несанкционированного доступа;
-- проведение атак на сайты, внешние сервисы, API, браузер или инфраструктуру;
-- создание вредоносного кода либо инструкций по проникновению, компрометации или захвату систем.
-
-Если для оценки риска необходимо назвать класс угрозы, он описывается **только концептуально**: какие данные/authority защищаются, при каком условии возникает риск и какой defensive invariant/механизм должен его закрыть. Эксплуатационные шаги, offensive methodology и инструкции по использованию слабости не требуются и не документируются.
-
-Это ограничение security-scope не сужает обычный исследование correctness, reliability, concurrency, generation/receipt, rollback, performance, selection fidelity и archival fidelity, когда эти вопросы сами по себе не являются offensive-security анализом.
+GitHub Actions must not be the default debugger for syntax/static/deterministic failures that available local tools can detect. Runner minimization cannot weaken exact-head/post-merge integrity, TOCTOU or required physical/external evidence.
 
 ## Постоянный триггер перехода в новый чат
 
@@ -114,84 +63,85 @@ Canonical authorities остаются:
 
 **«Подготовь переход в новый чат»**
 
-всегда означает: немедленно начать безопасную подготовку к новому чату, даже если текущая разработка, исследование, PR, исследование или обсуждение не завершены.
+всегда запускает handoff protocol, даже если разработка, **Комплексное исследование проекта**, PR или discussion не завершены.
 
-### Обязательный handoff-порядок
+### Handoff protocol
 
-1. Fresh-fetch `main`, зафиксировать exact current SHA и убедиться, что canonical post-merge CI state известен.
-2. Проверить open Pull Request, open Issue и существующую рабочую ветку/commit state.
-3. Не завершать работу искусственно: не закрывать P-owner, не менять research status, не объявлять acceptance/DONE и не выполнять release только ради перехода между чатами.
-4. Если существенная незавершённая работа уже представлена open Pull Request — сохранить её там; PR body должен позволять восстановить task scope, P-owner/impact и remaining work.
-5. Если PR отсутствует, но существует существенный незавершённый контекст, который иначе потеряется, создать/обновить open Issue/checkpoint. Такой Issue — только рабочая точка продолжения, не второй source of truth и не основание автоматически резервировать новый P-код.
-6. Если есть рабочая branch с полезными commits и без PR, сохранить exact head и открыть draft/normal PR, когда это безопаснее потери branch-state. Не merge незавершённую работу ради handoff.
-7. Проверить `CONTEXT_MANIFEST.json` и `RESTORE_PROMPT.md`; если они устарели из-за уже принятого текущего изменения, синхронизировать их нормальным PR-first способом до handoff либо явно зафиксировать remaining synchronization work в checkpoint.
-8. После подготовки GitHub выдать пользователю готовый prompt для нового чата. Prompt должен требовать fresh-fetch `main`, чтение `CONTEXT_MANIFEST.json` и bootstrap-набора, проверку open PR/open Issue и продолжение незавершённой работы без предположения о её завершении.
-9. Новый чат после такого prompt обязан сначала восстановить фактический GitHub state, а уже затем продолжать обсуждение/разработку/исследование.
+1. Fresh-fetch `main`, зафиксировать exact current SHA и проверить current post-merge integrity state.
+2. Проверить open PR, open Issues, branches и durable commits/evidence.
+3. Не закрывать P-owner, не менять research status, не объявлять acceptance/DONE и не выполнять release только ради перехода.
+4. Если незавершённая работа уже находится в open PR, использовать его как durable resume point; PR body должен отражать exact head, scope и remaining work.
+5. Если полезная branch имеет commits без PR, сохранить exact head и открыть PR/checkpoint, когда это необходимо для предотвращения потери work state.
+6. Если существенный контекст невозможно безопасно сохранить PR/branch и без checkpoint он потеряется, допускается open Issue/checkpoint как working context; Issue не становится status authority и не резервирует P-code автоматически.
+7. Проверить, что `CONTEXT_MANIFEST.json`, `RESTORE_PROMPT.md`, current baseline и применимые policy docs не устарели из-за уже принятого изменения.
+8. Выдать пользователю стартовый prompt следующего чата, требующий fresh GitHub bootstrap и продолжение от фактического durable state.
+9. Новый чат не предполагает, что старый tranche завершён; он сначала проверяет GitHub.
 
-## 14 постоянных правил автоматизации
+## Постоянные правила автоматизации
 
 ### 1. Context bootstrap
 
-Поддерживать `CONTEXT_MANIFEST.json` как машинную навигацию, а `RESTORE_PROMPT.md` — как короткую инструкцию старта. Они не дублируют current status. CI должен ловить broken/retired context references. В PR body для существенной работы желательно сохранять короткие `context-delta` и `remaining-work`.
+`CONTEXT_MANIFEST.json` — machine navigation; `RESTORE_PROMPT.md` — краткий restore procedure. Они не дублируют owner/test/release status.
 
-### 2. P work index
+### 2. Current requirements baseline
 
-Поддерживать/развивать машинный `P_WORK_INDEX` как навигацию `P-code -> family/source/tests/external acceptance/related owners`, но никогда не хранить в нём competing current status; status всегда читается из `RESEARCH_REGISTRY.md`.
+Automation должна направлять обычную разработку/research к `USER_REQUIREMENTS.md` + `DECISIONS_AND_RATIONALE.md`, а не к historical requirement chain.
 
-### 3. Research coverage matrix
+### 3. P work navigation
 
-Автоматически строить производную матрицу `P-code -> evidence -> source -> deterministic tests -> external verification`. Она предназначена для обнаружения дыр покрытия, а не для автоматического изменения статуса owner.
+Любой `P_WORK_INDEX`/`p_context`/derived matrix может быть только navigation. Current P-status всегда читается из `RESEARCH_REGISTRY.md`.
 
-### 4. Differential research
+### 4. Differential review
 
-Для runtime/research PR автоматически анализировать exact `base...head`, sensitive/trust-boundary surface и потенциально затронутые owners. Результат — risk navigation; он не имеет права автоматически назначать P-owner или менять `RESEARCH_REGISTRY.md`.
+Для PR анализировать exact `base...head`, sensitive/trust-boundary surfaces, relevant owners и test/evidence impact. Derived result не меняет Registry автоматически.
 
-### 5. Regular deep research split
+### 5. Local-first research execution
 
-GitHub Actions регулярно добывает детерминированные факты: consistency, indexes, static/surface signals, tests and reproducible schedules. Семантический глубокий исследование выполняется ChatGPT по fresh `main`/current evidence. Не помещать LLM verdict в CI как автоматический authority и не хранить OpenAI secret только ради такого исследования.
+Deterministic/static/model checks выполняются локально, если это возможно. Remote Actions evidence запускается только по environment need или mandatory gate. Семантический **Комплексный исследование проекта** выполняется по fresh current state и не переносится в CI как автоматический LLM authority.
 
-### 6. Seeded race/concurrency sweeps
+### 6. Reproducible schedules
 
-Для generation/late-settlement/MV3/restart/CAS классов постепенно поддерживать расширенные reproducible seeded schedules. Найденный дефект должен ссылаться на воспроизводимый seed/schedule; случайный fuzz без воспроизводимости не является достаточным evidence.
+Race/concurrency/generation/late-settlement findings должны иметь воспроизводимые schedules/seeds/fixtures, когда такой класс доказательства применим.
 
 ### 7. P work packet
 
-Перед разработкой P0/P1/P2 формировать рабочий пакет: canonical owner/acceptance, relevant family evidence, architecture, source files/symbols, deterministic tests, related owners, external verification и relevant Git/PR history.
+Перед работой по owner собирать current owner/acceptance, relevant family evidence, current requirements/architecture, source/tests, external verification needs и related owners.
 
-### 8. `p_context` fast path
+### 8. External research input
 
-Развивать команду/скрипт, позволяющий по одному P-коду получить компактный machine/human-readable work packet, включая JSON mode. Это ускоритель навигации, не authority.
+Для substantive research packet добавлять multiple relevant external-source categories согласно `COMPREHENSIVE_PROJECT_RESEARCH_POLICY.md`; чужое решение не становится requirement автоматически.
 
 ### 9. P-to-test metadata
 
-Связывать targeted deterministic tests с P-кодами машинно читаемым metadata/index. Targeted P-tests используются для быстрого feedback, но никогда не заменяют полный repository integrity suite перед merge.
+Targeted tests могут связываться с P-code для navigation/feedback, но не заменяют full required integrity/physical acceptance.
 
 ### 10. Root-cause clusters
 
-Поддерживать производные связи `cluster / related / depends_on`, чтобы планировать fixes по общему root cause и по возможности закрывать несколько owners одним архитектурно корректным изменением. Cluster не заменяет individual P-owner/status.
+Derived `cluster/related/depends_on` помогают планировать работу, но не заменяют individual P-owner/status.
 
 ### 11. Issues only for real active work
 
-Не создавать сотни GitHub Issues задним числом по `RESEARCH_REGISTRY`. Issue создаётся только для фактически выполняемой незавершённой работы, нового finding или handoff checkpoint. Registry остаётся authority по P-owner/status.
+Не создавать GitHub Issues массово из Registry. Issue используется только для реальной незавершённой работы, нового finding или handoff checkpoint.
 
-### 12. PR review automation
+### 12. PR review
 
-При появлении/изменении runtime/research PR выполнять exact base/head review: research-impact, owner, evidence, tests, architecture, sensitive surface и acceptance. Если текущая интеграция не поддерживает надёжный event trigger, не притворяться, что review автоматизирован: запускать его по доступному condition/schedule/user trigger до появления поддерживаемого event mechanism.
+Перед merge требуется exact current head/base review и canonical PR contract. Если автоматического trigger нет, review выполняется доступным способом; нельзя притворяться, что event automation существует.
 
-### 13. Post-merge review automation
+### 13. Post-merge review
 
-После merge проверять canonical `main`, отдельный post-merge CI, фактический registry/evidence state, remaining work и следующую логичную owner/cluster задачу. Такой отчёт рабочий и не является новым status authority.
+После merge проверять exact canonical `main`, post-merge Repository Integrity, actual remaining work и current baseline consistency.
 
-### 14. Regular GitHub health review
+### 14. GitHub health review
 
-Проводить read-only health review по принятому steady-state threshold и/или безопасному schedule: repository posture, branches, open PR/Issues, permanent workflows/pins, Dependabot scope, context manifest, P/research indexes, historical Releases/tags и broken references. При отсутствии drift cleanup commit не создавать.
+Периодически/по trigger выполнять read-only health review: `main`, branches, open PR/Issues, workflow/pins, context manifest, broken references, Registry/research indexes и release provenance. При отсутствии drift cleanup commit не создавать.
 
-## Общие ограничения всех автоматизаций
+## Общие ограничения
 
-- Не создавать второй current status registry.
-- Не переводить P-code в DONE/IMPLEMENTED автоматически только по тесту, static signal или LLM conclusion.
-- Не выполнять build/tag/Release автоматически.
-- Не удалять historical evidence/tags/releases без отдельного lossless retirement proof.
-- Не давать workflow write permissions, если read-only verification достаточно.
-- Не хранить единственное research evidence только в ephemeral Actions artifact/log.
-- Любая автоматическая рекомендация, затрагивающая architecture/research truth, проходит обычный PR-first review и явное принятие там, где этого требует проектный процесс.
+- не создавать второй current requirement/status registry;
+- не переводить P-code в DONE/IMPLEMENTED автоматически только по static/deterministic/LLM signal;
+- не выполнять build/tag/GitHub Release автоматически;
+- не удалять research/release evidence, необходимое для provenance, без отдельного lossless retirement proof;
+- не давать workflow write permissions, если read-only verification достаточно;
+- не хранить единственный substantive evidence только в ephemeral Actions artifact/log;
+- не использовать GitHub Actions вместо доступной local проверки только ради удобства;
+- изменения architecture/research truth проходят обычный PR-first review и применимое explicit acceptance.
