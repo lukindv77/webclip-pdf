@@ -71,7 +71,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C05 | Geometry/layout | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004)` |
 | C06 | Colors/backgrounds/compositing | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004, P1-003)` |
 | C07 | Fonts/typography | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-003, P1-187)` |
-| C08 | Raster images / crop/object-fit | `NOT-TRIAGED / UNKNOWN` |
+| C08 | Raster images / crop/object-fit | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-187)` |
 | C09 | Responsive images / picture/srcset/currentSrc | `NOT-TRIAGED / UNKNOWN` |
 | C10 | SVG visual state/resources | `NOT-TRIAGED / UNKNOWN` |
 | C11 | Canvas | `NOT-TRIAGED / UNKNOWN` |
@@ -198,6 +198,16 @@ A focused `unicode-range` fixture exposes a current **P1-003 ACTIVE** readiness 
 Two same-origin flattened-frame controls freshly revalidate **P1-187 ACTIVE**. Basic explicitly copied typography remains intact, while advanced text shadow/stroke, word spacing, kerning, OpenType feature/ligature state, RTL/bidi semantics and rendered width change in the proxy. A separate frame-local `@font-face` is ready in the child but lost as effective font authority after flattening; the physical PDF falls back to `LiberationSans` and changes width materially. These are one secondary-representation root, not new owners per CSS property.
 
 C07 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-003, P1-187)` within the explicit C07 boundary. C08 and every later untested sequential coordinate remain unchanged here.
+
+## Fresh continuation checkpoint — focused C08 raster images / crop / object-fit
+
+`RESEARCH_FULL_RESTART_C08_RASTER_IMAGES_2026-09-02.md` records the accepted focused C08 physical tranche. Its accepted execution is Chrome for Testing `152.0.7977.64`, workflow run `33535640665`, job `99949160705`, research head `0e0081b9cca8a4c8752e75e3fd8bad6f1903cefc`, GitHub PR synthetic merge checkout `cdd3e09fa72d28c48c0375fa3355762b11a5af55`, conclusion SUCCESS, artifact `9811522342`, artifact ZIP digest `sha256:bb9e6bb141b39ac9b6d388352d793fb95d8e9e52b57f705fde9626877eaf8744`.
+
+Fresh positive controls physically preserve ordinary top-document `object-fit:cover` with both left and right `object-position`, preserve `contain` letterboxing, wait for a controlled approximately four-second delayed raster image, and truthfully report an intentionally broken selected image as `failed=1` / `image-load-error`.
+
+A same-origin selected-BODY control freshly revalidates **P1-187 ACTIVE**. The child stylesheet renders a `400×200` red/blue image as `220×220 / object-fit:cover / object-position:left`, producing a red-only admitted crop. Current flattened representation does not copy the stylesheet-owned used dimensions/object-fit/object-position: the proxy becomes `400×200 / fill / center`, shows both red and blue, and the physical PDF preserves that wrong proxy state while the resource report remains clean. This is the existing flattened-secondary-representation root, not a new raster-specific owner.
+
+C08 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-187)` within the explicit C08 boundary. C09 and every later untested sequential coordinate remain unchanged here.
 
 ## Delivery rule
 
