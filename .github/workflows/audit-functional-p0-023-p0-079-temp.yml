@@ -1,0 +1,28 @@
+name: Audit functional P0-023 P0-079 temporary check
+
+on:
+  push:
+    branches: [audit/functional-p0-023-p0-079-pdf-cache-2026-09-01]
+
+permissions:
+  contents: read
+
+jobs:
+  pdf-cache-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.14'
+
+      - name: Run cache authority audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile project_tools/audit_pdf_cache_generation_authority.py
+          python project_tools/audit_pdf_cache_generation_authority.py
