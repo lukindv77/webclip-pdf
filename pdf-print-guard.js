@@ -49,9 +49,11 @@
 
   async function sanitizePrintedLinks(debuggee, rawSendCommand) {
     let searchId = '';
+    let domEnabled = false;
     const changed = [];
     try {
       await rawSendCommand(debuggee, 'DOM.enable');
+      domEnabled = true;
       await rawSendCommand(debuggee, 'DOM.getDocument', { depth: 0, pierce: true });
       const search = await rawSendCommand(debuggee, 'DOM.performSearch', {
         query: 'a[href], area[href]',
@@ -78,25 +80,28 @@
           changed.push({ nodeId: row.nodeId, href: row.href });
         }));
       }
+      // Frontend nodeId values are scoped to the enabled DOM agent. Keep the
+      // agent enabled across Page.printToPDF so the same exact nodes can be
+      // restored before page script execution resumes.
       return changed;
     } catch (error) {
       for (const row of [...changed].reverse()) {
         try { await rawSendCommand(debuggee, 'DOM.setAttributeValue', { nodeId: row.nodeId, name: 'href', value: row.href }); } catch (_) {}
+      }
+      if (domEnabled) {
+        try { await rawSendCommand(debuggee, 'DOM.disable'); } catch (_) {}
       }
       throw error;
     } finally {
       if (searchId) {
         try { await rawSendCommand(debuggee, 'DOM.discardSearchResults', { searchId }); } catch (_) {}
       }
-      try { await rawSendCommand(debuggee, 'DOM.disable'); } catch (_) {}
     }
   }
 
   async function restorePrintedLinks(debuggee, rawSendCommand, changed) {
-    if (!Array.isArray(changed) || !changed.length) return;
-    await rawSendCommand(debuggee, 'DOM.enable');
     try {
-      for (const row of changed) {
+      for (const row of (Array.isArray(changed) ? changed : [])) {
         await rawSendCommand(debuggee, 'DOM.setAttributeValue', { nodeId: row.nodeId, name: 'href', value: row.href });
       }
     } finally {
