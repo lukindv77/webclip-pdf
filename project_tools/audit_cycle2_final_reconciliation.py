@@ -41,11 +41,15 @@ def main() -> int:
         if family_lines:
             fail(f"terminal matrix still contains {forbidden}: {family_lines}")
 
+    # The Matrix is the merged pre-synthesis checkpoint: 46/46 terminal and
+    # final reconciliation pending. The later synthesis is the durable campaign
+    # state transition. Keeping these roles distinct prevents history rewriting.
     required_matrix = [
         "families with terminal required evidence under current Cycle-2 Change Impact: **46**",
         "families with at least one new stable-browser variant requiring revalidation: **0**",
         "remaining revalidation set: **none**",
-        "**`DEEP-AUDIT-COVERAGE-COMPLETE`**",
+        "**`DEEP-AUDIT-IN-PROGRESS`**",
+        "final reconciliation pending",
         "C46 remains bounded `EXTERNAL-REQUIRED / UNKNOWN`",
         "PD1, PD2, PD3, PD4, PD5",
         "PD6",
@@ -53,7 +57,7 @@ def main() -> int:
     ]
     for fragment in required_matrix:
         if fragment not in matrix:
-            fail(f"missing final Matrix declaration: {fragment}")
+            fail(f"missing final Matrix checkpoint declaration: {fragment}")
 
     for cid in ("C17", "C37", "C41", "C42", "C44", "C46"):
         matching = [line for line in matrix.splitlines() if line.startswith(f"| {cid} ")]
@@ -85,14 +89,11 @@ def main() -> int:
             fail(f"missing canonical owner used by Cycle-2 synthesis: {owner}")
 
     changed = subprocess.check_output(
-        ["git", "diff", "--name-only", f"{CYCLE2_START}...HEAD"],
-        cwd=ROOT,
-        text=True,
+        ["git", "diff", "--name-only", f"{CYCLE2_START}...HEAD"], cwd=ROOT, text=True
     ).splitlines()
-    allowed_temp = ".github/workflows/audit-cycle2-final-temp.yml"
     unexpected = [
         path for path in changed
-        if not (path.startswith("project_docs/") or path.startswith("project_tools/") or path == allowed_temp)
+        if not (path.startswith("project_docs/") or path.startswith("project_tools/"))
     ]
     if unexpected:
         fail(f"Cycle-2 staleness gate found product/runtime/contract-adjacent changes: {unexpected}")
@@ -102,7 +103,7 @@ def main() -> int:
     print(
         "cycle2 final reconciliation: OK; families=46/46, revalidation=0, "
         "external=C17,C37,C41,C42,C44,C46, C46=bounded-UNKNOWN, "
-        "coverage=complete, critical_closure=no, release_ready=no, runtime_staleness=none"
+        "coverage=complete-by-synthesis, critical_closure=no, release_ready=no, runtime_staleness=none"
     )
     return 0
 
