@@ -41,6 +41,9 @@ jobs:
       - name: Repository consistency self-test
         run: python project_tools/test_repository_consistency.py
 
+      - name: Final audit-delta retirement self-test
+        run: python project_tools/test_final_delta_retirement.py
+
       - name: Context/bootstrap contract
         run: python project_tools/check_context_contract.py
 

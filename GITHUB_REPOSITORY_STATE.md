@@ -25,20 +25,22 @@ Important permanent reservations include P0-079/P0-080, P1-195…P1-230, explici
 
 ## Evidence layers
 
-The legacy standalone audit-delta layer has completed lossless retirement for the former 189 current `AUDIT_DELTA_*.md` files: their source text was embedded verbatim into 11 family evidence documents, each source identified by original filename and SHA-256, and then removed from the working tree. One explicitly temporary current delta may remain while active analysis is being folded into durable evidence; `project_docs/AUDIT_DELTA_INDEX.md` is authoritative for whether such a temporary delta currently exists. Exact originals remain in Git history.
+The standalone `AUDIT_DELTA_*.md` working layer has completed lossless retirement. The former 189-delta layer was embedded into family/cross-cutting evidence. The final temporary selection/capture delta was then embedded verbatim into `project_docs/AUDIT_RETIRED_DELTA_EVIDENCE.md` with its original filename, historical source commit and exact Git blob hash; `project_tools/test_final_delta_retirement.py` compares that embedded byte sequence against the historical Git source on every repository-integrity run. Exact originals also remain recoverable through Git history.
 
 Use current evidence by role:
 
 - `project_docs/AUDIT_REGISTRY.md` — current owner/status authority;
-- `project_docs/AUDIT_DELTA_INDEX.md` — navigation across consolidated audit families and any explicitly temporary current delta;
+- `project_docs/AUDIT_DELTA_INDEX.md` — compact navigation across consolidated audit families and supplemental durable evidence;
 - `project_docs/AUDIT_FAMILY_*_EVIDENCE.md` — detailed family source proof, deterministic schedules, corrections, positive controls and acceptance boundaries;
 - `project_docs/AUDIT_HISTORY_INDEX.md` — corrections, retractions, dedup decisions and negative findings;
 - `project_docs/AUDIT_EVIDENCE.md` — historical implementation/browser proof;
-- `project_docs/AUDIT_RETIRED_DELTA_EVIDENCE.md` — earlier retired correction/positive-control evidence;
+- `project_docs/AUDIT_RETIRED_DELTA_EVIDENCE.md` — retired corrections/positive controls and the verbatim final temporary-delta source;
 - `project_docs/AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md` — cross-cutting revalidation/implementation taxonomy;
 - `project_docs/TEST_STATUS.md` — compact test/release truth;
 - `project_docs/TEST_EVIDENCE.md` — historical test/browser checkpoints;
 - current runtime/source files — final authority over stale descriptive text.
+
+A future temporary audit delta is permitted only during active analysis under `AUDIT_CHANGE_WORKFLOW.md`; while it exists it must be indexed by `AUDIT_DELTA_INDEX.md` and then folded losslessly into durable evidence rather than becoming a second status authority.
 
 ## Audit change lifecycle
 
@@ -54,7 +56,7 @@ PRs that change runtime or canonical audit evidence are checked by `project_tool
 
 ## Retired historical narratives
 
-Current `main` intentionally does not carry separate working copies of root `P*_CLOSURE.md`, `STATIC_CHECKS_*.md`, `DEEP_AUDIT_2026-08-25.md`, `QA_STATUS_0_9_9.md`, `PROJECT_RECOVERY.md`, `AUDIT_CONSOLIDATION_INDEX.md`, dated handoff folders or retired standalone historical `AUDIT_DELTA_*.md` after lossless family consolidation.
+Current `main` intentionally does not carry separate working copies of root `P*_CLOSURE.md`, `STATIC_CHECKS_*.md`, `DEEP_AUDIT_2026-08-25.md`, `QA_STATUS_0_9_9.md`, `PROJECT_RECOVERY.md`, `AUDIT_CONSOLIDATION_INDEX.md`, dated handoff folders or retired standalone historical `AUDIT_DELTA_*.md` after lossless consolidation.
 
 Their exact history remains recoverable through Git.
 
@@ -73,7 +75,8 @@ See `project_docs/BUILD_AND_RECOVERY_RULES.md` and `project_docs/GITHUB_WORKFLOW
 
 `.github/workflows/repository-integrity.yml` is **read-only** with respect to GitHub repository state. It uses only `contents: read`; no commit-status write permission or mutating GitHub API call is required. On push/PR it runs:
 
-- repository consistency;
+- repository consistency plus self-test;
+- final audit-delta byte-for-byte retirement self-test;
 - immutable GitHub Actions pin/read-only workflow/Dependabot-scope validation + self-test;
 - exact PR runtime/audit change-contract validation on pull requests + self-test;
 - release-readiness schema/status validation + self-test;
