@@ -1,135 +1,128 @@
-# CSS visual dependency graph audit — Final — Blocks 49–56
+# Durable audit evidence — CSS visual dependency graph — consolidated final — 2026-08-30
 
-Final interruption-safe stage of the tranche begun from exact fresh `main` `cd342ac548606ab93eba3d1f2ebc9a68f2f51c08`.
+Canonical P-code owner/status authority remains exclusively in `AUDIT_REGISTRY.md`. This document is the compact current-tree representation of the completed **56-block** CSS visual-dependency audit. It replaces four interruption-safe checkpoints while preserving their exact historical bytes through Git provenance.
 
-Current P-code status and ownership remain exclusively authoritative in `project_docs/AUDIT_REGISTRY.md`.
+No runtime source, registry row, manifest/version/build/tag/release state is changed by this compaction. Audit conclusions and acceptance boundaries are unchanged.
 
-## Blocks 49–56
+## Exact provenance and recovery
 
-### Block 49 — historical duplicate reconciliation
+All four source checkpoints were present together on pre-compaction canonical `main`:
 
-Fresh re-read of `AUDIT_CAPTURE_ADMISSION_RESOURCE_FIDELITY_EVIDENCE_2026-08-29.md` confirms that several controls in this tranche intentionally revalidate already-owned P1-003 scope rather than create new findings:
+`4a44b75b283e18e5091913c793059965112eb1a3`
 
-- delayed pseudo background resource;
-- delayed `mask-image` resource;
-- delayed `list-style-image`;
-- pseudo-only web font;
-- cross-origin frame-agent CSS/background/font parity weakness.
+Their Git blob identities are content-addressed recovery receipts:
 
-That earlier tranche is the durable evidence which reopened **P1-003 ACTIVE**. Therefore these classes are not assigned another owner here.
+| Blocks | Historical source path | Git blob SHA |
+|---|---|---|
+| 1–16 | `project_docs/AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_2026-08-30_EVIDENCE.md` | `9ab49df3b368a68bfac8ade402453f85b0df9a20` |
+| 17–32 | `project_docs/AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_STAGE2_2026-08-30_EVIDENCE.md` | `bc772620ab18d202406adf0a81d69483000ba992` |
+| 33–48 | `project_docs/AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_STAGE3_2026-08-30_EVIDENCE.md` | `88f25125e66412d50434af2a425157f5c5dfb581` |
+| 49–56 | `project_docs/AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_FINAL_2026-08-30_EVIDENCE.md` | `7bac52cee7a9b7e3eb1aff4b48faf7370784bafb` |
 
-The current tranche adds new acceptance evidence rather than a duplicate root cause.
+`project_tools/test_staged_evidence_compaction.py` verifies on every Repository Integrity run that each historical path at that exact commit hashes to the recorded blob, that the retired BASE/STAGE2/STAGE3 paths are absent from the current tree, and that this current semantic evidence preserves a marker for every original block. The full original Markdown therefore remains byte-for-byte recoverable from Git history.
 
-### Block 50 — genuinely new refinements in this tranche
+Original audited source baseline: `main = cd342ac548606ab93eba3d1f2ebc9a68f2f51c08`.
 
-The new evidence not already represented by that earlier 26-block resource tranche is principally:
+Managed physical probes used Chromium `144.0.7559.96` with forced `screen` media plus raw CDP `Page.printToPDF`, print backgrounds enabled. This is engineering evidence, not real unpacked-Chrome release QA.
 
-1. delayed `border-image-source` physical bytes and clean-current-report omission;
-2. generated image slots `content:url(...)` / `::marker content:url(...)` with direct physical controls;
-3. `image-set()` renderer-selected candidate versus parser-discovered candidate over-admission, including a complete 500-task-cap amplification control;
-4. exact post-scan dependency creation caused by WebClip's own header, print-style, image-wrapper and flattened-proxy insertion;
-5. same-origin proxy `cloneNode(true)` / adoption ordering changing source computed relative-URL resolution before `copyComputedFrameCloneStyle()` reads it;
-6. a covered `background-image` resource that was successfully prefetched under frame provenance but becomes a new delayed top-document resource after flattening;
-7. raw inline `border-image-source` / `list-style-image` frame-base loss plus child-head/pseudo rule loss in the secondary representation;
-8. exact copy-before-adoption positive control showing the frame background provenance can be retained under a different ordering.
+## Owner/classification result
 
-These refine P1-003/P1-187; they do not justify a new P-code.
+No new P-number and no canonical status transition resulted from this 56-block tranche.
 
-### Block 51 — graph identity must be representation-generation bound
+Primary refined owners remain:
 
-The current `resourceReport` describes tasks discovered **before** the final WebClip print representation exists.
+- **P1-003 ACTIVE** — renderer-resource preparation must describe the actual final selected visual dependency graph under bounded deadlines, including CSS/pseudo resources, frame parity, renderer-selected candidates, post-preparation graph changes and truthful known/unknown omissions.
+- **P1-187 ACTIVE** — the same-origin flattened secondary representation must preserve required rendered visual state and frame-local resource provenance under explicit materialization budgets.
 
-Physical controls prove that the task graph can change after that report because:
+Supporting boundaries remain P0-004, P0-070, P0-075, P1-004, P1-167, P1-229 and P2-007. Their status is not changed by this evidence compaction.
 
-- page CSS reacts to WebClip helper DOM/styles;
-- proxy insertion creates new page-CSS dependencies;
-- adoption/rebasing creates different resource URLs;
-- flattened representation omits or substitutes source CSS/pseudo state.
+## Block-preservation map
 
-Therefore a truthful “resource ready” receipt cannot be only a count of earlier tasks. Acceptance under P1-003 should bind readiness to the exact representation generation that Chromium will physically render, or explicitly admit that graph convergence is unknown.
+The following map preserves the substantive finding, positive control or rejected hypothesis carried by every original block. Exact fixture text, measurements and source excerpts remain recoverable from the provenance ledger above.
 
-### Block 52 — renderer-selected candidates must be distinguished from parser candidates
+### Blocks 1–16 — uncovered CSS/pseudo visual resources
 
-The `image-set()` control shows that extracting every textual/computed `url(...)` is not equivalent to acquiring the actual rendered dependency graph:
+1. Fresh authority/source reset used exact audited `main`; no new owner was allocated.
+2. Duplicate/root-cause search found CSS visual-resource completeness already owned by P1-003 and flattened rendered state by P1-187.
+3. Current generic CSS URL parsing is applied by prefetch only to element `backgroundImage`, not to the wider computed visual-property graph.
+4. Cross-origin frame-agent preparation is narrower still: selected ordinary IMG only, with no CSS visual-resource scan.
+5. Delayed `border-image-source` can be absent from immediate physical PDF while appearing after settlement; print completion is not readiness proof.
+6. Delayed `list-style-image` can be silently absent while list text remains, then appear after settlement.
+7. Delayed pseudo `::before { content:url(...) }` is physically relevant and is missed by element-only computed-style scanning.
+8. Delayed `::marker content:url(...)` is likewise a physically relevant pseudo-tree dependency missed by the current scan.
+9. Production-shaped delayed ordinary `background-image` is a positive control: the current bounded background scan discovers and waits it successfully.
+10. The same production-shaped scan discovers zero tasks for delayed `border-image`, allowing physical omission before settlement.
+11. The same current scan discovers zero tasks for delayed `list-style-image` and prints before that resource settles.
+12. The same current scan discovers zero tasks for delayed pseudo-content image and prints before settlement.
+13. Because uncovered resource classes create no tasks, a structurally clean resource report can coexist with a physically missing selected visual dependency.
+14. Current flattened-frame style whitelist omits tested `border-image-source`, `list-style-image`, pseudo content, `clip-path` and `box-shadow`; a settled source effect can disappear in the proxy representation.
+15. Child-head pseudo style rules disappear when only body nodes are proxied and pseudo computed state is not reconstructed.
+16. Precision controls rejected new claims from the tested mask, shape-outside, external SVG filter and inconclusive external clip-path schedules.
 
-- Chromium DPR=1 selected/requested one candidate;
-- current URL extraction saw 500 candidates in the same valid computed value;
-- all 500 can consume the task cap;
-- a 12-candidate exact-deadline schedule reported 11 failures despite the renderer-selected 1x candidate being ready.
+### Blocks 17–32 — candidate over-admission, pseudo fonts and post-scan graph creation
 
-Acceptance should not call non-selected alternatives “missing rendered resources”. If the implementation cannot determine which alternative the renderer actually selected, that uncertainty should be represented as graph uncertainty rather than fabricated failure completeness.
+17. A 500-candidate `image-set()` computed value exposed 500 URLs to the current parser while Chromium at DPR 1 physically requested only the selected 1x candidate.
+18. In a 12-candidate deadline schedule, the renderer-selected 1x image was ready but current-shaped preload started all alternatives and reported 11 failures, demonstrating false-partial semantics.
+19. One valid `image-set()` value can consume the complete 500-task resource cap even though the measured renderer selected one candidate.
+20. Ordinary multi-layer backgrounds are a positive control: multiple simultaneously composited URLs legitimately require multiple dependencies.
+21. A CSS custom property resolving into covered `background-image` becomes a concrete URL and is discoverable; variables themselves are not the root cause.
+22. A custom property resolving into uncovered `border-image-source` remains invisible because the admitted property set, not variable syntax, is the limitation.
+23. A delayed pseudo-only web font can be absent from immediate PDF and present after settlement.
+24. Current font readiness derives font state from the ordinary element and does not acquire pseudo-element font state, so the pseudo-only font is missed.
+25. The tested `@counter-style symbols:url()` schedule did not produce a valid positive resource control and was rejected.
+26. WebClip header insertion after prefetch can cause host CSS to create a new delayed selected background dependency after the scan.
+27. WebClip print-style insertion after prefetch can likewise create a new selected dependency after the scan.
+28. WebClip image-wrapper insertion after prefetch can likewise make page CSS introduce a new selected resource dependency.
+29. These post-scan mutations refine existing representation-generation/resource and isolation owners; adding more pre-scan properties alone cannot prove final graph readiness.
+30. Frame-agent-shaped cross-origin selected content with only delayed ordinary background reports zero attempted resources and can print without that background; top/frame parity is incomplete.
+31. The frame mismatch remains within the existing P1-003 frame-parity root rather than requiring a new frame-specific resource owner.
+32. Stage classification remained no-new-owner/no-status-transition; later work was directed toward final graph identity and bounded truthful convergence.
 
-### Block 53 — truthful degradation state requirements
+### Blocks 33–48 — same-origin proxy ordering and resource-provenance drift
 
-The existing worker marks the resource stage `partial` only when the current report has a recorded failure, cap omission, deadline exceedance or scan truncation. Untracked CSS/pseudo/frame/proxy resources can therefore be physically missing while that condition remains false.
+33. Production flatten ordering clones/adopts body nodes into a top-owned proxy before reading/copying source computed whitelist styles.
+34. `cloneNode(true)` without cross-document adoption is a positive control: it does not by itself change the source frame-relative computed background URL.
+35. Adoption of the clone into a detached top-owned container can change the still-frame-owned source element's computed relative background URL to the top-document base while leaving its raw style unchanged.
+36. Current production-shaped order therefore reads the already-mutated top-based source computed URL and writes that wrong absolute URL into the proxy.
+37. Merely having `background-image` in the whitelist does not preserve frame provenance when the value is read after the representation transition changed its resolution.
+38. A source frame resource confirmed ready before flatten can become stale evidence when adoption produces a different top-document resource URL afterward.
+39. Physical control showed that newly rebased delayed top resource can be absent from immediate PDF after the original frame resource was already confirmed ready, then appear after settlement.
+40. Copy-before-adoption is the precision positive control: capturing source computed values first preserved the tested frame-relative background through later adoption.
+41. Non-whitelisted raw relative `border-image-source` rebases through the top document and can request/print the wrong top resource.
+42. Non-whitelisted raw relative `list-style-image` similarly rebases and can print a top-document marker instead of the frame resource.
+43. A custom-property-backed border image retained frame provenance in the tested schedule, proving that URL rebasing cannot be generalized by syntax alone.
+44. A border image supplied only by child-head CSS disappears independently because the child head is not represented and the property is not whitelisted.
+45. A child-head pseudo image rule disappears independently because neither child-head rule nor pseudo computed state is reconstructed.
+46. Inserting the flattened-frame marker itself can trigger host CSS that creates a new delayed selected dependency after prefetch.
+47. Current local preparation performs no final resource revalidation/convergence pass after header/style/wrapper/proxy mutations and final proxy property establishment.
+48. Stage classification remained P1-003 for final graph truth and P1-187 for flattened representation provenance, with no new owner/status transition.
 
-A future P1-003 closure should distinguish at least these semantic cases, regardless of exact UI labels:
+### Blocks 49–56 — duplicate reconciliation and final acceptance
 
-- **confirmed ready for the final admitted graph** — required renderer-selected dependencies for that representation were acquired/settled under the bounded contract;
-- **partial-known** — a required admitted dependency is known to have failed/been omitted/timed out;
-- **graph unknown / non-converged** — the implementation cannot prove that the scanned graph still equals the final rendered graph, including mutation/adoption/representation transitions or unsupported dependency classes.
+49. Historical reconciliation confirmed that several delayed pseudo/background/mask/list/font/frame cases intentionally revalidate the earlier durable tranche that already reopened P1-003; they are not new roots.
+50. New refinements in this tranche are principally border-image physical omission, generated image slots, renderer-selected versus parser candidates, post-scan helper/proxy dependency creation, same-origin adoption ordering, resource rebasing/provenance loss, child-head/pseudo representation loss and copy-before-adoption preservation.
+51. A truthful readiness receipt must be bound to the exact final representation generation, because the dependency graph can change after the earlier report through page reactions, proxy insertion, adoption/rebasing and representation substitution.
+52. Renderer-selected candidate dependencies must be distinguished from parser-discovered alternatives; inability to identify the selected candidate is graph uncertainty, not fabricated rendered-resource failure.
+53. Future semantics must distinguish confirmed-ready final graph, partial-known required dependency failure/omission/timeout, and graph-unknown/non-converged state; degraded saves must not be represented as proven complete when graph identity is unknown.
+54. One bounded contract must cover the top selected representation, same-origin flattened proxy and cross-origin child representation; making only the top scanner exhaustive is insufficient.
+55. Positive controls retained include delayed ordinary IMG/background waits, legitimate multi-layer background URLs, covered custom-property background resolution, clone-without-adoption stability, copy-before-adoption provenance preservation and the tested custom-property border provenance; rejected/inconclusive controls remain non-findings.
+56. Final classification: no new permanent P-code or status transition; resource readiness is a property of the exact final renderer representation and actually selected dependency graph, generation-bound through preparation/frame representation changes with uncertainty preserved when bounded code cannot prove convergence.
 
-These names are acceptance terminology in this evidence, not a claim that current runtime already implements these states.
+## Preserved acceptance direction
 
-A save may still be allowed by product policy in degraded cases, but it must not be represented as a proven faithful resource-complete copy when the graph is unknown.
+The complete tranche therefore retains these architecture requirements:
 
-### Block 54 — one bounded contract must cover top / same-origin proxy / cross-origin child
+1. **P1-003:** acquire or truthfully classify the actual renderer-selected dependency graph for the exact final representation rather than equating parsed URL strings with resource completeness.
+2. **P1-003:** represent known partial failure separately from graph-unknown/non-converged state; a clean report over an incomplete task vocabulary is not proof of fidelity.
+3. **P1-003:** apply one bounded readiness vocabulary across top, same-origin proxy and cross-origin selected child representations.
+4. **P1-187:** preserve source-frame rendered style/resource provenance and pseudo/head-derived visual state through flattened representation creation without depending on source computed state after adoption changes it.
+5. Keep graph acquisition/convergence within shared bounded preparation work rather than unbounded rescans or fetching every textual alternative.
+6. Bind readiness evidence to the same physical representation generation eventually rendered to PDF.
+7. Preserve the positive controls and rejected hypotheses above so future repair does not overgeneralize or regress working cases.
+8. Real unpacked-Chrome QA remains separate release evidence; these managed Chromium probes are engineering acceptance evidence only.
 
-P1-003 already explicitly owns frame parity. The evidence now demonstrates three materially different graph producers:
+## Evidence interpretation
 
-1. top-document selected rendered state;
-2. same-origin flattened proxy whose resource URLs/style rules can differ from its source frame;
-3. cross-origin frame-agent representation whose current prefetch is ordinary-`img` only.
+This file is current durable semantic evidence, not a replacement status registry. Historical source checkpoints may contain wording or numbering statements that later became stale; current status and permanent numbering always come from `AUDIT_REGISTRY.md`.
 
-Closure cannot be defined by making only the top-document scanner exhaustive. Each physically rendered representation needs the same truthful resource-generation contract, while P1-167 requires the combined work to remain under a shared node/time/task/byte budget.
-
-### Block 55 — precision / positive / rejected controls retained
-
-Positive controls that must survive future repair:
-
-- current ordinary `<img>` readiness waits a delayed selected image;
-- current element `background-image` readiness can successfully wait a delayed ordinary background;
-- ordinary multi-layer backgrounds legitimately require multiple simultaneously composited URLs;
-- CSS variables resolving into the covered computed background remain discoverable;
-- `cloneNode(true)` without cross-document adoption does not by itself alter source base resolution;
-- copying source computed frame URL values **before** adoption preserved the tested frame background physically;
-- the tested custom-property-backed border image preserved frame URL provenance under adoption, demonstrating that URL syntax paths are not all equivalent.
-
-Rejected/non-promoted controls:
-
-- the new managed mask fixture did not reproduce a reliable loaded-vs-unloaded difference; prior durable evidence remains the mask authority instead;
-- tested `shape-outside` image fixture did not produce a measurable layout difference;
-- tested external SVG CSS filter did not issue the intended resource request;
-- tested external clip-path schedule lacked a valid intended clipped positive control;
-- `@counter-style symbols:url()` did not yield the expected image-resource positive control;
-- managed WebGL availability remains an external real-Chrome/GPU boundary from earlier evidence.
-
-### Block 56 — final classification and no-new-owner decision
-
-**No new permanent P-code and no canonical status transition.**
-
-Primary refined owners:
-
-- **P1-003 ACTIVE** — final selected renderer-resource graph must be actual, bounded, representation-generation exact and truthful about both known omissions and graph uncertainty;
-- **P1-187 ACTIVE** — same-origin flattened proxy must preserve required renderer state and resource provenance under bounded materialization.
-
-Strong supporting boundaries:
-
-- **P0-070 ACTIVE** — exact full-document/physical generation;
-- **P0-075 ACTIVE** — page-observable live preparation/helper DOM is not a trusted/frozen representation;
-- **P0-004 ACTIVE** — selected physical copy fidelity;
-- **P1-167 ACTIVE** — graph acquisition/convergence must live inside one bounded preparation budget;
-- **P1-004 / P1-229** — cross-origin child lifecycle/representation parity;
-- **P2-007** — explicit capture/representation-mode architecture remains the broader product boundary.
-
-Git/history checks do not identify an independent CSS-resource owner. Existing history also contains deliberate prior decisions not to allocate an adjacent `P1-230` for audit refinements already covered by existing owners. This tranche likewise does **not** allocate `P1-230` or any later number.
-
-## Tranche result
-
-Completed **56/56 blocks** with durable checkpoints after Blocks 1–16, 17–32, 33–48 and this final Blocks 49–56 stage.
-
-The durable architecture result is:
-
-> Resource readiness is a property of the exact final renderer representation and its actually selected dependency graph, not of a pre-mutation list of URL strings. The graph must remain generation-bound through WebClip preparation and frame representation changes; when bounded code cannot prove convergence, the product must preserve that uncertainty instead of reporting resource completeness.
-
-Runtime, `AUDIT_REGISTRY.md`, manifest/version/build/tag/release state are intentionally unchanged by this docs-only audit tranche.
+The compaction removes interruption mechanics and repeated classification/environment boilerplate from the working tree while retaining every block's substantive finding/control and an exact Git recovery path for the original text.
