@@ -27,9 +27,14 @@ Important permanent reservations include P0-079/P0-080, P1-195…P1-230, explici
 
 The standalone `AUDIT_DELTA_*.md` working layer has completed lossless retirement. The former 189-delta layer was embedded into family/cross-cutting evidence. The final temporary selection/capture delta was then embedded verbatim into `project_docs/AUDIT_RETIRED_DELTA_EVIDENCE.md` with its original filename, historical source commit and exact Git blob hash; `project_tools/test_final_delta_retirement.py` compares that embedded byte sequence against the historical Git source on every repository-integrity run. Exact originals also remain recoverable through Git history.
 
-Interruption-safe staged evidence is compacted independently rather than deleted as if the FINAL checkpoint contained earlier blocks. A completed staged compaction must retain a current semantic block map plus exact historical source commit/blob receipts. `project_tools/test_staged_evidence_compaction.py` verifies those receipts and prevents retired checkpoint paths from silently returning.
+Interruption-safe staged evidence is compacted independently rather than deleted as if the FINAL checkpoint contained earlier blocks. A completed staged compaction must retain a current semantic block map plus exact historical source commit/blob receipts. `project_tools/test_staged_evidence_compaction.py` verifies every completed series, recovers its historical checkpoints, checks their content-addressed Git blob identities and prevents retired checkpoint paths from silently returning.
 
-The renderer-owned replaced-resource convergence series is the first completed staged compaction: its original Blocks 1–20 / 21–36 / 37–56 checkpoints are represented by one current `AUDIT_REPLACED_RESOURCE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md`, while all three original blobs remain byte-for-byte recoverable from Git history. Three staged series remain explicitly listed in `AUDIT_DELTA_INDEX.md` for later separately proven compaction.
+Two staged series have completed this process:
+
+- renderer-owned replaced-resource convergence — original Blocks 1–20 / 21–36 / 37–56 are represented by one current `AUDIT_REPLACED_RESOURCE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md`;
+- CSS visual dependency graph — original Blocks 1–16 / 17–32 / 33–48 / 49–56 are represented by one current `AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_FINAL_2026-08-30_EVIDENCE.md`.
+
+All retired source blobs remain byte-for-byte recoverable from the recorded pre-compaction Git commits. Two staged series remain explicitly listed in `AUDIT_DELTA_INDEX.md` for later separately proven compaction.
 
 Use current evidence by role:
 
@@ -81,7 +86,7 @@ See `project_docs/BUILD_AND_RECOVERY_RULES.md` and `project_docs/GITHUB_WORKFLOW
 
 - repository consistency plus self-test;
 - final audit-delta byte-for-byte retirement self-test;
-- staged evidence compaction provenance self-test;
+- staged evidence compaction provenance self-test across every completed staged series;
 - immutable GitHub Actions pin/read-only workflow/Dependabot-scope validation + self-test;
 - exact PR runtime/audit change-contract validation on pull requests + self-test;
 - release-readiness schema/status validation + self-test;
