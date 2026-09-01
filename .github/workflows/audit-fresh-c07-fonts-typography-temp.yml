@@ -36,6 +36,7 @@ jobs:
           git rev-parse HEAD
           sha256sum content.js frame-proxy-budget-guard.js frame-proxy-inert-guard.js host-control-activation-guard.js
           fc-match 'DejaVu Sans Mono'
+          fc-match 'DejaVu Serif'
 
       - name: C07 focused physical probe
         env:
@@ -45,6 +46,13 @@ jobs:
           mkdir -p c07-artifacts
           python project_tools/audit_fresh_c07_fonts_typography_accept.py --out-dir c07-artifacts | tee c07-result.json
 
+      - name: C07 unicode-range sample-bound probe
+        env:
+          CHROMIUM_BIN: ${{ github.workspace }}/.chrome/chrome-linux64/chrome
+        run: |
+          set -euo pipefail
+          python project_tools/audit_fresh_c07_unicode_range_sample_bound.py --out-dir c07-artifacts | tee c07-unicode-result.json
+
       - name: Upload C07 evidence artifacts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -52,6 +60,7 @@ jobs:
           name: c07-fonts-typography-${{ github.sha }}
           path: |
             c07-result.json
+            c07-unicode-result.json
             c07-artifacts/*.json
             c07-artifacts/*.pdf
             c07-artifacts/*.png
