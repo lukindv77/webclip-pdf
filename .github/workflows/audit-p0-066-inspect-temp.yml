@@ -16,6 +16,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
+      - name: Validate policy first
+        run: |
+          set -euo pipefail
+          node --check durable-url-policy.js
+          node project_tools/test_p0_066_durable_url_policy.js
       - name: Print P0-066 source contexts
         shell: bash
         run: |
@@ -23,22 +28,14 @@ jobs:
           echo "HEAD=$(git rev-parse HEAD)"
           python - <<'PY'
           from pathlib import Path
-
           targets = {
-              'service-worker.js': [
-                  'sanitizeContentSaveMeta', 'normalizeJournalUrl', 'sanitizeSelectionSnapshot',
-                  'normalizePendingJournalAppendData', 'appendJournalEntry(', 'journalViewSummary',
-                  'normalizeImportedHttpUrl', 'normalizeImportedHttpsUrl', 'normalizeImportedJournalEntry',
-                  'getValidCachedPdfForTab', 'putCachedPdf', 'openJournalDb', 'readJournalEntryBatch',
-                  'journalEntryForContentTemplate', 'publicUrl:', 'sourceUrl:', 'urlKey:',
-              ],
+              'service-worker.js': ['sanitizeContentSaveMeta', 'normalizeJournalUrl', 'sanitizeSelectionSnapshot', 'normalizePendingJournalAppendData', 'appendJournalEntry(', 'journalViewSummary', 'normalizeImportedHttpUrl', 'normalizeImportedHttpsUrl', 'normalizeImportedJournalEntry', 'getValidCachedPdfForTab', 'putCachedPdf', 'openJournalDb', 'readJournalEntryBatch', 'publicUrl:', 'sourceUrl:', 'urlKey:'],
               'content.js': ['prepareForPrint', 'Полный URL страницы', 'urlLink.textContent', 'urlLink.href', 'locator.src', "getAttribute('src')", "getAttribute('href')"],
               'journal.js': ['entry.url', 'publicUrl', 'urlKey'],
           }
           for filename, needles in targets.items():
               p = Path(filename)
-              if not p.exists():
-                  continue
+              if not p.exists(): continue
               lines = p.read_text(encoding='utf-8').splitlines()
               print(f'\n===== {filename} ({len(lines)} lines) =====')
               emitted = set()
@@ -48,10 +45,8 @@ jobs:
                   for i in hits[:20]:
                       lo, hi = max(0, i-8), min(len(lines), i+13)
                       key = (lo, hi)
-                      if key in emitted:
-                          continue
+                      if key in emitted: continue
                       emitted.add(key)
-                      for n in range(lo, hi):
-                          print(f'{n+1:06d}: {lines[n]}')
+                      for n in range(lo, hi): print(f'{n+1:06d}: {lines[n]}')
                       print('...')
           PY
