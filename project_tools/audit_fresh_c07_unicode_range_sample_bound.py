@@ -24,6 +24,14 @@ def face_states(page):
 def cyr_fonts(path):
     return sorted(set(s['font'] for s in base.pdf_spans(path) if ('ЖЖЖ' in s['text'] or 'КИРИЛЛИЦА' in s['text'])))
 
+def artifact_text(path):
+    return ' '.join(s['text'] for s in base.pdf_spans(path))
+
+def is_cyrillic_face(face):
+    # Chrome normalizes U+0400-04FF to U+400-4FF, so do not depend on leading zeroes.
+    normalized=str(face.get('unicodeRange','')).upper().replace(' ','')
+    return 'U+400-4FF' in normalized or 'U+0400-04FF' in normalized
+
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('--chromium',default=os.environ.get('CHROMIUM_BIN','')); ap.add_argument('--out-dir',required=True); a=ap.parse_args(); out=pathlib.Path(a.out_dir); out.mkdir(parents=True,exist_ok=True)
     sans=font_file('DejaVu Sans Mono'); serif=font_file('DejaVu Serif')
@@ -36,16 +44,29 @@ def main():
         text='ASCII_C07_'+('A'*80)+' КИРИЛЛИЦА_ЖЖЖЖЖ_C07'
         base.load_runtime(page,f"<article id='scope'>{text}</article>",head)
         before=face_states(page); base.select_top(page); t=time.monotonic(); req=base.begin_prepare(page); elapsed=time.monotonic()-t; prepared=face_states(page)
-        immediate_path=out/'unicode_range_immediate.pdf'; tpdf=time.monotonic(); immediate=base.print_pdf(page,immediate_path); pdf_elapsed=time.monotonic()-tpdf; after_pdf=face_states(page); immediate_fonts=cyr_fonts(immediate_path)
-        page.wait_for_timeout(5000); settled_state=face_states(page); settled_path=out/'unicode_range_settled.pdf'; settled=base.print_pdf(page,settled_path); settled_fonts=cyr_fonts(settled_path)
+        immediate_path=out/'unicode_range_immediate.pdf'; tpdf=time.monotonic(); immediate=base.print_pdf(page,immediate_path); pdf_elapsed=time.monotonic()-tpdf; after_pdf=face_states(page); immediate_fonts=cyr_fonts(immediate_path); immediate_text=artifact_text(immediate_path)
+        page.wait_for_timeout(5000); settled_state=face_states(page); settled_path=out/'unicode_range_settled.pdf'; settled=base.print_pdf(page,settled_path); settled_fonts=cyr_fonts(settled_path); settled_text=artifact_text(settled_path)
         report=req.get('meta',{}).get('resourceReport',{})
-        # Source-level discriminator: preparation only samples first 64 direct text chars; it must not falsely claim the delayed Cyrillic face was awaited.
+
+        # The current font task is deduplicated by fontSpec and samples only the
+        # first bounded direct text slice. The ASCII face is therefore admitted
+        # while the later Cyrillic unicode-range face remains loading.
         assert elapsed<2.0,(elapsed,report,H.hits,prepared)
         assert any('/cyr.ttf'==h['path'] for h in H.hits),H.hits
-        result={'accepted':True,'sourceBaseline':'28afa1fe6f29b455574f1e2caf9865f1e957c625','contentSha256':hashlib.sha256(base.CONTENT.encode()).hexdigest(),'chrome':browser.version,'prepareElapsedSec':elapsed,'printElapsedSec':pdf_elapsed,'resourceReport':report,'faceStates':{'before':before,'afterPrepare':prepared,'afterImmediatePdf':after_pdf,'settled':settled_state},'immediate':{'artifact':{k:v for k,v in immediate.items() if k not in ('spans','words')},'cyrillicFonts':immediate_fonts},'settled':{'artifact':{k:v for k,v in settled.items() if k not in ('spans','words')},'cyrillicFonts':settled_fonts},'hits':H.hits}
-        pending_after_prepare=any(x['status']!='loaded' and '0400' in x['unicodeRange'] for x in prepared)
-        physical_changed=bool(immediate_fonts and settled_fonts and immediate_fonts!=settled_fonts)
-        result['classification']='P1-003' if pending_after_prepare and physical_changed else ('readiness-report-gap-no-physical-loss' if pending_after_prepare else 'positive-control')
+        assert int(report.get('failed',0))==0 and int(report.get('loaded',0))==int(report.get('attempted',0))==1,report
+        pending_after_prepare=any(is_cyrillic_face(x) and x['status']!='loaded' for x in prepared)
+        assert pending_after_prepare,(prepared,report)
+        assert any(is_cyrillic_face(x) and x['status']=='loaded' for x in settled_state),settled_state
+
+        # Physical discriminator: with font-display:block, the selected logical
+        # text is absent from the immediate PDF while the report says ready; the
+        # same prepared page contains it after the delayed face settles.
+        assert 'ASCII_C07_' not in immediate_text and 'КИРИЛЛИЦА' not in immediate_text,(immediate_text,immediate_fonts,prepared)
+        assert 'ASCII_C07_' in settled_text and 'КИРИЛЛИЦА' in settled_text,(settled_text,settled_fonts,settled_state)
+        assert settled_fonts and 'DejaVuSerif' in settled_fonts,settled_fonts
+        assert immediate['sha256']!=settled['sha256'],(immediate,settled)
+
+        result={'accepted':True,'sourceBaseline':'28afa1fe6f29b455574f1e2caf9865f1e957c625','contentSha256':hashlib.sha256(base.CONTENT.encode()).hexdigest(),'chrome':browser.version,'prepareElapsedSec':elapsed,'printElapsedSec':pdf_elapsed,'resourceReport':report,'faceStates':{'before':before,'afterPrepare':prepared,'afterImmediatePdf':after_pdf,'settled':settled_state},'immediate':{'artifact':{k:v for k,v in immediate.items() if k not in ('spans','words')},'cyrillicFonts':immediate_fonts,'selectedTextPresent':False},'settled':{'artifact':{k:v for k,v in settled.items() if k not in ('spans','words')},'cyrillicFonts':settled_fonts,'selectedTextPresent':True},'hits':H.hits,'classification':'P1-003'}
         print(json.dumps(result,ensure_ascii=False,indent=2)); base.resolve_prepare(page); ctx.close(); browser.close(); return 0
     finally: server.shutdown(); server.server_close()
 
