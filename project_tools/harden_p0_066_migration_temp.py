@@ -22,23 +22,26 @@ p = ROOT / 'durable-url-policy.js'
 s = p.read_text(encoding='utf-8')
 s = s.replace("migrateStoreCursor(tx.objectStore('entries'), sanitizeJournalEntryUrls);", "migrateStoreCursor(tx.objectStore('entries'), sanitizeJournalEntryUrls, tx);")
 s = s.replace("migrateStoreCursor(tx.objectStore(name), (value) => ({ ...value, data: sanitizePendingDataUrls(value?.data || {}) }));", "migrateStoreCursor(tx.objectStore(name), (value) => ({ ...value, data: sanitizePendingDataUrls(value?.data || {}) }), tx);")
-s = s.replace("      migrateStoreCursor(tx.objectStore('importStaging'), (value) => {", "      migrateStoreCursor(tx.objectStore('importStaging'), (value) => {")
 s = s.replace("        return out;\n      });\n    }\n    if (db.objectStoreNames.contains('urlStats')) {\n      try { tx.objectStore('urlStats').clear(); } catch (_) {}\n    }", "        return out;\n      }, tx);\n    }\n    if (db.objectStoreNames.contains('urlStats')) {\n      try {\n        const clear = tx.objectStore('urlStats').clear();\n        if (clear && typeof clear === 'object') clear.onerror = () => abortMigration(tx);\n      } catch (_) {\n        abortMigration(tx);\n      }\n    }")
 s = s.replace("migrateStoreCursor(tx.objectStore('pdfs'), sanitizeCachedPdfRecordUrls);", "migrateStoreCursor(tx.objectStore('pdfs'), sanitizeCachedPdfRecordUrls, tx);")
 s = s.replace("migrateStoreCursor(tx.objectStore('meta'), sanitizeCachedPdfRecordUrls);", "migrateStoreCursor(tx.objectStore('meta'), sanitizeCachedPdfRecordUrls, tx);")
 p.write_text(s, encoding='utf-8')
 
-update(
-    'journal.js',
-    """    request.onupgradeneeded = () => {\n""",
-    """    request.onupgradeneeded = (event) => {\n""",
-    'journal upgrade event'
-)
-update(
-    'journal.js',
-    """      WebClipDurableUrlPolicy.migrateJournalDbV8(db, request.transaction, request.oldVersion || 0);\n""",
-    """      WebClipDurableUrlPolicy.migrateJournalDbV8(db, request.transaction, event?.oldVersion || 0);\n""",
-    'journal oldVersion source'
-)
+p = ROOT / 'journal.js'
+s = p.read_text(encoding='utf-8')
+marker = 'function openJournalDbForView() {'
+start = s.find(marker)
+if start < 0:
+    raise SystemExit('journal view DB function marker missing')
+prefix, tail = s[:start], s[start:]
+old_handler = '    request.onupgradeneeded = () => {\n'
+if tail.count(old_handler) < 1:
+    raise SystemExit('journal view upgrade handler missing')
+tail = tail.replace(old_handler, '    request.onupgradeneeded = (event) => {\n', 1)
+old_version = '      WebClipDurableUrlPolicy.migrateJournalDbV8(db, request.transaction, request.oldVersion || 0);\n'
+if tail.count(old_version) != 1:
+    raise SystemExit(f'journal view oldVersion source expected once, found {tail.count(old_version)}')
+tail = tail.replace(old_version, '      WebClipDurableUrlPolicy.migrateJournalDbV8(db, request.transaction, event?.oldVersion || 0);\n', 1)
+p.write_text(prefix + tail, encoding='utf-8')
 
 print('P0-066 migration hardening applied')
