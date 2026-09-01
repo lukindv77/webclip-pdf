@@ -12,7 +12,7 @@ Accepted GitHub Actions run: `33469545801`, job `99736317876`, conclusion **SUCC
 
 Browser: Google Chrome for Testing `152.0.7977.64`.
 
-The temporary evidence workflow was removed after the accepted run. Runtime/test files covered by the accepted evidence were not changed after that evidence head before durable documentation/status delivery.
+The temporary evidence workflow was removed after the accepted run. Product runtime and Chrome-harness sources covered by the accepted evidence were not changed after that evidence head before delivery.
 
 ## 1. Acceptance contract
 
@@ -216,4 +216,6 @@ The accepted evidence proves that WebClip's own PDF preparation no longer invoke
 
 ## 9. Delivery note
 
-The first PR Integrity attempt failed only because the original PR body mentioned unrelated residual P-codes and the machine-readable contract checker conservatively treated those mentions as declared owners. PR metadata was narrowed to the single affected owner before this docs-only commit. No runtime, deterministic-test, Chrome-harness, manifest, build or release file changed after the accepted evidence head.
+The first PR Integrity attempt failed only because the original PR body mentioned unrelated residual P-codes and the machine-readable contract checker conservatively treated those mentions as declared owners. PR metadata was narrowed to the single affected owner.
+
+After an unrelated owner merged into `main`, the merge-result deterministic suite exposed three stale repository-binding assertions: two prior injection tests still expected the older helper prefix, and the P0-067 deterministic test expected the older worker bootstrap without the newly added independent worker guard. Those deterministic assertions were updated only to recognize the current combined bootstrap/injection order. The P0-067 product runtime, `content.js`, Chrome harness and accepted Chrome source hashes above remain unchanged. The full Repository Integrity suite must pass on the integrated PR head before merge.
