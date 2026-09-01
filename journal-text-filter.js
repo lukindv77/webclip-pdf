@@ -103,5 +103,5 @@
 // security bootstraps here so extension pages using the journal filter remain
 // unchanged while guards are installed before ordinary worker code runs.
 if (typeof importScripts === 'function' && typeof document === 'undefined') {
-  importScripts('pdf-print-guard.js', 'content-injection-guard.js', 'operation-log-redaction-guard.js');
+  importScripts('pdf-print-guard.js', 'content-injection-guard.js', 'operation-log-redaction-guard.js', 'pdf-cache-document-generation-guard.js');
 }
