@@ -1,15 +1,16 @@
 (() => {
   'use strict';
 
-  // Worker-side admission guard for WebClip top content-script injection.
-  // Any service-worker request that injects content.js must load the flattened
-  // frame materialization budget guard and inert clone guard first, in that
-  // order, in the same isolated world.
-  const INSTALL_MARKER = '__webclipContentInjectionGuardV1';
+  // Worker/popup-side admission guard for WebClip top content-script injection.
+  // Any request that injects content.js must load the flattened-frame budget,
+  // inert-clone and page-control activation guards first, in that order, in
+  // the same isolated world.
+  const INSTALL_MARKER = '__webclipContentInjectionGuardV2';
   const BUDGET_HELPER_FILE = 'frame-proxy-budget-guard.js';
   const INERT_HELPER_FILE = 'frame-proxy-inert-guard.js';
+  const HOST_CONTROL_HELPER_FILE = 'host-control-activation-guard.js';
   const CONTENT_FILE = 'content.js';
-  const REQUIRED_PREFIX = Object.freeze([BUDGET_HELPER_FILE, INERT_HELPER_FILE]);
+  const REQUIRED_PREFIX = Object.freeze([BUDGET_HELPER_FILE, INERT_HELPER_FILE, HOST_CONTROL_HELPER_FILE]);
 
   function rewriteDetails(details) {
     if (!details || typeof details !== 'object') return details;
@@ -55,7 +56,7 @@
         installed = scripting.executeScript === guardedExecuteScript;
       } catch (_) {}
     }
-    if (!installed) throw new Error('P0-064/P0-068: failed to install content injection guard.');
+    if (!installed) throw new Error('P0-064/P0-068/P0-067: failed to install content injection guard.');
     globalThis[INSTALL_MARKER] = true;
     return { installed: true };
   }
@@ -63,6 +64,7 @@
   globalThis.WebClipContentInjectionGuard = Object.freeze({
     BUDGET_HELPER_FILE,
     INERT_HELPER_FILE,
+    HOST_CONTROL_HELPER_FILE,
     CONTENT_FILE,
     REQUIRED_PREFIX,
     rewriteDetails,
