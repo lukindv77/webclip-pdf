@@ -76,6 +76,7 @@ function createHarness({ resultCount = 4, failPrint = false } = {}) {
     [4, { href: '#fragment', id: 'fragment' }]
   ]);
   let scriptsDisabled = false;
+  let domEnabled = false;
 
   async function rawSendCommand(_debuggee, method, params = {}) {
     calls.push({ method, params: { ...params } });
@@ -84,19 +85,33 @@ function createHarness({ resultCount = 4, failPrint = false } = {}) {
       scriptsDisabled = Boolean(params.value);
       return {};
     }
-    if (method === 'DOM.enable' || method === 'DOM.disable' || method === 'DOM.getDocument' || method === 'DOM.discardSearchResults') return {};
-    if (method === 'DOM.performSearch') return { searchId: 'P0-071-search', resultCount };
+    if (method === 'DOM.enable') { domEnabled = true; return {}; }
+    if (method === 'DOM.disable') { domEnabled = false; return {}; }
+    if (method === 'DOM.getDocument' || method === 'DOM.discardSearchResults') {
+      assert.equal(domEnabled, true, `${method} requires the same enabled DOM agent`);
+      return {};
+    }
+    if (method === 'DOM.performSearch') {
+      assert.equal(domEnabled, true);
+      return { searchId: 'P0-071-search', resultCount };
+    }
     if (method === 'DOM.getSearchResults') {
+      assert.equal(domEnabled, true);
       return { nodeIds: [1, 2, 3, 4].slice(params.fromIndex, Math.min(params.toIndex, 4)) };
     }
-    if (method === 'DOM.getAttributes') return { attributes: attributesFor(attrs.get(params.nodeId) || {}) };
+    if (method === 'DOM.getAttributes') {
+      assert.equal(domEnabled, true);
+      return { attributes: attributesFor(attrs.get(params.nodeId) || {}) };
+    }
     if (method === 'DOM.removeAttribute') {
+      assert.equal(domEnabled, true, 'P0-071 must not invalidate frontend nodeIds before href removal');
       assert.equal(scriptsDisabled, true, 'P0-071 href removal must happen only after page scripts are frozen');
       const row = attrs.get(params.nodeId);
       if (row) delete row[params.name];
       return {};
     }
     if (method === 'DOM.setAttributeValue') {
+      assert.equal(domEnabled, true, 'P0-071 must keep the DOM agent enabled so exact frontend nodeIds survive through print');
       assert.equal(scriptsDisabled, true, 'P0-071 href restore must finish before scripts resume');
       const row = attrs.get(params.nodeId) || {};
       row[params.name] = params.value;
@@ -104,6 +119,7 @@ function createHarness({ resultCount = 4, failPrint = false } = {}) {
       return {};
     }
     if (method === 'Page.printToPDF') {
+      assert.equal(domEnabled, true, 'DOM agent must remain enabled across Page.printToPDF so changed nodeIds remain restorable');
       assert.equal(scriptsDisabled, true, 'Page.printToPDF must run while page scripts are frozen');
       assert.equal(attrs.get(1).href, 'https://safe.example/original');
       assert.equal(attrs.get(2).href, undefined, 'javascript href must be absent from actual printed representation');
@@ -139,13 +155,15 @@ function createHarness({ resultCount = 4, failPrint = false } = {}) {
     assert.equal(harness.attrs.get(3).href, 'data:text/html,bad', 'live-page data href must be restored after physical print');
 
     const methods = harness.calls.map((item) => item.method);
-    const disableAt = methods.indexOf('Emulation.setScriptExecutionDisabled');
+    const disableScriptsAt = methods.indexOf('Emulation.setScriptExecutionDisabled');
     const searchAt = methods.indexOf('DOM.performSearch');
     const printAt = methods.indexOf('Page.printToPDF');
-    const enableAt = methods.findIndex((method, index) => index > printAt && method === 'Emulation.setScriptExecutionDisabled');
-    assert.ok(disableAt >= 0 && disableAt < searchAt && searchAt < printAt && printAt < enableAt, `unexpected P0-071 render-cut command order: ${methods.join(' -> ')}`);
-    assert.equal(harness.calls[disableAt].params.value, true);
-    assert.equal(harness.calls[enableAt].params.value, false);
+    const disableDomAt = methods.indexOf('DOM.disable');
+    const enableScriptsAt = methods.findIndex((method, index) => index > printAt && method === 'Emulation.setScriptExecutionDisabled');
+    assert.ok(disableScriptsAt >= 0 && disableScriptsAt < searchAt && searchAt < printAt && printAt < disableDomAt && disableDomAt < enableScriptsAt,
+      `unexpected P0-071 render-cut command order: ${methods.join(' -> ')}`);
+    assert.equal(harness.calls[disableScriptsAt].params.value, true);
+    assert.equal(harness.calls[enableScriptsAt].params.value, false);
   }
 
   {
