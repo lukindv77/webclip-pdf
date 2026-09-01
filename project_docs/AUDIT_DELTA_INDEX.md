@@ -6,7 +6,7 @@ This file is **navigation only**. Current P-code status and single-owner authori
 
 The standalone `AUDIT_DELTA_*.md` working layer is fully retired in the current tree. The former 189-delta layer was embedded losslessly into family/cross-cutting evidence; the final temporary selection/capture delta is preserved verbatim in `AUDIT_RETIRED_DELTA_EVIDENCE.md` with exact Git provenance and a byte-for-byte CI self-test.
 
-Interruption-safe staged evidence is being compacted separately. Completed staged compactions retain a compact current semantic document plus exact historical source commit/blob receipts verified by `project_tools/test_staged_evidence_compaction.py`. No staged checkpoint is a status authority.
+The interruption-safe staged evidence series covered by the 2026-09-01 cleanup are also fully compacted. Each completed compaction retains one compact current semantic document plus exact historical source commit/blob receipts verified by `project_tools/test_staged_evidence_compaction.py`. No staged checkpoint is a status authority.
 
 ## Primary evidence families
 
@@ -60,12 +60,18 @@ Interruption-safe staged evidence is being compacted separately. Completed stage
 - `AUDIT_REPLACED_RESOURCE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md` — compact current representation of Blocks 1–56; original checkpoint blobs are recoverable from pre-compaction Git and verified in CI.
 - `AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_FINAL_2026-08-30_EVIDENCE.md` — compact current representation of Blocks 1–56; original checkpoint blobs are recoverable from pre-compaction Git and verified in CI.
 - `AUDIT_FLATTENED_DOCUMENT_NAMESPACE_FINAL_2026-08-30_EVIDENCE.md` — compact current representation of Blocks 1–56 with historical status wording reconciled to current Registry; original checkpoint blobs are recoverable from pre-compaction Git and verified in CI.
+- `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md` — compact current representation of Blocks 1–56 with historical P-number wording separated from current Registry truth; original checkpoint blobs are recoverable from pre-compaction Git and verified in CI.
 
-### Interruption-safe staged evidence series still retained in the working tree
+### Completed staged-evidence compactions
 
-One series remains for separately proven lossless compaction. Its presence is navigation, not status authority.
+The cleanup set is complete. These four current FINAL documents replace their former interruption-safe BASE/STAGE checkpoint sets while preserving exact history:
 
-- `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_2026-08-30_EVIDENCE.md`, `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_STAGE3_2026-08-30_EVIDENCE.md`, `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md`
+1. `AUDIT_REPLACED_RESOURCE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md`;
+2. `AUDIT_CSS_VISUAL_DEPENDENCY_GRAPH_FINAL_2026-08-30_EVIDENCE.md`;
+3. `AUDIT_FLATTENED_DOCUMENT_NAMESPACE_FINAL_2026-08-30_EVIDENCE.md`;
+4. `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md`.
+
+`project_tools/test_staged_evidence_compaction.py` verifies every original source path/blob from its recorded pre-compaction commit and fails if a retired checkpoint path returns to the current tree.
 
 ## Historical and closure evidence
 

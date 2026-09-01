@@ -58,6 +58,23 @@ SERIES = (
         ),
         "blocks": 56,
     },
+    {
+        "name": "composed-rendered-scope",
+        "source_commit": "948d5ae047fcd91325658b27f614f8afb37005e0",
+        "consolidated": "project_docs/AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md",
+        "sources": {
+            "project_docs/AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_2026-08-30_EVIDENCE.md": "cb97d2be0675a76da0209c8c7044043cf7efa910",
+            "project_docs/AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_STAGE2_2026-08-30_EVIDENCE.md": "7002fafcb2899e7fa811988f09ae23726479cec4",
+            "project_docs/AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_STAGE3_2026-08-30_EVIDENCE.md": "afcbbd355ff39af1c0d829515d03a44dea878052",
+            "project_docs/AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md": "4e36a6d7c7418c2bb8c9a7de6299bfc414ef408b",
+        },
+        "retired": (
+            "project_docs/AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_2026-08-30_EVIDENCE.md",
+            "project_docs/AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_STAGE2_2026-08-30_EVIDENCE.md",
+            "project_docs/AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_STAGE3_2026-08-30_EVIDENCE.md",
+        ),
+        "blocks": 56,
+    },
 )
 
 
