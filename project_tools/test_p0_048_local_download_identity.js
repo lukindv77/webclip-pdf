@@ -92,7 +92,7 @@ assert.match(workerSource, /importScripts\('public-suffix\.js', 'journal-import-
   'service worker must load identity helper before body execution');
 assert.match(workerSource, /listPendingLocalDownloadFallbackIntents\(\)/,
   'reconciliation must load the bounded all-intent set');
-assert.match(workerSource, /WebClipLocalDownloadIdentity\.chooseUniqueDownloadForIntent/,
+assert.match(workerSource, /globalThis\.WebClipLocalDownloadIdentity\?\.chooseUniqueDownloadForIntent/,
   'reconciliation must use unique intent/download classifier');
 assert.match(workerSource, /const existingReq = pending\.get\(id\)/,
   'numeric downloadId binding must inspect existing durable owner');
