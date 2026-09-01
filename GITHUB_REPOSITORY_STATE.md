@@ -108,7 +108,7 @@ Explicit project decision:
 
 This is therefore not an open cleanup defect. Safety relies on PR-first discipline, exact-head CI and re-check before merge, no normal direct writes/force updates to `main`, exact Git history and recovery provenance.
 
-GitHub repository setting `delete_branch_on_merge` is currently `false`. The connected GitHub interface available to this workflow does not expose a repository-settings write action, so this setting is not represented as enabled. Until it is changed manually, merged work-branch refs are non-authoritative and are deleted when possible or aligned to current `main` only after proving no unique useful runtime/audit state remains and preserving the former exact head in PR/Git history.
+GitHub repository setting `delete_branch_on_merge` is currently `true`. Newly merged work branches are therefore removed automatically by GitHub when applicable. Older remote refs that predate or escaped automatic deletion remain non-authoritative and must be reconciled separately: delete them only after proving that no unique useful runtime/audit state would be lost and that the former exact head is preserved in PR/Git history.
 
 ## Build artifacts and historical Releases
 
