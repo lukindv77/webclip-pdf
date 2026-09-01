@@ -68,7 +68,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C02 | SelectionSnapshot restore -> admitted rendered target -> saved copy | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-001, P0-080)` |
 | C03 | Main Content / auto candidate -> actual saved scope | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-160, P0-070/P0-075/P0-080)` |
 | C04 | Ordinary DOM/text baseline | `L4-REVALIDATED / PASS` |
-| C05 | Geometry/layout | `NOT-TRIAGED / UNKNOWN` |
+| C05 | Geometry/layout | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004)` |
 | C06 | Colors/backgrounds/compositing | `NOT-TRIAGED / UNKNOWN` |
 | C07 | Fonts/typography | `NOT-TRIAGED / UNKNOWN` |
 | C08 | Raster images / crop/object-fit | `NOT-TRIAGED / UNKNOWN` |
@@ -164,6 +164,16 @@ The matrix above advances only those specifically exercised coordinates. No hist
 Six physical PDF cases cover ordinary nested block/inline text, Cyrillic text, nested and inline Exclude behavior, `<br>`/`<pre>`/displayed entity text, visible heading/list/table-cell text order and multiple independent Includes. No C04-specific failure was observed, so C04 advances to `L4-REVALIDATED / PASS` within that explicit ordinary-DOM/text boundary.
 
 A concurrent docs-only PR #109 recorded broader C04–C15 observations while this focused C04 evidence was being executed. Those broader observations remain available as supporting/reference evidence, but this matrix deliberately advances **only C04** under the current one-major-audit-task-per-session rule. C05 and every later untested sequential coordinate remain unchanged here.
+
+## Fresh continuation checkpoint — focused C05 geometry/layout
+
+`AUDIT_FULL_RESTART_C05_GEOMETRY_LAYOUT_2026-09-01.md` records the accepted focused C05 physical tranche. Its accepted execution is Chrome for Testing `152.0.7977.64`, workflow run `33506314081`, job `99851081249`, exact evidence head `9e59102234d8a9021a3c793a569161c461ea2958`, conclusion SUCCESS.
+
+Fifteen physical PDF cases cover ordinary flow, flex, grid, inline fragmentation, relative/absolute/fixed positioning, selected descendant transforms, min/max/clamp sizing, page-owned width/transform contexts, nested percentage sizing, fixed table layout, vertical writing, multicolumn layout and Exclude-induced flex reflow. The acceptance model is scale-invariant where a uniform CSS-px -> PDF-point scaling is legitimate.
+
+Fourteen cases are positive controls. `body_width_context` specifically demonstrates that root width normalization can change absolute CSS widths while preserving the selected/ancestor ratio in the physical PDF, so it is not misclassified as a defect. `body_transform_context` independently revalidates existing **P0-004 ACTIVE**: removing a page-owned ancestor transform changes the selected/ancestor geometry ratio materially beyond uniform page scaling. No new P-code is allocated.
+
+C05 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004)` within the explicit C05 boundary. C06 and every later untested sequential coordinate remain unchanged here.
 
 ## Delivery rule
 
