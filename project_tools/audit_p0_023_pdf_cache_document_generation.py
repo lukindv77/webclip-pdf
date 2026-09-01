@@ -17,7 +17,8 @@ from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GUARD = ROOT / "pdf-cache-document-generation-guard.js"
-BOOTSTRAP = ROOT / "journal-text-filter.js"
+BOOTSTRAP = ROOT / "service-worker-bootstrap.js"
+MANIFEST = ROOT / "manifest.json"
 WORKER = ROOT / "service-worker.js"
 
 
@@ -28,6 +29,7 @@ def sha256(data: bytes) -> str:
 def assert_source() -> dict[str, str]:
     guard = GUARD.read_text(encoding="utf-8")
     bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
+    manifest = MANIFEST.read_text(encoding="utf-8")
     worker = WORKER.read_text(encoding="utf-8")
     required = [
         "WEBCLIP_PDF_CACHE_DOCUMENT_MISMATCH",
@@ -36,19 +38,25 @@ def assert_source() -> dict[str, str]:
         "WEBCLIP_SEND_PDF_TO_YANDEX",
         "WEBCLIP_RETRY_PDF_TO_YANDEX",
         "WEBCLIP_DOWNLOAD_CACHED_PDF",
-        "response?.cached === true",
         "chromeApi?.storage?.session",
+        "installObserver",
+        "installFunctionGuards",
     ]
     for fragment in required:
         if fragment not in guard:
             raise AssertionError(f"P0-023 guard missing invariant: {fragment}")
-    if "pdf-cache-document-generation-guard.js" not in bootstrap:
-        raise AssertionError("worker bootstrap does not install P0-023 guard")
+    if bootstrap.index("installObserver") > bootstrap.index("importScripts('service-worker.js')"):
+        raise AssertionError("P0-023 sender observer must register before product worker")
+    if bootstrap.index("installFunctionGuards") < bootstrap.index("importScripts('service-worker.js')"):
+        raise AssertionError("P0-023 function wrappers must install after product worker functions exist")
+    if '"service_worker": "service-worker-bootstrap.js"' not in manifest:
+        raise AssertionError("manifest does not route MV3 worker through P0-023 bootstrap")
     if "return `tab:${tabId}`" not in worker or "currentUrl !== cachedUrl" not in worker:
         raise AssertionError("current tab-scoped/URL-only cache boundary changed; re-audit required")
     return {
         "guard_sha256": sha256(GUARD.read_bytes()),
         "bootstrap_sha256": sha256(BOOTSTRAP.read_bytes()),
+        "manifest_sha256": sha256(MANIFEST.read_bytes()),
         "service_worker_sha256": sha256(WORKER.read_bytes()),
     }
 
@@ -73,30 +81,48 @@ def build_extension(output: pathlib.Path, page_origin: str) -> pathlib.Path:
     shutil.copy2(GUARD, ext / GUARD.name)
     (ext / "sw.js").write_text(
         """importScripts('pdf-cache-document-generation-guard.js');
+const observerInstall = WebClipPdfCacheDocumentGenerationGuard.installObserver();
+if (!observerInstall?.installed) throw new Error('observer install failed');
+
 const calls = [];
 let generationCached = true;
+async function generatePdfAndUploadToYandex(tabId) {
+  calls.push({fn:'generate', tabId:Number(tabId || 0)});
+  return {ok:false, cached:generationCached, filename:generationCached ? 'cached.pdf' : '', error:generationCached ? 'fixture cached failure' : 'fixture pre-cache failure'};
+}
+async function retryCachedPdfUploadToYandex(tabId) {
+  calls.push({fn:'retry', tabId:Number(tabId || 0)});
+  return {ok:true, reusedCachedPdf:true};
+}
+async function downloadCachedPdf(tabId) {
+  calls.push({fn:'download', tabId:Number(tabId || 0)});
+  return {ok:true, downloadedCachedPdf:true};
+}
+async function deleteCachedPdf(tabId) {
+  calls.push({fn:'delete', tabId:Number(tabId || 0)});
+  return true;
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const type = String(message?.type || '');
-  calls.push({type, tabId: Number(sender?.tab?.id || 0), documentId: String(sender?.documentId || '')});
-  if (type === 'WEBCLIP_SEND_PDF_TO_YANDEX') {
-    sendResponse({ok:false, cached:generationCached, filename:generationCached ? 'cached.pdf' : '', error:generationCached ? 'fixture cached failure' : 'fixture pre-cache failure'});
-    return false;
-  }
-  if (type === 'WEBCLIP_RETRY_PDF_TO_YANDEX' || type === 'WEBCLIP_DOWNLOAD_CACHED_PDF') {
-    sendResponse({ok:true, reusedCachedPdf:true});
-    return false;
-  }
-  if (type === 'WEBCLIP_INVALIDATE_PDF_CACHE') {
-    sendResponse({ok:true});
-    return false;
-  }
-  if (type === 'AUDIT_PROBE') {
-    sendResponse({ok:true, documentId:String(sender?.documentId || '')});
-    return false;
-  }
-  sendResponse({ok:true});
-  return false;
+  const tabId = Number(sender?.tab?.id || 0);
+  const run = async () => {
+    if (type === 'WEBCLIP_SEND_PDF_TO_YANDEX') return generatePdfAndUploadToYandex(tabId);
+    if (type === 'WEBCLIP_RETRY_PDF_TO_YANDEX') return retryCachedPdfUploadToYandex(tabId);
+    if (type === 'WEBCLIP_DOWNLOAD_CACHED_PDF') return downloadCachedPdf(tabId);
+    if (type === 'WEBCLIP_INVALIDATE_PDF_CACHE') { await deleteCachedPdf(tabId); return {ok:true}; }
+    if (type === 'AUDIT_PROBE') return {ok:true, documentId:String(sender?.documentId || '')};
+    return {ok:true};
+  };
+  run().then(
+    (value) => sendResponse(value),
+    (error) => sendResponse({ok:false, code:String(error?.code || ''), error:error?.message || String(error)})
+  );
+  return true;
 });
+
+const functionInstall = WebClipPdfCacheDocumentGenerationGuard.installFunctionGuards(globalThis);
+if (!functionInstall?.installed) throw new Error('function guard install failed');
 globalThis.__audit = {
   calls,
   setGenerationCached(value) { generationCached = Boolean(value); },
@@ -220,7 +246,7 @@ def main() -> int:
             if mismatch.get("code") != "WEBCLIP_PDF_CACHE_DOCUMENT_MISMATCH":
                 raise AssertionError(f"same-URL replacement was not rejected by generation guard: {mismatch}")
             if calls_after_mismatch != calls_before_mismatch:
-                raise AssertionError("mismatched retry reached product cache handler")
+                raise AssertionError("mismatched retry reached product cache function")
 
             worker.evaluate("__audit.setGenerationCached(false)")
             failed_b = via_content({"type": "WEBCLIP_SEND_PDF_TO_YANDEX"})
