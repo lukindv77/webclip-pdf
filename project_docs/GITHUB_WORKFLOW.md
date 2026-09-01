@@ -85,6 +85,25 @@ Permanent workflows must remain read-only with respect to the repository: `conte
 
 This does not make GitHub-hosted infrastructure mathematically immutable: GitHub can update the `ubuntu-24.04` runner image. It does ensure that action source revisions and language runtime versions cannot silently drift through mutable workflow refs. Updating a pin/version is a normal reviewed PR with full integrity checks.
 
+## GitHub Actions usage minimization
+
+GitHub Actions are an **independent verification and environment-boundary layer**, not the default interactive development/debugging environment. The project minimizes runner usage without weakening required evidence or delivery gates.
+
+Permanent operating rules:
+
+1. **Local-first preflight.** Before the first substantive push of a logical change, all checks that can truthfully run in the available local/tool environment should be completed there first: Python compile/checkers, deterministic model/unit/integration tests, JavaScript syntax/tests, Registry/Matrix/release-readiness consistency and diff/staleness guards. A failing deterministic checker should normally be debugged locally rather than through repeated push→Actions cycles.
+2. **Actions remain mandatory at delivery boundaries.** A normal PR still requires one green `repository-integrity` run for the exact reviewed PR head and one green post-merge `repository-integrity` run for the exact resulting canonical `main`. These two gates are not removed merely to save Actions minutes.
+3. **Remote browser evidence is exception-driven.** GitHub-hosted Chrome/OS execution is used when the acceptance claim requires L3/L4/L5 evidence that the local environment cannot honestly supply—for example current Chrome renderer semantics, physical PDF evidence, a runner-specific platform boundary or another explicitly external environment. Lower-level deterministic checks do not move to Actions merely because a remote runner is convenient.
+4. **No CI-as-debugger loop by default.** Intermediate commits should be batched into a coherent locally preflighted head before push where practical. Every push must have a durable reason; repeated tiny pushes solely to discover ordinary syntax/checker failures are process noise.
+5. **Reuse evidence under Change Impact.** Existing physical/browser evidence is not rerun automatically when relevant runtime, contract, browser semantics and fixture assumptions are unchanged. `AUDIT_COVERAGE_CAMPAIGN_POLICY.md` Change Impact rules decide when revalidation is required.
+6. **Avoid one-off workflows when a reusable path exists.** Browser/audit runs should prefer an existing parameterized or otherwise reusable workflow. A temporary workflow is justified only when the required environment/evidence cannot be expressed through the current permanent workflows; it must be removed before merge unless separately promoted by an explicit infrastructure decision.
+7. **Path/scope selectivity for heavy checks.** New heavy workflows must use the narrowest truthful trigger/change-impact scope practical. Documentation-only or audit-tooling-only changes must not cause unrelated Chrome/PDF/Yandex evidence reruns unless their change impact actually invalidates that evidence.
+8. **Caching is allowed only as an execution optimization.** Safe caches for immutable browser archives, language packages or build dependencies may reduce Actions minutes, but a cache hit never changes the acceptance/evidence requirement and must not become a second source of truth.
+9. **Local limitation must be explicit.** If the available local browser/runtime is too old or otherwise unsuitable, it may be used for lower-level development controls but must not be cited as current-feature evidence. The required remote/current environment is then a deliberate evidence run, not a reason to move the whole development loop into CI.
+10. **Optimization must not weaken truthfulness.** Actions minimization may reduce duplicate executions, pushes and runner minutes; it must not skip an evidence layer required by the claim, bypass exact-SHA verification, weaken TOCTOU, suppress post-merge validation or convert an external/unknown boundary into a synthetic PASS.
+
+Target operating shape: the large majority of checker/test development happens before push; GitHub Actions are concentrated on the two delivery integrity gates plus the comparatively small set of current-browser/physical/external evidence runs that genuinely require hosted infrastructure.
+
 ## Automated integrity gate
 
 `.github/workflows/repository-integrity.yml` запускается на push/PR в `main` и вручную. Он подтверждает:
