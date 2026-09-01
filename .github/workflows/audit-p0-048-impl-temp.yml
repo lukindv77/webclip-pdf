@@ -1,0 +1,33 @@
+name: Audit P0-048 local download identity implementation temporary
+
+on:
+  push:
+    branches:
+      - fix/p0-048-local-download-identity-2026-09-01
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Apply and verify P0-048 patch
+        run: |
+          set -euo pipefail
+          python project_tools/_p0_048_patch_temp.py
+          node --check service-worker.js
+          node --check local-download-identity.js
+          node project_tools/test_p0_048_local_download_identity.js
+          git diff --check
+          rm project_tools/_p0_048_patch_temp.py .github/workflows/audit-p0-048-impl-temp.yml
+          git config user.name lukindv77
+          git config user.email lukindv@gmail.com
+          git add -A
+          git commit -m 'fix: make local download fallback identity unambiguous'
+          git push origin HEAD:fix/p0-048-local-download-identity-2026-09-01
