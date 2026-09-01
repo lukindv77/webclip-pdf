@@ -97,7 +97,7 @@ Automation должна направлять обычную разработку
 
 ### 5. Local-first research execution
 
-Deterministic/static/model checks выполняются локально, если это возможно. Remote Actions evidence запускается только по environment need или mandatory gate. Семантический **Комплексный исследование проекта** выполняется по fresh current state и не переносится в CI как автоматический LLM authority.
+Deterministic/static/model checks выполняются локально, если это возможно. Remote Actions evidence запускается только по environment need или mandatory gate. Семантическое **Комплексное исследование проекта** выполняется по fresh current state и не переносится в CI как автоматический LLM authority.
 
 ### 6. Reproducible schedules
 
