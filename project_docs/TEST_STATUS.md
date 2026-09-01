@@ -16,7 +16,7 @@ The project documentation may refer to `0.9.9 WIP`; that is not the manifest ver
 
 GitHub Actions workflow `Repository integrity` is the current automated gate for an exact commit/PR head. It runs:
 
-- repository/audit consistency checker;
+- repository/research consistency checker;
 - release-readiness schema/status validation (`NOT READY` is valid WIP state);
 - JavaScript syntax for every tracked `.js` file via `node --check`;
 - all current `project_tools/test_*.js` deterministic JavaScript test files;
@@ -28,7 +28,7 @@ The repository-hygiene PR immediately preceding this policy change demonstrated 
 
 ## Historical product gate
 
-Before the later audit/consolidation stream, the historical documented checkpoint was:
+Before the later research/consolidation stream, the historical documented checkpoint was:
 
 - **88/88 JavaScript syntax PASS**
 - **74/74 deterministic tests PASS**
@@ -56,17 +56,17 @@ Before claiming a `0.9.9` release or raising the manifest version, the project s
 3. real Chrome `chrome.debugger` / `Page.printToPDF` path under the actual extension, not only managed harness boundaries;
 4. real Chrome automatic download / native Save As / terminal DownloadItem behavior and relevant late-settlement/recovery scenarios;
 5. real Yandex OAuth/API E2E for the currently required account/auth/root/capability identity contract;
-6. real Yandex upload/move/publish/unpublish/delete/backup/restore behavior, including failure/timeout/unknown-settlement and account/root switching scenarios required by open audit owners;
+6. real Yandex upload/move/publish/unpublish/delete/backup/restore behavior, including failure/timeout/unknown-settlement and account/root switching scenarios required by open research owners;
 7. focused review/regression verification for open P0/P1 owners that affect the release-critical flow;
 8. explicit release decision with durable evidence reference.
 
-Enterprise policy in the historical audit environment blocked normal unpacked-extension loading; the project intentionally did not bypass that policy and therefore did not count it as a PASS. Exact historical environment details are retained in `TEST_EVIDENCE.md` rather than here.
+Enterprise policy in the historical research environment blocked normal unpacked-extension loading; the project intentionally did not bypass that policy and therefore did not count it as a PASS. Exact historical environment details are retained in `TEST_EVIDENCE.md` rather than here.
 
 ## Release policy
 
 Until the applicable real release QA is completed and an explicit release decision is made:
 
-- do not bump `manifest.json` from `0.9.8` to `0.9.9` merely because audit/docs advanced;
+- do not bump `manifest.json` from `0.9.8` to `0.9.9` merely because research/docs advanced;
 - do not describe `0.9.9` as released;
 - do not create a release build/tag/GitHub Release merely because deterministic CI is green;
 - do not reinterpret historical gate counts as current reruns;

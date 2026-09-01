@@ -18,25 +18,25 @@ WebClip должен сохранять копии страниц сайта с 
 
 `SESSION_EXECUTION_AND_INTERRUPTION_SAFETY_POLICY.md` является обязательной project-wide policy для длинной инструментальной работы. Каждая содержательная сессия должна начинаться с проверки незавершённого durable state и краткого отчёта пользователю о точке продолжения, плане, способности завершить взятые блоки и рисках переноса. Объём работы рассчитывается на максимально полезное использование всего инструментального окна, а substantive progress сохраняется этапами в durable checkpoints, достаточных для гарантированного продолжения после неожиданного прерывания.
 
-## Постоянное правило внешнего user-intent research для глубокого аудита
+## Постоянное правило внешнего user-intent research для глубокого исследования
 
-`AUDIT_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md` является обязательным входом в выбор и приоритизацию deep-audit operations/surfaces и одновременно в product discovery. Во время активного глубокого аудита WebClip должен регулярно сверять User Intent / Operation Map с актуальным опытом пользователей похожих и пересекающихся решений по official developer materials/demos, GitHub projects/issues/discussions, reviews/comparisons, Reddit/другим пользовательским форумам и web-archiving practices. Внешний опыт используется для выявления реальных пользовательских задач, ожиданий, recurring pain и кандидатных новых функций/режимов/UX-улучшений, но не автоматически копирует чужой product contract в WebClip. Текущие датированные baseline/user-intent и Product Opportunity Map хранятся отдельными durable research-evidence документами и refresh-ятся по freshness rules policy.
+`RESEARCH_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md` является обязательным входом в выбор и приоритизацию deep-research operations/surfaces и одновременно в product discovery. Во время активного глубокого исследования WebClip должен регулярно сверять User Intent / Operation Map с актуальным опытом пользователей похожих и пересекающихся решений по official developer materials/demos, GitHub projects/issues/discussions, reviews/comparisons, Reddit/другим пользовательским форумам и web-archiving practices. Внешний опыт используется для выявления реальных пользовательских задач, ожиданий, recurring pain и кандидатных новых функций/режимов/UX-улучшений, но не автоматически копирует чужой product contract в WebClip. Текущие датированные baseline/user-intent и Product Opportunity Map хранятся отдельными durable research-evidence документами и refresh-ятся по freshness rules policy.
 
-## Постоянная модель систематического глубокого аудита
+## Постоянная модель систематического глубокого исследования
 
-`AUDIT_COVERAGE_CAMPAIGN_POLICY.md` является обязательной методикой deep audit. Аудит ведётся не по количеству P-кодов или audit blocks, а через Coverage Matrix по end-to-end boundaries и material surface families с evidence ladder L1–L5, explicit controls, risk ranking, finite deep-dive tranche envelope, root-cause saturation и closure re-audit после implementation.
+`RESEARCH_COVERAGE_CAMPAIGN_POLICY.md` является обязательной методикой deep research. Исследование ведётся не по количеству P-кодов или research blocks, а через Coverage Matrix по end-to-end boundaries и material surface families с evidence ladder L1–L5, explicit controls, risk ranking, finite deep-dive tranche envelope, root-cause saturation и closure re-research после implementation.
 
 Основной campaign cycle:
 
 `Coverage Sweep -> Risk Ranking -> Deep-Dive Tranches -> Closure Sweep -> Coverage Reconciliation -> Final Synthesis`.
 
-Audit completeness и implementation closure разделены. Surface может быть audit-complete с outcome `FINDING`, пока её P-owner остаётся ACTIVE. `DEEP-AUDIT-COVERAGE-COMPLETE` можно объявить только когда все CORE families triaged, все material relevant cells достигли required evidence либо имеют явный external/limitation/out-of-scope state, findings имеют root-cause ownership и необъяснённых NOT-AUDITED областей нет. `DEEP-AUDIT-CRITICAL-CLOSURE-COMPLETE` и `RELEASE-READY` являются отдельными более сильными состояниями.
+Research completeness и implementation closure разделены. Surface может быть research-complete с outcome `FINDING`, пока её P-owner остаётся ACTIVE. `DEEP-RESEARCH-COVERAGE-COMPLETE` можно объявить только когда все CORE families triaged, все material relevant cells достигли required evidence либо имеют явный external/limitation/out-of-scope state, findings имеют root-cause ownership и необъяснённых NOT-RESEARCHED областей нет. `DEEP-RESEARCH-CRITICAL-CLOSURE-COMPLETE` и `RELEASE-READY` являются отдельными более сильными состояниями.
 
-Первая фактическая реконструкция текущей coverage хранится в `AUDIT_COVERAGE_RECONSTRUCTION_2026-08-30.md`. Она консервативно зачла существующие physical/render evidence и выделила новые contract-specific `REVALIDATION-REQUIRED` gaps вместо автоматического превращения близких исторических probes в PASS.
+Первая фактическая реконструкция текущей coverage хранится в `RESEARCH_COVERAGE_RECONSTRUCTION_2026-08-30.md`. Она консервативно зачла существующие physical/render evidence и выделила новые contract-specific `REVALIDATION-REQUIRED` gaps вместо автоматического превращения близких исторических probes в PASS.
 
 ## Нормативный контракт текущего основного PDF-режима
 
-`WEBCLIP_PDF_FIDELITY_CONTRACT.md` является обязательным product/architecture и deep-audit contract текущего основного PDF. Этот режим является осознанным гибридом **fidelity + bounded static completeness**.
+`WEBCLIP_PDF_FIDELITY_CONTRACT.md` является обязательным product/architecture и deep-research contract текущего основного PDF. Этот режим является осознанным гибридом **fidelity + bounded static completeness**.
 
 Ключевые границы:
 

@@ -194,7 +194,7 @@ function descendants(root) {
   assert.match(popup, /readLaterButton[\s\S]*await ensureTopContentScript\(tab\.id\)/);
   assert.match(sharedWorkerBootstrap, /importScripts\('pdf-print-guard\.js',\s*'content-injection-guard\.js',\s*'operation-log-redaction-guard\.js'\)/);
   const deepCloneCalls = content.match(/\.cloneNode\(true\)/g) || [];
-  assert.equal(deepCloneCalls.length, 1, 'content.js must retain one audited deep-clone interception boundary');
+  assert.equal(deepCloneCalls.length, 1, 'content.js must retain one researched deep-clone interception boundary');
   assert.match(content, /proxy\.appendChild\(node\.cloneNode\(true\)\)/);
 })();
 

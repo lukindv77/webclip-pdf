@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Validate PR-level coupling between runtime changes, audit ownership and tests.
+"""Validate PR-level coupling between runtime changes, research ownership and tests.
 
 This checker is intentionally local/network-free. In GitHub Actions it receives the
 exact PR base/head SHAs and PR body, computes the changed-file set, and fails closed
-when a product-runtime or canonical-audit change is not accompanied by an explicit
+when a product-runtime or canonical-research change is not accompanied by an explicit
 impact declaration and the required durable evidence.
 """
 
@@ -21,20 +21,22 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 P_CODE = re.compile(r"\bP[012]-\d{3}\b")
 CHECKED = r"\[[xX]\]"
-AUDIT_NONE = re.compile(rf"^\s*-\s*{CHECKED}\s*`?audit-impact:\s*none`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
-AUDIT_OWNER = re.compile(rf"^\s*-\s*{CHECKED}\s*`?audit-impact:\s*owner`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
+RESEARCH_NONE = re.compile(rf"^\s*-\s*{CHECKED}\s*`?research-impact:\s*none`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
+RESEARCH_STRUCTURAL = re.compile(rf"^\s*-\s*{CHECKED}\s*`?research-impact:\s*structural`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
+RESEARCH_OWNER = re.compile(rf"^\s*-\s*{CHECKED}\s*`?research-impact:\s*owner`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
 TEST_EXTERNAL_ONLY = re.compile(rf"^\s*-\s*{CHECKED}\s*`?test-impact:\s*external-only`?(?:\s|$)", re.MULTILINE | re.IGNORECASE)
-AUDIT_RATIONALE = re.compile(r"^\s*`?audit-rationale:\s*(.*?)`?\s*$", re.MULTILINE | re.IGNORECASE)
+RESEARCH_RATIONALE = re.compile(r"^\s*`?research-rationale:\s*(.*?)`?\s*$", re.MULTILINE | re.IGNORECASE)
 
 RUNTIME_SUFFIXES = {".js", ".html", ".css", ".png", ".svg", ".ico", ".webp"}
 RUNTIME_DIRS = {"assets", "icons"}
-REGISTRY = "project_docs/AUDIT_REGISTRY.md"
+REGISTRY = "project_docs/RESEARCH_REGISTRY.md"
 READINESS = "project_docs/RELEASE_READINESS.md"
 TEST_STATUS = "project_docs/TEST_STATUS.md"
 TEMPLATE_MARKERS = (
-    "audit-impact: none",
-    "audit-impact: owner",
-    "audit-rationale:",
+    "research-impact: none",
+    "research-impact: structural",
+    "research-impact: owner",
+    "research-rationale:",
     "test-impact: external-only",
     "P-owner(s) affected",
     "PR change-contract validation",
@@ -67,11 +69,11 @@ def is_runtime_path(path: str) -> bool:
     return bool(p.parts and p.parts[0] in RUNTIME_DIRS)
 
 
-def is_audit_evidence_path(path: str) -> bool:
-    if path == REGISTRY or path == "project_docs/AUDIT_HISTORY_INDEX.md":
+def is_research_evidence_path(path: str) -> bool:
+    if path == REGISTRY or path == "project_docs/RESEARCH_HISTORY_INDEX.md":
         return True
     name = pathlib.PurePosixPath(path).name
-    return path.startswith("project_docs/") and name.startswith("AUDIT_") and name.endswith("_EVIDENCE.md")
+    return path.startswith("project_docs/") and name.startswith("RESEARCH_") and name.endswith("_EVIDENCE.md")
 
 
 def is_deterministic_test_path(path: str) -> bool:
@@ -83,8 +85,8 @@ def selected(pattern: re.Pattern[str], body: str) -> bool:
     return bool(pattern.search(body or ""))
 
 
-def audit_rationale(body: str) -> str:
-    match = AUDIT_RATIONALE.search(body or "")
+def research_rationale(body: str) -> str:
+    match = RESEARCH_RATIONALE.search(body or "")
     if not match:
         return ""
     return match.group(1).strip().strip("`").strip()
@@ -125,52 +127,62 @@ def evaluate(changed: Sequence[str], body: str, texts: Mapping[str, str] | None 
     errors: list[str] = []
 
     runtime = sorted(path for path in changed_set if is_runtime_path(path))
-    audit_files = sorted(path for path in changed_set if is_audit_evidence_path(path))
+    research_files = sorted(path for path in changed_set if is_research_evidence_path(path))
     deterministic_tests = sorted(path for path in changed_set if is_deterministic_test_path(path))
     registry_changed = REGISTRY in changed_set
     manifest_changed = "manifest.json" in changed_set
 
-    impact_none = selected(AUDIT_NONE, body)
-    impact_owner = selected(AUDIT_OWNER, body)
+    impact_none = selected(RESEARCH_NONE, body)
+    impact_structural = selected(RESEARCH_STRUCTURAL, body)
+    impact_owner = selected(RESEARCH_OWNER, body)
     external_only = selected(TEST_EXTERNAL_ONLY, body)
-    rationale = audit_rationale(body)
+    rationale = research_rationale(body)
 
-    if impact_none and impact_owner:
-        errors.append("select exactly one audit-impact declaration; both none and owner are checked")
+    selected_count = sum((impact_none, impact_structural, impact_owner))
+    if selected_count > 1:
+        errors.append("select exactly one research-impact declaration: none, structural, or owner")
 
-    requires_audit_declaration = bool(runtime or audit_files)
-    if requires_audit_declaration and not (impact_none or impact_owner):
-        errors.append("runtime/audit change requires one checked declaration: audit-impact: none OR audit-impact: owner")
+    requires_research_declaration = bool(runtime or research_files)
+    if requires_research_declaration and selected_count == 0:
+        errors.append("runtime/research change requires one checked declaration: research-impact: none, structural, or owner")
 
     if runtime and not concrete_rationale(rationale):
-        errors.append("every runtime change requires a concrete non-placeholder audit-rationale")
+        errors.append("every runtime change requires a concrete non-placeholder research-rationale")
 
-    if audit_files and impact_none:
-        errors.append("audit-impact: none is inconsistent with changed canonical audit registry/evidence files")
+    if research_files and impact_none:
+        errors.append("research-impact: none is inconsistent with changed canonical research registry/evidence files")
+
+    if impact_structural:
+        if runtime:
+            errors.append("research-impact: structural is restricted to non-runtime structural/terminology/provenance changes")
+        if not research_files:
+            errors.append("research-impact: structural requires changed canonical research registry/evidence files")
+        if not concrete_rationale(rationale):
+            errors.append("research-impact: structural requires a concrete non-placeholder research-rationale")
 
     codes = sorted(set(P_CODE.findall(body or "")))
     if impact_owner and not codes:
-        errors.append("audit-impact: owner requires at least one explicit P-code in the PR body")
+        errors.append("research-impact: owner requires at least one explicit P-code in the PR body")
 
-    if impact_owner and not audit_files:
-        errors.append("audit-impact: owner requires durable AUDIT_REGISTRY/family/history evidence in the PR diff")
+    if impact_owner and not research_files:
+        errors.append("research-impact: owner requires durable RESEARCH_REGISTRY/family/history evidence in the PR diff")
 
-    if impact_owner and audit_files and codes:
-        evidence_text = "\n".join(texts.get(path, "") for path in audit_files)
+    if impact_owner and research_files and codes:
+        evidence_text = "\n".join(texts.get(path, "") for path in research_files)
         if evidence_text and not any(code in evidence_text for code in codes):
-            errors.append("none of the declared P-codes appears in the changed durable audit evidence")
+            errors.append("none of the declared P-codes appears in the changed durable research evidence")
 
-    if registry_changed and not impact_owner:
-        errors.append("AUDIT_REGISTRY.md change requires audit-impact: owner")
-    if registry_changed and len(audit_files) < 2:
-        errors.append("AUDIT_REGISTRY.md change requires a second durable audit evidence/history file in the same PR")
+    if registry_changed and not (impact_owner or impact_structural):
+        errors.append("RESEARCH_REGISTRY.md change requires research-impact: owner or structural")
+    if registry_changed and impact_owner and len(research_files) < 2:
+        errors.append("RESEARCH_REGISTRY.md owner change requires a second durable research evidence/history file in the same PR")
 
     if runtime and impact_owner:
         if deterministic_tests and external_only:
             errors.append("test-impact: external-only cannot be checked when deterministic tests are changed in the same PR")
         if not deterministic_tests and not external_only:
             errors.append(
-                "runtime + audit-impact: owner requires a changed deterministic project_tools/test_*.js "
+                "runtime + research-impact: owner requires a changed deterministic project_tools/test_*.js "
                 "or checked test-impact: external-only"
             )
         if deterministic_tests and not external_only and codes:
@@ -183,7 +195,7 @@ def evaluate(changed: Sequence[str], body: str, texts: Mapping[str, str] | None 
                 )
 
     if external_only and not impact_owner:
-        errors.append("test-impact: external-only is valid only with audit-impact: owner")
+        errors.append("test-impact: external-only is valid only with research-impact: owner")
 
     if manifest_changed:
         missing = [path for path in (READINESS, TEST_STATUS) if path not in changed_set]
@@ -240,10 +252,10 @@ def main() -> int:
         return 1
 
     runtime_count = sum(1 for path in changed if is_runtime_path(path))
-    audit_count = sum(1 for path in changed if is_audit_evidence_path(path))
+    research_count = sum(1 for path in changed if is_research_evidence_path(path))
     print(
         "PR change contract PASS: "
-        f"changed={len(changed)}, runtime={runtime_count}, audit={audit_count}."
+        f"changed={len(changed)}, runtime={runtime_count}, research={research_count}."
     )
     return 0
 

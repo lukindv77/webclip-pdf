@@ -17,16 +17,16 @@ POLICY = DOCS / "CONTEXT_AUTOMATION_POLICY.md"
 EXPECTED_SCHEMA = "WEBCLIP_CONTEXT_MANIFEST_V1"
 EXPECTED_TRIGGER = "Подготовь переход в новый чат"
 EXPECTED_AUTHORITIES = {
-    "audit_status": "project_docs/AUDIT_REGISTRY.md",
-    "audit_navigation": "project_docs/AUDIT_DELTA_INDEX.md",
+    "research_status": "project_docs/RESEARCH_REGISTRY.md",
+    "research_navigation": "project_docs/RESEARCH_DELTA_INDEX.md",
     "test_status": "project_docs/TEST_STATUS.md",
     "release_readiness": "project_docs/RELEASE_READINESS.md",
 }
 FORBIDDEN_CURRENT_RESTORE_MARKERS = (
-    "читать `project_docs/AUDIT_DELTA_*.md`",
-    "read `project_docs/AUDIT_DELTA_*.md`",
-    "AUDIT_CONSOLIDATION_INDEX.md",
-    "DOCUMENTATION_CONSISTENCY_AUDIT.md",
+    "читать `project_docs/RESEARCH_DELTA_*.md`",
+    "read `project_docs/RESEARCH_DELTA_*.md`",
+    "RESEARCH_CONSOLIDATION_INDEX.md",
+    "DOCUMENTATION_CONSISTENCY_RESEARCH.md",
     "PROJECT_RECOVERY.md",
     "QA_STATUS_0_9_9.md",
 )
@@ -99,9 +99,9 @@ def validate_restore_and_policy(restore_text: str, policy_text: str) -> list[str
     errors: list[str] = []
     for marker in (
         "CONTEXT_MANIFEST.json",
-        "AUDIT_REGISTRY.md",
-        "AUDIT_DELTA_INDEX.md",
-        "AUDIT_FAMILY_*_EVIDENCE.md",
+        "RESEARCH_REGISTRY.md",
+        "RESEARCH_DELTA_INDEX.md",
+        "RESEARCH_FAMILY_*_EVIDENCE.md",
         EXPECTED_TRIGGER,
     ):
         if marker not in restore_text:
@@ -119,7 +119,7 @@ def validate_restore_and_policy(restore_text: str, policy_text: str) -> list[str
         "CONTEXT_MANIFEST.json",
         "14 постоянных правил автоматизации",
         "P work index",
-        "Differential audit",
+        "Differential research",
         "Seeded race",
         "Post-merge review automation",
         "Regular GitHub health review",

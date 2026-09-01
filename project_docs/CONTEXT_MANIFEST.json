@@ -5,15 +5,17 @@
   "fresh_main_required": true,
   "authorities": {
     "source": "fresh_main_head",
-    "audit_status": "project_docs/AUDIT_REGISTRY.md",
-    "audit_navigation": "project_docs/AUDIT_DELTA_INDEX.md",
+    "research_status": "project_docs/RESEARCH_REGISTRY.md",
+    "research_navigation": "project_docs/RESEARCH_DELTA_INDEX.md",
     "test_status": "project_docs/TEST_STATUS.md",
-    "release_readiness": "project_docs/RELEASE_READINESS.md"
+    "release_readiness": "project_docs/RELEASE_READINESS.md",
+    "research_scope_policy": "project_docs/COMPREHENSIVE_PROJECT_RESEARCH_POLICY.md"
   },
   "bootstrap": [
     "GITHUB_REPOSITORY_STATE.md",
-    "project_docs/AUDIT_REGISTRY.md",
-    "project_docs/AUDIT_DELTA_INDEX.md",
+    "project_docs/COMPREHENSIVE_PROJECT_RESEARCH_POLICY.md",
+    "project_docs/RESEARCH_REGISTRY.md",
+    "project_docs/RESEARCH_DELTA_INDEX.md",
     "project_docs/TEST_STATUS.md"
   ],
   "profiles": {
@@ -23,14 +25,15 @@
       "project_docs/WEBCLIP_COPY_ARCHITECTURE_POLICY.md",
       "project_docs/GITHUB_WORKFLOW.md"
     ],
-    "audit": [
-      "project_docs/AUDIT_FULL_RESTART_2026-09-01_BASELINE.md",
-      "project_docs/AUDIT_FULL_RESTART_SWEEP1_SOURCE_2026-09-01.md",
-      "project_docs/AUDIT_FULL_RESTART_SELECTION_GENERATION_2026-09-01.md",
-      "project_docs/AUDIT_FULL_RESTART_RENDER_FIDELITY_2026-09-01.md",
-      "project_docs/AUDIT_HISTORY_INDEX.md",
-      "project_docs/AUDIT_EVIDENCE.md",
-      "project_docs/AUDIT_FORMAT_NEUTRAL_CAPTURE_RESEARCH_EVIDENCE.md",
+    "research": [
+      "project_docs/COMPREHENSIVE_PROJECT_RESEARCH_POLICY.md",
+      "project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md",
+      "project_docs/RESEARCH_FULL_RESTART_SWEEP1_SOURCE_2026-09-01.md",
+      "project_docs/RESEARCH_FULL_RESTART_SELECTION_GENERATION_2026-09-01.md",
+      "project_docs/RESEARCH_FULL_RESTART_RENDER_FIDELITY_2026-09-01.md",
+      "project_docs/RESEARCH_HISTORY_INDEX.md",
+      "project_docs/RESEARCH_EVIDENCE.md",
+      "project_docs/RESEARCH_FORMAT_NEUTRAL_CAPTURE_RESEARCH_EVIDENCE.md",
       "project_docs/WEBCLIP_COPY_ARCHITECTURE_POLICY.md",
       "project_docs/TEST_EVIDENCE.md"
     ],
@@ -48,11 +51,11 @@
       "project_docs/BUILD_AND_RECOVERY_RULES.md"
     ]
   },
-  "audit_evidence_discovery": {
-    "family_index": "project_docs/AUDIT_DELTA_INDEX.md",
-    "family_pattern": "project_docs/AUDIT_FAMILY_*_EVIDENCE.md",
-    "crosscutting": "project_docs/AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md",
-    "retired_history": "project_docs/AUDIT_RETIRED_DELTA_EVIDENCE.md"
+  "research_evidence_discovery": {
+    "family_index": "project_docs/RESEARCH_DELTA_INDEX.md",
+    "family_pattern": "project_docs/RESEARCH_FAMILY_*_EVIDENCE.md",
+    "crosscutting": "project_docs/RESEARCH_CROSSCUTTING_REVALIDATION_EVIDENCE.md",
+    "retired_history": "project_docs/RESEARCH_RETIRED_DELTA_EVIDENCE.md"
   },
   "handoff": {
     "trigger_phrase": "Подготовь переход в новый чат",

@@ -29,7 +29,7 @@ def main() -> int:
 
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            fixture = pathlib.Path(tmp) / "AUDIT_REGISTRY.md"
+            fixture = pathlib.Path(tmp) / "RESEARCH_REGISTRY.md"
             rc.CANONICAL_REGISTRY = fixture
 
             for code in ("P1-226", "P1-227", "P1-228", "P1-229", "P1-230"):

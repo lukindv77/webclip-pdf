@@ -2,7 +2,7 @@
 """Fail-fast consistency checks for the WebClip Git working tree.
 
 The checker is intentionally network-free. It validates repository organization,
-audit-number ownership and recovery/release documentation without interpreting
+research-number ownership and recovery/release documentation without interpreting
 runtime implementation correctness.
 """
 
@@ -18,14 +18,14 @@ from dataclasses import dataclass
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCS = ROOT / "project_docs"
 
-CANONICAL_REGISTRY = DOCS / "AUDIT_REGISTRY.md"
-DELTA_INDEX = DOCS / "AUDIT_DELTA_INDEX.md"
-AUDIT_WORKFLOW = DOCS / "AUDIT_CHANGE_WORKFLOW.md"
+CANONICAL_REGISTRY = DOCS / "RESEARCH_REGISTRY.md"
+DELTA_INDEX = DOCS / "RESEARCH_DELTA_INDEX.md"
+RESEARCH_WORKFLOW = DOCS / "RESEARCH_CHANGE_WORKFLOW.md"
 RELEASE_INDEX = DOCS / "RELEASE_HISTORY_INDEX.md"
 RELEASE_READINESS = DOCS / "RELEASE_READINESS.md"
 RELEASE_CHECKER = ROOT / "project_tools" / "check_release_readiness.py"
 PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
-AUDIT_ISSUE_TEMPLATE = ROOT / ".github" / "ISSUE_TEMPLATE" / "audit_finding.md"
+RESEARCH_ISSUE_TEMPLATE = ROOT / ".github" / "ISSUE_TEMPLATE" / "research_finding.md"
 RELEASE_GATE = ROOT / ".github" / "workflows" / "release-gate.yml"
 CONTROL_DOCS = [
     ROOT / "GITHUB_REPOSITORY_STATE.md",
@@ -35,18 +35,18 @@ CONTROL_DOCS = [
     DOCS / "BUILD_AND_RECOVERY_RULES.md",
     DOCS / "GITHUB_WORKFLOW.md",
     DOCS / "TEST_STATUS.md",
-    AUDIT_WORKFLOW,
+    RESEARCH_WORKFLOW,
     RELEASE_INDEX,
     RELEASE_READINESS,
 ]
 
 FORBIDDEN_CURRENT_PATHS = {
-    ROOT / "DEEP_AUDIT_2026-08-25.md",
+    ROOT / "DEEP_RESEARCH_2026-08-25.md",
     ROOT / "QA_STATUS_0_9_9.md",
     ROOT / "PROJECT_RECOVERY.md",
-    DOCS / "AUDIT_CONSOLIDATION_INDEX.md",
-    DOCS / "DOCUMENTATION_CONSISTENCY_AUDIT.md",
-    ROOT / "project_tools" / "consolidate_audit_families.py",
+    DOCS / "RESEARCH_CONSOLIDATION_INDEX.md",
+    DOCS / "DOCUMENTATION_CONSISTENCY_RESEARCH.md",
+    ROOT / "project_tools" / "consolidate_research_families.py",
     ROOT / "project_tools" / "normalize_repository_docs.py",
 }
 FORBIDDEN_TRACKED_SUFFIXES = {".zip", ".crx", ".pem", ".p12", ".pfx", ".key"}
@@ -64,7 +64,7 @@ HISTORICAL_RELEASE_TAGS = {
 
 P_CODE = re.compile(r"\bP([012])-(\d{3})\b")
 REGISTRY_ROW = re.compile(r"^\|\s*(P[012]-\d{3})\s*\|", re.MULTILINE)
-INDEX_DELTA_ROW = re.compile(r"^-\s+`(AUDIT_DELTA_[A-Z0-9_\-]+\.md)`\s*$", re.MULTILINE)
+INDEX_DELTA_ROW = re.compile(r"^-\s+`(RESEARCH_DELTA_[A-Z0-9_\-]+\.md)`\s*$", re.MULTILINE)
 MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
@@ -93,25 +93,25 @@ def check_required_structure(result: CheckResult) -> None:
     required = [
         CANONICAL_REGISTRY,
         DELTA_INDEX,
-        AUDIT_WORKFLOW,
-        DOCS / "AUDIT_EVIDENCE.md",
-        DOCS / "AUDIT_HISTORY_INDEX.md",
-        DOCS / "AUDIT_RETIRED_DELTA_EVIDENCE.md",
-        DOCS / "AUDIT_CROSSCUTTING_REVALIDATION_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_BACKUP_RECOVERY_GENERATION_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_YANDEX_AUTH_CONFIG_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_YANDEX_REMOTE_IDENTITY_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_BACKUP_RESTORE_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_JOURNAL_IMPORT_PROVENANCE_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_JOURNAL_VIEW_AUTHORITY_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_JOURNAL_COMMENTS_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_OPERATION_RECEIPTS_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_LOCAL_DOWNLOAD_SAVEAS_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_CHROME_MV3_SETTLEMENT_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_FRAME_PERMISSION_IDENTITY_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_PRIVACY_TRUST_EVIDENCE.md",
-        DOCS / "AUDIT_FAMILY_URLSTATS_EVIDENCE.md",
+        RESEARCH_WORKFLOW,
+        DOCS / "RESEARCH_EVIDENCE.md",
+        DOCS / "RESEARCH_HISTORY_INDEX.md",
+        DOCS / "RESEARCH_RETIRED_DELTA_EVIDENCE.md",
+        DOCS / "RESEARCH_CROSSCUTTING_REVALIDATION_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_BACKUP_RECOVERY_GENERATION_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_YANDEX_AUTH_CONFIG_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_YANDEX_REMOTE_IDENTITY_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_BACKUP_RESTORE_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_JOURNAL_IMPORT_PROVENANCE_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_JOURNAL_VIEW_AUTHORITY_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_JOURNAL_COMMENTS_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_OPERATION_RECEIPTS_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_LOCAL_DOWNLOAD_SAVEAS_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_CHROME_MV3_SETTLEMENT_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_FRAME_PERMISSION_IDENTITY_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_PDF_PRINT_OFFSCREEN_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_PRIVACY_TRUST_EVIDENCE.md",
+        DOCS / "RESEARCH_FAMILY_URLSTATS_EVIDENCE.md",
         DOCS / "TEST_EVIDENCE.md",
         DOCS / "TEST_STATUS.md",
         DOCS / "BUILD_AND_RECOVERY_RULES.md",
@@ -122,7 +122,7 @@ def check_required_structure(result: CheckResult) -> None:
         RELEASE_CHECKER,
         RELEASE_GATE,
         PR_TEMPLATE,
-        AUDIT_ISSUE_TEMPLATE,
+        RESEARCH_ISSUE_TEMPLATE,
         ROOT / "GITHUB_REPOSITORY_STATE.md",
         ROOT / "README.md",
         ROOT / "manifest.json",
@@ -136,13 +136,13 @@ def check_required_structure(result: CheckResult) -> None:
             result.error(f"retired competing/one-shot source returned to current tree: {path.relative_to(ROOT)}")
 
     if CANONICAL_REGISTRY.is_file() and "single current authority" not in read(CANONICAL_REGISTRY):
-        result.error("AUDIT_REGISTRY.md no longer declares single current authority")
+        result.error("RESEARCH_REGISTRY.md no longer declares single current authority")
 
     compatibility = DOCS / "PRIORITIES_P0_P1_P2.md"
     if compatibility.is_file():
         text = read(compatibility)
-        if "AUDIT_REGISTRY.md" not in text:
-            result.error("legacy PRIORITIES compatibility file does not redirect to AUDIT_REGISTRY.md")
+        if "RESEARCH_REGISTRY.md" not in text:
+            result.error("legacy PRIORITIES compatibility file does not redirect to RESEARCH_REGISTRY.md")
         if len(text.splitlines()) > 80:
             result.error("legacy PRIORITIES file has grown back into a competing registry")
 
@@ -176,18 +176,18 @@ def check_delta_index(result: CheckResult) -> None:
         return
     index_text = read(DELTA_INDEX)
     indexed = set(INDEX_DELTA_ROW.findall(index_text))
-    actual = {p.name for p in DOCS.glob("AUDIT_DELTA_*.md") if p.name != "AUDIT_DELTA_INDEX.md"}
+    actual = {p.name for p in DOCS.glob("RESEARCH_DELTA_*.md") if p.name != "RESEARCH_DELTA_INDEX.md"}
 
     missing_from_index = sorted(actual - indexed)
     missing_from_tree = sorted(indexed - actual)
     if missing_from_index:
-        result.error("current audit deltas missing from AUDIT_DELTA_INDEX.md: " + ", ".join(missing_from_index))
+        result.error("current research deltas missing from RESEARCH_DELTA_INDEX.md: " + ", ".join(missing_from_index))
     if missing_from_tree:
-        result.error("AUDIT_DELTA_INDEX.md references non-current delta files: " + ", ".join(missing_from_tree))
+        result.error("RESEARCH_DELTA_INDEX.md references non-current delta files: " + ", ".join(missing_from_tree))
 
     for name in sorted(actual):
         if not P_CODE.search(read(DOCS / name)):
-            result.error(f"audit delta has no P-code owner/reference: project_docs/{name}")
+            result.error(f"research delta has no P-code owner/reference: project_docs/{name}")
 
 
 def check_tracked_artifacts(result: CheckResult) -> None:
@@ -238,8 +238,8 @@ def check_root_readme(result: CheckResult) -> None:
         return
     text = read(path)
     if len(text.splitlines()) > 250:
-        result.error("README.md has grown back into an audit/changelog narrative (>250 lines)")
-    for marker in ("0.9.8", "project_docs/AUDIT_REGISTRY.md", "project_docs/TEST_STATUS.md"):
+        result.error("README.md has grown back into an research/changelog narrative (>250 lines)")
+    for marker in ("0.9.8", "project_docs/RESEARCH_REGISTRY.md", "project_docs/TEST_STATUS.md"):
         if marker not in text:
             result.error(f"README.md missing current navigation/runtime marker: {marker}")
 
@@ -247,28 +247,28 @@ def check_root_readme(result: CheckResult) -> None:
 def check_process_controls(result: CheckResult) -> None:
     if PR_TEMPLATE.is_file():
         text = read(PR_TEMPLATE)
-        for marker in ("repository-integrity", "Exact reviewed head SHA", "manifest.json", "AUDIT_REGISTRY.md", "AUDIT_CHANGE_WORKFLOW.md"):
+        for marker in ("repository-integrity", "Exact reviewed head SHA", "manifest.json", "RESEARCH_REGISTRY.md", "RESEARCH_CHANGE_WORKFLOW.md"):
             if marker not in text:
                 result.error(f"pull request template missing safety marker: {marker}")
 
-    if AUDIT_ISSUE_TEMPLATE.is_file():
-        text = read(AUDIT_ISSUE_TEMPLATE)
-        for marker in ("Exact `main` / source SHA", "Duplicate check", "AUDIT_REGISTRY.md", "Acceptance criteria"):
+    if RESEARCH_ISSUE_TEMPLATE.is_file():
+        text = read(RESEARCH_ISSUE_TEMPLATE)
+        for marker in ("Exact `main` / source SHA", "Duplicate check", "RESEARCH_REGISTRY.md", "Acceptance criteria"):
             if marker not in text:
-                result.error(f"audit finding issue template missing admission marker: {marker}")
+                result.error(f"research finding issue template missing admission marker: {marker}")
 
-    if AUDIT_WORKFLOW.is_file():
-        text = read(AUDIT_WORKFLOW)
-        for marker in ("AUDIT_REGISTRY.md", "Резервирование номера", "exact-head CI", "Historical PASS"):
+    if RESEARCH_WORKFLOW.is_file():
+        text = read(RESEARCH_WORKFLOW)
+        for marker in ("RESEARCH_REGISTRY.md", "Резервирование номера", "exact-head CI", "Historical PASS"):
             if marker not in text:
-                result.error(f"audit change workflow missing lifecycle marker: {marker}")
+                result.error(f"research change workflow missing lifecycle marker: {marker}")
 
     if RELEASE_INDEX.is_file():
         text = read(RELEASE_INDEX)
         missing = sorted(tag for tag in HISTORICAL_RELEASE_TAGS if tag not in text)
         if missing:
             result.error("release history index lost retained historical tags: " + ", ".join(missing))
-        for marker in ("RETAIN", "TEST_STATUS.md", "AUDIT_EVIDENCE.md"):
+        for marker in ("RETAIN", "TEST_STATUS.md", "RESEARCH_EVIDENCE.md"):
             if marker not in text:
                 result.error(f"release history index missing retention/evidence marker: {marker}")
 
@@ -311,12 +311,12 @@ def check_control_doc_links(result: CheckResult) -> None:
 
 def check_canonical_references(result: CheckResult) -> None:
     required_refs = {
-        ROOT / "GITHUB_REPOSITORY_STATE.md": ["project_docs/AUDIT_REGISTRY.md", "project_docs/TEST_STATUS.md", "project_docs/RELEASE_HISTORY_INDEX.md", "project_docs/AUDIT_CHANGE_WORKFLOW.md", "project_docs/RELEASE_READINESS.md"],
-        ROOT / "README.md": ["project_docs/AUDIT_REGISTRY.md", "project_docs/TEST_STATUS.md", "project_docs/BUILD_AND_RECOVERY_RULES.md"],
-        DOCS / "RESTORE_PROMPT.md": ["AUDIT_REGISTRY.md", "TEST_STATUS.md"],
-        DOCS / "README_INDEX.md": ["AUDIT_REGISTRY.md", "BUILD_AND_RECOVERY_RULES.md", "RELEASE_HISTORY_INDEX.md", "GITHUB_WORKFLOW.md", "AUDIT_CHANGE_WORKFLOW.md", "RELEASE_READINESS.md"],
-        DOCS / "GITHUB_WORKFLOW.md": ["RELEASE_HISTORY_INDEX.md", ".github/pull_request_template.md", "AUDIT_CHANGE_WORKFLOW.md", "RELEASE_READINESS.md"],
-        AUDIT_WORKFLOW: ["AUDIT_REGISTRY.md", "RELEASE_READINESS.md"],
+        ROOT / "GITHUB_REPOSITORY_STATE.md": ["project_docs/RESEARCH_REGISTRY.md", "project_docs/TEST_STATUS.md", "project_docs/RELEASE_HISTORY_INDEX.md", "project_docs/RESEARCH_CHANGE_WORKFLOW.md", "project_docs/RELEASE_READINESS.md"],
+        ROOT / "README.md": ["project_docs/RESEARCH_REGISTRY.md", "project_docs/TEST_STATUS.md", "project_docs/BUILD_AND_RECOVERY_RULES.md"],
+        DOCS / "RESTORE_PROMPT.md": ["RESEARCH_REGISTRY.md", "TEST_STATUS.md"],
+        DOCS / "README_INDEX.md": ["RESEARCH_REGISTRY.md", "BUILD_AND_RECOVERY_RULES.md", "RELEASE_HISTORY_INDEX.md", "GITHUB_WORKFLOW.md", "RESEARCH_CHANGE_WORKFLOW.md", "RELEASE_READINESS.md"],
+        DOCS / "GITHUB_WORKFLOW.md": ["RELEASE_HISTORY_INDEX.md", ".github/pull_request_template.md", "RESEARCH_CHANGE_WORKFLOW.md", "RELEASE_READINESS.md"],
+        RESEARCH_WORKFLOW: ["RESEARCH_REGISTRY.md", "RELEASE_READINESS.md"],
     }
     for path, refs in required_refs.items():
         if not path.is_file():

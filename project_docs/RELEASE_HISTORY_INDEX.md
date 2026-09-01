@@ -1,6 +1,6 @@
 # Release history index — WebClip
 
-This file is the canonical navigation index for historical GitHub Releases that are intentionally retained as reproducible engineering evidence. It does **not** make a historical pre-release current, and it does not replace `TEST_STATUS.md` or `AUDIT_REGISTRY.md`.
+This file is the canonical navigation index for historical GitHub Releases that are intentionally retained as reproducible engineering evidence. It does **not** make a historical pre-release current, and it does not replace `TEST_STATUS.md` or `RESEARCH_REGISTRY.md`.
 
 Inventory checkpoint: 2026-08-29, based on the GitHub Releases API for `lukindv77/webclip-pdf`.
 
@@ -8,7 +8,7 @@ Inventory checkpoint: 2026-08-29, based on the GitHub Releases API for `lukindv7
 
 The seven currently published `0.9.8` pre-releases are retained. They are not repository clutter in the same sense as generated ZIPs committed into the working tree: each Release keeps a binary artifact outside Git, an exact historical source commit, a recorded build gate and an artifact SHA-256. The P1-149…P1-153 sequence is also the reproducible binary trail for the real `its.1c.ru` clipping investigation.
 
-`TEST_EVIDENCE.md` and `AUDIT_EVIDENCE.md` preserve the durable meaning of those checkpoints, but they do not substitute for the executable ZIP snapshot itself. Therefore deleting these Releases or their assets would reduce historical reproducibility.
+`TEST_EVIDENCE.md` and `RESEARCH_EVIDENCE.md` preserve the durable meaning of those checkpoints, but they do not substitute for the executable ZIP snapshot itself. Therefore deleting these Releases or their assets would reduce historical reproducibility.
 
 | Tag / Release | Source commit | Recorded build gate | ZIP SHA-256 | Evidence role | Disposition |
 |---|---|---|---|---|---|
@@ -20,7 +20,7 @@ The seven currently published `0.9.8` pre-releases are retained. They are not re
 | `v0.9.8-build-20260825-1912-p1-152-diag` | `ff0f712abb3c9b484312105c61a0bc6068a959f6` | 83/83 JS syntax; 70/70 deterministic | `691b138fd499735ddbe6380796734b320de75922c5786f58a7b78e8bfbfba6b6` | P1-152: top-body flattened-proxy mount checkpoint after proving the ancestor shell still constrained pagination. | RETAIN |
 | `v0.9.8-build-20260825-1935-p1-153-diag` | `558618b8ff0ab382008e6bcf800a97aaf07a5053` | 84/84 JS syntax; 71/71 deterministic | `5bea0e810d9d32f3732786d399ef01819db41bf891e571288ef340bc26873586` | P1-153: diagnostic build associated with the real 2-page `its.1c.ru` clipping closure checkpoint. | RETAIN |
 
-All seven are historical pre-releases. None of these rows claims current release QA, current-source test rerun, real Yandex E2E, or that later audit findings are closed.
+All seven are historical pre-releases. None of these rows claims current release QA, current-source test rerun, real Yandex E2E, or that later research findings are closed.
 
 ## Cleanup policy for Releases and tags
 
@@ -30,7 +30,7 @@ A historical Release may be deleted only after an explicit retirement comparison
 2. its binary artifact has no remaining reproducibility value, or an intentionally retained replacement artifact is recorded;
 3. artifact SHA-256, build gate, purpose and unique browser/product observations are preserved in current evidence/history documents;
 4. deletion will not erase the only practical artifact for a real-world reproduction sequence;
-5. the change is reviewed separately from runtime development and does not silently rewrite current audit status.
+5. the change is reviewed separately from runtime development and does not silently rewrite current research status.
 
 Until those conditions are proven, the safe default is **retain**.
 

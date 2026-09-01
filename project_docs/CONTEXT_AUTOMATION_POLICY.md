@@ -1,22 +1,22 @@
-# Permanent context / audit / development automation policy
+# Permanent context / research / development automation policy
 
 Этот документ фиксирует постоянные правила использования GitHub как машиночитаемой памяти проекта WebClip PDF. Он **не является** источником текущего статуса P-кодов, тестов или релиза.
 
 Canonical authorities остаются:
 
 - source/WIP tree — fresh `main` exact commit SHA;
-- P-owner/status — `AUDIT_REGISTRY.md`;
-- detailed audit proof — consolidated `AUDIT_FAMILY_*_EVIDENCE.md` + history/cross-cutting evidence;
+- P-owner/status — `RESEARCH_REGISTRY.md`;
+- detailed research proof — consolidated `RESEARCH_FAMILY_*_EVIDENCE.md` + history/cross-cutting evidence;
 - current automated test truth — exact GitHub Actions run + `TEST_STATUS.md` как current narrative;
 - release truth — `RELEASE_READINESS.md`.
 
-## Постоянная продуктовая цель WebClip PDF и обязательные правила глубокого аудита
+## Постоянная продуктовая цель WebClip PDF и обязательные правила глубокого исследования
 
 Главная цель существования WebClip PDF — **максимально качественно, точно и удобно позволять пользователю выделять нужную область веб-страницы, снимать максимально faithful копию выбранного содержимого и сохранять её для последующего чтения и/или долгосрочного архивного хранения**. PDF, Journal, backup/recovery, cloud storage, permissions, UI и остальные подсистемы оцениваются в том числе по тому, насколько они поддерживают эту основную цель.
 
 ### Selection fidelity — корректное и удобное выделение
 
-Глубокий аудит обязан рассматривать пользовательское выделение как критический продуктовый контракт. Нужно проверять не только работу UI рамки/области, но и соответствие между тем, **что пользователь фактически видел и выбрал**, и тем, **что затем было захвачено и сохранено**.
+Глубокий исследование обязан рассматривать пользовательское выделение как критический продуктовый контракт. Нужно проверять не только работу UI рамки/области, но и соответствие между тем, **что пользователь фактически видел и выбрал**, и тем, **что затем было захвачено и сохранено**.
 
 Обязательные классы проверки включают как минимум:
 
@@ -34,7 +34,7 @@ Canonical authorities остаются:
 
 ### Archival fidelity — качество и точность сохранённой копии
 
-Успешный API call, download или наличие PDF-файла сами по себе не доказывают успех WebClipping. Аудит обязан оценивать конечный результат как архивную копию конкретного состояния страницы и проверять, насколько она пригодна для последующего чтения и хранения.
+Успешный API call, download или наличие PDF-файла сами по себе не доказывают успех WebClipping. Исследование обязан оценивать конечный результат как архивную копию конкретного состояния страницы и проверять, насколько она пригодна для последующего чтения и хранения.
 
 Проверка должна включать как минимум:
 
@@ -50,13 +50,13 @@ Canonical authorities остаются:
 - отсутствие случайной модификации исходной страницы после завершения операции;
 - соответствие сохранённой копии именно той logical page/document generation, которую пользователь намеревался зафиксировать.
 
-Ключевой invariant глубокого аудита:
+Ключевой invariant глубокого исследования:
 
 **Selection intent -> captured source state -> rendered archival copy должны относиться к одной и той же логической версии документа, frame identity и выбранной области либо система обязана честно сигнализировать degraded/unknown/retry вместо выдачи неточного результата как успешного.**
 
 ### Обязательное внешнее исследование WebClipping
 
-Глубокий аудит **обязан регулярно изучать опыт других разработчиков, вендоров и пользователей похожего WebClipping/WebArchiving функционала**, а не ограничиваться внутренним кодом проекта.
+Глубокий исследование **обязан регулярно изучать опыт других разработчиков, вендоров и пользователей похожего WebClipping/WebArchiving функционала**, а не ограничиваться внутренним кодом проекта.
 
 При релевантных вопросах нужно использовать внешнее исследование, включая глубокое исследование нескольких независимых источников, и изучать:
 
@@ -73,17 +73,17 @@ Canonical authorities остаются:
 
 1. конкретный дефект/риск текущей реализации — выполнить обычный duplicate/root-cause check и привязать finding к существующему owner либо предложить новый owner по принятому процессу;
 2. архитектурное улучшение, необходимое для fidelity/reliability основной WebClipping функции — вынести пользователю конкретное предложение с преимуществами, рисками и местом изменения;
-3. новую продуктовую возможность, способную заметно улучшить selection UX, capture fidelity, archive readability или долговечность результата — предложить пользователю и, если это действительно новая accepted backlog-работа, оформить как P2 только после проверки `AUDIT_REGISTRY.md`, family evidence, history и Git на отсутствие существующего owner/duplicate.
+3. новую продуктовую возможность, способную заметно улучшить selection UX, capture fidelity, archive readability или долговечность результата — предложить пользователю и, если это действительно новая accepted backlog-работа, оформить как P2 только после проверки `RESEARCH_REGISTRY.md`, family evidence, history и Git на отсутствие существующего owner/duplicate.
 
-### Поведение глубокого аудита относительно основной цели
+### Поведение глубокого исследования относительно основной цели
 
 Приоритизация findings должна учитывать продуктовый impact. При прочих равных дефект, который способен привести к неверному выделению, неполному/неточному capture, потере части страницы, сохранению не той document generation или созданию misleading archival copy, имеет более высокий вес, чем внутренний дефект сопоставимой технической сложности, не влияющий на основное назначение расширения.
 
-Глубокий аудит должен активно пытаться опровергать предположения реализации через controlled schedules: reorder, timeout, late settlement, worker restart, navigation/reload, frame reuse, permission revoke/regrant, account/root switch, DOM/layout change, clear/import races и stale UI. Цель — установить, какие invariants действительно гарантируются кодом, а какие только предполагаются.
+Глубокий исследование должен активно пытаться опровергать предположения реализации через controlled schedules: reorder, timeout, late settlement, worker restart, navigation/reload, frame reuse, permission revoke/regrant, account/root switch, DOM/layout change, clear/import races и stale UI. Цель — установить, какие invariants действительно гарантируются кодом, а какие только предполагаются.
 
 ### Defensive security scope — конфиденциальность, целостность, хранение и передача данных
 
-Вопросы безопасности в глубоком аудите WebClip PDF рассматриваются **только как defensive security / защитный архитектурный анализ**. Цель — определить, насколько проект защищает данные пользователя и учетные данные расширения при хранении, обработке и передаче во внешние сервисы/API.
+Вопросы безопасности в глубоком исследовании WebClip PDF рассматриваются **только как defensive security / защитный архитектурный анализ**. Цель — определить, насколько проект защищает данные пользователя и учетные данные расширения при хранении, обработке и передаче во внешние сервисы/API.
 
 В security-scope входят:
 
@@ -96,7 +96,7 @@ Canonical authorities остаются:
 - безопасная обработка redirects, signed/capability URLs, внешних API-ответов и credential-bearing запросов без раскрытия учетных данных в durable metadata, URL или diagnostics;
 - корректное удаление, lifecycle/retention и восстановление данных без ложного утверждения об удалении или успешном сохранении.
 
-Не входят в scope и не должны становиться задачами аудита:
+Не входят в scope и не должны становиться задачами исследования:
 
 - поиск или разработка способов эксплуатации уязвимостей;
 - создание exploit/PoC для проникновения или обхода защитных механизмов;
@@ -106,7 +106,7 @@ Canonical authorities остаются:
 
 Если для оценки риска необходимо назвать класс угрозы, он описывается **только концептуально**: какие данные/authority защищаются, при каком условии возникает риск и какой defensive invariant/механизм должен его закрыть. Эксплуатационные шаги, offensive methodology и инструкции по использованию слабости не требуются и не документируются.
 
-Это ограничение security-scope не сужает обычный аудит correctness, reliability, concurrency, generation/receipt, rollback, performance, selection fidelity и archival fidelity, когда эти вопросы сами по себе не являются offensive-security анализом.
+Это ограничение security-scope не сужает обычный исследование correctness, reliability, concurrency, generation/receipt, rollback, performance, selection fidelity и archival fidelity, когда эти вопросы сами по себе не являются offensive-security анализом.
 
 ## Постоянный триггер перехода в новый чат
 
@@ -114,19 +114,19 @@ Canonical authorities остаются:
 
 **«Подготовь переход в новый чат»**
 
-всегда означает: немедленно начать безопасную подготовку к новому чату, даже если текущая разработка, аудит, PR, исследование или обсуждение не завершены.
+всегда означает: немедленно начать безопасную подготовку к новому чату, даже если текущая разработка, исследование, PR, исследование или обсуждение не завершены.
 
 ### Обязательный handoff-порядок
 
 1. Fresh-fetch `main`, зафиксировать exact current SHA и убедиться, что canonical post-merge CI state известен.
 2. Проверить open Pull Request, open Issue и существующую рабочую ветку/commit state.
-3. Не завершать работу искусственно: не закрывать P-owner, не менять audit status, не объявлять acceptance/DONE и не выполнять release только ради перехода между чатами.
+3. Не завершать работу искусственно: не закрывать P-owner, не менять research status, не объявлять acceptance/DONE и не выполнять release только ради перехода между чатами.
 4. Если существенная незавершённая работа уже представлена open Pull Request — сохранить её там; PR body должен позволять восстановить task scope, P-owner/impact и remaining work.
 5. Если PR отсутствует, но существует существенный незавершённый контекст, который иначе потеряется, создать/обновить open Issue/checkpoint. Такой Issue — только рабочая точка продолжения, не второй source of truth и не основание автоматически резервировать новый P-код.
 6. Если есть рабочая branch с полезными commits и без PR, сохранить exact head и открыть draft/normal PR, когда это безопаснее потери branch-state. Не merge незавершённую работу ради handoff.
 7. Проверить `CONTEXT_MANIFEST.json` и `RESTORE_PROMPT.md`; если они устарели из-за уже принятого текущего изменения, синхронизировать их нормальным PR-first способом до handoff либо явно зафиксировать remaining synchronization work в checkpoint.
 8. После подготовки GitHub выдать пользователю готовый prompt для нового чата. Prompt должен требовать fresh-fetch `main`, чтение `CONTEXT_MANIFEST.json` и bootstrap-набора, проверку open PR/open Issue и продолжение незавершённой работы без предположения о её завершении.
-9. Новый чат после такого prompt обязан сначала восстановить фактический GitHub state, а уже затем продолжать обсуждение/разработку/аудит.
+9. Новый чат после такого prompt обязан сначала восстановить фактический GitHub state, а уже затем продолжать обсуждение/разработку/исследование.
 
 ## 14 постоянных правил автоматизации
 
@@ -136,19 +136,19 @@ Canonical authorities остаются:
 
 ### 2. P work index
 
-Поддерживать/развивать машинный `P_WORK_INDEX` как навигацию `P-code -> family/source/tests/external acceptance/related owners`, но никогда не хранить в нём competing current status; status всегда читается из `AUDIT_REGISTRY.md`.
+Поддерживать/развивать машинный `P_WORK_INDEX` как навигацию `P-code -> family/source/tests/external acceptance/related owners`, но никогда не хранить в нём competing current status; status всегда читается из `RESEARCH_REGISTRY.md`.
 
-### 3. Audit coverage matrix
+### 3. Research coverage matrix
 
 Автоматически строить производную матрицу `P-code -> evidence -> source -> deterministic tests -> external verification`. Она предназначена для обнаружения дыр покрытия, а не для автоматического изменения статуса owner.
 
-### 4. Differential audit
+### 4. Differential research
 
-Для runtime/audit PR автоматически анализировать exact `base...head`, sensitive/trust-boundary surface и потенциально затронутые owners. Результат — risk navigation; он не имеет права автоматически назначать P-owner или менять `AUDIT_REGISTRY.md`.
+Для runtime/research PR автоматически анализировать exact `base...head`, sensitive/trust-boundary surface и потенциально затронутые owners. Результат — risk navigation; он не имеет права автоматически назначать P-owner или менять `RESEARCH_REGISTRY.md`.
 
-### 5. Regular deep audit split
+### 5. Regular deep research split
 
-GitHub Actions регулярно добывает детерминированные факты: consistency, indexes, static/surface signals, tests and reproducible schedules. Семантический глубокий аудит выполняется ChatGPT по fresh `main`/current evidence. Не помещать LLM verdict в CI как автоматический authority и не хранить OpenAI secret только ради такого аудита.
+GitHub Actions регулярно добывает детерминированные факты: consistency, indexes, static/surface signals, tests and reproducible schedules. Семантический глубокий исследование выполняется ChatGPT по fresh `main`/current evidence. Не помещать LLM verdict в CI как автоматический authority и не хранить OpenAI secret только ради такого исследования.
 
 ### 6. Seeded race/concurrency sweeps
 
@@ -172,11 +172,11 @@ GitHub Actions регулярно добывает детерминирован�
 
 ### 11. Issues only for real active work
 
-Не создавать сотни GitHub Issues задним числом по `AUDIT_REGISTRY`. Issue создаётся только для фактически выполняемой незавершённой работы, нового finding или handoff checkpoint. Registry остаётся authority по P-owner/status.
+Не создавать сотни GitHub Issues задним числом по `RESEARCH_REGISTRY`. Issue создаётся только для фактически выполняемой незавершённой работы, нового finding или handoff checkpoint. Registry остаётся authority по P-owner/status.
 
 ### 12. PR review automation
 
-При появлении/изменении runtime/audit PR выполнять exact base/head review: audit-impact, owner, evidence, tests, architecture, sensitive surface и acceptance. Если текущая интеграция не поддерживает надёжный event trigger, не притворяться, что review автоматизирован: запускать его по доступному condition/schedule/user trigger до появления поддерживаемого event mechanism.
+При появлении/изменении runtime/research PR выполнять exact base/head review: research-impact, owner, evidence, tests, architecture, sensitive surface и acceptance. Если текущая интеграция не поддерживает надёжный event trigger, не притворяться, что review автоматизирован: запускать его по доступному condition/schedule/user trigger до появления поддерживаемого event mechanism.
 
 ### 13. Post-merge review automation
 
@@ -184,7 +184,7 @@ GitHub Actions регулярно добывает детерминирован�
 
 ### 14. Regular GitHub health review
 
-Проводить read-only health review по принятому steady-state threshold и/или безопасному schedule: repository posture, branches, open PR/Issues, permanent workflows/pins, Dependabot scope, context manifest, P/audit indexes, historical Releases/tags и broken references. При отсутствии drift cleanup commit не создавать.
+Проводить read-only health review по принятому steady-state threshold и/или безопасному schedule: repository posture, branches, open PR/Issues, permanent workflows/pins, Dependabot scope, context manifest, P/research indexes, historical Releases/tags и broken references. При отсутствии drift cleanup commit не создавать.
 
 ## Общие ограничения всех автоматизаций
 
@@ -193,5 +193,5 @@ GitHub Actions регулярно добывает детерминирован�
 - Не выполнять build/tag/Release автоматически.
 - Не удалять historical evidence/tags/releases без отдельного lossless retirement proof.
 - Не давать workflow write permissions, если read-only verification достаточно.
-- Не хранить единственное audit evidence только в ephemeral Actions artifact/log.
-- Любая автоматическая рекомендация, затрагивающая architecture/audit truth, проходит обычный PR-first review и явное принятие там, где этого требует проектный процесс.
+- Не хранить единственное research evidence только в ephemeral Actions artifact/log.
+- Любая автоматическая рекомендация, затрагивающая architecture/research truth, проходит обычный PR-first review и явное принятие там, где этого требует проектный процесс.

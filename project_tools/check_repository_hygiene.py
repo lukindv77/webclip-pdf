@@ -16,7 +16,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCS = ROOT / "project_docs"
 WORKFLOWS = ROOT / ".github" / "workflows"
-DELTA_INDEX = DOCS / "AUDIT_DELTA_INDEX.md"
+DELTA_INDEX = DOCS / "RESEARCH_DELTA_INDEX.md"
 
 PERMANENT_WORKFLOWS = {
     "repository-integrity.yml",
@@ -28,27 +28,27 @@ PERMANENT_WORKFLOWS = {
 # exact names are grandfathered only so the new guard can prevent further growth
 # without forcing unrelated lossless compaction into this policy PR.
 LEGACY_STAGED_FILES = {
-    "AUDIT_FLATTENED_CSS_NAMED_ENVIRONMENT_STAGE2_2026-08-30_EVIDENCE.md",
-    "AUDIT_FLATTENED_CSS_NAMED_ENVIRONMENT_STAGE3_2026-08-30_EVIDENCE.md",
-    "AUDIT_FOCUS_INTERACTION_STATE_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
-    "AUDIT_FOCUS_INTERACTION_STATE_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
-    "AUDIT_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE2_2026-08-30_EVIDENCE.md",
-    "AUDIT_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE3_2026-08-30_EVIDENCE.md",
-    "AUDIT_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE4_2026-08-30_EVIDENCE.md",
-    "AUDIT_RESPONSIVE_IMAGE_CAPTURE_IDENTITY_STAGE2_2026-08-30_EVIDENCE.md",
-    "AUDIT_RESPONSIVE_IMAGE_CAPTURE_IDENTITY_STAGE3_2026-08-30_EVIDENCE.md",
-    "AUDIT_RESPONSIVE_REPLACED_MEDIA_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
-    "AUDIT_RESPONSIVE_REPLACED_MEDIA_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
-    "AUDIT_TEMPORAL_RENDER_STATE_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
-    "AUDIT_TEMPORAL_RENDER_STATE_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
-    "AUDIT_TYPOGRAPHY_LAYOUT_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
-    "AUDIT_TYPOGRAPHY_LAYOUT_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
-    "AUDIT_VIEWPORT_ENVIRONMENT_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
-    "AUDIT_VIEWPORT_ENVIRONMENT_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
+    "RESEARCH_FLATTENED_CSS_NAMED_ENVIRONMENT_STAGE2_2026-08-30_EVIDENCE.md",
+    "RESEARCH_FLATTENED_CSS_NAMED_ENVIRONMENT_STAGE3_2026-08-30_EVIDENCE.md",
+    "RESEARCH_FOCUS_INTERACTION_STATE_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "RESEARCH_FOCUS_INTERACTION_STATE_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
+    "RESEARCH_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE2_2026-08-30_EVIDENCE.md",
+    "RESEARCH_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE3_2026-08-30_EVIDENCE.md",
+    "RESEARCH_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE4_2026-08-30_EVIDENCE.md",
+    "RESEARCH_RESPONSIVE_IMAGE_CAPTURE_IDENTITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "RESEARCH_RESPONSIVE_IMAGE_CAPTURE_IDENTITY_STAGE3_2026-08-30_EVIDENCE.md",
+    "RESEARCH_RESPONSIVE_REPLACED_MEDIA_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "RESEARCH_RESPONSIVE_REPLACED_MEDIA_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
+    "RESEARCH_TEMPORAL_RENDER_STATE_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "RESEARCH_TEMPORAL_RENDER_STATE_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
+    "RESEARCH_TYPOGRAPHY_LAYOUT_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "RESEARCH_TYPOGRAPHY_LAYOUT_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
+    "RESEARCH_VIEWPORT_ENVIRONMENT_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md",
+    "RESEARCH_VIEWPORT_ENVIRONMENT_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md",
 }
 
 STAGED_RE = re.compile(
-    r"^(?P<family>AUDIT_.+)_STAGE\d+_\d{4}-\d{2}-\d{2}_EVIDENCE\.md$"
+    r"^(?P<family>RESEARCH_.+)_STAGE\d+_\d{4}-\d{2}-\d{2}_EVIDENCE\.md$"
 )
 LEGACY_STAGED_FAMILIES = {
     STAGED_RE.match(name).group("family")
@@ -60,27 +60,27 @@ LEGACY_STAGED_FAMILIES = {
 def inspect_tree(root: pathlib.Path) -> list[str]:
     docs = root / "project_docs"
     workflows = root / ".github" / "workflows"
-    index = docs / "AUDIT_DELTA_INDEX.md"
+    index = docs / "RESEARCH_DELTA_INDEX.md"
     errors: list[str] = []
 
     if not index.is_file():
-        return ["repository hygiene: project_docs/AUDIT_DELTA_INDEX.md is missing"]
+        return ["repository hygiene: project_docs/RESEARCH_DELTA_INDEX.md is missing"]
 
     index_text = index.read_text(encoding="utf-8")
 
     deltas = sorted(
         p.name
-        for p in docs.glob("AUDIT_DELTA_*.md")
-        if p.name != "AUDIT_DELTA_INDEX.md"
+        for p in docs.glob("RESEARCH_DELTA_*.md")
+        if p.name != "RESEARCH_DELTA_INDEX.md"
     )
     if len(deltas) > 1:
         errors.append(
-            "repository hygiene: more than one temporary AUDIT_DELTA is retained: "
+            "repository hygiene: more than one temporary RESEARCH_DELTA is retained: "
             + ", ".join(deltas)
         )
 
     active_staged: list[tuple[str, str]] = []
-    for path in sorted(docs.glob("AUDIT_*_STAGE*_EVIDENCE.md")):
+    for path in sorted(docs.glob("RESEARCH_*_STAGE*_EVIDENCE.md")):
         match = STAGED_RE.match(path.name)
         if not match:
             errors.append(
@@ -91,7 +91,7 @@ def inspect_tree(root: pathlib.Path) -> list[str]:
         family = match.group("family")
         if path.name not in index_text:
             errors.append(
-                f"repository hygiene: staged checkpoint is not indexed in AUDIT_DELTA_INDEX.md: {path.name}"
+                f"repository hygiene: staged checkpoint is not indexed in RESEARCH_DELTA_INDEX.md: {path.name}"
             )
 
         if path.name in LEGACY_STAGED_FILES:

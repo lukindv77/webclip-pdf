@@ -3,7 +3,7 @@
 ## P0 перед каждой сборкой
 
 ### Manifest / recovery
-- Manifest V3; runtime version берётся из `manifest.json` и не повышается из-за docs/audit-only изменений.
+- Manifest V3; runtime version берётся из `manifest.json` и не повышается из-за docs/research-only изменений.
 - `contextMenus`, `alarms`, `debugger`, `offscreen`, `storage`, `downloads`, `scripting` присутствуют согласно current manifest.
 - Все tracked JS проходят syntax check.
 - `python project_tools/test_recovery_archive.py` подтверждает Git-first recovery: build только из clean exact commit, exact `source_commit` metadata, обязательные файлы, SHA-256/CRC и отказ на dirty tree.
@@ -298,7 +298,7 @@
 - кликабельность `Яндекс Диск` согласно P1-025 сохраняется; `Скачан локально` не становится кликабельным.
 
 
-## Audit regression additions — checkpoint 2026-08-24
+## Research regression additions — checkpoint 2026-08-24
 
 - `P0-043`: terminate/reload the service worker after pre-download intent commit but before `downloadId` bind; maintenance must identify the Chrome DownloadItem and finalize exactly one journal record after `complete`.
 - `P0-043`: Chrome download `interrupted` must never create a journal entry; pending intent/bound checkpoint must be removed and operation log must end in error.
@@ -307,10 +307,10 @@
 - `P1-041`: export a multi-chunk journal and verify staging chunks are Blob-backed; generated local JSON and Yandex upload bytes are identical to the logical export JSON. Verify legacy text chunks still render.
 - `P1-042`: preview a large staged import and confirm it reports schema/count without mutating/normalizing the staged journal; full validation still rejects malformed individual records on confirmed import.
 - `P1-044`: simulate Yandex move verify returning 404/timeouts until deadline; Trash and ReadLater→Upload must stop around the 45-second overall budget and preserve their local fail-safe/recovery semantics.
-- `P0-044`: inject failure of both journal recovery checkpoint and journal append after a successful Yandex file upload; until the remote-save checkpoint design is implemented this test is expected to expose the open audit gap.
+- `P0-044`: inject failure of both journal recovery checkpoint and journal append after a successful Yandex file upload; until the remote-save checkpoint design is implemented this test is expected to expose the open research gap.
 - `P0-045`: if extension is enabled in Incognito, verify the chosen privacy policy prevents silent persistent URL/title leakage into normal-profile journal/operation logs.
 
-### Audit regression — P0-044/P0-045/P0-046/P1-043/P1-045
+### Research regression — P0-044/P0-045/P0-046/P1-043/P1-045
 
 - Stop MV3 worker after Yandex upload starts/finishes but before Journal append; after wake/reauthorization verify the same stable entry id is recovered without duplicate remote upload or duplicate Journal row.
 - Clear/import while `pendingRemoteSaves` exists: stale checkpoint must not resurrect replaced Journal data.
@@ -322,7 +322,7 @@
 
 
 
-### Audit regression — P0-049…053 / P1-051…053
+### Research regression — P0-049…053 / P1-051…053
 
 - `P0-049`: pause local/remote recovery after it reads its checkpoint, concurrently clear or replace the journal, then resume; no old entry may be appended and no generic pending append may resurrect it later.
 - `P0-050`: run two overlapping journal mutations; make A's stats update fail while B succeeds. The dirty marker must still require repair after B completes. During a full rebuild, start another mutation; the rebuild must not clear the newer marker.
@@ -335,7 +335,7 @@
 - `P1-049`: if a matching Chrome DownloadItem is found but binding its `downloadId` to the durable intent fails, maintenance must report partial/failed and keep the intent for a later pass.
 
 
-### Audit regression: aggregate payload bounds and lifecycle
+### Research regression: aggregate payload bounds and lifecycle
 
 - `P0-054`: verify a normal selection snapshot is preserved; >250 locators or >2 MiB aggregate locator JSON from a content/import boundary is rejected with a controlled error and no journal mutation.
 - `P0-055`: verify add/edit at normal size; 501 comments, >100000-char single comment, or >2 MiB aggregate comment text is rejected; imported backup remains unchanged when rejected.
@@ -344,7 +344,7 @@
 - `P1-058/P1-059`: simulate repeated worker wake without startup; existing alarm `scheduledTime` must not be pushed forward and no duplicate due-backup/maintenance operation may start.
 
 
-### Audit regression: import scalars / alarms / durable local downloads
+### Research regression: import scalars / alarms / durable local downloads
 
 - `P0-056`: import backup with multi-megabyte entry/comment IDs, invalid/huge localDayKey/operationDateTime and extra nested comment fields; verify controlled normalization/rejection and no unbounded duplicate copy.
 - `P1-060`: remove backup alarms, simulate worker wake with overdue backup, verify a near-term alarm is created and no backup starts until `onAlarm`; after success verify next periodic alarm.
@@ -354,7 +354,7 @@
 - `P1-064`: seed >12 pending local downloads; one maintenance pass processes at most 12 oldest checkpoints and leaves the rest intact for the next pass.
 
 
-## Audit regression — P0-057 / P1-043 / P1-065…P1-071
+## Research regression — P0-057 / P1-043 / P1-065…P1-071
 
 - `P0-057`: seed both `chrome.storage.session[yandexAuth]` and legacy `chrome.storage.local[yandexAuth]`; make `storage.local.remove()` fail. Any status/API path must fail closed with `YANDEX_LEGACY_TOKEN_CLEANUP_FAILED` and must not return a usable token until a later cleanup succeeds. On success, verify the persistent key is gone.
 - `P1-043`: Options → «Локальное хранилище» shows usage/quota/free/safety reserve and current persistence status. «Защитить локальное хранилище» calls the standard Storage API only after explicit user action. Verify manifest has no `unlimitedStorage` and no new permission is requested.
