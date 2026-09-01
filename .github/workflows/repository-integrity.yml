@@ -41,6 +41,12 @@ jobs:
       - name: Repository consistency self-test
         run: python project_tools/test_repository_consistency.py
 
+      - name: Repository growth hygiene
+        run: python project_tools/check_repository_hygiene.py
+
+      - name: Repository growth hygiene self-test
+        run: python project_tools/test_repository_hygiene.py
+
       - name: Final audit-delta retirement self-test
         run: python project_tools/test_final_delta_retirement.py
 
