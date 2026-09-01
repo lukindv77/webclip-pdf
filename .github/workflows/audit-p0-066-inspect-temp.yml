@@ -1,0 +1,57 @@
+name: P0-066 boundary inspection
+
+on:
+  push:
+    branches:
+      - fix/p0-066-durable-url-confidentiality-2026-09-01
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Print P0-066 source contexts
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "HEAD=$(git rev-parse HEAD)"
+          python - <<'PY'
+          from pathlib import Path
+
+          targets = {
+              'service-worker.js': [
+                  'sanitizeContentSaveMeta', 'normalizeJournalUrl', 'sanitizeSelectionSnapshot',
+                  'normalizePendingJournalAppendData', 'appendJournalEntry(', 'journalViewSummary',
+                  'normalizeImportedHttpUrl', 'normalizeImportedHttpsUrl', 'normalizeImportedJournalEntry',
+                  'getValidCachedPdfForTab', 'putCachedPdf', 'openJournalDb', 'readJournalEntryBatch',
+                  'journalEntryForContentTemplate', 'publicUrl:', 'sourceUrl:', 'urlKey:',
+              ],
+              'content.js': ['prepareForPrint', 'Полный URL страницы', 'urlLink.textContent', 'urlLink.href', 'locator.src', "getAttribute('src')", "getAttribute('href')"],
+              'journal.js': ['entry.url', 'publicUrl', 'urlKey'],
+          }
+          for filename, needles in targets.items():
+              p = Path(filename)
+              if not p.exists():
+                  continue
+              lines = p.read_text(encoding='utf-8').splitlines()
+              print(f'\n===== {filename} ({len(lines)} lines) =====')
+              emitted = set()
+              for needle in needles:
+                  hits = [i for i, line in enumerate(lines) if needle in line]
+                  print(f'\n--- needle={needle!r} hits={len(hits)} ---')
+                  for i in hits[:20]:
+                      lo, hi = max(0, i-8), min(len(lines), i+13)
+                      key = (lo, hi)
+                      if key in emitted:
+                          continue
+                      emitted.add(key)
+                      for n in range(lo, hi):
+                          print(f'{n+1:06d}: {lines[n]}')
+                      print('...')
+          PY
