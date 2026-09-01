@@ -230,23 +230,33 @@
     };
   }
 
-  function migrateStoreCursor(store, mapper) {
+  function abortMigration(tx) {
+    try { tx?.abort?.(); } catch (_) {}
+  }
+
+  function migrateStoreCursor(store, mapper, tx) {
     if (!store?.openCursor) return;
     const request = store.openCursor();
+    request.onerror = () => abortMigration(tx);
     request.onsuccess = () => {
       const cursor = request.result;
       if (!cursor) return;
-      try { cursor.update(mapper(cursor.value)); } catch (_) {}
-      cursor.continue();
+      try {
+        const update = cursor.update(mapper(cursor.value));
+        if (update && typeof update === 'object') update.onerror = () => abortMigration(tx);
+        cursor.continue();
+      } catch (_) {
+        abortMigration(tx);
+      }
     };
   }
 
   function migrateJournalDbV8(db, tx, oldVersion) {
     if (Number(oldVersion || 0) >= 8 || !tx) return;
-    if (db.objectStoreNames.contains('entries')) migrateStoreCursor(tx.objectStore('entries'), sanitizeJournalEntryUrls);
+    if (db.objectStoreNames.contains('entries')) migrateStoreCursor(tx.objectStore('entries'), sanitizeJournalEntryUrls, tx);
     for (const name of ['pendingAppends', 'pendingDownloads', 'pendingRemoteSaves']) {
       if (!db.objectStoreNames.contains(name)) continue;
-      migrateStoreCursor(tx.objectStore(name), (value) => ({ ...value, data: sanitizePendingDataUrls(value?.data || {}) }));
+      migrateStoreCursor(tx.objectStore(name), (value) => ({ ...value, data: sanitizePendingDataUrls(value?.data || {}) }), tx);
     }
     if (db.objectStoreNames.contains('importStaging')) {
       migrateStoreCursor(tx.objectStore('importStaging'), (value) => {
@@ -254,17 +264,22 @@
         if (value?.entry) out.entry = sanitizeJournalEntryUrls(value.entry);
         if (Array.isArray(value?.entries)) out.entries = value.entries.map(sanitizeJournalEntryUrls);
         return out;
-      });
+      }, tx);
     }
     if (db.objectStoreNames.contains('urlStats')) {
-      try { tx.objectStore('urlStats').clear(); } catch (_) {}
+      try {
+        const clear = tx.objectStore('urlStats').clear();
+        if (clear && typeof clear === 'object') clear.onerror = () => abortMigration(tx);
+      } catch (_) {
+        abortMigration(tx);
+      }
     }
   }
 
   function migratePdfCacheDbV4(db, tx, oldVersion) {
     if (Number(oldVersion || 0) >= 4 || !tx) return;
-    if (db.objectStoreNames.contains('pdfs')) migrateStoreCursor(tx.objectStore('pdfs'), sanitizeCachedPdfRecordUrls);
-    if (db.objectStoreNames.contains('meta')) migrateStoreCursor(tx.objectStore('meta'), sanitizeCachedPdfRecordUrls);
+    if (db.objectStoreNames.contains('pdfs')) migrateStoreCursor(tx.objectStore('pdfs'), sanitizeCachedPdfRecordUrls, tx);
+    if (db.objectStoreNames.contains('meta')) migrateStoreCursor(tx.objectStore('meta'), sanitizeCachedPdfRecordUrls, tx);
   }
 
   globalThis.WebClipDurableUrlPolicy = Object.freeze({

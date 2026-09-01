@@ -886,7 +886,7 @@ function openJournalDbForView() {
       fail(error);
       return;
     }
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       if (settled) {
         abortLateUpgrade();
         return;
@@ -931,7 +931,7 @@ function openJournalDbForView() {
         if (!importStore.indexNames.contains('importId')) importStore.createIndex('importId', 'importId', { unique: false });
         if (!importStore.indexNames.contains('createdAt')) importStore.createIndex('createdAt', 'createdAt', { unique: false });
       }
-      WebClipDurableUrlPolicy.migrateJournalDbV8(db, request.transaction, request.oldVersion || 0);
+      WebClipDurableUrlPolicy.migrateJournalDbV8(db, request.transaction, event?.oldVersion || 0);
     };
     request.onsuccess = () => {
       const db = request.result;
