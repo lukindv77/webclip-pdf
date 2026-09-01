@@ -25,9 +25,14 @@ REQUIRED_DOCS = [
     "README_INDEX.md",
     "PROJECT_OVERVIEW.md",
     "USER_REQUIREMENTS.md",
-    "ARCHITECTURE.md",
     "DECISIONS_AND_RATIONALE.md",
-    "CHANGELOG_AND_RATIONALE.md",
+    "PROJECT_MISSION_AND_DEFENSIVE_SECURITY_POLICY.md",
+    "COMPREHENSIVE_PROJECT_RESEARCH_POLICY.md",
+    "SESSION_EXECUTION_AND_INTERRUPTION_SAFETY_POLICY.md",
+    "ARCHITECTURE.md",
+    "DATA_MODELS.md",
+    "WEBCLIP_COPY_ARCHITECTURE_POLICY.md",
+    "WEBCLIP_PDF_FIDELITY_CONTRACT.md",
     "RESEARCH_REGISTRY.md",
     "RESEARCH_DELTA_INDEX.md",
     "RESEARCH_HISTORY_INDEX.md",
@@ -35,7 +40,6 @@ REQUIRED_DOCS = [
     "TEST_STATUS.md",
     "RELEASE_READINESS.md",
     "RELEASE_HISTORY_INDEX.md",
-    "DATA_MODELS.md",
     "ASSISTANT_NOTES_AND_LIMITATIONS.md",
     "TEST_PLAN.md",
     "BUILD_AND_RECOVERY_RULES.md",
@@ -160,7 +164,7 @@ def build() -> pathlib.Path:
         ),
     }
 
-    recovery_readme = f"""# WebClip Project Recovery {version}\n\nThis is a standalone offline/disaster-recovery artifact for WebClip PDF Prototype {version}.\n\nCanonical source identity: Git commit `{source_commit}`.\nTags pointing at that commit when the artifact was built: {", ".join(source_tags) if source_tags else "(none)"}.\n\n## Start here\n\n1. Read `BUILD_METADATA.json` and note `source_commit`.\n2. Verify `FILE_HASHES.sha256`.\n3. Read `project_docs/RESTORE_PROMPT.md` and `project_docs/README_INDEX.md`.\n4. If GitHub is available, restore/compare the exact Git commit first; that Git tree is canonical.\n5. If GitHub is unavailable, `source/` is the offline representation of that exact commit.\n6. After Git access returns, compare the offline tree/hashes and return to repository history.\n\nThis archive is not intended to be nested inside the user-facing extension ZIP.\nCreate a newer official recovery artifact only from a clean exact Git commit.\n"""
+    recovery_readme = f"""# WebClip Project Recovery {version}\n\nThis is a standalone offline/disaster-recovery artifact for WebClip PDF Prototype {version}.\n\nCanonical source identity: Git commit `{source_commit}`.\nTags pointing at that commit when the artifact was built: {", ".join(source_tags) if source_tags else "(none)"}.\n\n## Start here\n\n1. Read `BUILD_METADATA.json` and note `source_commit`.\n2. Verify `FILE_HASHES.sha256`.\n3. Read `project_docs/RESTORE_PROMPT.md`, `project_docs/USER_REQUIREMENTS.md`, `project_docs/DECISIONS_AND_RATIONALE.md` and `project_docs/README_INDEX.md`.\n4. If GitHub is available, restore/compare the exact Git commit first; that Git tree is canonical.\n5. Do not reconstruct current requirements from older historical revisions; use the current-baseline files from this exact snapshot.\n6. If GitHub is unavailable, `source/` is the offline representation of that exact commit.\n7. After Git access returns, compare the offline tree/hashes and return to repository history.\n\nThis archive is not intended to be nested inside the user-facing extension ZIP.\nCreate a newer official recovery artifact only from a clean exact Git commit.\n"""
 
     hashes: list[str] = []
 
