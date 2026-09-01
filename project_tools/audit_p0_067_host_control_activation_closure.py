@@ -248,13 +248,19 @@ def main() -> int:
             if not isolated.get("guard") or not isolated.get("guarded"):
                 raise AssertionError(f"isolated guard missing: {isolated}")
 
+            # Main-world positive control must run before WebClip selection adds
+            # its capture listener, which intentionally intercepts page clicks.
+            page.evaluate("document.getElementById('main-world-control').click()")
+            main_world_control_clicks = int(page.evaluate("__host.mainWorldClicks"))
+            if main_world_control_clicks != 1:
+                raise AssertionError("page main-world programmatic click was modified by isolated guard")
+
             probes = worker.evaluate("""async (tabId) => (await chrome.scripting.executeScript({target:{tabId},func:()=>{
               const guard=globalThis.WebClipHostControlActivationGuard;
               guard.patchSameOriginFrameRealms(document);
               document.getElementById('isolated-probe-control').click();
               document.getElementById('same-frame').contentDocument.getElementById('frame-button').click();
-              const host=document.getElementById('webclip-pdf-extension-root');
-              return {stats:{...guard.stats}, hasHost:Boolean(host)};
+              return {stats:{...guard.stats}};
             }}))[0].result""", tab_id)
             page.wait_for_timeout(50)
             host_after_probes = page.evaluate("({...__host})")
@@ -293,7 +299,7 @@ def main() -> int:
 
             # Trusted physical activation of WebClip's own UI enters the real
             # downloadPdf -> prepareForPrint path. The worker deliberately holds
-            # WEBCLIP_GENERATE_PDF so physical PDF evidence can be captured while
+            # WEBCLIP_GENERATE_PDF so physical PDF evidence is captured while
             # the product preparation state is still active.
             page.get_by_role("button", name="Сформировать PDF").click()
             deadline = time.monotonic() + 15
@@ -328,19 +334,17 @@ def main() -> int:
               return true;
             }""")
             page.wait_for_timeout(100)
-
-            # The page main world remains untouched: its own programmatic click
-            # still dispatches normally after all isolated-world guard activity.
-            page.evaluate("document.getElementById('main-world-control').click()")
-            main_world_control_clicks = int(page.evaluate("__host.mainWorldClicks"))
-            if main_world_control_clicks != 1:
-                raise AssertionError("page main-world click semantics were modified")
+            main_native_final = bool(page.evaluate("String(HTMLElement.prototype.click).includes('[native code]')"))
+            if not main_native_final:
+                raise AssertionError("page main-world HTMLElement.click prototype changed after full flow")
 
             result.update({
                 "verdict": "P0-067 ENGINEERING-CLOSURE-CANDIDATE",
                 "chrome": context.browser.version,
                 "main_world_click_native_before": main_native_before,
                 "main_world_click_native_after": main_native_after,
+                "main_world_click_native_final": main_native_final,
+                "main_world_control_clicks": main_world_control_clicks,
                 "isolated": isolated,
                 "probes": probes,
                 "webclip_programmatic": webclip_programmatic,
@@ -349,7 +353,6 @@ def main() -> int:
                 "panel": panel,
                 "guard_stats": stats,
                 "generate_pdf_message_count": 1,
-                "main_world_control_clicks": main_world_control_clicks,
                 "pdf": {"pages": pdf["pages"], "sha256": pdf["sha256"]},
             })
             context.close()
