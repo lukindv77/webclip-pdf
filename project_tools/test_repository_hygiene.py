@@ -53,6 +53,21 @@ def main() -> int:
         assert_error(hygiene.inspect_tree(root), "more than one active staged evidence family")
         (docs / stage_a).unlink()
         (docs / stage_b).unlink()
+
+        legacy = "AUDIT_VIEWPORT_ENVIRONMENT_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md"
+        assert legacy in hygiene.LEGACY_STAGED_FILES
+        (docs / legacy).write_text("legacy checkpoint\n", encoding="utf-8")
+        (docs / "AUDIT_DELTA_INDEX.md").write_text(INDEX_HEADER + f"- `{legacy}`\n", encoding="utf-8")
+        assert hygiene.inspect_tree(root) == []
+
+        legacy_extension = "AUDIT_VIEWPORT_ENVIRONMENT_FIDELITY_STAGE4_2026-09-02_EVIDENCE.md"
+        (docs / legacy_extension).write_text("new checkpoint\n", encoding="utf-8")
+        (docs / "AUDIT_DELTA_INDEX.md").write_text(
+            INDEX_HEADER + f"- `{legacy}`\n- `{legacy_extension}`\n", encoding="utf-8"
+        )
+        assert_error(hygiene.inspect_tree(root), "frozen legacy staged family gained a new checkpoint")
+        (docs / legacy).unlink()
+        (docs / legacy_extension).unlink()
         (docs / "AUDIT_DELTA_INDEX.md").write_text(INDEX_HEADER, encoding="utf-8")
 
         (workflows / "temporary-browser-evidence.yml").write_text("name: temp\n", encoding="utf-8")
