@@ -53,6 +53,23 @@ Use current evidence by role:
 
 A future temporary audit delta is permitted only during active analysis under `AUDIT_CHANGE_WORKFLOW.md`; while it exists it must be indexed by `AUDIT_DELTA_INDEX.md` and then folded losslessly into durable evidence rather than becoming a second status authority.
 
+## Repository growth hygiene
+
+The durable operating policy is defined in `project_docs/GITHUB_WORKFLOW.md`. Current hard invariants are:
+
+- an open project PR is a real merge candidate, not provenance/archive storage;
+- one root/owner has at most one uncoordinated current work branch/PR;
+- completed work branches are disposable and auto-delete after squash merge;
+- current tree retains at most one temporary `AUDIT_DELTA_*.md` besides the index;
+- current tree retains at most one active staged evidence family, and every `*_STAGE<n>_*_EVIDENCE.md` checkpoint must be explicitly indexed;
+- completed staged series are losslessly compacted instead of remaining as BASE/STAGE working noise;
+- final mergeable tree contains only the approved permanent workflows `repository-integrity.yml` and `release-gate.yml`, unless an explicit infrastructure PR changes both policy and guard;
+- routine work updates existing family/navigation/control layers rather than creating new governance/tracking files by default.
+
+`project_tools/check_repository_hygiene.py` + `project_tools/test_repository_hygiene.py` enforce the current-tree subset of these rules. Branch inventory, open-PR purpose, merge settings and stale refs are GitHub-remote state and are therefore checked at fresh-start/health review instead of being guessed by a network-free tree checker.
+
+A health review is triggered after 12 merged project PRs or 3 months, whichever comes first, and immediately when a hygiene invariant is observed broken. If no drift exists, no cleanup commit is created.
+
 ## Audit change lifecycle
 
 `project_docs/AUDIT_CHANGE_WORKFLOW.md` is the process contract for future audit work.
@@ -87,6 +104,7 @@ See `project_docs/BUILD_AND_RECOVERY_RULES.md` and `project_docs/GITHUB_WORKFLOW
 `.github/workflows/repository-integrity.yml` is **read-only** with respect to GitHub repository state. It uses only `contents: read`; no commit-status write permission or mutating GitHub API call is required. On push/PR it runs:
 
 - repository consistency plus self-test;
+- repository growth hygiene plus self-test;
 - final audit-delta byte-for-byte retirement self-test;
 - staged evidence compaction provenance self-test across every completed staged series;
 - immutable GitHub Actions pin/read-only workflow/Dependabot-scope validation + self-test;
@@ -102,13 +120,13 @@ External `uses:` refs in workflows are pinned to full 40-character action commit
 
 `NOT READY` release state is valid in ordinary CI. Malformed/missing release-readiness structure is not.
 
-`.github/pull_request_template.md` records exact-head/runtime/audit/release checks and machine-readable impact markers. `.github/ISSUE_TEMPLATE/audit_finding.md` structures new audit admission.
+`.github/pull_request_template.md` records exact-head/runtime/audit/release and repository-hygiene checks. `.github/ISSUE_TEMPLATE/audit_finding.md` structures new audit admission.
 
 ## Release readiness gate
 
 `project_docs/RELEASE_READINESS.md` is the machine-readable current release-readiness declaration.
 
-`.github/workflows/release-gate.yml` is a separate **manual, read-only, fail-closed** gate. It requires exact candidate SHA/version, repeats repository/pin/test/recovery checks and rejects the candidate until required real Chrome/Yandex evidence, release-blocker review and explicit release decision are all recorded.
+`.github/workflows/release-gate.yml` is a separate **manual, read-only, fail-closed** gate. It requires exact candidate SHA/version, repeats repository/hygiene/pin/test/recovery checks and rejects the candidate until required real Chrome/Yandex evidence, release-blocker review and explicit release decision are all recorded.
 
 The release gate does not build, tag, publish or modify GitHub Releases.
 

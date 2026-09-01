@@ -10,6 +10,15 @@ Describe the exact purpose of this change and the intended files/subsystems.
 - [ ] `manifest.json` is unchanged, or release/test truth is synchronized in the same PR.
 - [ ] No generated ZIP/CRX, recovery archive, token, secret, browser profile or private key is being committed.
 
+## Repository hygiene
+
+- [ ] This open PR is a real merge candidate, not provenance/archive storage.
+- [ ] This PR has one bounded purpose/root and does not duplicate an already active branch/PR for the same owner without explicit coordination.
+- [ ] The final PR tree contains no temporary workflow; only approved permanent workflows remain unless this PR explicitly changes infrastructure policy and its guard.
+- [ ] At most one temporary `AUDIT_DELTA_*.md` exists, and any active staged evidence belongs to at most one indexed staged-family.
+- [ ] Completed staged checkpoints were compacted losslessly into durable evidence instead of being retained as BASE/STAGE noise.
+- [ ] The head branch is disposable after squash merge; `delete_branch_on_merge=true` is expected to remove it automatically.
+
 ## Audit / P-owner safety
 
 - [ ] `AUDIT_REGISTRY.md` remains the single owner/status authority and P-numbers were not reused.
@@ -43,6 +52,7 @@ When deterministic tests are added for `audit-impact: owner`, each declared P-co
 ## Validation
 
 - [ ] `repository-integrity` is green for the exact PR head SHA.
+- [ ] Repository growth hygiene and its deterministic self-test passed.
 - [ ] PR change-contract validation passed for the exact base/head diff.
 - [ ] JavaScript syntax and deterministic tests relevant to the changed tree passed through CI.
 - [ ] Release-readiness schema/status validation passed; `NOT READY` is acceptable unless this PR explicitly prepares a release candidate.

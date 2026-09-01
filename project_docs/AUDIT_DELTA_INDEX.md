@@ -8,6 +8,8 @@ The standalone `AUDIT_DELTA_*.md` working layer is fully retired in the current 
 
 The interruption-safe staged evidence series covered by the 2026-09-01 cleanup are also fully compacted. Each completed compaction retains one compact current semantic document plus exact historical source commit/blob receipts verified by `project_tools/test_staged_evidence_compaction.py`. No staged checkpoint is a status authority.
 
+Eight older staged families were already present outside that cleanup set when the steady-state repository-hygiene policy was introduced on 2026-09-01. They are a **frozen legacy baseline**, not active working series: they may only shrink through separately proven lossless compaction and must not gain new STAGE checkpoints. Exact retained checkpoint paths are listed below so repository hygiene can distinguish known historical debt from new growth.
+
 ## Primary evidence families
 
 | # | Family | Consolidated evidence | Primary owners / scope | Retired deltas |
@@ -72,6 +74,19 @@ The cleanup set is complete. These four current FINAL documents replace their fo
 4. `AUDIT_COMPOSED_RENDERED_SCOPE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md`.
 
 `project_tools/test_staged_evidence_compaction.py` verifies every original source path/blob from its recorded pre-compaction commit and fails if a retired checkpoint path returns to the current tree.
+
+### Frozen legacy staged-evidence baseline
+
+These staged checkpoint files pre-date the steady-state hygiene contract. They are retained as historical evidence for now, are not active working series, and must not be extended. Future cleanup may only remove them through separately proven lossless compaction.
+
+- Flattened CSS named environment: `AUDIT_FLATTENED_CSS_NAMED_ENVIRONMENT_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_FLATTENED_CSS_NAMED_ENVIRONMENT_STAGE3_2026-08-30_EVIDENCE.md`.
+- Focus/interaction state fidelity: `AUDIT_FOCUS_INTERACTION_STATE_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_FOCUS_INTERACTION_STATE_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md`.
+- Post-freeze physical render cut: `AUDIT_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE3_2026-08-30_EVIDENCE.md`, `AUDIT_POST_FREEZE_PHYSICAL_RENDER_CUT_STAGE4_2026-08-30_EVIDENCE.md`.
+- Responsive image capture identity: `AUDIT_RESPONSIVE_IMAGE_CAPTURE_IDENTITY_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_RESPONSIVE_IMAGE_CAPTURE_IDENTITY_STAGE3_2026-08-30_EVIDENCE.md`.
+- Responsive replaced-media fidelity: `AUDIT_RESPONSIVE_REPLACED_MEDIA_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_RESPONSIVE_REPLACED_MEDIA_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md`.
+- Temporal render-state fidelity: `AUDIT_TEMPORAL_RENDER_STATE_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_TEMPORAL_RENDER_STATE_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md`.
+- Typography/layout fidelity: `AUDIT_TYPOGRAPHY_LAYOUT_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_TYPOGRAPHY_LAYOUT_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md`.
+- Viewport/environment fidelity: `AUDIT_VIEWPORT_ENVIRONMENT_FIDELITY_STAGE2_2026-08-30_EVIDENCE.md`, `AUDIT_VIEWPORT_ENVIRONMENT_FIDELITY_STAGE3_2026-08-30_EVIDENCE.md`.
 
 ## Historical and closure evidence
 

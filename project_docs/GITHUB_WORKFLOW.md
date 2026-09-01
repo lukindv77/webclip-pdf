@@ -26,7 +26,7 @@ Compensating process controls:
 4. Compare the full PR diff with fresh `main` before review/merge.
 5. Merge only when `repository-integrity` is green for that exact head SHA and the head has not moved since review.
 6. Immediately before merge re-check head SHA, mergeability and changed files; use expected-head protection in the merge call when available.
-7. Prefer squash for repository/docs-only PRs; preserve multi-commit runtime/audit investigations only when their sequence itself is useful evidence.
+7. Normal PR integration is squash-only; merge commits and rebase merges remain disabled in repository settings.
 8. Never force-update `main` as part of normal work.
 
 Direct modification of `main` is reserved for explicitly documented emergency recovery after a separate user decision. `protected=false` is not permission to bypass PR-first workflow.
@@ -96,7 +96,7 @@ Permanent operating rules:
 3. **Remote browser evidence is exception-driven.** GitHub-hosted Chrome/OS execution is used when the acceptance claim requires L3/L4/L5 evidence that the local environment cannot honestly supply—for example current Chrome renderer semantics, physical PDF evidence, a runner-specific platform boundary or another explicitly external environment. Lower-level deterministic checks do not move to Actions merely because a remote runner is convenient.
 4. **No CI-as-debugger loop by default.** Intermediate commits should be batched into a coherent locally preflighted head before push where practical. Every push must have a durable reason; repeated tiny pushes solely to discover ordinary syntax/checker failures are process noise.
 5. **Reuse evidence under Change Impact.** Existing physical/browser evidence is not rerun automatically when relevant runtime, contract, browser semantics and fixture assumptions are unchanged. `AUDIT_COVERAGE_CAMPAIGN_POLICY.md` Change Impact rules decide when revalidation is required.
-6. **Avoid one-off workflows when a reusable path exists.** Browser/audit runs should prefer an existing parameterized or otherwise reusable workflow. A temporary workflow is justified only when the required environment/evidence cannot be expressed through the current permanent workflows; it must be removed before merge unless separately promoted by an explicit infrastructure decision.
+6. **Avoid one-off workflows when a reusable path exists.** Browser/audit runs should prefer an existing parameterized or otherwise reusable workflow. A temporary workflow is justified only when the required environment/evidence cannot be expressed through the current permanent workflows; it must be removed before the final mergeable PR head unless separately promoted by an explicit infrastructure decision that also updates the repository-hygiene guard.
 7. **Path/scope selectivity for heavy checks.** New heavy workflows must use the narrowest truthful trigger/change-impact scope practical. Documentation-only or audit-tooling-only changes must not cause unrelated Chrome/PDF/Yandex evidence reruns unless their change impact actually invalidates that evidence.
 8. **Caching is allowed only as an execution optimization.** Safe caches for immutable browser archives, language packages or build dependencies may reduce Actions minutes, but a cache hit never changes the acceptance/evidence requirement and must not become a second source of truth.
 9. **Local limitation must be explicit.** If the available local browser/runtime is too old or otherwise unsuitable, it may be used for lower-level development controls but must not be cited as current-feature evidence. The required remote/current environment is then a deliberate evidence run, not a reason to move the whole development loop into CI.
@@ -108,13 +108,15 @@ Target operating shape: the large majority of checker/test development happens b
 
 `.github/workflows/repository-integrity.yml` запускается на push/PR в `main` и вручную. Он подтверждает:
 
-1. repository/audit organization через `project_tools/check_repository_consistency.py`;
-2. immutable GitHub Actions pins, read-only workflow permissions and low-noise Dependabot scope через `check_ci_pins.py` + self-test;
-3. exact PR runtime/audit contract через `check_pr_change_contract.py` + self-test на PR;
-4. корректность структуры `RELEASE_READINESS.md` через `check_release_readiness.py status` — статус `NOT READY` здесь допустим;
-5. JavaScript syntax для tracked `.js`;
-6. deterministic `project_tools/test_*.js`;
-7. Git-first recovery builder через `project_tools/test_recovery_archive.py`.
+1. repository/audit organization через `project_tools/check_repository_consistency.py` + self-test;
+2. bounded repository growth через `project_tools/check_repository_hygiene.py` + self-test;
+3. lossless final audit-delta retirement и staged-evidence compaction provenance;
+4. immutable GitHub Actions pins, read-only workflow permissions and low-noise Dependabot scope через `check_ci_pins.py` + self-test;
+5. exact PR runtime/audit contract через `check_pr_change_contract.py` + self-test на PR;
+6. корректность структуры `RELEASE_READINESS.md` через `check_release_readiness.py status` — статус `NOT READY` здесь допустим;
+7. JavaScript syntax для tracked `.js`;
+8. deterministic `project_tools/test_*.js`;
+9. Git-first recovery builder через `project_tools/test_recovery_archive.py`.
 
 CI PASS на конкретном SHA означает только реально выполненные им checks. Он не заменяет real unpacked Chrome и real Yandex E2E.
 
@@ -155,18 +157,25 @@ Gate fail-closed проверяет `RELEASE_READINESS.md`: real unpacked Chrome
 
 Утверждённый постоянный порядок поддержания устойчивого состояния GitHub без излишнего роста repository noise:
 
-1. **Одно смысловое изменение — один рабочий PR.** Перед началом работы выполняется fresh-fetch `main`. В обычном режиме одновременно ведётся не более одного активного проектного PR; единственное штатное исключение — один автоматический Dependabot PR.
-2. **Для runtime обязателен audit-contract.** Любое изменение runtime получает `audit-impact` и конкретный `audit-rationale`. При затронутом owner указываются P-код, durable evidence и deterministic regression test либо обоснованный `test-impact: external-only`.
-3. **После каждого merge обязателен push-run canonical `main`.** Green PR-head сам по себе недостаточен. Если post-merge `repository-integrity` красный, новая разработка не начинается до возврата `main` в green state.
-4. **Рабочие ветки одноразовые и не являются источниками истины после merge.** При доступном автоматическом удалении merged branches они удаляются. Пока `delete_branch_on_merge=false`, прежний exact head сохраняется в PR/Git history, а оставшийся obsolete ref допустимо выровнять с canonical `main` после проверки отсутствия уникального полезного состояния.
-5. **Dependabot остаётся месячным и только для GitHub Actions.** Auto-merge не используется. Каждый grouped update проходит exact diff review, оценку major-version implications и полный CI. Exact Action SHA хранится только в executable workflow source, а не дублируется в narrative docs.
-6. **Issues создаются только для реальной незавершённой работы или нового finding.** Исторический `AUDIT_REGISTRY` не переносится задним числом в сотни Issues; registry остаётся authority по P-owner/status.
-7. **Периодический health review выполняется редко и по порогу:** после каждых **12 merged project PR** либо раз в **3 месяца**, что наступит раньше. Проверяются branches, open PR/Issues, workflow/pins, Releases/tags, broken documentation references и registry/evidence consistency. При отсутствии drift cleanup commits не создаются.
-8. **Исторические evidence не удаляются по календарю.** Git history не переписывается через BFG/filter-repo ради уборки. Retirement отдельного evidence/artifact допускается только после доказанного lossless переноса уникального содержания и фиксации retirement evidence.
-9. **Release остаётся отдельным явно санкционированным событием.** Требуются explicit release decision, актуальный `RELEASE_READINESS.md`, real unpacked Chrome QA, real Yandex E2E, review release-critical owners и ручной release gate; build/tag/Release выполняются только после этого отдельным действием.
-10. **Repository infrastructure не наращивается без наблюдаемой необходимости.** CODEOWNERS, Projects, milestones, новые governance-файлы, дополнительные workflows или более сложная CI/container infrastructure добавляются только когда закрывают конкретно доказанный риск или повторяющуюся операционную проблему.
+1. **Одно смысловое изменение — один рабочий PR.** Перед началом работы выполняется fresh-fetch `main` и GitHub inventory: current `main` SHA, branches и open PR. В обычном режиме одновременно ведётся не более одного активного проектного PR; единственное штатное исключение — один автоматический Dependabot PR.
+2. **Open PR означает реального кандидата на merge.** PR не используется как долговременный архив или provenance storage. Если эксперимент/WIP не должен merge-иться, его exact head SHA и назначение фиксируются в PR/Git history, PR закрывается без merge, а branch удаляется. PR по уже DONE owner не остаётся открытым без нового доказанного regression/root.
+3. **Одна задача/owner — максимум одна текущая рабочая ветка.** Параллельная ветка того же root допустима только при явной координации; иначе перед новой работой сначала reconciliate существующий branch/PR. После squash merge head branch автоматически удаляется (`delete_branch_on_merge=true`).
+4. **Для runtime обязателен audit-contract.** Любое изменение runtime получает `audit-impact` и конкретный `audit-rationale`. При затронутом owner указываются P-код, durable evidence и deterministic regression test либо обоснованный `test-impact: external-only`.
+5. **После каждого merge обязателен push-run canonical `main`.** Green PR-head сам по себе недостаточен. Если post-merge `repository-integrity` красный, новая разработка не начинается до возврата `main` в green state.
+6. **Audit evidence не размножается без необходимости.** Перед новым standalone evidence-файлом проверяется существующий `AUDIT_FAMILY_*`, supplemental evidence и history layer. Новый файл создаётся только когда существующий durable слой не может сохранить доказательство без потери смысла; status authority при этом остаётся только в `AUDIT_REGISTRY.md`.
+7. **Temporary audit delta жёстко ограничен.** В current tree одновременно допустим максимум один `AUDIT_DELTA_*.md` кроме index. Он существует только во время активного анализа, обязан быть проиндексирован и после стабилизации finding складывается lossless в durable evidence/history вместо превращения во второй status ledger.
+8. **Staged evidence — только interruption-safety механизм.** Одновременно допустима максимум одна активная staged-family. Каждый `*_STAGE<n>_*_EVIDENCE.md` обязан быть явно перечислен в `AUDIT_DELTA_INDEX.md`. После завершения tranche checkpoints должны быть compacted в durable FINAL/семейный evidence с exact historical commit/blob provenance и deterministic recovery check; завершённая серия не остаётся BASE/STAGE-набором в current tree.
+9. **Final mergeable tree содержит только утверждённые permanent workflows.** Текущая permanent allowlist: `repository-integrity.yml` и `release-gate.yml`. Temporary physical/browser workflow допустим на промежуточной evidence-ветке, но обязан быть удалён до final PR head. Новый permanent workflow требует отдельного явного infrastructure decision и синхронного обновления hygiene guard.
+10. **Dependabot остаётся месячным и только для GitHub Actions.** Auto-merge не используется. Каждый grouped update проходит exact diff review, оценку major-version implications и полный CI. Exact Action SHA хранится только в executable workflow source, а не дублируется в narrative docs.
+11. **Issues создаются только для реальной незавершённой работы или нового finding.** Исторический `AUDIT_REGISTRY` не переносится задним числом в сотни Issues; registry остаётся authority по P-owner/status.
+12. **Health review выполняется по порогу и при нарушении инварианта.** Плановый review — после каждых **12 merged project PR** либо раз в **3 месяца**, что наступит раньше. Внеплановый review выполняется сразу, если обнаружены stale/diverged branches, provenance-only/open PR, competing PR одного root, temporary workflow на final head, >1 temporary delta, >1 staged-family, broken evidence navigation или Registry/state/checker drift. Если drift отсутствует, cleanup commit не создаётся.
+13. **Исторические evidence не удаляются по календарю.** Git history не переписывается через BFG/filter-repo ради уборки. Retirement отдельного evidence/artifact допускается только после доказанного lossless переноса уникального содержания и фиксации recovery provenance.
+14. **Release остаётся отдельным явно санкционированным событием.** Требуются explicit release decision, актуальный `RELEASE_READINESS.md`, real unpacked Chrome QA, real Yandex E2E, review release-critical owners и ручной release gate; build/tag/Release выполняются только после этого отдельным действием.
+15. **Repository infrastructure не наращивается без наблюдаемой необходимости.** CODEOWNERS, Projects, milestones, новые governance-файлы, дополнительные workflows или более сложная CI/container infrastructure добавляются только когда закрывают конкретно доказанный риск или повторяющуюся операционную проблему.
 
-Эти десять пунктов являются постоянным steady-state регламентом проекта. Изменение самого регламента требует отдельного явного согласования; routine project work не должно порождать новые policy-файлы или дублирующие tracking-сущности.
+`project_tools/check_repository_hygiene.py` автоматически контролирует current-tree часть этих правил: максимум один temporary delta, максимум одну active staged-family с обязательной индексацией checkpoint-файлов и отсутствие temporary/unapproved workflows в mergeable tree. GitHub-remote часть (branch/PR inventory, merge settings, stale refs) проверяется fresh-start review, потому что network-free repository checker не должен притворяться authority над состоянием GitHub API.
+
+Эти пятнадцать пунктов являются постоянным steady-state регламентом проекта. Изменение самого регламента требует отдельного явного согласования; routine project work не должно порождать новые policy-файлы или дублирующие tracking-сущности.
 
 ## Accepted main branch posture
 
@@ -176,8 +185,10 @@ Gate fail-closed проверяет `RELEASE_READINESS.md`: real unpacked Chrome
 - GitHub Pro ради branch protection не приобретается;
 - repository не переводится в public ради branch protection;
 - `main` остаётся **`protected=false`**;
-- защита от ошибок обеспечивается PR-first process, exact-head CI/TOCTOU check, Git history/recovery provenance и запретом обычных direct/force writes в `main`.
+- normal PR integration — **squash-only**; merge commits и rebase merges выключены;
+- `delete_branch_on_merge=true` включён;
+- защита от ошибок обеспечивается PR-first process, exact-head CI/TOCTOU check, automatic branch deletion, Git history/recovery provenance и запретом обычных direct/force writes в `main`.
 
 Это ограничение нужно учитывать при каждой операции записи, но его не следует снова заводить как open repository-cleanup blocker.
 
-Если API текущей интеграции не умеет удалить obsolete branch refs, такие ветки не считаются источником истины; после доказательства отсутствия уникального полезного состояния их допустимо выровнять с canonical `main`, сохранив прежний exact head SHA в PR/Issue/Git evidence.
+Если API текущей интеграции в конкретной сессии не умеет удалить obsolete branch ref, такой ref не считается источником истины. Сначала сохраняется exact historical head в PR/Issue/Git evidence, затем ref должен быть удалён через доступный GitHub UI/API; временное выравнивание с canonical `main` допустимо только как промежуточная мера до физического удаления.
