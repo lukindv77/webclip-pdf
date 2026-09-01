@@ -69,7 +69,7 @@ GitHub Actions must not be the default debugger for syntax/static/deterministic 
 
 1. Fresh-fetch `main`, зафиксировать exact current SHA и проверить current post-merge integrity state.
 2. Проверить open Pull Request, open Issue, branches и durable commits/evidence.
-3. Не закрывать P-owner, не менять research status, не объявлять acceptance/DONE и не выполнять release только ради перехода.
+3. не закрывать P-owner, не менять research status, не объявлять acceptance/DONE и не выполнять release только ради перехода.
 4. Если незавершённая работа уже находится в open Pull Request, использовать его как durable resume point; PR body должен отражать exact head, scope и remaining work.
 5. Если полезная branch имеет commits без PR, сохранить exact head и открыть PR/checkpoint, когда это необходимо для предотвращения потери work state.
 6. Если существенный контекст невозможно безопасно сохранить PR/branch и без checkpoint он потеряется, допускается open Issue/checkpoint как working context; Issue не становится status authority и не резервирует P-code автоматически.
