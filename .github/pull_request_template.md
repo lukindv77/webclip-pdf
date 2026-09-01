@@ -32,14 +32,15 @@ Describe the exact purpose of this change and the intended files/subsystems.
 
 For any runtime or canonical research/evidence change, select **exactly one**:
 
-- [ ] `research-impact: none` — no P-owner/status/acceptance contract is affected.
+- [ ] `research-impact: none` — no canonical research registry/evidence and no P-owner/status/acceptance contract is affected.
+- [ ] `research-impact: structural` — canonical research structure, terminology, navigation or provenance location changes, but runtime and P-owner/status/acceptance semantics do not.
 - [ ] `research-impact: owner` — one or more P-owners are affected; list them below and update durable research evidence in this PR.
 
 P-owner(s) affected, or `none`:
 
 `______________________________`
 
-For **every runtime change**, replace the placeholder below with a concrete explanation of why no existing owner/invariant is affected, or how the declared owner(s) are affected:
+For every runtime change and every `research-impact: structural` change, replace the placeholder below with a concrete explanation of why no existing owner/invariant changes, or how the declared owner(s) are affected:
 
 `research-rationale: <replace with concrete rationale>`
 
