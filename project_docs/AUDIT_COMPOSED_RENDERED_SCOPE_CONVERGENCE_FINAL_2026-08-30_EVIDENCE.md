@@ -23,7 +23,7 @@ The historical tranche itself was audited from exact fresh baseline `edb5f04835a
 
 The historical source files repeatedly state that no new P-code was allocated during this tranche and specifically say that `P1-230` remained unallocated. That wording was true at the time of the 2026-08-30 checkpoints but is **not current status authority**. The current Registry now assigns `P1-230` to the separate user-reached dynamic-scroll/materialization root. This compaction preserves the historical wording through the exact Git blobs above but does not repeat it as current truth.
 
-The tranche remains evidence refining existing rendered-scope, selection-generation, resource, locator/privacy, bounded-discovery and frame-topology owners. Any present-day ACTIVE/DONE/MERGED/BACKLOG interpretation must be read from `AUDIT_REGISTRY.md`.
+The tranche remains evidence refining existing rendered-scope, selection-generation, resource, locator/privacy, bounded-discovery and frame-topology owners. Owner references preserved for navigation are `P0-004`, `P0-070`, `P0-075`, `P1-001`, `P1-003`, `P1-004`, `P1-160`, `P1-167`, `P1-182`, `P1-193`, `P1-227` and `P1-228`. Any present-day ACTIVE/DONE/MERGED/BACKLOG interpretation of those references must be read from `AUDIT_REGISTRY.md`.
 
 ## Semantic preservation map — Blocks 1–56
 
