@@ -99,9 +99,9 @@
   });
 })();
 
-// service-worker.js already imports this shared helper synchronously. Keep the
-// security bootstrap worker-only so journal.html remains unchanged while the
-// PDF guard is installed before any Page.printToPDF path can run.
+// service-worker.js imports this shared helper synchronously. Keep worker-only
+// security bootstraps here so extension pages using the journal filter remain
+// unchanged while guards are installed before ordinary worker code runs.
 if (typeof importScripts === 'function' && typeof document === 'undefined') {
-  importScripts('pdf-print-guard.js');
+  importScripts('pdf-print-guard.js', 'content-injection-guard.js');
 }
