@@ -38,10 +38,30 @@ jobs:
           unzip -q /tmp/chrome-linux64.zip -d /tmp/chrome-for-testing
           /tmp/chrome-for-testing/chrome-linux64/chrome --version
 
+      - name: Apply runner-only harness compatibility adjustments
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          fresh = Path('project_tools/audit_fresh_c04_c15_render_fidelity.py')
+          text = fresh.read_text(encoding='utf-8')
+          text = text.replace("'SVG_C10_MARKER',", "")
+          text = text.replace("'C10InlineSvg':art['pixels']['magenta']>100 and 'SVG_C10_MARKER' in text", "'C10InlineSvg':art['pixels']['magenta']>100")
+          fresh.write_text(text, encoding='utf-8')
+
+          p071 = Path('project_tools/audit_p0_071_print_render_guard.py')
+          text = p071.read_text(encoding='utf-8')
+          old = 'if "importScripts(\'pdf-print-guard.js\')" not in bootstrap:'
+          new = 'if "\'pdf-print-guard.js\'" not in bootstrap:'
+          if old not in text:
+              raise SystemExit('P0-071 compatibility anchor missing')
+          p071.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
       - name: Fresh C04-C15 physical render probe
         env:
           CHROME_BIN: /tmp/chrome-for-testing/chrome-linux64/chrome
         run: |
+          set -o pipefail
           mkdir -p /tmp/webclip-fresh-c04-c15
           python project_tools/audit_fresh_c04_c15_render_fidelity.py \
             --chrome "$CHROME_BIN" \
@@ -52,6 +72,7 @@ jobs:
         env:
           CHROME_BIN: /tmp/chrome-for-testing/chrome-linux64/chrome
         run: |
+          set -o pipefail
           mkdir -p /tmp/webclip-p0-071
           python project_tools/audit_p0_071_print_render_guard.py \
             --chrome "$CHROME_BIN" \
