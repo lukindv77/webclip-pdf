@@ -1,200 +1,124 @@
-# Durable audit evidence — renderer-owned replaced-resource convergence — final stage — 2026-08-30
+# Durable audit evidence — renderer-owned replaced-resource convergence — consolidated final — 2026-08-30
+
+Canonical P-code owner/status authority remains exclusively in `AUDIT_REGISTRY.md`. This document is the compact current-tree representation of the completed **56-block** replaced/media/render-resource audit. It replaces three interruption-safe checkpoint files while preserving their exact historical bytes through Git provenance.
+
+No runtime source, registry row, manifest/version/build/tag/release state is changed by this compaction. The audit conclusions and acceptance boundaries are unchanged.
+
+## Exact provenance and recovery
+
+The source checkpoints were all present together on pre-compaction canonical `main`:
+
+`73c92c3389790dc4fdf449373eb2392a729359f3`
+
+Their Git blob identities are content-addressed recovery receipts:
+
+| Blocks | Historical source path | Git blob SHA |
+|---|---|---|
+| 1–20 | `project_docs/AUDIT_REPLACED_RESOURCE_CONVERGENCE_2026-08-30_EVIDENCE.md` | `b36dc030b245ef39d150d5e8de561859f28ebc19` |
+| 21–36 | `project_docs/AUDIT_REPLACED_RESOURCE_CONVERGENCE_STAGE2_2026-08-30_EVIDENCE.md` | `aa7b484a30c7591ac2e15e0f0269ca6d229f09fa` |
+| 37–56 | `project_docs/AUDIT_REPLACED_RESOURCE_CONVERGENCE_FINAL_2026-08-30_EVIDENCE.md` | `a06dca0fb4752fc4c6514f4069ea97e63cb91452` |
+
+`project_tools/test_staged_evidence_compaction.py` verifies on every Repository Integrity run that each historical path at that exact commit hashes to the recorded blob and that the retired BASE/STAGE2 paths are absent from the current tree. Thus the full original Markdown remains byte-for-byte recoverable with Git while this file carries the current compact semantic evidence.
+
+Original audited source baseline: `main = 66c5cd43906254a583f692bcda3e9e451a29dce6`.
+
+Managed browser used by the original physical probes: `Chromium 144.0.7559.96`. Physical probes used worker-equivalent forced-screen CDP `Page.printToPDF(...ReturnAsStream)` with local HTTP fixtures controlling resource settlement. These are engineering evidence, not real unpacked-Chrome release QA.
+
+## Owner/classification result
+
+No new P-number and no status transition resulted from the 56-block tranche.
+
+Primary refined owners remain:
+
+- **P1-003 ACTIVE** — one bounded renderer-visible selected resource-settlement model, including resource classes not represented by the current IMG/background/font task taxonomy, late-emerging style/resource graphs, top/frame parity and truthful unknown/omitted outcomes.
+- **P1-187 ACTIVE** — one bounded inert materialization contract for renderer-owned state and exact frame-local resource provenance that ordinary DOM cloning does not preserve.
+
+Supporting boundaries remain **P0-070**, **P0-004**, **P1-167**, **P2-007**, **P0-075** and **P1-229**. Their status is not changed by this evidence compaction.
+
+## Block-preservation map
+
+The following map preserves the unique finding/control carried by every original block. Exact measurements, fixture wording and source excerpts remain recoverable from the provenance ledger above.
+
+### Blocks 1–20 — initial renderer-state/resource boundary
+
+1. Current top prefetch explicitly models ordinary IMG, computed background-image and fonts; video/media/track, SVG image-like resources and image-input are outside that task vocabulary.
+2. Direct top-document paused video prints the current decoded frame — positive renderer capability control.
+3. `cloneNode(true)` resets current video temporal state and can print the initial frame instead — P1-187.
+4. Poster-only video prints correctly directly — positive control.
+5. Existing flattened URL copying preserves several media URLs but cannot preserve temporal renderer state.
+6. Required direction is bounded inert current-frame/state preservation or truthful degradation, not recreated live playback.
+7. Active WebVTT cue text can enter the physical PDF — positive semantic control.
+8. Relative frame-local `<track src>` can rebind after adoption into the top document and lose the active cue — P1-187.
+9. Absolutizing the source track URL restores the cue — positive provenance control.
+10. Relative video poster provenance is already handled by existing proxy URL copying — positive non-regression control.
+11. Direct top-document 2D canvas pixels print correctly — positive renderer capability control.
+12. Deep-cloned canvas bitmap is empty — revalidation of existing P1-187 renderer-owned bitmap loss.
+13. Managed environment could not obtain a usable WebGL context; no WebGL defect was registered.
+14. Tested ordinary `srcset` did not switch merely because output used A4 under forced-screen media — negative control.
+15. Tested `<picture media>` likewise retained the screen-selected source — negative control.
+16. Tested `sizes="auto"` reflow did not force `currentSrc` reselection — rejected broad hypothesis.
+17. Delayed video poster was not awaited by `Page.printToPDF` or current explicit prefetch; immediate bytes omitted the poster and settled bytes included it — P1-003.
+18. Delayed SVG `<image href>` behaved the same way — P1-003.
+19. Delayed `input[type=image]` resource behaved the same way — P1-003.
+20. Those unmodeled resource classes can be physically absent while current resource counters remain clean, so absence of known-task failure is not completeness proof — P1-003 / supporting P0-070.
+
+### Blocks 21–36 — late stylesheet graph and frame-local provenance
+
+21. A pending external stylesheet can materially change selected physical output after an immediate clean print — P1-003.
+22. `getComputedStyle()` returns current pre-settlement style rather than making the stylesheet a readiness barrier.
+23. A late stylesheet can introduce a new background resource only after the original scan saw `none`; the selected resource graph can emerge after scanning.
+24. The acceptance does not require extension-side arbitrary CSS/resource byte fetching; browser-visible settlement/freeze/truthful degradation remains sufficient architecture space.
+25. Current report schema cannot distinguish “no tasks” from “selected visual graph has not emerged yet”.
+26. Combining an earlier resource report with bytes from a later visual generation is a supporting P0-070 generation-truth risk.
+27. Relative frame-local `input[type=image].src` can rebind under the top-document base in the flattened proxy — P1-187.
+28. Absolutizing that image-input URL restores the source visual — positive control.
+29. Relative frame-local SVG `<image href>` can likewise rebind under the top-document base — P1-187.
+30. Absolutizing the SVG image provenance restores the source visual — positive control.
+31. The repeated failure shows a bounded renderer/resource-provenance model is preferable to indefinitely adding tag-specific patches.
+32. Cross-origin `frame-agent` resource preparation currently models selected ordinary IMG only; renderer-resource parity is narrower than top content — P1-003.
+33. Parent aggregation cannot truthfully report a resource class the child never attempted or represented.
+34. Existing bounded ordinary-image waits remain a positive design pattern to preserve while generalizing the model.
+35. Playing media can advance across ordinary asynchronous preparation latency, so the product must define current-view/admission/physical-cut/static semantics explicitly — supporting P0-070 / P1-187 / P2-007.
+36. Current generic diagnostics do not receipt video temporal state, decoded frame, cue state, canvas bitmap or equivalent renderer-owned state; telemetry is not artifact proof.
+
+### Blocks 37–56 — convergence and final architecture
+
+37. Delayed primary `<video src>` itself is outside current readiness tasks; immediate print can omit the frame and settled print can contain it — P1-003.
+38. Delayed ordinary IMG is a positive control: current bounded DOM-image wait blocks through settlement and the expected image reaches the PDF.
+39. SVG `<feImage>` is physically relevant in direct Chromium — positive capability control.
+40. Delayed SVG `<feImage href>` is not awaited by PDF/current explicit prefetch and can be omitted before settlement — P1-003.
+41. Cloned audio control state resets temporal state and changes rendered controls — supporting P1-187.
+42. Nested relative video `<source src>` is already correctly absolutized by current proxy copying — positive provenance control.
+43. Correct absolute media URL still does not preserve the current decoded frame; resource provenance and renderer state are distinct obligations under P1-187.
+44. A poster-to-decoded-frame transition caused solely by preparation timing demonstrates the need for explicit generation/output-mode semantics — supporting P0-070 / P2-007.
+45. Preparation latency can move a playing video between materially different physical frames.
+46. Deliberately paused direct video remains a stable positive current-view control.
+47. Poster/static representation is a valid explicit degradation policy only when it is declared rather than silently substituted for a current paused frame.
+48. Active caption text is renderer-owned semantic state relevant to later reading/searchability, not only visual pixels.
+49. The accumulated dependency classes show that a per-tag URL patch list is not a durable renderer-resource architecture.
+50. Top content and selected remote frames need the same bounded resource/state vocabulary and truthful unknown/omission semantics; P1-229 keeps its separate remote selected-only media/geometry responsibility.
+51. Any P1-187 materialization must be bounded by node/pixel/byte/time limits and must not recreate active playback merely to preserve appearance.
+52. Diagnostics/OperationLog remain telemetry and cannot prove final PDF identity for frame/cue/canvas/late-style state.
+53. Future regression matrix must cover delayed IMG, poster, primary media, SVG image/feImage, image input, late stylesheet/resource emergence, paused/cloned media, frame-local track/image provenance, nested source, canvas, captions, responsive-source positive controls and real-browser WebGL.
+54. Negative/rejected controls remain binding guardrails: tested A4 forced-screen srcset/picture and `sizes=auto` did not reproduce switching; existing poster/nested-source URL absolutization works; object/embed, external SVG-use and managed WebGL probes were not promoted.
+55. Duplicate/root-cause review confirmed P1-003 and P1-187 already own the observed roots; no independent owner was justified.
+56. Final convergence rule: WebClip must account for renderer state/resources that actually determine the admitted saved representation, under bounded settlement/materialization and truthful degradation, rather than equating easy-to-enumerate HTML URLs with renderer completeness.
 
-Canonical P-code owner/status authority remains exclusively in `AUDIT_REGISTRY.md`. This file completes **Blocks 37–56**. Together with the stage-1 and stage-2 checkpoint files, the tranche contains **56 completed blocks** from exact fresh `main = 66c5cd43906254a583f692bcda3e9e451a29dce6`.
+## Preserved acceptance direction
 
-Managed Chromium remains `144.0.7559.96`; exact physical PDF probes use the worker-equivalent forced-screen `Page.printToPDF(...ReturnAsStream)` path. Real unpacked Chrome remains release QA.
+The complete tranche therefore retains these architecture requirements:
 
-No runtime source, registry row, manifest/version/build/tag/release state is changed.
+1. **P1-003:** establish one bounded renderer-visible resource-settlement model for top document and selected frames, including truthful `unknown/omitted` when the graph is still emerging or cannot be confirmed.
+2. **P1-187:** establish one bounded inert representation for renderer-owned state lost by cloning, including canvas/video/media/cue state plus exact frame-local resource provenance.
+3. **P0-070:** bind the admitted representation/resource receipt to the exact save generation through physical PDF bytes.
+4. **P0-004:** preserve complete selected visual/semantic content without silently substituting materially different renderer state.
+5. **P1-167:** keep enumeration, waiting and raster/materialization work under shared node/time/pixel/byte limits.
+6. **P2-007:** explicitly distinguish faithful current-view media state from static-reading/poster/fallback semantics when product modes differ.
+7. Preserve working direct-browser and existing bounded IMG/media-URL positive controls rather than flattening all behavior indiscriminately.
+8. Real unpacked-Chrome regression remains necessary for media controls, WebGL and real-site release closure.
 
-## Blocks 37–43 — additional media/replaced renderer state
+## Evidence interpretation
 
-### Block 37 — delayed primary `<video src>` itself is outside current readiness tasks — P1-003
+This file is current durable semantic evidence, not a replacement status registry. Historical source checkpoints may contain wording that later became stale (for example temporary statements about which P-number was unallocated); current status/numbering always comes from `AUDIT_REGISTRY.md`.
 
-A selected autoplay/muted video used a controlled media response delayed roughly three seconds and no poster.
-
-Before settlement:
-
-- `readyState = 0`;
-- `currentTime = 0`;
-- exact `Page.printToPDF` returned in about **23 ms**;
-- expected red/blue video-frame pixels were both **0**.
-
-After settlement:
-
-- `readyState = 4`;
-- video was playing at about t≈0.69 s;
-- PDF contained about **77,748 red pixels**.
-
-Current top prefetch has no video-media readiness task. The actual media resource itself, not only the poster, is therefore a direct P1-003 selected renderer-resource case.
-
-### Block 38 — known delayed ordinary `<img>` wait is a positive control
-
-A controlled ordinary image began incomplete (`naturalWidth=0`) and settled after roughly two seconds. A production-shaped DOM-image load wait blocked for about **1.98 s**, after which `naturalWidth=300` and the exact PDF contained about **32,865 expected yellow pixels**.
-
-This validates the existing ordinary-IMG readiness design pattern. The audit direction is to extend truthful renderer-resource coverage, not to remove a working bounded wait.
-
-### Block 39 — SVG `<feImage>` is physically relevant in direct Chromium: positive control
-
-A selected SVG filter whose output came from `<feImage href=...>` rendered the referenced yellow image into PDF, with about **32,760 yellow pixels** in the settled control.
-
-The resource slot is a real selected visual dependency in this Chromium build.
-
-### Block 40 — delayed SVG `<feImage href>` is not awaited by PDF or current explicit prefetch — P1-003
-
-With the `feImage` response delayed by about three seconds:
-
-- exact print returned in about **43 ms**;
-- immediate PDF had **0** expected yellow pixels;
-- settled PDF contained about **32,760 yellow pixels**.
-
-Current prefetch does not scan `feImage href`, so this renderer-owned SVG resource is another truthful-omission case under P1-003.
-
-### Block 41 — audio control renderer state also resets under cloning — P1-187 supporting
-
-A four-second audio fixture with browser controls was paused around t≈2.14 s. Its deep clone reported `currentTime=0` with the same duration. Exact source-versus-clone PDF rasters differed across roughly **1,100 pixels** in the controls region.
-
-This is the non-video media-control counterpart of Block 3. It does not justify a separate audio owner; P1-187 already owns renderer-owned state lost by the flattened secondary representation.
-
-### Block 42 — nested `<source src>` URL provenance is a positive proxy control
-
-A source-frame video used a relative nested `<source src="../v.webm">`. `source.src` resolved to the exact frame resource. Production-shaped URL copying assigned that absolute source URL in the adopted clone, and `clone.currentSrc` remained the correct resource URL.
-
-URL identity was therefore preserved for the nested source.
-
-### Block 43 — correct media URL still does not preserve the current frame
-
-In the same control the source video was paused in the blue interval around t≈1.63 s, while the clone began at `currentTime=0`. Exact clone PDF rendered the red initial frame (~77,748 red pixels, 0 blue) despite correct absolute `currentSrc`.
-
-This sharply separates media **resource provenance** from media **renderer state**. Both belong to P1-187, but one cannot substitute for the other.
-
-## Blocks 44–48 — physical generation and current-view semantics
-
-### Block 44 — poster-to-decoded-frame transition can be selected purely by preparation timing — P0-070 / P2-007 supporting
-
-A video had an already available green poster plus a controlled delayed media source.
-
-Early physical PDF while `readyState=0` contained about **77,748 green poster pixels**. After media settlement and autoplay (`readyState=4`, t≈0.81 s), the otherwise identical PDF contained about **77,748 red decoded-frame pixels** and no green poster pixels.
-
-Neither state is intrinsically a browser bug. The product must define whether the saved copy means renderer state at save admission, at physical cut, or a stable static-media representation. P0-070 owns exact generation; P2-007 owns explicit capture/output semantics.
-
-### Block 45 — preparation latency can move an already playing video between materially different frames
-
-The earlier red-to-blue current-frame schedule began near t≈0.19 s with a red rendered frame. After ~1.2 seconds of asynchronous preparation-equivalent delay, the physical PDF captured the blue interval at t≈1.57 s.
-
-A future freeze contract must cover renderer-owned temporal media state if the product claims an exact current-view copy. Waiting for resources without freezing the admitted generation is not sufficient by itself.
-
-### Block 46 — paused direct video remains a stable positive current-view control
-
-When the top-document source video is deliberately paused, Chromium directly prints that current decoded frame correctly. Therefore current-frame freezing/materialization is technically meaningful; WebClip should not degrade a stable paused state merely because secondary cloning lacks temporal state.
-
-### Block 47 — static poster mode remains a valid explicit degradation candidate
-
-When a video has no available current media frame, Chromium's poster representation is physically printable. An explicit mode/policy may choose poster/static-media representation, but it must not silently substitute poster/first frame for a current paused frame while claiming faithful current-view fidelity.
-
-### Block 48 — active text cues can carry useful later-reading semantics
-
-Because active WebVTT cues enter PDF text, preserving the current cue can improve saved-copy accessibility/searchability. Static media materialization should consider cue text as renderer-owned semantic state, not only raster pixels, under the selected output-mode policy.
-
-## Blocks 49–52 — report/representation architecture
-
-### Block 49 — a per-tag URL patch list will continue to miss renderer-owned dependency classes
-
-Across this tranche alone, physically relevant resource/state inputs include:
-
-- ordinary IMG current candidate;
-- video media source;
-- video poster;
-- active text track;
-- SVG image href;
-- SVG filter `feImage`;
-- image-input source;
-- stylesheet settlement that later creates new computed visual URLs;
-- current canvas bitmap;
-- current video/audio temporal state.
-
-Prior evidence already adds backgrounds, pseudo content, border-image, clip-path and frame-local generated state. The durable solution is a bounded renderer-resource/state contract rather than indefinitely enumerating isolated attributes without settlement semantics.
-
-### Block 50 — frame parity must use the same resource/state vocabulary
-
-Top content currently has IMG/background/font tasks; frame-agent currently has only ordinary IMG waiting. A repaired P1-003 contract should expose the same bounded resource-state categories and truthful unknown/omission semantics for top and selected remote frames, while P1-229 retains its separate selected-only media/geometry authority.
-
-### Block 51 — secondary frame materialization needs explicit state budgets
-
-P1-187 acceptance for canvas/video/media cannot mean unbounded rasterization of arbitrary renderer surfaces. Required controls include explicit node/pixel/byte/time budgets, deterministic handling when a current frame/bitmap cannot be captured, and no recreation of live playback or other active content merely to make the copy look right.
-
-### Block 52 — diagnostics and OperationLog remain telemetry rather than artifact proof
-
-Current generic page diagnostics and resource counters can help explain a failure, but they do not cryptographically or semantically prove the final PDF contains the same video frame, cue, canvas bitmap or late stylesheet state. Artifact success must not be inferred from the absence of a known resource failure counter.
-
-## Blocks 53–56 — regression matrix and final classification
-
-### Block 53 — required regression matrix for P1-003 / P1-187 convergence
-
-A future implementation should retain at least these cases:
-
-1. delayed ordinary IMG -> bounded wait/known positive path;
-2. delayed video poster -> either ready before print or truthful omission;
-3. delayed primary video source -> defined current/static-media behavior and truthful readiness;
-4. delayed SVG image -> ready or truthful omission;
-5. delayed SVG `feImage` -> ready or truthful omission;
-6. delayed image input -> ready or truthful omission;
-7. pending stylesheet that later changes selected paint -> do not claim settled visual graph prematurely;
-8. pending stylesheet that later introduces background/font resource URLs -> newly emerging graph remains bounded and truthful;
-9. paused current top video frame -> direct current frame survives faithful current-view mode;
-10. flattened same-origin paused video -> current frame does not reset to first frame/poster without explicit degradation;
-11. relative frame text track -> source cue/resource provenance retained;
-12. relative frame image-input and SVG image -> source resource identity retained;
-13. nested relative video `<source>` remains correctly absolutized;
-14. current canvas bitmap remains preserved under the existing P1-187 budget contract;
-15. audio/video browser-owned control state follows the declared static/current-view mode;
-16. active caption text remains available when semantically admitted;
-17. ordinary `srcset` and `<picture media>` forced-screen positive controls remain stable;
-18. WebGL remains a real-browser regression item because this managed environment could not obtain a usable context.
-
-### Block 54 — negative/rejected controls remain part of the evidence
-
-Do not promote these into unsupported broad defects:
-
-- A4 forced-screen print did not by itself reselect tested ordinary srcset/picture candidates.
-- Tested `sizes="auto"` reflow did not force a resource switch.
-- Relative frame video poster and nested media source URLs are already correctly absolutized by current proxy copying.
-- Object/embed fixtures were inconclusive in this headless environment and are not registered as WebClip regressions.
-- External SVG `<use>` delayed transport did not produce a valid rendered positive control in the tested schedule and is not used as a fresh defect.
-- WebGL was unavailable in the managed browser and is explicitly not counted as a failure.
-
-### Block 55 — duplicate/root-cause review rejects a new P-number
-
-Fresh registry makes P1-003 directly authoritative for the actual selected visual resource graph, frame parity, Page.printToPDF-not-a-readiness-barrier and truthful bounded omissions. P1-187 directly owns required rendered state in the flattened iframe proxy.
-
-Git history also contains prior deliberate decisions not to allocate `P1-230` for adjacent physical-copy refinements. The fresh media/replaced-resource evidence materially strengthens those existing owners but does not establish an independent root cause.
-
-### Block 56 — final acceptance and tranche closure
-
-The 56-block tranche converges on one rule:
-
-> **WebClip must account for the renderer state/resources that actually determine the admitted saved representation, not only HTML attributes or URLs that happen to be easy to enumerate.**
-
-Required architecture direction:
-
-1. `P1-003`: one bounded renderer-visible resource-settlement model for top + selected frames, including truthful `unknown/omitted` when the graph is still emerging or a supported class cannot be confirmed;
-2. `P1-187`: one bounded inert materialization contract for renderer-owned state lost by cloning, including current canvas/video/media/cue state and exact frame-local resource provenance;
-3. `P0-070`: bind that representation to the declared save generation from admission to physical PDF bytes;
-4. `P0-004`: preserve complete selected visual/semantic content without silently substituting materially different renderer state;
-5. `P1-167`: keep resource/state enumeration, waiting and raster/materialization work under shared node/time/pixel/byte limits;
-6. `P2-007`: explicitly distinguish faithful current-view media state from static-reading/poster/fallback semantics where both are reasonable product choices;
-7. preserve direct working browser behavior instead of flattening everything indiscriminately;
-8. require real unpacked-Chrome regressions for media controls/WebGL/real-site behavior before release closure.
-
-## Final owner/status decision
-
-No registry edit and no status transition.
-
-Primary refined owners:
-
-`P1-003, P1-187`.
-
-Supporting owner/boundaries:
-
-`P0-070, P0-004, P1-167, P2-007, P0-075, P1-229`.
-
-No new P-code is created; `P1-230` remains unallocated.
+The compaction intentionally removes interruption mechanics, repeated “no registry edit” boilerplate and duplicated environment prose from the working tree while retaining every block's substantive finding/control and an exact Git recovery path for the original text.
