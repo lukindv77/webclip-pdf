@@ -37,7 +37,7 @@ def assert_source() -> dict[str, str]:
         "WEBCLIP_RETRY_PDF_TO_YANDEX",
         "WEBCLIP_DOWNLOAD_CACHED_PDF",
         "response?.cached === true",
-        "storage.session",
+        "chromeApi?.storage?.session",
     ]
     for fragment in required:
         if fragment not in guard:
