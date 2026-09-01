@@ -1,0 +1,37 @@
+name: Comprehensive research terminology migration (temporary)
+
+on:
+  push:
+    branches:
+      - research/terminology-and-scope-migration-2026-09-01
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Apply comprehensive research migration
+        run: |
+          set -euo pipefail
+          python project_tools/migrate_comprehensive_research_terminology.py
+          git status --short
+
+      - name: Commit migrated current tree
+        run: |
+          set -euo pipefail
+          git config user.name "lukindv77"
+          git config user.email "lukindv@gmail.com"
+          if git diff --cached --quiet; then
+            echo "No migration changes produced"
+            exit 1
+          fi
+          git commit -m "research: adopt comprehensive project research terminology and scope"
+          git push origin HEAD:research/terminology-and-scope-migration-2026-09-01
