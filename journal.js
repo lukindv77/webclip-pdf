@@ -163,7 +163,7 @@ function createReconnectableProgressPort(name, onMessage, isActive = () => false
 // не зависит от service worker: запись выполняет service worker, но просмотр
 // всегда читает один и тот же persistent store WebClipJournal.
 const JOURNAL_DB_NAME = 'WebClipJournal';
-const JOURNAL_DB_VERSION = 7;
+const JOURNAL_DB_VERSION = 8;
 const JOURNAL_STORE = 'entries';
 const JOURNAL_META_STORE = 'meta';
 const TRANSFER_DB_NAME = 'WebClipOffscreenTransfers';
@@ -392,7 +392,8 @@ window.addEventListener('beforeunload', (event) => {
 
 function applySourceContextToUi() {
   const hasSourceContext = /^https?:\/\//i.test(sourceUrl);
-  sourceUrlEl.textContent = sourceUrl || (mode === 'all' ? 'контекст страницы не задан' : 'не определён');
+  const safeSourceUrl = WebClipDurableUrlPolicy.sanitizeHttpUrl(sourceUrl);
+  sourceUrlEl.textContent = safeSourceUrl || (mode === 'all' ? 'контекст страницы не задан' : 'не определён');
   siteKeyEl.textContent = siteKeyFromUrl(sourceUrl) || (mode === 'all' ? 'все домены' : 'не определён');
   currentButton.disabled = !hasSourceContext;
   siteButton.disabled = !hasSourceContext;
@@ -689,13 +690,7 @@ function setMode(nextMode) {
 }
 
 function normalizeUrl(url) {
-  try {
-    const parsed = new URL(url);
-    parsed.hash = '';
-    return parsed.toString();
-  } catch (_) {
-    return String(url || '').split('#')[0];
-  }
+  return WebClipDurableUrlPolicy.exactHttpUrlKey(url);
 }
 
 function isOpenableYandexPublicUrl(value) {
@@ -936,6 +931,7 @@ function openJournalDbForView() {
         if (!importStore.indexNames.contains('importId')) importStore.createIndex('importId', 'importId', { unique: false });
         if (!importStore.indexNames.contains('createdAt')) importStore.createIndex('createdAt', 'createdAt', { unique: false });
       }
+      WebClipDurableUrlPolicy.migrateJournalDbV8(db, request.transaction, request.oldVersion || 0);
     };
     request.onsuccess = () => {
       const db = request.result;
@@ -951,7 +947,7 @@ function openJournalDbForView() {
 }
 
 function journalEntryViewSummary(entry = {}) {
-  const url = String(entry.url || '').slice(0, 8192);
+  const url = WebClipDurableUrlPolicy.sanitizeHttpUrl(entry.url || '').slice(0, 8192);
   const hostname = String(entry.hostname || '').slice(0, 255);
   return {
     id: String(entry.id || '').slice(0, 180),
@@ -960,7 +956,7 @@ function journalEntryViewSummary(entry = {}) {
     readingMode: entry.destination === 'yandex' && entry.readingMode === 'later' ? 'later' : 'read',
     hostname,
     url,
-    urlKey: String(entry.urlKey || normalizeUrl(url)).slice(0, 8192),
+    urlKey: String(WebClipDurableUrlPolicy.isExactHttpUrlKey(entry.urlKey) ? entry.urlKey : normalizeUrl(entry.url || '')).slice(0, 8192),
     siteKey: String(siteKeyFromUrl(url || hostname)).slice(0, 1024)
   };
 }
@@ -2196,7 +2192,7 @@ function buildEntryCard(entry) {
 
   const journalComments = buildJournalComments(entry);
 
-  const sameUrl = Boolean(sourceUrl && normalizeUrl(entry.url) === normalizeUrl(sourceUrl));
+  const sameUrl = Boolean(sourceUrl && String(entry.urlKey || normalizeUrl(entry.url)) === normalizeUrl(sourceUrl));
   const sameSite = Boolean(sourceUrl && siteKeyFromUrl(entry.url) && siteKeyFromUrl(entry.url) === siteKeyFromUrl(sourceUrl));
   const canApply = sourceTabId > 0 && sameSite;
   const apply = makeButton('Применить Включены/Исключены', true, () => applyEntry(entry));

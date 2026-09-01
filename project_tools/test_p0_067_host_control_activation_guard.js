@@ -86,10 +86,10 @@ function makeGuardContext() {
   });
   assert.deepEqual(
     Array.from(rewritten.files),
-    ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'host-control-activation-guard.js', 'content.js']
+    ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'host-control-activation-guard.js', 'durable-url-policy.js', 'content.js']
   );
   const already = context.WebClipContentInjectionGuard.rewriteDetails({
-    files: ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'host-control-activation-guard.js', 'content.js']
+    files: ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'host-control-activation-guard.js', 'durable-url-policy.js', 'content.js']
   });
   assert.equal(Array.from(already.files).filter((x) => x === 'host-control-activation-guard.js').length, 1);
 })();

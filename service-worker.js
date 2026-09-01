@@ -1,4 +1,4 @@
-importScripts('public-suffix.js', 'journal-import-stream.js', 'journal-text-filter.js', 'local-download-identity.js');
+importScripts('public-suffix.js', 'durable-url-policy.js', 'journal-import-stream.js', 'journal-text-filter.js', 'local-download-identity.js');
 
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
 const YANDEX_API_BASE = 'https://cloud-api.yandex.net/v1/disk';
@@ -28,7 +28,7 @@ const YANDEX_SCOPES = ['cloud_api:disk.read', 'cloud_api:disk.write', 'cloud_api
 const PDF_CACHE_DB_NAME = 'WebClipPdfRetryCache';
 const PDF_CACHE_STORE = 'pdfs';
 const PDF_CACHE_META_STORE = 'meta';
-const PDF_CACHE_DB_VERSION = 3;
+const PDF_CACHE_DB_VERSION = 4;
 const PDF_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_PDF_BASE64_CHARS = 64 * 1024 * 1024; // legacy cache compatibility only
 const MAX_PDF_BYTES = 48 * 1024 * 1024;
@@ -50,7 +50,7 @@ const TRANSFER_TEXT_CHUNK_CHARS = 1024 * 1024;
 const DEBUGGER_COMMAND_TIMEOUT_MS = 60 * 1000;
 const JOURNAL_DB_NAME = 'WebClipJournal';
 const JOURNAL_STORE = 'entries';
-const JOURNAL_DB_VERSION = 7;
+const JOURNAL_DB_VERSION = 8;
 const JOURNAL_VIEW_QUERY_DEADLINE_MS = 20 * 1000;
 const MAX_DOMAIN_FILTER_BASES = 500;
 const MAX_DOMAIN_FILTER_CHILDREN = 1500;
@@ -2674,10 +2674,15 @@ function sanitizeContentSaveMeta(rawMeta, sender) {
   if (!['http:', 'https:'].includes(parsed.protocol)) {
     throw new Error('Сохранение PDF разрешено только для HTTP/HTTPS страниц.');
   }
+  const exactUrl = parsed.toString();
+  const safeUrl = WebClipDurableUrlPolicy.sanitizeHttpUrl(exactUrl);
+  const urlKey = WebClipDurableUrlPolicy.exactHttpUrlKey(exactUrl);
+  if (!safeUrl || !urlKey) throw new Error('Не удалось безопасно нормализовать URL страницы для сохранения.');
   return {
     hostname: parsed.hostname.toLowerCase().slice(0, 255),
-    siteAddress: parsed.origin.slice(0, 2048),
-    url: parsed.toString().slice(0, MAX_IMPORTED_URL_CHARS),
+    siteAddress: WebClipDurableUrlPolicy.sanitizeSiteAddress(exactUrl),
+    url: safeUrl.slice(0, MAX_IMPORTED_URL_CHARS),
+    urlKey,
     title: boundedContentString(raw.title || 'Без названия', MAX_CONTENT_TITLE_CHARS),
     localDateTime: boundedContentString(raw.localDateTime, 128),
     filenameTimestamp: boundedContentString(raw.filenameTimestamp, 128),
@@ -3696,7 +3701,7 @@ async function generatePdfAndDownload(tabId, meta, operationId = '') {
       },
       pdfBlob,
       createdAt: Date.now(),
-      sourceUrl: normalizeJournalUrl(meta.url || ''),
+      sourceUrl: WebClipDurableUrlPolicy.sanitizeHttpUrl(meta.url || ''), sourceUrlKey: WebClipDurableUrlPolicy.isExactHttpUrlKey(meta.urlKey) ? String(meta.urlKey) : normalizeJournalUrl(meta.url || ''),
       temporary: true
     });
     pdfBlob = null;
@@ -3791,7 +3796,7 @@ async function generatePdfAndUploadToYandex(tabId, meta, operationId = '') {
         resourceReport: sanitizePdfResourceReport(meta.resourceReport)
       },
       journalEntryId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      pdfBlob, createdAt: Date.now(), sourceUrl: normalizeJournalUrl(meta.url || '')
+      pdfBlob, createdAt: Date.now(), sourceUrl: WebClipDurableUrlPolicy.sanitizeHttpUrl(meta.url || ''), sourceUrlKey: WebClipDurableUrlPolicy.isExactHttpUrlKey(meta.urlKey) ? String(meta.urlKey) : normalizeJournalUrl(meta.url || '')
     };
     const cachedMetadata = await putCachedPdf(cached);
     cached.pdfBlob = null;
@@ -4043,13 +4048,7 @@ async function downloadCachedPdf(tabId, operationId = '') {
 }
 
 function normalizeJournalUrl(url) {
-  try {
-    const parsed = new URL(String(url || ''));
-    parsed.hash = '';
-    return parsed.toString();
-  } catch (_) {
-    return String(url || '').split('#')[0];
-  }
+  return WebClipDurableUrlPolicy.exactHttpUrlKey(url);
 }
 
 function getJournalSiteKey(urlOrHostname) {
@@ -4082,9 +4081,11 @@ function sanitizeSelectionSnapshot(snapshot, { rejectOverflow = false } = {}) {
       ariaLabel: String(locator.ariaLabel || '').slice(0, 240),
       name: String(locator.name || '').slice(0, 240),
       title: String(locator.title || '').slice(0, 240),
-      src: String(locator.src || '').slice(0, 2000),
+      src: WebClipDurableUrlPolicy.sanitizeLocatorUrl(locator.src || ''),
+      srcKey: WebClipDurableUrlPolicy.isLocatorUrlKey(locator.srcKey) ? String(locator.srcKey) : WebClipDurableUrlPolicy.locatorUrlKey(locator.src || ''),
       role: String(locator.role || '').slice(0, 120),
-      href: String(locator.href || '').slice(0, 2000),
+      href: WebClipDurableUrlPolicy.sanitizeLocatorUrl(locator.href || ''),
+      hrefKey: WebClipDurableUrlPolicy.isLocatorUrlKey(locator.hrefKey) ? String(locator.hrefKey) : WebClipDurableUrlPolicy.locatorUrlKey(locator.href || ''),
       parentTag: String(locator.parentTag || '').slice(0, 64),
       parentId: String(locator.parentId || '').slice(0, 512),
       parentRole: String(locator.parentRole || '').slice(0, 120),
@@ -4331,7 +4332,7 @@ function openJournalDb(timeoutMs = 10_000) {
   return openIndexedDbBounded(
     JOURNAL_DB_NAME,
     JOURNAL_DB_VERSION,
-    (db, tx) => {
+    (db, tx, event) => {
       let store;
       if (!db.objectStoreNames.contains(JOURNAL_STORE)) {
         store = db.createObjectStore(JOURNAL_STORE, { keyPath: 'id' });
@@ -4378,6 +4379,7 @@ function openJournalDb(timeoutMs = 10_000) {
         if (!importStore.indexNames.contains('importId')) importStore.createIndex('importId', 'importId', { unique: false });
         if (!importStore.indexNames.contains('createdAt')) importStore.createIndex('createdAt', 'createdAt', { unique: false });
       }
+      WebClipDurableUrlPolicy.migrateJournalDbV8(db, tx, event?.oldVersion || 0);
     },
     'Не удалось открыть журнал WebClip.',
     Math.max(1, Math.min(20_000, Number(timeoutMs) || 10_000))
@@ -4612,7 +4614,7 @@ function normalizePendingJournalAppendData(data = {}) {
     filename: String(data.filename || '').slice(0, 512),
     remotePath: String(data.remotePath || '').slice(0, MAX_IMPORTED_PATH_CHARS),
     folder: String(data.folder || '').slice(0, MAX_IMPORTED_PATH_CHARS),
-    publicUrl: String(data.publicUrl || '').slice(0, MAX_IMPORTED_URL_CHARS),
+    publicUrl: WebClipDurableUrlPolicy.sanitizeHttpsUrl(data.publicUrl || '').slice(0, MAX_IMPORTED_URL_CHARS),
     resourceId: String(data.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
     accountUid: String(data.accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
     rootPath: normalizeDiskPath(String(data.rootPath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
@@ -4621,8 +4623,9 @@ function normalizePendingJournalAppendData(data = {}) {
     operationId: String(data.operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
     meta: {
       hostname: String(meta.hostname || '').slice(0, 255),
-      siteAddress: String(meta.siteAddress || '').slice(0, MAX_IMPORTED_URL_CHARS),
-      url: String(meta.url || '').slice(0, MAX_IMPORTED_URL_CHARS),
+      siteAddress: WebClipDurableUrlPolicy.sanitizeSiteAddress(meta.siteAddress || meta.url || ''),
+      url: WebClipDurableUrlPolicy.sanitizeHttpUrl(meta.url || '').slice(0, MAX_IMPORTED_URL_CHARS),
+      urlKey: WebClipDurableUrlPolicy.isExactHttpUrlKey(meta.urlKey) ? String(meta.urlKey) : normalizeJournalUrl(meta.url || ''),
       title: String(meta.title || '').slice(0, 4000),
       localDateTime: String(meta.localDateTime || '').slice(0, 200),
       filenameTimestamp: String(meta.filenameTimestamp || '').slice(0, 100),
@@ -5509,11 +5512,11 @@ async function appendJournalEntry({ destination, filename, remotePath = '', fold
     destination: destination === 'yandex' ? 'yandex' : 'download',
     readingMode,
     filename: String(filename || ''),
-    remotePath: String(remotePath || ''), folder: String(folder || ''), publicUrl: String(publicUrl || ''), resourceId: String(resourceId || ''),
+    remotePath: String(remotePath || ''), folder: String(folder || ''), publicUrl: WebClipDurableUrlPolicy.sanitizeHttpsUrl(publicUrl || ''), resourceId: String(resourceId || ''),
     accountUid: String(accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
     rootPath: normalizeDiskPath(String(rootPath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
-    hostname: String(meta.hostname || ''), siteAddress: String(meta.siteAddress || ''),
-    url: String(meta.url || ''), urlKey: normalizeJournalUrl(meta.url || ''), siteKey: getJournalSiteKey(meta.url || meta.hostname || ''),
+    hostname: String(meta.hostname || ''), siteAddress: WebClipDurableUrlPolicy.sanitizeSiteAddress(meta.siteAddress || meta.url || ''),
+    url: WebClipDurableUrlPolicy.sanitizeHttpUrl(meta.url || ''), urlKey: WebClipDurableUrlPolicy.isExactHttpUrlKey(meta.urlKey) ? String(meta.urlKey) : normalizeJournalUrl(meta.url || ''), siteKey: getJournalSiteKey(meta.url || meta.hostname || ''),
     title: String(meta.title || ''),
     fileComment: String(meta.fileComment || ''),
     resourceReport: sanitizePdfResourceReport(meta.resourceReport),
@@ -7051,27 +7054,11 @@ function boundedImportString(value, maxChars) {
 }
 
 function normalizeImportedHttpUrl(value) {
-  const raw = boundedImportString(value, MAX_IMPORTED_URL_CHARS).trim();
-  if (!raw) return '';
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
-    url.hash = '';
-    return url.toString();
-  } catch (_) {
-    return '';
-  }
+  return WebClipDurableUrlPolicy.sanitizeHttpUrl(boundedImportString(value, MAX_IMPORTED_URL_CHARS));
 }
 
 function normalizeImportedHttpsUrl(value) {
-  const raw = boundedImportString(value, MAX_IMPORTED_URL_CHARS).trim();
-  if (!raw) return '';
-  try {
-    const url = new URL(raw);
-    return url.protocol === 'https:' ? url.toString() : '';
-  } catch (_) {
-    return '';
-  }
+  return WebClipDurableUrlPolicy.sanitizeHttpsUrl(boundedImportString(value, MAX_IMPORTED_URL_CHARS));
 }
 
 function assertJournalCommentBudget(comments, legacyComment = '') {
@@ -7130,7 +7117,9 @@ function normalizeImportedJournalEntry(raw, index, seenIds = null, forcedId = ''
   let id = boundedImportString(forcedId || raw.id || '', MAX_IMPORTED_ENTRY_ID_CHARS).trim();
   if (!id || (!forcedId && seenIds?.has(id))) id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`;
   if (seenIds) seenIds.add(id);
-  const url = normalizeImportedHttpUrl(raw.url || '');
+  const rawUrl = boundedImportString(raw.url || '', MAX_IMPORTED_URL_CHARS).trim();
+  const url = normalizeImportedHttpUrl(rawUrl);
+  const urlKey = WebClipDurableUrlPolicy.isExactHttpUrlKey(raw.urlKey) ? String(raw.urlKey) : normalizeJournalUrl(rawUrl);
   const hostname = boundedImportString(raw.hostname || (() => { try { return new URL(url).hostname; } catch (_) { return ''; } })(), 255);
   const snapshot = sanitizeSelectionSnapshot(raw.selectionSnapshot || {}, { rejectOverflow: true });
   const createdAt = Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now();
@@ -7153,9 +7142,9 @@ function normalizeImportedJournalEntry(raw, index, seenIds = null, forcedId = ''
     accountUid: boundedImportString(raw.accountUid || '', MAX_YANDEX_ACCOUNT_FIELD_CHARS),
     rootPath: normalizeDiskPath(boundedImportString(raw.rootPath || '', MAX_IMPORTED_PATH_CHARS)),
     hostname,
-    siteAddress: boundedImportString(raw.siteAddress || '', MAX_IMPORTED_URL_CHARS),
+    siteAddress: WebClipDurableUrlPolicy.sanitizeSiteAddress(raw.siteAddress || rawUrl),
     url,
-    urlKey: normalizeJournalUrl(url),
+    urlKey,
     siteKey: getJournalSiteKey(url || hostname),
     title: boundedImportString(raw.title || '', 4000),
     fileComment: boundedImportString(raw.fileComment || '', MAX_IMPORTED_COMMENT_CHARS),
@@ -8760,13 +8749,15 @@ function pdfCacheMetadataFromRecord(record = {}) {
   const pdfBase64 = typeof record.pdfBase64 === 'string' ? record.pdfBase64 : '';
   const pdfBlob = record.pdfBlob instanceof Blob ? record.pdfBlob : null;
   const pdfByteLength = Math.max(0, Number(record.pdfByteLength) || (pdfBlob ? pdfBlob.size : 0) || (pdfBase64 ? base64DecodedByteLength(pdfBase64) : 0));
+  const safeRecord = WebClipDurableUrlPolicy.sanitizeCachedPdfRecordUrls(record);
   return {
     key: String(record.key || ''),
     tabId: Math.max(0, Number(record.tabId) || 0),
     filename: String(record.filename || '').slice(0, 512),
-    meta: record.meta && typeof record.meta === 'object' ? record.meta : {},
+    meta: safeRecord.meta && typeof safeRecord.meta === 'object' ? safeRecord.meta : {},
     createdAt: Number(record.createdAt || Date.now()),
-    sourceUrl: String(record.sourceUrl || '').slice(0, MAX_IMPORTED_URL_CHARS),
+    sourceUrl: String(safeRecord.sourceUrl || '').slice(0, MAX_IMPORTED_URL_CHARS),
+    sourceUrlKey: String(safeRecord.sourceUrlKey || ''),
     pdfByteLength,
     pdfBase64Chars: pdfBase64 ? pdfBase64.length : Math.max(0, Number(record.pdfBase64Chars) || 0),
     cacheFormat: pdfBlob ? 'blob-v3' : pdfBase64 ? 'base64-legacy' : String(record.cacheFormat || ''),
@@ -8818,10 +8809,11 @@ function openPdfCacheDb() {
         request.onsuccess = () => {
           const cursor = request.result;
           if (!cursor) return;
-          try { metaStore.put(pdfCacheMetadataFromRecord(cursor.value || {})); } catch (_) {}
+          try { metaStore.put(pdfCacheMetadataFromRecord(WebClipDurableUrlPolicy.sanitizeCachedPdfRecordUrls(cursor.value || {}))); } catch (_) {}
           cursor.continue();
         };
       }
+      WebClipDurableUrlPolicy.migratePdfCacheDbV4(db, tx, event?.oldVersion || 0);
     },
     'Не удалось открыть локальный кэш PDF.'
   );
@@ -8829,7 +8821,7 @@ function openPdfCacheDb() {
 
 async function putCachedPdf(record) {
   if (!record?.key) throw new Error('Не указан ключ PDF cache.');
-  const normalizedRecord = { ...record };
+  const normalizedRecord = WebClipDurableUrlPolicy.sanitizeCachedPdfRecordUrls({ ...record });
   const sourceBase64 = typeof normalizedRecord.pdfBase64 === 'string' ? normalizedRecord.pdfBase64 : '';
   const anticipatedPdfBytes = sourceBase64
     ? base64DecodedByteLength(sourceBase64)
@@ -8945,7 +8937,9 @@ async function getValidCachedPdfForTab(tabId) {
     await deleteCachedPdfByKey(key).catch(() => {});
     return null;
   }
-  const cachedUrl = normalizeJournalUrl(cached.sourceUrl || cached?.meta?.url || '');
+  const cachedUrl = WebClipDurableUrlPolicy.isExactHttpUrlKey(cached.sourceUrlKey)
+    ? String(cached.sourceUrlKey)
+    : normalizeJournalUrl(cached.sourceUrl || cached?.meta?.url || '');
   if (!currentUrl || !cachedUrl || currentUrl !== cachedUrl) {
     await deleteCachedPdfByKey(key).catch(() => {});
     return null;

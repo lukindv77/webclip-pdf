@@ -128,6 +128,7 @@ function append(parent, child) {
     'frame-proxy-budget-guard.js',
     'frame-proxy-inert-guard.js',
     'host-control-activation-guard.js',
+    'durable-url-policy.js',
     'content.js'
   ]);
   // popup.js may continue requesting the historical prefix; the shared

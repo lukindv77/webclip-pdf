@@ -3,6 +3,8 @@
     return;
   }
   globalThis.__WEBCLIP_PDF_PROTOTYPE_LOADED__ = true;
+  const durableUrlPolicy = globalThis.WebClipDurableUrlPolicy;
+  if (!durableUrlPolicy) throw new Error('P0-066: durable URL policy helper is not loaded before content.js.');
 
   const INCLUDE_ATTR = 'data-webclip-pdf-include';
   const EXCLUDE_ATTR = 'data-webclip-pdf-exclude';
@@ -1037,6 +1039,8 @@
   }
 
   function createSimpleElementLocator(element, ownerDoc = element?.ownerDocument || document) {
+    const rawSrc = String(element?.getAttribute?.('src') || '').slice(0, 1000);
+    const rawHref = String(element?.getAttribute?.('href') || '').slice(0, 1000);
     const classes = [...(element?.classList || [])]
       .filter((name) => name && !name.startsWith('webclip-'))
       .slice(0, 8);
@@ -1055,9 +1059,11 @@
       ariaLabel: String(element?.getAttribute?.('aria-label') || '').slice(0, 180),
       name: String(element?.getAttribute?.('name') || '').slice(0, 180),
       title: String(element?.getAttribute?.('title') || '').slice(0, 180),
-      src: String(element?.getAttribute?.('src') || '').slice(0, 1000),
+      src: durableUrlPolicy.sanitizeLocatorUrl(rawSrc),
+      srcKey: durableUrlPolicy.locatorUrlKey(rawSrc),
       role: String(element?.getAttribute?.('role') || '').slice(0, 120),
-      href: String(element?.getAttribute?.('href') || '').slice(0, 1000),
+      href: durableUrlPolicy.sanitizeLocatorUrl(rawHref),
+      hrefKey: durableUrlPolicy.locatorUrlKey(rawHref),
       parentTag: String(parent?.localName || '').toLowerCase(),
       parentId: String(parent?.id || '').slice(0, 180),
       parentRole: String(parent?.getAttribute?.('role') || '').slice(0, 120),
@@ -1265,7 +1271,8 @@
       if (locator.ariaLabel && candidate.getAttribute('aria-label') === locator.ariaLabel) score += 8;
       if (locator.name && candidate.getAttribute('name') === locator.name) score += 6;
       if (locator.title && candidate.getAttribute('title') === locator.title) score += 4;
-      if (locator.src && candidate.getAttribute('src') === locator.src) score += 4;
+      if (locator.srcKey && durableUrlPolicy.locatorUrlKey(candidate.getAttribute('src') || '') === locator.srcKey) score += 4;
+      else if (locator.src && durableUrlPolicy.sanitizeLocatorUrl(candidate.getAttribute('src') || '') === locator.src) score += 4;
       for (const className of wantedClasses) {
         if (candidate.classList?.contains(className)) score += 2;
       }
@@ -1350,14 +1357,25 @@
       if (actual === wanted) score += weight;
       else score -= mismatchPenalty;
     };
+    const exactLocatorUrlAttribute = (field, keyField, attrName, weight, mismatchPenalty = 0) => {
+      const wantedKey = String(locator?.[keyField] || '');
+      const wantedSafe = String(locator?.[field] || '');
+      if (!wantedKey && !wantedSafe) return;
+      const actualRaw = String(candidate.getAttribute?.(attrName) || '');
+      const matched = wantedKey
+        ? durableUrlPolicy.locatorUrlKey(actualRaw) === wantedKey
+        : durableUrlPolicy.sanitizeLocatorUrl(actualRaw) === wantedSafe;
+      if (matched) score += weight;
+      else score -= mismatchPenalty;
+    };
 
     exactAttribute('id', 'id', 36, 10);
     exactAttribute('ariaLabel', 'aria-label', 14, 3);
     exactAttribute('name', 'name', 10, 2);
     exactAttribute('title', 'title', 6, 1);
-    exactAttribute('src', 'src', 10, 2);
+    exactLocatorUrlAttribute('src', 'srcKey', 'src', 10, 2);
     exactAttribute('role', 'role', 9, 2);
-    exactAttribute('href', 'href', 14, 3);
+    exactLocatorUrlAttribute('href', 'hrefKey', 'href', 14, 3);
 
     const wantedClasses = Array.isArray(locator.classes) ? locator.classes.filter(Boolean).slice(0, 8) : [];
     let classMatches = 0;

@@ -3,14 +3,15 @@
 
   // Worker/popup-side admission guard for WebClip top content-script injection.
   // Any request that injects content.js must load the flattened-frame budget,
-  // inert-clone and page-control activation guards first, in that order, in
-  // the same isolated world.
+  // inert-clone, page-control activation and durable URL policy helpers first,
+  // in that order, in the same isolated world.
   const INSTALL_MARKER = '__webclipContentInjectionGuardV2';
   const BUDGET_HELPER_FILE = 'frame-proxy-budget-guard.js';
   const INERT_HELPER_FILE = 'frame-proxy-inert-guard.js';
   const HOST_CONTROL_HELPER_FILE = 'host-control-activation-guard.js';
+  const DURABLE_URL_HELPER_FILE = 'durable-url-policy.js';
   const CONTENT_FILE = 'content.js';
-  const REQUIRED_PREFIX = Object.freeze([BUDGET_HELPER_FILE, INERT_HELPER_FILE, HOST_CONTROL_HELPER_FILE]);
+  const REQUIRED_PREFIX = Object.freeze([BUDGET_HELPER_FILE, INERT_HELPER_FILE, HOST_CONTROL_HELPER_FILE, DURABLE_URL_HELPER_FILE]);
 
   function rewriteDetails(details) {
     if (!details || typeof details !== 'object') return details;
@@ -65,6 +66,7 @@
     BUDGET_HELPER_FILE,
     INERT_HELPER_FILE,
     HOST_CONTROL_HELPER_FILE,
+    DURABLE_URL_HELPER_FILE,
     CONTENT_FILE,
     REQUIRED_PREFIX,
     rewriteDetails,

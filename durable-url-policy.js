@@ -262,8 +262,9 @@
   }
 
   function migratePdfCacheDbV4(db, tx, oldVersion) {
-    if (Number(oldVersion || 0) >= 4 || !tx || !db.objectStoreNames.contains('pdfs')) return;
-    migrateStoreCursor(tx.objectStore('pdfs'), sanitizeCachedPdfRecordUrls);
+    if (Number(oldVersion || 0) >= 4 || !tx) return;
+    if (db.objectStoreNames.contains('pdfs')) migrateStoreCursor(tx.objectStore('pdfs'), sanitizeCachedPdfRecordUrls);
+    if (db.objectStoreNames.contains('meta')) migrateStoreCursor(tx.objectStore('meta'), sanitizeCachedPdfRecordUrls);
   }
 
   globalThis.WebClipDurableUrlPolicy = Object.freeze({

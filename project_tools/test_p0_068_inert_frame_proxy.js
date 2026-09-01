@@ -173,6 +173,7 @@ function descendants(root) {
     'frame-proxy-budget-guard.js',
     'frame-proxy-inert-guard.js',
     'host-control-activation-guard.js',
+    'durable-url-policy.js',
     'content.js'
   ];
   const rewritten = context.WebClipContentInjectionGuard.rewriteDetails({ target: { tabId: 9 }, files: ['content.js'] });
