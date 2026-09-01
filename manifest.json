@@ -32,7 +32,7 @@
     "open_in_tab": true
   },
   "background": {
-    "service_worker": "service-worker.js"
+    "service_worker": "service-worker-bootstrap.js"
   },
   "optional_host_permissions": [
     "http://*/*",
