@@ -169,7 +169,12 @@ function descendants(root) {
   vm.createContext(context);
   vm.runInContext(source, context, { filename: 'content-injection-guard.js' });
   assert.ok(context.WebClipContentInjectionGuard);
-  const expected = ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'content.js'];
+  const expected = [
+    'frame-proxy-budget-guard.js',
+    'frame-proxy-inert-guard.js',
+    'host-control-activation-guard.js',
+    'content.js'
+  ];
   const rewritten = context.WebClipContentInjectionGuard.rewriteDetails({ target: { tabId: 9 }, files: ['content.js'] });
   assert.deepEqual(Array.from(rewritten.files), expected);
   const untouched = context.WebClipContentInjectionGuard.rewriteDetails({ target: { tabId: 9 }, files: ['frame-agent.js'] });
@@ -182,6 +187,9 @@ function descendants(root) {
   const popup = fs.readFileSync(path.join(ROOT, 'popup.js'), 'utf8');
   const sharedWorkerBootstrap = fs.readFileSync(path.join(ROOT, 'journal-text-filter.js'), 'utf8');
   const content = fs.readFileSync(path.join(ROOT, 'content.js'), 'utf8');
+  // popup.js can request the historical budget/inert/content sequence because
+  // popup.html installs content-injection-guard.js first; the shared guard
+  // upgrades it to include the P0-067 helper before execution.
   assert.match(popup, /files:\s*\['frame-proxy-budget-guard\.js',\s*'frame-proxy-inert-guard\.js',\s*'content\.js'\]/);
   assert.match(popup, /readLaterButton[\s\S]*await ensureTopContentScript\(tab\.id\)/);
   assert.match(sharedWorkerBootstrap, /importScripts\('pdf-print-guard\.js',\s*'content-injection-guard\.js',\s*'operation-log-redaction-guard\.js'\)/);
