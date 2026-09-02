@@ -1,0 +1,64 @@
+name: Research C24 inert disclosure
+
+on:
+  push:
+    branches: [research/evidence-c24-inert-disclosure-2026-09-02]
+    paths-ignore:
+      - project_tools/.c24-physical-result.json
+
+permissions:
+  contents: write
+
+jobs:
+  physical-c24:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact evidence head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.14'
+
+      - name: Install bounded harness dependencies
+        run: python -m pip install --disable-pip-version-check playwright==1.55.0 pypdf==6.0.0
+
+      - name: Run exact-source physical C24 matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [[ -z "$chrome" ]]; then
+            echo 'Google Chrome/Chromium is unavailable on runner' >&2
+            exit 1
+          fi
+          "$chrome" --version
+          export CONTENT_BLOB_SHA="$(git rev-parse HEAD:content.js)"
+          export HOST_GUARD_BLOB_SHA="$(git rev-parse HEAD:host-control-activation-guard.js)"
+          python project_tools/research_c24_inert_disclosure.py --chrome "$chrome" --out "$RUNNER_TEMP/c24-pdfs" | tee "$RUNNER_TEMP/c24-result.log"
+          result="$(grep '^C24_RESULT_JSON=' "$RUNNER_TEMP/c24-result.log" | tail -n 1 | sed 's/^C24_RESULT_JSON=//')"
+          if [[ -z "$result" ]]; then
+            echo 'C24 result JSON missing' >&2
+            exit 1
+          fi
+          printf '%s\n' "$result" > project_tools/.c24-physical-result.json
+          echo "::notice title=C24_RESULT::$result"
+
+      - name: Persist temporary exact result receipt
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -s project_tools/.c24-physical-result.json ]]; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add project_tools/.c24-physical-result.json
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: persist temporary C24 physical result'
+          git push origin HEAD:research/evidence-c24-inert-disclosure-2026-09-02
