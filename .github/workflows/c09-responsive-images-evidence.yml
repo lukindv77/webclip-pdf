@@ -1,0 +1,48 @@
+name: C09 responsive images evidence
+
+on:
+  push:
+    branches:
+      - research/full-restart-c09-responsive-images-2026-09-02
+
+permissions:
+  contents: read
+
+jobs:
+  c09-responsive-images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.14'
+
+      - name: Install local harness dependencies
+        run: python -m pip install --disable-pip-version-check playwright pymupdf pillow
+
+      - name: Install Chrome for Testing 152.0.7977.64
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output /tmp/chrome.zip \
+            https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.64/linux64/chrome-linux64.zip
+          unzip -q /tmp/chrome.zip -d /tmp/chrome-c09
+          /tmp/chrome-c09/chrome-linux64/chrome --version
+
+      - name: Run C09 local-first physical harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/c09-evidence
+          python project_tools/research_c09_responsive_images.py \
+            --chrome /tmp/chrome-c09/chrome-linux64/chrome \
+            --output /tmp/c09-evidence | tee /tmp/c09-output.txt
+          test -s /tmp/c09-evidence/result.json
+          sha256sum /tmp/c09-evidence/*.pdf
+          cat /tmp/c09-evidence/result.json
