@@ -35,4 +35,8 @@ This is not a new P-code. Git/current-history reconciliation identifies historic
 
 The evidence does not justify an unbounded iframe height or universal flattening. A valid implementation may retain hard budgets, but exceeding the live-frame representation envelope must settle through a bounded complete final representation or a truthful degraded/failed result, never silent partial success.
 
+## Delivery binding
+
+The canonical integration vehicle for this receipt is PR #129. Exact-head and post-merge `Repository integrity` remain mandatory delivery gates; this receipt does not treat an unverified branch head as integrated current truth.
+
 No runtime source, manifest/version, build/tag/GitHub Release, or release-readiness state is changed by this evidence receipt.
