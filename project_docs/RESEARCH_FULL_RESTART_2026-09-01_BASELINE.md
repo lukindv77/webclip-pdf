@@ -74,7 +74,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C08 | Raster images / crop/object-fit | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-187)` |
 | C09 | Responsive images / picture/srcset/currentSrc | `L4-REVALIDATED / FINDING + POSITIVE/NEGATIVE/CAUSAL CONTROLS (P0-004, P0-070, P0-075, P1-003, P1-187)` |
 | C10 | SVG visual state/resources | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-003, P1-187)` |
-| C11 | Canvas | `NOT-TRIAGED / UNKNOWN` |
+| C11 | Canvas | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-187)` |
 | C12 | Video / replaced media / current frame | `NOT-TRIAGED / UNKNOWN` |
 | C13 | Form / renderer-owned controls | `NOT-TRIAGED / UNKNOWN` |
 | C14 | Pseudo/generated content | `NOT-TRIAGED / UNKNOWN` |
@@ -238,6 +238,20 @@ Two same-origin flattened-frame controls freshly revalidate **P1-187 ACTIVE**. F
 Historical flattened-document namespace evidence was used only for duplicate/root-cause reconciliation. It already proves SVG fragment/gradient/`<use>` namespace collisions under the same secondary-representation family, so no new SVG-specific P-code is allocated. Registry status is unchanged.
 
 C10 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-003, P1-187)`. C11 — Canvas — is the next sequential untriaged coordinate.
+
+## Fresh continuation checkpoint — focused C11 Canvas
+
+`RESEARCH_FULL_RESTART_C11_CANVAS_2026-09-02.md` records the fresh C11 tranche on exact canonical source `b0e76d6c366434fbbd5feeb34af4ece7b0db1909`, with exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`.
+
+Fresh source inspection finds no canvas-specific capture/materialization path. Local-first managed Chromium `144.0.7559.96` L3/L4 evidence physically proves that a top-document canvas and the same canvas printed directly inside an accessible child frame preserve the current red bitmap, while a production-shaped same-origin BODY `cloneNode(true)` preserves canvas dimensions/fallback DOM but loses the renderer-owned bitmap and prints blank.
+
+A causal control copies the source canvas bitmap into the cloned target canvas before printing and restores the same red physical result. This directly revalidates existing **P1-187 ACTIVE**, whose canonical Registry wording already names canvas bitmap as required flattened rendered state. No new P-code is allocated.
+
+A narrow live-mutation control additionally shows that a red canvas repainted blue before the render cut is physically printed blue. This is supporting evidence for existing exact-generation/isolation owners P0-070/P0-075 and C35, not a second C11 root or owner allocation.
+
+External standards/comparable-tool research constrains the target architecture: WHATWG defines printed canvas as the current bitmap but also enforces origin-clean readback security; SingleFile documents that canvas image representation can sometimes be unavailable for security reasons. Therefore C11 does not prescribe unconditional `toDataURL()`/pixel readback. Safe bounded renderer-owned materialization or truthful degraded/unknown is required when preservation is unsupported, tainted or over budget.
+
+C11 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-187)`. C12 — Video / replaced media / current frame — is the next sequential untriaged coordinate.
 
 ## Delivery rule
 
