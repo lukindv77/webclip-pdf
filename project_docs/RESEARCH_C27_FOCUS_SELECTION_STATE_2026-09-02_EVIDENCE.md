@@ -24,6 +24,8 @@ Fresh classification:
 
 The harness bound itself to the exact baseline and current `content.js`, the real WebClip guard prefix, current same-origin BODY flattening, `media:'screen'`, and `Page.printToPDF`. Synthetic local fixtures only were used.
 
+Earlier failed workflow attempts stopped on harness-only source-guard/static-receipt defects before an accepted result; they are not product evidence.
+
 ## Fresh observations
 
 1. Native Chrome kept the source input focused through physical PDF generation. `:focus`, `:focus-within`, `:focus-visible`, focus-only content, red input background and magenta outline survived; no blur mutation occurred. PDF SHA-256: `0243d7fab499ed797482fbcdaba9263ec5a82e7cebdd95e715029f00760ed892`.
