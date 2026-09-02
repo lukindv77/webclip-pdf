@@ -92,7 +92,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C26 | Hover exclusion | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/PAGE-CLEANED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004)` |
 | C27 | Focus / selection / interaction-induced page state | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/TRUSTED-CLICK/EXPLICIT-FOCUS/REFOCUS/SELECTION/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-187 supporting)` |
 | C28 | Responsive/environment state | `L4-REVALIDATED / FINDING + POSITIVE/NARROW/DPR/SCHEME/FRAME/CAUSAL CONTROLS (P0-070, P0-004)` |
-| C29 | Viewport units / container-query dependent geometry | `NOT-TRIAGED / UNKNOWN` |
+| C29 | Viewport units / container-query dependent geometry | `L4-REVALIDATED / FINDING + POSITIVE/DIRECT/ALIGNED/CONTAINER/FROZEN/CAUSAL CONTROLS (P0-070, P0-004)` |
 | C30 | Clipping / overflow / paint containment | `NOT-TRIAGED / UNKNOWN` |
 | C31 | Fixed / sticky | `NOT-TRIAGED / UNKNOWN` |
 | C32 | Pagination / physical page breaks | `NOT-TRIAGED / UNKNOWN` |
@@ -421,6 +421,17 @@ Duplicate/root-cause reconciliation maps C27 to existing **P0-075 / P0-070 / P0-
 A source `1200×700`, DPR2, dark desktop/landscape representation remains desktop/landscape in live `matchMedia()` through both beforeprint observers, yet production-shaped `media:'screen'` + A4 portrait physical PDF selects the mobile/portrait branches while retaining DPR2/dark. The generated request already contains bounded diagnostic `viewportWidth`/`viewportHeight`; those values do not freeze renderer representation. Test-only CDP width/height/orientation media features also fail to prevent the switch. A bounded admission-style used-state materialization restores desktop/landscape under the same A4 renderer, while a narrow mobile/portrait source is a positive control. Same-origin BODY flattening is also positive in this coordinate because copied used state preserves the child desktop/landscape branch.
 
 Duplicate/root-cause reconciliation maps C28 to existing **P0-070 / P0-004 ACTIVE**. P0-075 is not needed because the drift reproduces without WebClip UI interaction; P1-187 is a positive rather than a fresh finding here. No new P-code or Registry wording/status change is warranted. C28 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NARROW/DPR/SCHEME/FRAME/CAUSAL CONTROLS (P0-070, P0-004)`. C29 — Viewport units / container-query dependent geometry — is the next sequential coordinate.
+
+
+## Fresh continuation checkpoint — focused C29 Viewport units / container-query dependent geometry
+
+`RESEARCH_FULL_RESTART_C29_VIEWPORT_CONTAINER_GEOMETRY_2026-09-02.md` records the accepted C29 exact-source physical tranche on canonical source `4508b7abce73366fd796c0d662f15d3bbb112df8`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33626492404`, job `100235352749`, exact accepted workflow head `78ae97da0b1741529ec9736ab06ca25c608bc49d`, conclusion SUCCESS and raw result SHA-256 `b3d60e267efe3797f877ea1266fe94c1f084ce875a6ac1bc81b9d8a787d33d0a`.
+
+At the admitted 1200×800 screen state, `50vw=600px`, the percentage query container is about `937.6px`, its `50cqw` child is about `458.8px`, and the container-query branch is WIDE. Current WebClip preparation and `beforeprint` continue to report that source-like geometry, yet the physical A4 PDF contains the NARROW branch. Direct Chromium and a source already aligned to 703×1031 produce the same scale-invariant physical geometry ratios as current WebClip (`viewport/fixed≈1.04`, `cqw/fixed≈0.779`). An explicit 800px query-container remains WIDE, rejecting a generic container-query failure.
+
+A test-only freeze of admitted source used geometry into explicit pixel values preserves the WIDE branch and restores source-shaped physical ratios (`viewport/fixed≈1.542`, `cqw/fixed≈1.176`) while Exclude and outside-scope controls remain omitted. Two earlier runs are retained as rejected harness hypotheses: `beforeprint` was not a receipt of final paged used geometry, and absolute PDF pixel widths were not comparable across differently page-fitted documents; the accepted gate uses within-PDF scale-invariant ratios.
+
+Duplicate/root-cause reconciliation maps C29 to existing **P0-070 / P0-004 ACTIVE**. No new P-code, Registry wording/status or runtime/release change is warranted. C29 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/DIRECT/ALIGNED/CONTAINER/FROZEN/CAUSAL CONTROLS (P0-070, P0-004)`. C30 — Clipping / overflow / paint containment — is the next sequential coordinate.
 
 ## Delivery rule
 
