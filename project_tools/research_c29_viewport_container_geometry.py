@@ -8,8 +8,9 @@ WebClip's current selected-save representation:
 - source viewport aligned to the A4 content-area geometry as a positive control;
 - test-only source-used-geometry freeze as a causal static-representation control.
 
-The physical PDF itself contains a beforeprint measurement receipt and container-query branch
-tokens, so the classification does not rely only on pre-print DOM inspection.
+The physical PDF carries container-query branch tokens. PyMuPDF raster receipts independently
+measure the colored boxes whose widths are authored in vw/cqw, so used geometry is verified from
+physical bytes rather than inferred from beforeprint/live DOM metrics.
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ import re
 import shutil
 import tempfile
 
+import fitz
 from playwright.sync_api import sync_playwright
 from pypdf import PdfReader
 
@@ -134,9 +136,10 @@ def pdf_text(path: pathlib.Path) -> tuple[str, int]:
 
 
 def parse_probe(text: str) -> dict:
+    compact = " ".join(text.split())
     m = re.search(
         r"C29_PRINT_PROBE viewport=([0-9.]+)x([0-9.]+) cqContainer=([0-9.]+) cqUnit=([0-9.]+) cqBranch=(wide|narrow) fixedContainer=([0-9.]+) fixedCqUnit=([0-9.]+) fixedBranch=(wide|narrow)",
-        text,
+        compact,
     )
     if not m:
         return {}
@@ -147,6 +150,39 @@ def parse_probe(text: str) -> dict:
     }
 
 
+def _color_bbox(path: pathlib.Path, kind: str) -> dict:
+    doc = fitz.open(path)
+    page = doc[0]
+    pix = page.get_pixmap(matrix=fitz.Matrix(1, 1), alpha=False)
+    samples, n, width, height = pix.samples, pix.n, pix.width, pix.height
+    xs: list[int] = []
+    ys: list[int] = []
+    for y in range(height):
+        row = y * width * n
+        for x in range(width):
+            i = row + x * n
+            r, g, b = samples[i], samples[i + 1], samples[i + 2]
+            if kind == "cyan":
+                ok = 210 <= r <= 235 and g >= 245 and b >= 245
+            elif kind == "green":
+                ok = 210 <= r <= 235 and g >= 245 and 210 <= b <= 235
+            elif kind == "pink":
+                ok = r >= 245 and 210 <= g <= 235 and b >= 245
+            else:
+                ok = False
+            if ok:
+                xs.append(x); ys.append(y)
+    doc.close()
+    if not xs:
+        return {"pixels": 0, "x": 0, "y": 0, "w": 0, "h": 0}
+    return {
+        "pixels": len(xs),
+        "x": min(xs), "y": min(ys),
+        "w": max(xs) - min(xs) + 1,
+        "h": max(ys) - min(ys) + 1,
+    }
+
+
 def pdf_summary(path: pathlib.Path) -> dict:
     text, pages = pdf_text(path)
     return {
@@ -154,6 +190,11 @@ def pdf_summary(path: pathlib.Path) -> dict:
         "bytes": path.stat().st_size,
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "probe": parse_probe(text),
+        "geometry": {
+            "viewport": _color_bbox(path, "cyan"),
+            "cqUnit": _color_bbox(path, "green"),
+            "fixedCqUnit": _color_bbox(path, "pink"),
+        },
         "wide": "C29_CQ_WIDE" in text,
         "narrow": "C29_CQ_NARROW" in text,
         "fixedWide": "C29_FIXED_WIDE" in text,
@@ -236,10 +277,7 @@ def webclip_case(ctx, out: pathlib.Path, name: str, width: int, height: int, fre
         "afterPrepare": after_prepare,
         "beforePrint": before_print,
         "pdf": pdf,
-        "requestViewport": {
-            "width": (request or {}).get("meta", {}).get("viewportWidth"),
-            "height": (request or {}).get("meta", {}).get("viewportHeight"),
-        },
+        "requestMetaKeys": sorted((request or {}).get("meta", {}).keys()),
     }
     finish(p)
     p.close()
@@ -265,13 +303,12 @@ def run(chrome: str, out: pathlib.Path) -> dict:
     result["resultSha256"] = hashlib.sha256(payload.encode()).hexdigest()
     print("C29_RESULT_JSON=" + json.dumps(result, sort_keys=True, separators=(",", ":")), flush=True)
 
-    # Raw JSON is emitted first. Assertions establish controls without hard-coding an exact
-    # Chromium page-area pixel value beyond the observed direction/branch semantics.
+    # Raw JSON is emitted first. beforeprint is intentionally NOT treated as final paged-layout
+    # geometry: the first run proved it can remain source-like while physical query branches differ.
     d = result["directWide"]
     assert d["source"]["cqBranch"] == "wide" and d["source"]["fixedBranch"] == "wide", d
     assert d["pdf"]["narrow"] and not d["pdf"]["wide"], d
     assert d["pdf"]["fixedWide"] and not d["pdf"]["fixedNarrow"], d
-    assert d["pdf"]["probe"].get("viewportW", 9999) < d["source"]["viewportBox"]["w"] * 0.8, d
 
     w = result["webclipWide"]
     assert w["source"]["cqBranch"] == "wide" and w["pdf"]["narrow"] and not w["pdf"]["wide"], w
@@ -280,14 +317,19 @@ def run(chrome: str, out: pathlib.Path) -> dict:
 
     a = result["webclipAligned"]
     assert a["source"]["cqBranch"] == "narrow" and a["pdf"]["narrow"], a
-    assert abs(a["pdf"]["probe"].get("viewportW", 0) - a["source"]["viewportBox"]["w"]) < 3, a
     assert a["pdf"]["fixedWide"], a
 
     f = result["webclipFrozen"]
     assert f["source"]["cqBranch"] == "wide" and f["pdf"]["wide"] and not f["pdf"]["narrow"], f
-    assert abs(f["pdf"]["probe"].get("viewportW", 0) - f["source"]["viewportBox"]["w"]) < 3, f
-    assert abs(f["pdf"]["probe"].get("cqUnit", 0) - f["source"]["cqUnit"]) < 3, f
     assert not f["pdf"]["excludePresent"] and not f["pdf"]["outsideTopPresent"] and not f["pdf"]["outsideBottomPresent"], f
+
+    # Physical raster geometry: viewport/cq-relative boxes shrink under paged geometry, while
+    # an explicit fixed-container cqw control stays stable. Freezing source used geometry restores
+    # the large source-shaped boxes through the same A4 renderer.
+    assert w["pdf"]["geometry"]["viewport"]["w"] < f["pdf"]["geometry"]["viewport"]["w"] * 0.8, (w, f)
+    assert w["pdf"]["geometry"]["cqUnit"]["w"] < f["pdf"]["geometry"]["cqUnit"]["w"] * 0.8, (w, f)
+    assert abs(w["pdf"]["geometry"]["fixedCqUnit"]["w"] - f["pdf"]["geometry"]["fixedCqUnit"]["w"]) <= 4, (w, f)
+    assert abs(a["pdf"]["geometry"]["viewport"]["w"] - w["pdf"]["geometry"]["viewport"]["w"]) <= 4, (a, w)
     return result
 
 
