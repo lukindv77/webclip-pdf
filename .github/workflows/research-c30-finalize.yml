@@ -1,6 +1,6 @@
 name: Research C30 finalize
 
-"on":
+on:
   push:
     branches: [research/evidence-c30-clipping-containment-2026-09-02]
 
@@ -16,43 +16,36 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Finalize C30 durable evidence
+      - name: Advance C30 baseline and remove temporary finalizer
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-
-          baseline = Path('project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md')
-          text = baseline.read_text(encoding='utf-8')
-          old = '| C30 | Clipping / overflow / paint containment | `NOT-TRIAGED / UNKNOWN` |'
-          new = '| C30 | Clipping / overflow / paint containment | `L4-REVALIDATED / FINDING + POSITIVE/HIDDEN/CLIP/PAINT/CLIP-PATH/CAUSAL CONTROLS (P0-004)` |'
+          import base64
+          p=Path('project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md')
+          text=p.read_text(encoding='utf-8')
+          old='| C30 | Clipping / overflow / paint containment | `NOT-TRIAGED / UNKNOWN` |'
+          new='| C30 | Clipping / overflow / paint containment | `L4-REVALIDATED / FINDING + POSITIVE/HIDDEN/CLIP/PAINT/CLIP-PATH/CAUSAL CONTROLS (P0-004)` |'
           if old not in text:
               raise SystemExit('C30 baseline row did not match expected current text')
-          text = text.replace(old, new, 1)
-          checkpoint = '''
-
-## Fresh continuation checkpoint — focused C30 Clipping / overflow / paint containment
-
-`RESEARCH_FULL_RESTART_C30_CLIPPING_CONTAINMENT_2026-09-02.md` records the accepted fresh C30 exact-source physical tranche on canonical source `cd0f1d6aaf5bc874a2b8e791c2c0fd2c6a52fbd0`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33635043627`, job `100263691851`, exact workflow head `6969bcbfcf07d46fddf559fb1fe50dbe5f487ed3`, conclusion SUCCESS and accepted raw result SHA-256 `b45411ad9a8abdba69b438c29b69007714ccf7618879864918e562629f34dfca`.
-
-Fresh current-path physical results preserve only `8/120` mounted selected rows under `overflow:hidden`, `overflow:clip`, and `contain:paint` even when the latter keeps authored `overflow:visible`. A separate `clip-path:inset(0)` variant preserves only 40 unique rows and loses LAST. In contrast, `contain:layout` and `max-height:360px + overflow:visible` preserve `120/120`, rejecting a broad height/containment hypothesis. Test-only normalization of the exact prepared hidden/paint ancestors to auto-height, visible overflow, `contain:none` and no clip-path restores `120/120` while Exclude/outside controls remain omitted.
-
-Duplicate/root-cause reconciliation maps C30 directly to existing **P0-004 ACTIVE**; C20 remains adjacent retained-scrollport evidence under the same owner. No new P-code, Registry wording/status, runtime or release change is warranted. C30 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/HIDDEN/CLIP/PAINT/CLIP-PATH/CAUSAL CONTROLS (P0-004)`. C31 — Fixed / sticky — is the next sequential coordinate.
-'''
+          text=text.replace(old,new,1)
+          checkpoint=base64.b64decode('IyMgRnJlc2ggY29udGludWF0aW9uIGNoZWNrcG9pbnQg4oCUIGZvY3VzZWQgQzMwIENsaXBwaW5nIC8gb3ZlcmZsb3cgLyBwYWludCBjb250YWlubWVudAoKYFJFU0VBUkNIX0ZVTExfUkVTVEFSVF9DMzBfQ0xJUFBJTkdfQ09OVEFJTk1FTlRfMjAyNi0wOS0wMi5tZGAgcmVjb3JkcyB0aGUgYWNjZXB0ZWQgZnJlc2ggQzMwIGV4YWN0LXNvdXJjZSBwaHlzaWNhbCB0cmFuY2hlIG9uIGNhbm9uaWNhbCBzb3VyY2UgYGNkMGYxZDZhYWY1YmM4NzRhMmI4ZTc5MWMyYzBmZDJjNmE1MmZiZDBgLCBleGFjdCBgY29udGVudC5qc2AgYmxvYiBgZjNlZTdiNTFmZTllZTk0ZmRmZTM2ZThhN2M5OWYxNGE1NDhmZGM0ZWAsIEdvb2dsZSBDaHJvbWUgYDE1MS4wLjc5MjIuMTczYCwgd29ya2Zsb3cgcnVuIGAzMzYzNTA0MzYyN2AsIGpvYiBgMTAwMjYzNjkxODUxYCwgZXhhY3Qgd29ya2Zsb3cgaGVhZCBgNjk2OWJjYmZjZjA3ZDQ2ZmRkZjU1OWZiMWZlNTBkYmU1ZjQ4N2VkM2AsIGNvbmNsdXNpb24gU1VDQ0VTUyBhbmQgYWNjZXB0ZWQgcmF3IHJlc3VsdCBTSEEtMjU2IGBiNDU0MTFhZDlhOGFiZGJhNjliNDM4YzI5YjY5MDA3NzE0Y2NmNzYxODg3OTg2NDkxOGU1NjI2MjlmMzRkZmNhYC4KCkZyZXNoIGN1cnJlbnQtcGF0aCBwaHlzaWNhbCByZXN1bHRzIHByZXNlcnZlIG9ubHkgYDgvMTIwYCBtb3VudGVkIHNlbGVjdGVkIHJvd3MgdW5kZXIgYG92ZXJmbG93OmhpZGRlbmAsIGBvdmVyZmxvdzpjbGlwYCwgYW5kIGBjb250YWluOnBhaW50YCBldmVuIHdoZW4gdGhlIGxhdHRlciBrZWVwcyBhdXRob3JlZCBgb3ZlcmZsb3c6dmlzaWJsZWAuIEEgc2VwYXJhdGUgYGNsaXAtcGF0aDppbnNldCgwKWAgdmFyaWFudCBwcmVzZXJ2ZXMgb25seSA0MCB1bmlxdWUgcm93cyBhbmQgbG9zZXMgTEFTVC4gSW4gY29udHJhc3QsIGBjb250YWluOmxheW91dGAgYW5kIGBtYXgtaGVpZ2h0OjM2MHB4ICsgb3ZlcmZsb3c6dmlzaWJsZWAgcHJlc2VydmUgYDEyMC8xMjBgLCByZWplY3RpbmcgYSBicm9hZCBoZWlnaHQvY29udGFpbm1lbnQgaHlwb3RoZXNpcy4gVGVzdC1vbmx5IG5vcm1hbGl6YXRpb24gb2YgdGhlIGV4YWN0IHByZXBhcmVkIGhpZGRlbi9wYWludCBhbmNlc3RvcnMgdG8gYXV0by1oZWlnaHQsIHZpc2libGUgb3ZlcmZsb3csIGBjb250YWluOm5vbmVgIGFuZCBubyBjbGlwLXBhdGggcmVzdG9yZXMgYDEyMC8xMjBgIHdoaWxlIEV4Y2x1ZGUvb3V0c2lkZSBjb250cm9scyByZW1haW4gb21pdHRlZC4KCkR1cGxpY2F0ZS9yb290LWNhdXNlIHJlY29uY2lsaWF0aW9uIG1hcHMgQzMwIGRpcmVjdGx5IHRvIGV4aXN0aW5nICoqUDAtMDA0IEFDVElWRSoqOyBDMjAgcmVtYWlucyBhZGphY2VudCByZXRhaW5lZC1zY3JvbGxwb3J0IGV2aWRlbmNlIHVuZGVyIHRoZSBzYW1lIG93bmVyLiBObyBuZXcgUC1jb2RlLCBSZWdpc3RyeSB3b3JkaW5nL3N0YXR1cywgcnVudGltZSBvciByZWxlYXNlIGNoYW5nZSBpcyB3YXJyYW50ZWQuIEMzMCB0aGVyZWZvcmUgYWR2YW5jZXMgdG8gYEw0LVJFVkFMSURBVEVEIC8gRklORElORyArIFBPU0lUSVZFL0hJRERFTi9DTElQL1BBSU5UL0NMSVAtUEFUSC9DQVVTQUwgQ09OVFJPTFMgKFAwLTAwNClgLiBDMzEg4oCUIEZpeGVkIC8gc3RpY2t5IOKAlCBpcyB0aGUgbmV4dCBzZXF1ZW50aWFsIGNvb3JkaW5hdGUuCg==').decode('utf-8')
           anchor='\n## Delivery rule\n'
           if anchor not in text:
               raise SystemExit('Delivery rule anchor missing')
-          text=text.replace(anchor,checkpoint+anchor,1)
-          baseline.write_text(text,encoding='utf-8')
+          text=text.replace(anchor,'\n'+checkpoint+anchor,1)
+          p.write_text(text,encoding='utf-8')
 
           detail=Path('project_docs/RESEARCH_FULL_RESTART_C30_CLIPPING_CONTAINMENT_2026-09-02.md')
           d=detail.read_text(encoding='utf-8')
-          wrong='Hidden-causal PDF SHA-256: `3f37b1f26d4a47393518ff5a03e5d024e3f20cf218099bfdf39e16750b9` is not used because the authoritative raw receipt records `3f37b1f26d4a47393518ff5a03e5d024e3f20cf218099bfdf2043593c16750b9`.'
-          correct='Hidden-causal PDF SHA-256: `3f37b1f26d4a47393518ff5a03e5d024e3f20cf218099bfdf2043593c16750b9`.'
-          if wrong not in d:
-              raise SystemExit('C30 detailed evidence correction target missing')
-          detail.write_text(d.replace(wrong,correct,1),encoding='utf-8')
+          marker='Hidden-causal PDF SHA-256:'
+          start=d.find(marker)
+          end=d.find('\n',start)
+          if start<0 or end<0:
+              raise SystemExit('Hidden-causal SHA line missing')
+          d=d[:start]+'Hidden-causal PDF SHA-256: `3f37b1f26d4a47393518ff5a03e5d024e3f20cf218099bfdf2043593c16750b9`.'+d[end:]
+          detail.write_text(d,encoding='utf-8')
           PY
           git rm .github/workflows/research-c30-finalize.yml
           git config user.name 'github-actions[bot]'
