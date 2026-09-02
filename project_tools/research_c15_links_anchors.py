@@ -282,6 +282,13 @@ def render_pdf(chrome: str, url: str, output: Path) -> dict[str, object]:
         "text": text,
         "links": links,
         "goto_count": sum(1 for link in links if link["kind"] == fitz.LINK_GOTO),
+        "internal_destination_count": sum(
+            1
+            for link in links
+            if isinstance(link.get("target_page"), int)
+            and link["target_page"] >= 0
+            and not link.get("uri")
+        ),
         "uris": [link["uri"] for link in links if link.get("uri")],
     }
 
@@ -317,13 +324,13 @@ def run(repo_root: Path) -> dict[str, object]:
 
 
 def validate_result(result: dict[str, object]) -> None:
-    assert result["top_direct"]["goto_count"] >= 1
-    assert result["top_prepared"]["goto_count"] >= 1
-    assert result["frame_direct"]["goto_count"] >= 1
+    assert result["top_direct"]["internal_destination_count"] >= 1
+    assert result["top_prepared"]["internal_destination_count"] >= 1
+    assert result["frame_direct"]["internal_destination_count"] >= 1
     assert "FRAME_DESTINATION_TOKEN" in result["frame_flattened"]["text"]
     assert "PROXY_DEST_ID=[EMPTY]" in result["frame_flattened"]["text"]
-    assert result["frame_flattened"]["goto_count"] == 0
-    assert result["frame_causal_namespaced"]["goto_count"] >= 1
+    assert result["frame_flattened"]["internal_destination_count"] == 0
+    assert result["frame_causal_namespaced"]["internal_destination_count"] >= 1
     assert any("external.example/path" in uri for uri in result["top_prepared"]["uris"])
     assert any("frame-external.example/path" in uri for uri in result["frame_flattened"]["uris"])
     assert any("/red.svg" in uri for uri in result["top_prepared"]["uris"])
