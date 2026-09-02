@@ -82,7 +82,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C16 | Same-origin iframe | `L4-REVALIDATED / FINDING + POSITIVE/NESTED/CAUSAL CONTROLS (P1-150; P0-004 supporting)` |
 | C17 | Cross-origin iframe capture/print boundary | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL/NESTED-BOUNDARY CONTROLS (P1-229, P1-004 umbrella)` |
 | C18 | Shadow DOM / slots / composed tree | `L4-REVALIDATED / FINDING + POSITIVE PHYSICAL CONTROL (P2-006)` |
-| C19 | Ordinary long-page existing content | `NOT-TRIAGED / UNKNOWN` |
+| C19 | Ordinary long-page existing content | `L4-REVALIDATED / PASS` |
 | C20 | Nested scroll / retained scrollports | `NOT-TRIAGED / UNKNOWN` |
 | C21 | Lazy/offscreen resources already belonging to content | `NOT-TRIAGED / UNKNOWN` |
 | C22 | Scroll-triggered new logical content / user-reached max boundary | `NOT-TRIAGED / UNKNOWN` |
@@ -331,6 +331,16 @@ Google Chrome `151.0.7922.173` exact-source evidence at workflow run `3359909049
 A physical selected-host positive control contains both open-shadow descendants and the slotted token while excluding an outside light-DOM sibling. Thus the focused defect is not a blanket Chromium/PDF Shadow DOM rendering failure; it is the already-owned explicit-selection-scope product gap **P2-006 BACKLOG**. No new P-code or P0/P1 status transition occurs.
 
 C18 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE PHYSICAL CONTROL (P2-006)`. C19 — Ordinary long-page existing content — is the next sequential coordinate.
+
+## Fresh continuation checkpoint — focused C19 Ordinary long-page existing content
+
+`RESEARCH_FULL_RESTART_C19_ORDINARY_LONG_PAGE_2026-09-02.md` records the fresh C19 tranche on exact canonical source `6c1c55a241d5df1bd464da5ab57ac2cbd89f5249`, with exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`.
+
+Google Chrome `151.0.7922.173` exact-source physical evidence at workflow run `33599773162`, job `100150672109`, run head `97ddf3b8abc820e8fa06a0babfac0de80f0d581a`, conclusion SUCCESS, proves complete ordinary already-materialized top-document flow beyond the iframe-specific height guard. A selected `210192px` document preserves all 4200 rows and FIRST/MIDDLE/LAST through 206 physical PDF pages while omitting the explicit Exclude and both outside controls. Three far-separated Includes produce exactly the intended selected token set. Raw result SHA-256 is `55e50b601b94ffadfe58d0defda6ec6eae9a3e9cdcbb1e84d6ec37f9dc7ff9fc`.
+
+No C19-specific defect was observed and no P-code changes. This fresh PASS is deliberately limited to ordinary already-mounted top-document content: P1-150 remains the iframe-specific >200000px owner and P1-230 dynamic/virtualized history remains outside this fixture.
+
+C19 therefore advances to `L4-REVALIDATED / PASS`. C20 — Nested scroll / retained scrollports — is the next sequential coordinate.
 
 ## Delivery rule
 
