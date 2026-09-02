@@ -1,0 +1,61 @@
+name: Research C28 finalize
+
+on:
+  push:
+    branches: [research/evidence-c28-responsive-environment-2026-09-02]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-c28:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Advance C28 baseline and finalize durable evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          baseline = Path('project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md')
+          text = baseline.read_text(encoding='utf-8')
+          old = '| C28 | Responsive/environment state | `NOT-TRIAGED / UNKNOWN` |'
+          new = '| C28 | Responsive/environment state | `L4-REVALIDATED / FINDING + POSITIVE/NARROW/DPR/SCHEME/FRAME/CAUSAL CONTROLS (P0-070, P0-004)` |'
+          if old not in text:
+              raise SystemExit('C28 baseline row did not match expected current text')
+          text = text.replace(old, new, 1)
+          checkpoint = (
+              '\n\n## Fresh continuation checkpoint — focused C28 Responsive/environment state\n\n'
+              '`RESEARCH_FULL_RESTART_C28_RESPONSIVE_ENVIRONMENT_2026-09-02.md` records the accepted C28 exact-source physical tranche on canonical source `880256a7d6bfd612c3abdd5f11c0ffdd33190033`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33623739974`, job `100226506745`, exact accepted workflow head `4280a1b33c321bcff7de234ebb459c20dbe45e3b`, conclusion SUCCESS and raw result SHA-256 `9715b5f36b39d9331302b815f7637ee12e286dd590d9090c5ac114991ac159d4`.\n\n'
+              'A source `1200×700`, DPR2, dark desktop/landscape representation remains desktop/landscape in live `matchMedia()` through both beforeprint observers, yet production-shaped `media:\'screen\'` + A4 portrait physical PDF selects the mobile/portrait branches while retaining DPR2/dark. The generated request already contains bounded diagnostic `viewportWidth`/`viewportHeight`; those values do not freeze renderer representation. Test-only CDP width/height/orientation media features also fail to prevent the switch. A bounded admission-style used-state materialization restores desktop/landscape under the same A4 renderer, while a narrow mobile/portrait source is a positive control. Same-origin BODY flattening is also positive in this coordinate because copied used state preserves the child desktop/landscape branch.\n\n'
+              'Duplicate/root-cause reconciliation maps C28 to existing **P0-070 / P0-004 ACTIVE**. P0-075 is not needed because the drift reproduces without WebClip UI interaction; P1-187 is a positive rather than a fresh finding here. No new P-code or Registry wording/status change is warranted. C28 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NARROW/DPR/SCHEME/FRAME/CAUSAL CONTROLS (P0-070, P0-004)`. C29 — Viewport units / container-query dependent geometry — is the next sequential coordinate.\n'
+          )
+          anchor = '\n## Delivery rule\n'
+          if anchor not in text:
+              raise SystemExit('Delivery rule anchor missing')
+          if '## Fresh continuation checkpoint — focused C28 Responsive/environment state' in text:
+              raise SystemExit('C28 checkpoint already present')
+          text = text.replace(anchor, checkpoint + anchor, 1)
+          baseline.write_text(text, encoding='utf-8')
+
+          detailed = Path('project_docs/RESEARCH_FULL_RESTART_C28_RESPONSIVE_ENVIRONMENT_2026-09-02.md')
+          detail_text = detailed.read_text(encoding='utf-8')
+          old_detail = 'PDF SHA-256: `d67094abda4bb056d53771e14fdb82ae6d12ca2b9f1ca4594d9a6ca060d559d4` in the rejected-development execution and an equivalent accepted-run result under the same causal discriminator.'
+          new_detail = 'Accepted-run PDF SHA-256: `ebc39fda8180faf122b68b419f7e184e6bb53d54377c8bc84fbc913651261124`.'
+          if old_detail not in detail_text:
+              raise SystemExit('C28 detailed causal hash sentence did not match expected text')
+          detailed.write_text(detail_text.replace(old_detail, new_detail, 1), encoding='utf-8')
+          PY
+          git rm -f .github/workflows/research-c28-finalize.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md project_docs/RESEARCH_FULL_RESTART_C28_RESPONSIVE_ENVIRONMENT_2026-09-02.md
+          git commit -m 'research: finalize fresh C28 responsive evidence'
+          git push origin HEAD:research/evidence-c28-responsive-environment-2026-09-02
