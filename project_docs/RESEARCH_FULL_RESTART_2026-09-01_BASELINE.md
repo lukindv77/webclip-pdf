@@ -76,7 +76,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C10 | SVG visual state/resources | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-003, P1-187)` |
 | C11 | Canvas | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-187)` |
 | C12 | Video / replaced media / current frame | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-187)` |
-| C13 | Form / renderer-owned controls | `NOT-TRIAGED / UNKNOWN` |
+| C13 | Form / renderer-owned controls | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)` |
 | C14 | Pseudo/generated content | `NOT-TRIAGED / UNKNOWN` |
 | C15 | Links / anchors / internal destinations | `NOT-TRIAGED / UNKNOWN` |
 | C16 | Same-origin iframe | `PARTIAL / L4 POSITIVE CONTROLS` |
@@ -264,6 +264,20 @@ This is fresh direct revalidation of **P1-187 ACTIVE**: the final same-origin se
 External research reinforces the boundary rather than expanding scope: WHATWG defines paused video presentation by the current playback position/current frame; SingleFile documents security-related inability to snapshot some video elements; Browsertrix issues demonstrate that full streaming-media archival/replay is a separate resource problem. C12 therefore does not silently turn static current-frame fidelity into a promise to archive whole media streams.
 
 C12 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-187)`. C13 — Form / renderer-owned controls — is the next sequential untriaged coordinate.
+
+## Fresh continuation checkpoint — focused C13 Form / renderer-owned controls
+
+`RESEARCH_FULL_RESTART_C13_FORM_CONTROLS_2026-09-02.md` records the fresh C13 tranche on exact canonical source `77f6be5bbc67eb3193399ab182715e12369e7843`, with exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e` and exact `frame-proxy-inert-guard.js` blob `1197b4a5cf752c63ff3a3ecb3d1421aa51e59daa`.
+
+Fresh source inspection shows that the flattened-frame `node.cloneNode(true)` call is intercepted by the P0-068 inert-clone guard. The guard constructs fresh elements from safe content attributes, marks HTML inert, disables form-control tags, and therefore bypasses browser element-specific cloning steps. Current post-clone URL/style materialization does not restore input/textarea values, checkedness/indeterminate, select selectedness or range state.
+
+Managed Chromium `144.0.7559.96` L3/L4 controls distinguish the layers. Top-document and direct same-origin-frame PDFs preserve runtime `RUNTIME_INPUT`, `RUNTIME_TEXTAREA` and selected `RUNTIME_B`. Native Chromium cloning preserves input/textarea, checkbox indeterminate/checkedness, radio and range runtime state but reverts runtime select selectedness to markup defaults. The production-shaped WebClip inert mirror reverts all tested runtime-only control state to markup defaults (`RUNTIME_INPUT → DEFAULT_INPUT`, `RUNTIME_TEXTAREA → DEFAULT_TEXTAREA`, single select B → A, checkbox/radio/range to defaults) while remaining disabled/inert.
+
+The production-shaped proxy PDF contains `DEFAULT_INPUT` / `DEFAULT_TEXTAREA` / `DEFAULT_A` rather than the admitted current text/select state. A causal final-proxy materialization pass restores `RUNTIME_INPUT`, `RUNTIME_TEXTAREA` and `RUNTIME_B` in the physical PDF while controls remain disabled/inert, proving a secondary-representation state gap rather than Chromium PDF inability or a requirement to re-enable interaction.
+
+Fresh duplicate/root-cause reconciliation maps the failure to existing **P1-187 ACTIVE**. Historical capture-representation evidence had already treated browser-owned flattened state under P1-187, but it was used only for duplicate/hypothesis lookup and did not itself advance C13. P0-068 remains DONE: any P1-187 repair must preserve inertness and must not restore submission/action/event authority. Sensitive/password/autofill/file-picker semantics remain deferred to C39 privacy/data-minimization rather than being silently serialized.
+
+C13 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)`. C14 — Pseudo/generated content — is the next sequential untriaged coordinate.
 
 ## Delivery rule
 
