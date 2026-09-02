@@ -87,7 +87,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C21 | Lazy/offscreen resources already belonging to content | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CUSTOM/FRAME/SETTLED/CAUSAL CONTROLS (P1-003)` |
 | C22 | Scroll-triggered new logical content / user-reached max boundary | `L4-REVALIDATED / FINDING + POSITIVE/NO-AUTOSCROLL/TRUSTED-WHEEL/SCROLL-BACK CONTROLS (P1-230)` |
 | C23 | Virtualized/windowed content history within user-reached range | `L4-REVALIDATED / FINDING + POSITIVE/GRADUAL-WHEEL/SCROLL-BACK/RECYCLED-HISTORY/CAUSAL CONTROLS (P1-230)` |
-| C24 | Spoilers/disclosures / inert expansion | `NOT-TRIAGED / UNKNOWN` |
+| C24 | Spoilers/disclosures / inert expansion | `L4-REVALIDATED / FINDING + POSITIVE/GUARDED-ACTIVATION/INERT-STATIC/NAMED-DETAILS/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-167 supporting)` |
 | C25 | Dialog / popover / top layer | `NOT-TRIAGED / UNKNOWN` |
 | C26 | Hover exclusion | `NOT-TRIAGED / UNKNOWN` |
 | C27 | Focus / selection / interaction-induced page state | `NOT-TRIAGED / UNKNOWN` |
@@ -373,6 +373,17 @@ Fresh source and actual save-request inspection still find no WebClip-owned gene
 A window-scrolling virtualizer reuses eight DOM rows. Browser wheel input gradually mounts every logical ID `1…57`; at the deepest point the current window is `50…57`, and after returning to `scrollY=0` the current DOM window is again `1…8` while the fixture still proves every `1…57` was actually mounted/seen. Current WebClip physical PDF after scroll-back contains only IDs `1…8`. Test-only static materialization of the exact seen history inside the same selected host restores IDs `1…57` and the reached-last sentinel, with Exclude/outside controls still omitted.
 
 Duplicate/root-cause reconciliation maps this direct B6 history-loss finding to existing **P1-230 ACTIVE**. No new P-code or Registry wording/status change is required; C20 is excluded by fixture design because no retained nested scrollport exists. C23 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/GRADUAL-WHEEL/SCROLL-BACK/RECYCLED-HISTORY/CAUSAL CONTROLS (P1-230)`. C24 — Spoilers/disclosures / inert expansion — is next.
+
+
+## Fresh continuation checkpoint — focused C24 Spoilers/disclosures / inert expansion
+
+`RESEARCH_FULL_RESTART_C24_INERT_DISCLOSURE_2026-09-02.md` records the fresh C24 exact-source physical tranche on canonical source `c2f4648cf073070f74c188e7ff9f50d3e30ed05b`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, exact host-control guard blob `5b98e046a69f5389271f626536b02e6f073ca7fb`, Google Chrome `151.0.7922.173`, workflow run `33608253236`, job `100177131433`, exact accepted workflow head `445866d20f2caec910db6edb853b428524b9d51f` and conclusion SUCCESS.
+
+Fresh production-shaped evidence corrects the older unguarded C24 narrative: P0-067's current isolated-world activation guard blocks all four tested page-owned programmatic disclosure clicks (`blockedPageClicks=4`, page `clicks=[]`, `submits=0`), so P0-067 remains DONE. C24 nevertheless remains a finding because current live `details.open=true` fires page-observable state transition and can admit post-admission page-created content into the physical PDF; fallback ARIA/hidden-panel expansion directly mutates the live source and persists after print; no `sourceState/staticRepresentation` disclosure receipt is emitted.
+
+A disconnected static-materialization causal control preserves all tested pre-existing disclosure content with zero source click/submit/toggle-created/stateful-created content and leaves the source native details closed. A fresh `<details name="faq">` control additionally proves that live mutually-exclusive widget semantics can defeat the product's safe expanded-static completeness contract: current preparation leaves only one group member open/printed, while a private static representation can preserve both bodies without mutating source state.
+
+Duplicate/root-cause reconciliation maps the remaining C24 failures to existing **P0-075 / P0-070 / P0-004 ACTIVE**, with **P1-167 ACTIVE** supporting bounded-preparation ownership. **P1-004 ACTIVE** remains the source-level cross-origin disclosure-parity umbrella. No new P-code or Registry status change is warranted. C24 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/GUARDED-ACTIVATION/INERT-STATIC/NAMED-DETAILS/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-167 supporting)`. C25 — Dialog / popover / top layer — is the next sequential coordinate.
 
 ## Delivery rule
 
