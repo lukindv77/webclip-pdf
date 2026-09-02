@@ -152,7 +152,7 @@ Every code in this range remains occupied. All are ACTIVE except `P1-213`, which
 | P1-199 | ACTIVE | Cross-origin frame print prepare/restore state needs exact print-operation generation; stale restore cannot undo newer prepare. |
 | P1-200 | ACTIVE | Remote-frame selection/control commands and responses need exact selection-session generation/ordering. |
 | P1-201 | ACTIVE | Optional host-permission revoke/regrant must clean/fence already injected frame-agent authority and never revive old session state. |
-| P1-202 | ACTIVE | Deleted comment tombstones need one lifecycle across retention/search/export/import and portable capacity debt; deleted payload cannot consume active capacity forever. |
+| P1-202 | ACTIVE | Deleted-comment retention/privacy semantics must explicitly govern retained text, redisclosure and lifecycle. |
 | P1-203 | ACTIVE | Injected frame-agent may outlive MV3 worker registry; new worker must re-handshake/reconcile/clean rather than infer authority. |
 | P1-204 | ACTIVE | Browser-owned context-menu destructive rebuild needs generation durable across worker restart; old remove/create settlement cannot overtake new repair. |
 | P1-205 | ACTIVE | OperationLog retention cleanup and queued writes need one history-generation linearization so late writer cannot resurrect expired history. |
