@@ -1,96 +1,110 @@
-Текущая рабочая версия: **0.9.8**.
+# WebClip PDF — текущее состояние проекта
 
-# WebClip PDF Prototype — состояние проекта на версии 0.9.8
+Текущая runtime version определяется `manifest.json`: **0.9.8**. Обозначение `0.9.9` относится к WIP и не является выпущенной версией.
+
+Этот документ является кратким current overview, а не историей развития. Действующие требования и технические условия находятся в `USER_REQUIREMENTS.md`; причины принятых решений — в `DECISIONS_AND_RATIONALE.md`. Историю изменения этих требований не следует использовать для реконструкции current state при обычной работе.
 
 ## Назначение
 
-Chrome Extension Manifest V3 для выборочного WebClipping веб-страниц в PDF с управляемыми областями «Включены/Исключены», поддержкой same-origin iframe, кликабельными ссылками, локальным журналом, Яндекс Диском и резервным восстановлением проекта.
+WebClip PDF — Chrome Extension Manifest V3 для выборочного сохранения веб-контента в PDF с управляемыми областями «Включены/Исключены», frame-aware selection, кликабельными ссылками, локальным Journal, опциональной интеграцией с Яндекс Диском и Git-first recovery.
 
-## Главная цель проекта
+## Главная цель
 
-Верхнеуровневая нормативная цель WebClip закреплена в `PROJECT_MISSION_AND_DEFENSIVE_SECURITY_POLICY.md`.
+WebClip должен позволять пользователю явно выбрать нужное содержимое страницы и получить максимально точную, пригодную для последующего чтения и архивного хранения копию именно выбранного состояния страницы, насколько это безопасно и технически представимо текущим PDF-режимом.
 
-WebClip должен сохранять копии страниц сайта с учётом явно выбранной пользователем информации для последующего чтения **в том же виде, в каком эта информация отображалась на сайте**, насколько это безопасно и технически представимо выбранным форматом/режимом. Все сопутствующие компоненты и процессы подчинены этой цели и не должны подменять fidelity техническим успехом создания файла.
+Технический успех создания/загрузки файла не заменяет fidelity. Selection intent, captured source state и rendered archival copy должны относиться к одной logical document/frame generation либо система должна честно сигнализировать degraded/unknown/failure.
 
-Подготовка, сохранение, журналирование, передача, backup/recovery и диагностика должны быть безопасны для пользователя и не компрометировать данные, проходящие через WebClip. Security scope проекта — **defensive security**. Эксплуатация уязвимостей, разработка эксплойтов, обход авторизации, взлом сервисов, атаки, вредоносный код и инструкции по проникновению не являются задачами проекта. Если для оценки риска нужен класс атаки, достаточно концептуально зафиксировать: что защищается, при каком условии возникает риск и какой защитный механизм его закрывает.
+Security scope проекта — только defensive security / защитный архитектурный анализ: конфиденциальность, целостность, availability/recovery, permission minimization, хранение и передача данных, credentials, external API boundaries и safe failure semantics. Offensive exploitation не является задачей проекта.
 
-## Постоянное правило выполнения инструментальных сессий
+## Current authority model
 
-`SESSION_EXECUTION_AND_INTERRUPTION_SAFETY_POLICY.md` является обязательной project-wide policy для длинной инструментальной работы. Каждая содержательная сессия должна начинаться с проверки незавершённого durable state и краткого отчёта пользователю о точке продолжения, плане, способности завершить взятые блоки и рисках переноса. Объём работы рассчитывается на максимально полезное использование всего инструментального окна, а substantive progress сохраняется этапами в durable checkpoints, достаточных для гарантированного продолжения после неожиданного прерывания.
+- current source/WIP: fresh GitHub `main` exact SHA;
+- current requirements/technical conditions: `USER_REQUIREMENTS.md`;
+- current rationale/decisions: `DECISIONS_AND_RATIONALE.md`;
+- current architecture: `ARCHITECTURE.md`, `DATA_MODELS.md`, специализированные contracts;
+- P-code owner/status: только `RESEARCH_REGISTRY.md`;
+- research navigation/evidence: `RESEARCH_DELTA_INDEX.md` и relevant family/history evidence;
+- current test truth: `TEST_STATUS.md` + exact applicable execution evidence;
+- release truth: `RELEASE_READINESS.md`.
 
-## Постоянное правило внешнего user-intent research для глубокого исследования
-
-`RESEARCH_EXTERNAL_USER_INTENT_RESEARCH_POLICY.md` является обязательным входом в выбор и приоритизацию deep-research operations/surfaces и одновременно в product discovery. Во время активного глубокого исследования WebClip должен регулярно сверять User Intent / Operation Map с актуальным опытом пользователей похожих и пересекающихся решений по official developer materials/demos, GitHub projects/issues/discussions, reviews/comparisons, Reddit/другим пользовательским форумам и web-archiving practices. Внешний опыт используется для выявления реальных пользовательских задач, ожиданий, recurring pain и кандидатных новых функций/режимов/UX-улучшений, но не автоматически копирует чужой product contract в WebClip. Текущие датированные baseline/user-intent и Product Opportunity Map хранятся отдельными durable research-evidence документами и refresh-ятся по freshness rules policy.
-
-## Постоянная модель систематического глубокого исследования
-
-`RESEARCH_COVERAGE_CAMPAIGN_POLICY.md` является обязательной методикой deep research. Исследование ведётся не по количеству P-кодов или research blocks, а через Coverage Matrix по end-to-end boundaries и material surface families с evidence ladder L1–L5, explicit controls, risk ranking, finite deep-dive tranche envelope, root-cause saturation и closure re-research после implementation.
-
-Основной campaign cycle:
-
-`Coverage Sweep -> Risk Ranking -> Deep-Dive Tranches -> Closure Sweep -> Coverage Reconciliation -> Final Synthesis`.
-
-Research completeness и implementation closure разделены. Surface может быть research-complete с outcome `FINDING`, пока её P-owner остаётся ACTIVE. `DEEP-RESEARCH-COVERAGE-COMPLETE` можно объявить только когда все CORE families triaged, все material relevant cells достигли required evidence либо имеют явный external/limitation/out-of-scope state, findings имеют root-cause ownership и необъяснённых NOT-RESEARCHED областей нет. `DEEP-RESEARCH-CRITICAL-CLOSURE-COMPLETE` и `RELEASE-READY` являются отдельными более сильными состояниями.
-
-Первая фактическая реконструкция текущей coverage хранится в `RESEARCH_COVERAGE_RECONSTRUCTION_2026-08-30.md`. Она консервативно зачла существующие physical/render evidence и выделила новые contract-specific `REVALIDATION-REQUIRED` gaps вместо автоматического превращения близких исторических probes в PASS.
-
-## Нормативный контракт текущего основного PDF-режима
-
-`WEBCLIP_PDF_FIDELITY_CONTRACT.md` является обязательным product/architecture и deep-research contract текущего основного PDF. Этот режим является осознанным гибридом **fidelity + bounded static completeness**.
-
-Ключевые границы:
-
-- уже существующее содержимое selected scope, доступное обычным scrolling страницы или nested scroll containers, должно попадать в статический PDF, а не обрезаться текущим viewport;
-- если scroll/infinite/virtualized behavior создаёт **новое логическое содержимое**, WebClip не должен сам auto-scroll-ить live page за новым content: предел задаёт пользователь своим scroll, а ранее user-reached content не должен теряться только из-за virtual DOM recycling;
-- закрытые spoilers/`<details>` внутри selected scope безопасно раскрываются только в inert static representation для последующего чтения; provenance может сохранять факт, что source state был closed;
-- hover-only menus/tooltips/overlays/flyouts/styling в текущую PDF-копию не входят даже если hover был открыт пользователем;
-- responsive/resource/temporal/control/frame state должен оставаться связанным с admitted source generation, а pagination не должна молча выбирать другую responsive representation;
-- будущие HTML/archive/Reader/screenshot и другие форматы/режимы получают отдельные fidelity/completeness contracts и не наследуют этот PDF contract автоматически.
+Historical commits/evidence могут использоваться для provenance, regression investigation и duplicate/root-cause reconciliation, но не являются current requirement authority.
 
 ## Основной пользовательский поток
 
-1. Запустить WebClipper из popup или контекстного меню страницы.
-2. Выбрать область «Включены» вручную или через «Основной контент»; same-origin iframe анализируются как отдельные DOM-контексты.
-3. При необходимости добавить другие области «Включены» и вручную создать области «Исключены».
-4. Опционально использовать «Найти рекламу» только как подсказку.
-5. «Готово» → скачать PDF или отправить на Яндекс Диск.
-6. При ошибке Яндекс Диска повторить отправку того же кэшированного PDF без повторного `printToPDF`.
-7. Успешная операция записывается в локальный журнал вместе с frame-aware selection snapshot.
-8. Из журнала можно применить области «Включены/Исключены» к тому же URL либо другому URL того же сайта до третьего уровня домена; имя нового файла всегда формируется заново.
-9. Полный локальный журнал можно экспортировать/импортировать одним JSON-файлом; его версионные резервные копии могут автоматически выгружаться на Яндекс Диск. Импорт с Диска открывается на текущем месяце и позволяет листать `MM-YYYY` перед выбором конкретной версии.
-10. Иконка панели показывает свежесть последней полностью успешной выгрузки точного URL на Яндекс Диск, а badge — число уникальных локальных дней с такими Yandex-выгрузками. Локальные PDF остаются только в журнале.
-11. Общий журнал имеет иерархический фильтр доменов и universal multiline text filter (`Наименование/Комментарии/Сайт/URL`, AND/OR, до pagination); опубликованный PDF на Яндекс Диске открывается нажатием на badge `Яндекс Диск` записи через сохранённый `publicUrl`, без отдельной текстовой ссылки.
-12. Обычная отправка страницы на Яндекс Диск показывает поэтапный блокирующий progress UI.
+1. Запустить WebClip из popup/toolbar/context menu.
+2. Выбрать одну или несколько областей «Включены» вручную либо через «Основной контент».
+3. При необходимости создать области «Исключены».
+4. Опционально использовать «Найти рекламу» только как подсказку кандидатов.
+5. Подготовить bounded resources и статическое печатное представление без произвольных page-owned side effects.
+6. Сформировать PDF и скачать локально либо отправить на Яндекс Диск.
+7. При remote error сохранить selection state и позволить retry тех же PDF bytes без нового render.
+8. Записать операцию в локальный IndexedDB Journal.
+9. Использовать Journal для URL/site/all views, поиска/фильтрации, selection restore, export/import и remote backup.
+
+## Selection и frame model
+
+- `Включены` задают сохраняемые DOM-поддеревья; `Исключены` — явно вырезаемые вложенные поддеревья.
+- Родительская область «Включены» может поглощать дочерние «Включены», сохраняя валидные «Исключены».
+- Same-origin frames являются полноценными selection scopes.
+- Cross-origin frame доступен только через user-granted host permission и frame agent; ambiguity разрешается fail-closed.
+- Frame/document identity является частью selection snapshot и восстановления.
+
+## PDF model
+
+Текущий основной режим — печатный PDF через Chromium `Page.printToPDF` с screen-like representation и bounded static completeness.
+
+Основные invariants:
+
+- выбранный текст/структура/links/resources должны сохраняться максимально faithfully;
+- уже существующее scrollable содержимое selected scope не должно теряться только из-за viewport;
+- WebClip не должен сам создавать новое logical infinite/virtualized content за пользовательской reached boundary;
+- useful disclosure content представляется inert/static способом без arbitrary synthetic click/submit/navigation;
+- временные DOM/style mutations принадлежат конкретной print-generation и очищаются только при доказанном ownership;
+- служебный UI WebClip не попадает в PDF;
+- подробный contract задаёт `WEBCLIP_PDF_FIDELITY_CONTRACT.md`.
+
+## Journal
+
+Source of truth — локальный IndexedDB `WebClipJournal`.
+
+- `Весь журнал` независим от active-tab origin;
+- source context используется только для URL/site views и применения selection snapshot;
+- открытая Journal page должна видеть новые committed entries;
+- фильтры/поиск выполняются bounded до группировки/pagination;
+- local и Yandex entries визуально различаются badges без дублирующих строк;
+- public Yandex resource открывается по валидному `publicUrl`, если такой link authority существует.
 
 ## Яндекс Диск
 
-Пользователь выбирает только один `rootPath`. WebClipper сам поддерживает структуру:
+Пользователь выбирает один `rootPath`. WebClip управляет служебными путями внутри него, включая:
 
-- `<root>/Upload/...` — PDF страниц;
-- `<root>/Backup/Journal/MM-YYYY/WebClip_Journal_YYYY-MM-DD_HH-MM-SS-SSS.json` — версионные полные резервные копии журнала; предыдущие версии сохраняются.
+```text
+<root>/Upload/...
+<root>/Backup/Journal/MM-YYYY/...
+<root>/Trash/MM-YYYY/...
+```
 
-Перед соответствующей операцией служебные папки проверяются и при отсутствии создаются. Ошибка создания является ошибкой общей операции и фиксируется в состоянии фонового backup.
+Remote operations должны иметь доказуемую operation/resource/account/root identity. Path/filename/size не являются достаточной identity сами по себе. Retry неизвестной/ошибочной передачи не создаёт новый PDF.
 
-## Критические инварианты
+## Recovery и release
 
-- Никаких автоматических областей «Исключены»; реклама только подсвечивается как предложение.
-- «Включены» = всё выбранное поддерево; «Исключены» = явно удаляемое вложенное поддерево.
-- Родительская область «Включены» поглощает дочерние области «Включены», но валидные области «Исключены» сохраняются.
-- Same-origin iframe участвуют в выборе, основном контенте и journal restore через `framePath + element locator`.
-- Ссылки и ссылки изображений остаются кликабельными в PDF насколько это поддерживает Chromium.
-- Уже существующее scrollable содержимое selected scope должно быть статически представлено полностью; WebClip не должен auto-scroll live page для создания новых logical items за user-reached boundary.
-- Закрытые spoilers/`<details>` внутри selected scope раскрываются в inert static PDF representation без синтетического page-owned click; исходное closed/open состояние может сохраняться в provenance.
-- Hover-only состояние не входит в текущую PDF-копию даже если hover активировал пользователь.
-- PDF header: адрес сайта, clickable full URL, «Название страницы», локальная дата/время.
-- Имя: `Title__DomainUpTo3__timestamp.pdf`, максимум 100 символов, точка только перед расширением.
-- Ошибка Яндекс Диска не очищает области «Включены/Исключены»; retry использует те же байты PDF.
-- Журнал хранится локально в IndexedDB; Яндекс — только версионные резервные копии.
-- Ручной backup и обычный page upload на Яндекс Диск показывают блокирующий поэтапный прогресс и защищают вкладку от случайного закрытия до завершения.
-- Для Yandex PDF при включённой настройке сохраняется `publicUrl`; он является ссылкой журнала, а не производной от текущего пути файла.
-- Импорт журнала, очистка всего журнала и очистка домена требуют 9-значного ручного кода; удаление одной записи — обычный confirm.
-- Каждая сборка обязана содержать recovery-архив той же версии.
+- exact fresh `main` commit — canonical WIP snapshot;
+- handoff/chat/generated ZIP не являются параллельным source of truth;
+- официальный release требует отдельного явного решения и применимых gates;
+- release source привязывается к exact tested commit + annotated tag;
+- пользовательский extension ZIP **не обязан** содержать вложенный полный recovery/source ZIP;
+- отдельный offline/disaster recovery artifact создаётся только из clean exact commit с source metadata и hashes.
 
-- P1-027 = REGRESSION: текущий способ сохранения и статус чтения показываются только badges `Яндекс Диск`/`Скачан локально` + `Прочитано`/`Прочитать позже`; дублирующая строка режима/статуса удалена.
+## Комплексное исследование проекта
 
-### P1-028 — размещение journal badges
-**REGRESSION:** badges способа сохранения и статуса чтения находятся под заголовком страницы в общей строке даты/времени: дата/время слева, badge-группа справа. Верхний правый sibling-контейнер удалён, размеры badge не изменены; при узкой ширине дата сокращается ellipsis без наложения на фиксированную nowrap-группу.
+Каноническая деятельность: **«Комплексное исследование, оценка и проработка проекта и его архитектуры»**.
+
+`COMPREHENSIVE_PROJECT_RESEARCH_POLICY.md` задаёт обязательный scope. Для каждого существенного вопроса исследование должно сочетать fresh inspection WebClip с multi-source внешним исследованием аналогичных/смежных продуктов, vendor materials, public GitHub/GitLab projects, standards/platform documentation, issues/discussions и пользовательских форумов. Внешние решения рассматриваются как гипотезы и варианты, а не как автоматические требования.
+
+Работа планируется в пределах инструментальной сессии; если качественное завершение требует большего объёма, она разбивается на interruption-safe sessions/tranches с durable GitHub checkpoints. Полнота и точность важнее минимального количества окон.
+
+## GitHub и выполнение проверок
+
+Перед содержательной работой выполняется fresh-fetch `main`; перед write/merge — повторная staleness/TOCTOU проверка. Принятые изменения доводятся до canonical GitHub state и не остаются только в чате.
+
+Проверки выполняются local-first: доступные deterministic/static/analysis операции сначала запускаются локальными/встроенными инструментами. GitHub Actions используются только для недоступной локально environment-boundary evidence либо обязательных independent delivery/release gates. Экономия runner usage не отменяет required physical/external verification и exact-head/post-merge integrity.
