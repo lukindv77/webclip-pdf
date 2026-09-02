@@ -1,0 +1,77 @@
+name: Research C20 nested scroll
+
+on:
+  push:
+    branches: [research/evidence-c20-nested-scroll-2026-09-02]
+    paths-ignore:
+      - project_tools/.c20-physical-result.json
+
+permissions:
+  contents: write
+
+jobs:
+  physical-c20:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact evidence head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.14'
+
+      - name: Install bounded harness dependencies
+        run: python -m pip install --disable-pip-version-check playwright==1.55.0 pypdf==6.0.0
+
+      - name: Run exact-source physical C20 matrix
+        id: probe
+        shell: bash
+        run: |
+          set -uo pipefail
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [[ -z "$chrome" ]]; then
+            echo 'Google Chrome/Chromium is unavailable on runner' >&2
+            echo 1 > "$RUNNER_TEMP/c20-status"
+            exit 0
+          fi
+          "$chrome" --version
+          export CONTENT_BLOB_SHA="$(git rev-parse HEAD:content.js)"
+          set +e
+          python project_tools/research_c20_nested_scroll.py --chrome "$chrome" --out "$RUNNER_TEMP/c20-pdfs" | tee "$RUNNER_TEMP/c20-result.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "$status" > "$RUNNER_TEMP/c20-status"
+          result="$(grep '^C20_RESULT_JSON=' "$RUNNER_TEMP/c20-result.log" | tail -n 1 | sed 's/^C20_RESULT_JSON=//')"
+          if [[ -n "$result" ]]; then
+            printf '%s\n' "$result" > project_tools/.c20-physical-result.json
+            echo "::notice title=C20_RESULT::$result"
+          fi
+          exit 0
+
+      - name: Persist temporary exact result receipt
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -s project_tools/.c20-physical-result.json ]]; then
+            echo 'No C20 result receipt produced.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add project_tools/.c20-physical-result.json
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: persist temporary C20 physical result'
+          git push origin HEAD:research/evidence-c20-nested-scroll-2026-09-02
+
+      - name: Assert C20 harness status
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(cat "$RUNNER_TEMP/c20-status" 2>/dev/null || echo 1)"
+          test "$status" = 0
