@@ -173,7 +173,7 @@ def source_contract() -> dict:
         # selectionStart/selectionEnd already belong to ordinary form-control
         # value fidelity; they are not proof that active focus or a document
         # Selection was admitted. Guard only renderer/user-interaction state.
-        "prepareHasFocusReceipt": any(word in prepare for word in ("activeelement", "focuswithin", "focus-visible", "getselection")),
+        "prepareHasFocusReceipt": any(word in prepare for word in ("activeelement", "focuswithin", "focus-visible", "getselection()")),
         "screenMedia": "media: 'screen'" in SERVICE_WORKER,
         "printToPdf": "Page.printToPDF" in SERVICE_WORKER,
     }
