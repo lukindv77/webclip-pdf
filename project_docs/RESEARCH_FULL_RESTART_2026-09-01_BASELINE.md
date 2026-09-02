@@ -89,7 +89,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C23 | Virtualized/windowed content history within user-reached range | `L4-REVALIDATED / FINDING + POSITIVE/GRADUAL-WHEEL/SCROLL-BACK/RECYCLED-HISTORY/CAUSAL CONTROLS (P1-230)` |
 | C24 | Spoilers/disclosures / inert expansion | `L4-REVALIDATED / FINDING + POSITIVE/GUARDED-ACTIVATION/INERT-STATIC/NAMED-DETAILS/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-167 supporting)` |
 | C25 | Dialog / popover / top layer | `L4-REVALIDATED / FINDING + POSITIVE/AUTO-LIGHT-DISMISS/MANUAL/MODAL/CLOSED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P1-187; P0-004 supporting)` |
-| C26 | Hover exclusion | `NOT-TRIAGED / UNKNOWN` |
+| C26 | Hover exclusion | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/PAGE-CLEANED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004)` |
 | C27 | Focus / selection / interaction-induced page state | `NOT-TRIAGED / UNKNOWN` |
 | C28 | Responsive/environment state | `NOT-TRIAGED / UNKNOWN` |
 | C29 | Viewport units / container-query dependent geometry | `NOT-TRIAGED / UNKNOWN` |
@@ -397,6 +397,14 @@ Fresh same-origin BODY flattening independently revalidates **P1-187 ACTIVE**. S
 Accepted case-level execution: workflow run `33610993477`, job `100185833170`, exact head `040bee0dc466e9dec376405de6e0b48c9f7feb50`, SUCCESS, raw result SHA-256 `940b81c1b1ae52c0e7e1808e84daaa10e27605a36d4510989f758192d1fc732f`. Accepted final controls: run `33611864788`, job `100188651541`, exact head `c2bea7a0bf0d0454d55cb23ca570e0134cff44ad`, SUCCESS, raw result SHA-256 `1af09abbf1b44d257dc420d55a84791874c341506d81e644541a02fa4de8cc48`.
 
 Duplicate/root-cause reconciliation maps C25 to existing **P0-075 / P0-070 / P1-187 ACTIVE**, with **P0-004 ACTIVE** supporting physical selected-copy consequences. No new P-code or Registry status/writing change is warranted. C25 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/AUTO-LIGHT-DISMISS/MANUAL/MODAL/CLOSED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P1-187; P0-004 supporting)`. C26 — Hover exclusion — is the next sequential coordinate.
+## Fresh continuation checkpoint — focused C26 Hover exclusion
+
+`RESEARCH_FULL_RESTART_C26_HOVER_EXCLUSION_2026-09-02.md` records the fresh C26 exact-source physical tranche on canonical source `c5834ba0eb75fbf0ac1c637f42d7da1bff24b429`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33618234004`, job `100208967903`, exact accepted workflow head `be799886020c68e8984958d4843bf0709c56159e`, conclusion SUCCESS and raw result SHA-256 `a487b7773a8741ae530b45b15acfc92b7d54142cffb6d1db605c0a3b74435f62`.
+
+Native Chrome physically prints active CSS hover, hover pseudo-content and page-JS hover-mounted DOM. Current WebClip's full-screen review backdrop changes hit-testing and fires page-observable `pointerleave`: ordinary CSS/pseudo hover clears, but a page-JS flyout deliberately retained after leave remains selected DOM and reaches the physical PDF. A page-owned cleanup control removes it, same-origin selected BODY flattening repeats the sticky-DOM result, and a test-only provenance control removes exactly the hover-created node while preserving legitimate pre-existing content, a non-hover dialog, Exclude and outside-shell boundaries.
+
+Duplicate/root-cause reconciliation maps the fresh failure to existing **P0-075 / P0-070 / P0-004 ACTIVE**. Historical reservation against a standalone P1-231 remains correct: no new P-code or Registry wording/status change is warranted. C26 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/PAGE-CLEANED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004)`. C27 — Focus / selection / interaction-induced page state — is the next sequential coordinate.
+
 ## Delivery rule
 
 This baseline is research evidence only. It does not change runtime, P-code status, manifest version or release readiness. Subsequent restart tranches update this document or add narrowly scoped durable evidence only when the current tree has actually been inspected/tested.
