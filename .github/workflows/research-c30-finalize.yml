@@ -1,6 +1,6 @@
 name: Research C30 finalize
 
-on:
+"on":
   push:
     branches: [research/evidence-c30-clipping-containment-2026-09-02]
 
