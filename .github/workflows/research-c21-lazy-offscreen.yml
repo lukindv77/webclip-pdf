@@ -5,6 +5,7 @@ on:
     branches: [research/evidence-c21-lazy-offscreen-resources-2026-09-02]
     paths-ignore:
       - project_tools/.c21-physical-result.json
+      - project_tools/.c21-picture-control-result.json
 
 permissions:
   contents: write
@@ -24,41 +25,62 @@ jobs:
           python-version: '3.12.14'
       - name: Install bounded harness dependencies
         run: python -m pip install --disable-pip-version-check playwright==1.55.0 pymupdf==1.26.4
-      - name: Run exact-source physical C21 matrix
-        id: probe
+      - name: Run exact-source physical C21 matrix and picture control
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
-          if [[ -z "$chrome" ]]; then echo 1 > "$RUNNER_TEMP/c21-status"; exit 0; fi
+          if [[ -z "$chrome" ]]; then echo 'Chrome unavailable' >&2; exit 1; fi
           "$chrome" --version
           export CONTENT_BLOB_SHA="$(git rev-parse HEAD:content.js)"
+
           set +e
           python project_tools/research_c21_lazy_offscreen_resources.py --chrome "$chrome" --out "$RUNNER_TEMP/c21-pdfs" | tee "$RUNNER_TEMP/c21-result.log"
-          status=${PIPESTATUS[0]}
+          matrix_status=${PIPESTATUS[0]}
           set -e
-          echo "$status" > "$RUNNER_TEMP/c21-status"
           result="$(grep '^C21_RESULT_JSON=' "$RUNNER_TEMP/c21-result.log" | tail -n 1 | sed 's/^C21_RESULT_JSON=//')"
-          if [[ -n "$result" ]]; then
-            printf '%s\n' "$result" > project_tools/.c21-physical-result.json
-            echo "::notice title=C21_RESULT::$result"
-          fi
-          exit 0
-      - name: Persist temporary exact result receipt
-        if: always()
+          if [[ -z "$result" ]]; then echo 'C21 matrix JSON missing' >&2; exit 1; fi
+          printf '%s\n' "$result" > project_tools/.c21-physical-result.json
+          echo "::notice title=C21_RESULT::$result"
+          echo "matrix_status=$matrix_status" >> "$GITHUB_ENV"
+
+          python project_tools/research_c21_picture_datasrcset_control.py --chrome "$chrome" --out "$RUNNER_TEMP/c21-picture-pdfs" | tee "$RUNNER_TEMP/c21-picture.log"
+          control="$(grep '^C21_PICTURE_CONTROL_JSON=' "$RUNNER_TEMP/c21-picture.log" | tail -n 1 | sed 's/^C21_PICTURE_CONTROL_JSON=//')"
+          if [[ -z "$control" ]]; then echo 'C21 picture control JSON missing' >&2; exit 1; fi
+          printf '%s\n' "$control" > project_tools/.c21-picture-control-result.json
+          echo "::notice title=C21_PICTURE_CONTROL::$control"
+
+      - name: Persist temporary exact result receipts
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! -s project_tools/.c21-physical-result.json ]]; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add project_tools/.c21-physical-result.json
+          git add project_tools/.c21-physical-result.json project_tools/.c21-picture-control-result.json
           git diff --cached --quiet && exit 0
-          git commit -m 'research: persist temporary C21 physical result'
+          git commit -m 'research: persist temporary C21 physical results'
           git push origin HEAD:research/evidence-c21-lazy-offscreen-resources-2026-09-02
-      - name: Assert C21 harness status
-        if: always()
+
+      - name: Validate observed C21 split
         shell: bash
         run: |
           set -euo pipefail
-          test "$(cat "$RUNNER_TEMP/c21-status" 2>/dev/null || echo 1)" = 0
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('project_tools/.c21-physical-result.json').read_text())
+          c=json.loads(Path('project_tools/.c21-picture-control-result.json').read_text())
+          for key in ('nativeLazy','dataSrc','dataSrcset','sameOriginFrameNativeLazy'):
+              r=m[key]
+              assert r['colorPixels'] > 500, (key,r)
+              assert r['after']['naturalWidth'] > 0, (key,r)
+              assert not r['excludePresent'] and not r['outsidePresent'], (key,r)
+          p=m['pictureDataSrcset']
+          assert p['requestsBefore'] == 0 and p['requestsAfter'] >= 1, p
+          assert p['resourceReport']['failed'] == 0 and p['resourceReport']['deadlineExceeded'] is False, p
+          assert p['colorPixels'] == 0 and p['after']['currentSrc'].startswith('data:image/gif'), p
+          assert c['afterSettle']['currentSrc'].startswith('data:image/gif'), c
+          assert c['settled']['colorPixels'] == 0, c
+          assert c['causal']['colorPixels'] > 500 and c['causalState']['naturalWidth'] > 0, c
+          print('C21 observed split validated; development matrix non-zero is expected for the pre-causal picture assertion.')
+          PY
