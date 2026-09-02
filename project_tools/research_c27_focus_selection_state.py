@@ -377,13 +377,14 @@ CAPTURE_STATIC = r"""()=>{
   const clone=source.cloneNode(true);
   const sourceElements=[source,...source.querySelectorAll('*')];
   const cloneElements=[clone,...clone.querySelectorAll('*')];
+  const sourceInput=source.querySelector('#edit');
+  const cloneInput=cloneElements[sourceElements.indexOf(sourceInput)];
   const properties=['display','position','width','height','box-sizing','margin','padding','background-color','color','border-top-width','border-right-width','border-bottom-width','border-left-width','border-top-style','border-right-style','border-bottom-style','border-left-style','border-top-color','border-right-color','border-bottom-color','border-left-color','outline-width','outline-style','outline-color','outline-offset','font-size','font-family','line-height'];
   for(let i=0;i<Math.min(sourceElements.length,cloneElements.length);i++){
     const computed=getComputedStyle(sourceElements[i]);
     for(const property of properties){const value=computed.getPropertyValue(property);if(value)cloneElements[i].style.setProperty(property,value,'important')}
   }
-  const sourceInput=source.querySelector('#edit');
-  const cloneInput=clone.querySelector('#edit');
+  if(!(cloneInput instanceof HTMLInputElement)) throw new Error('static receipt input mapping missing');
   cloneInput.value=sourceInput.value;cloneInput.setAttribute('value',sourceInput.value);
   clone.querySelector('.omit')?.remove();
   clone.querySelector('#mutationMount')?.replaceChildren();
