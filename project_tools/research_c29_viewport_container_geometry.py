@@ -9,8 +9,8 @@ WebClip's current selected-save representation:
 - test-only source-used-geometry freeze as a causal static-representation control.
 
 The physical PDF carries container-query branch tokens. PyMuPDF raster receipts independently
-measure the colored boxes whose widths are authored in vw/cqw, so used geometry is verified from
-physical bytes rather than inferred from beforeprint/live DOM metrics.
+measure the colored boxes whose widths are authored in vw/cqw. Ratios to an explicit fixed
+container control make the comparison scale-invariant even when Chromium applies page fitting.
 """
 from __future__ import annotations
 
@@ -185,16 +185,22 @@ def _color_bbox(path: pathlib.Path, kind: str) -> dict:
 
 def pdf_summary(path: pathlib.Path) -> dict:
     text, pages = pdf_text(path)
+    geometry = {
+        "viewport": _color_bbox(path, "cyan"),
+        "cqUnit": _color_bbox(path, "green"),
+        "fixedCqUnit": _color_bbox(path, "pink"),
+    }
+    fixed_w = geometry["fixedCqUnit"]["w"] or 1
+    geometry["ratios"] = {
+        "viewportToFixed": round(geometry["viewport"]["w"] / fixed_w, 4),
+        "cqToFixed": round(geometry["cqUnit"]["w"] / fixed_w, 4),
+    }
     return {
         "pages": pages,
         "bytes": path.stat().st_size,
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "probe": parse_probe(text),
-        "geometry": {
-            "viewport": _color_bbox(path, "cyan"),
-            "cqUnit": _color_bbox(path, "green"),
-            "fixedCqUnit": _color_bbox(path, "pink"),
-        },
+        "geometry": geometry,
         "wide": "C29_CQ_WIDE" in text,
         "narrow": "C29_CQ_NARROW" in text,
         "fixedWide": "C29_FIXED_WIDE" in text,
@@ -323,13 +329,18 @@ def run(chrome: str, out: pathlib.Path) -> dict:
     assert f["source"]["cqBranch"] == "wide" and f["pdf"]["wide"] and not f["pdf"]["narrow"], f
     assert not f["pdf"]["excludePresent"] and not f["pdf"]["outsideTopPresent"] and not f["pdf"]["outsideBottomPresent"], f
 
-    # Physical raster geometry: viewport/cq-relative boxes shrink under paged geometry, while
-    # an explicit fixed-container cqw control stays stable. Freezing source used geometry restores
-    # the large source-shaped boxes through the same A4 renderer.
-    assert w["pdf"]["geometry"]["viewport"]["w"] < f["pdf"]["geometry"]["viewport"]["w"] * 0.8, (w, f)
-    assert w["pdf"]["geometry"]["cqUnit"]["w"] < f["pdf"]["geometry"]["cqUnit"]["w"] * 0.8, (w, f)
-    assert abs(w["pdf"]["geometry"]["fixedCqUnit"]["w"] - f["pdf"]["geometry"]["fixedCqUnit"]["w"]) <= 4, (w, f)
-    assert abs(a["pdf"]["geometry"]["viewport"]["w"] - w["pdf"]["geometry"]["viewport"]["w"]) <= 4, (a, w)
+    # Physical raster geometry is compared within each PDF against the explicit 800px query-
+    # container control. This removes Chromium's whole-page fit scaling from the comparison.
+    wr = w["pdf"]["geometry"]["ratios"]
+    fr = f["pdf"]["geometry"]["ratios"]
+    ar = a["pdf"]["geometry"]["ratios"]
+    dr = d["pdf"]["geometry"]["ratios"]
+    assert wr["viewportToFixed"] < fr["viewportToFixed"] * 0.8, (wr, fr)
+    assert wr["cqToFixed"] < fr["cqToFixed"] * 0.8, (wr, fr)
+    assert abs(ar["viewportToFixed"] - wr["viewportToFixed"]) <= 0.03, (ar, wr)
+    assert abs(ar["cqToFixed"] - wr["cqToFixed"]) <= 0.03, (ar, wr)
+    assert abs(dr["viewportToFixed"] - wr["viewportToFixed"]) <= 0.03, (dr, wr)
+    assert abs(dr["cqToFixed"] - wr["cqToFixed"]) <= 0.03, (dr, wr)
     return result
 
 
