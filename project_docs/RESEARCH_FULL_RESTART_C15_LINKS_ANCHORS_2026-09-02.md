@@ -1,32 +1,4 @@
 # WebClip — fresh full-project research restart — C15 links / anchors / internal destinations — 2026-09-02
-19:Classification:
-21:**`L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)`**
-25:## 1. Bounded question
-40:## 2. Fresh current-source inspection
-42:### 2.1 Top-document preparation absolutizes admitted links
-50:### 2.2 Flattening changes document identity but preserves child URL provenance
-60:### 2.3 The inert clone guard intentionally strips destination identity
-71:## 3. External standards / comparable capture research
-75:### 3.1 WHATWG fragment resolution is document-identity dependent
-85:### 3.2 `Page.printToPDF` is the print primitive, not a link-fidelity contract
-93:### 3.3 SingleFile explicitly protects same-document fragment form
-101:### 3.4 Chromium PDF anchor behavior is version-sensitive
-112:## 4. Fresh Chrome physical-PDF evidence
-122:- workflow run `33590686024`, job `100123891066`, conclusion `SUCCESS`;
-139:### 4.1 Positive/native controls preserve internal navigation
-149:### 4.2 Production-shaped flattening loses the internal destination
-159:### 4.3 Causal final-representation repair restores the internal destination
-173:### 4.4 Probe corrections are retained as research provenance
-182:## 5. Duplicate / root-cause reconciliation
-184:Fresh registry and historical evidence reconciliation maps the focused failure to existing **P1-187 ACTIVE**: the flattened same-origin representation must preserve required rendered state and document-local provenance under explicit budgets.
-186:No new C15-specific owner is needed. The evidence neither closes P1-187 nor expands its status; it adds a fresh link/destination fidelity discriminator to that existing root.
-190:## 6. Architectural implications
-202:This is an architectural direction under P1-187, not runtime authorization in this tranche.
-204:## 7. Verdict and next checkpoint
-208:**`L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)`**
-210:The next sequential restart coordinate is **C16 — Same-origin iframe**. Its matrix entry remains `PARTIAL / L4 POSITIVE CONTROLS`; the next tranche must inspect that current partial coverage and decide the bounded remaining question before advancing it.
-212 project_docs/RESEARCH_FULL_RESTART_C15_LINKS_ANCHORS_2026-09-02.md
-# WebClip — fresh full-project research restart — C15 links / anchors / internal destinations — 2026-09-02
 
 Date: 2026-09-02
 
