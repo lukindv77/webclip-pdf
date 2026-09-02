@@ -92,6 +92,7 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 | P1-130 | ACTIVE | Chrome Action mutation admission/repair must remain bounded and converge after skipped/stale/late operations; later degraded truth is P1-217. |
 | P1-138 | ACTIVE | Read-like Yandex list/fetch/status flows must not hide provisioning/mutation authority; pure observation must be separated from ensure/create side effects while keeping bounded UI reads. |
 | P1-146 | ACTIVE | Automatic local-download start is non-cancellable browser side effect: exact durable intent/actual settlement/restart reconciliation must survive unknown response without duplicate start. |
+| P1-150 | ACTIVE | Same-origin selected iframe print-height stabilization must not silently truncate admitted selected content at the `200000px` guard; over-bound content requires a complete bounded final representation or a truthful degraded/failed outcome instead of partial-PDF success. |
 | P1-154 | ACTIVE | Aggregate live Include/Exclude count/byte budget must apply before local+remote materialization **and** portable snapshot serialization; UI/PDF/Journal scope cannot silently diverge through post-hoc 250-item slicing. |
 | P1-156 | ACTIVE | Native Save As keeps user-owned unbounded dialog semantics while PREPARED/STARTED/RELEASE lifecycle, Blob pinning, exact DownloadItem reconciliation and owner-page/worker restart cleanup become durable/generation-exact. |
 | P1-157 | ACTIVE | Extension/content Chrome calls need class-correct lifetime semantics; shared Settings writers need one ordering contract; user-owned permission prompt cannot be treated as cancelled by caller timeout. |
@@ -151,7 +152,7 @@ Every code in this range remains occupied. All are ACTIVE except `P1-213`, which
 | P1-199 | ACTIVE | Cross-origin frame print prepare/restore state needs exact print-operation generation; stale restore cannot undo newer prepare. |
 | P1-200 | ACTIVE | Remote-frame selection/control commands and responses need exact selection-session generation/ordering. |
 | P1-201 | ACTIVE | Optional host-permission revoke/regrant must clean/fence already injected frame-agent authority and never revive old session state. |
-| P1-202 | ACTIVE | Deleted-comment retention/privacy semantics must explicitly govern retained text, redisclosure and lifecycle. |
+| P1-202 | ACTIVE | Deleted comment tombstones need one lifecycle across retention/search/export/import and portable capacity debt; deleted payload cannot consume active capacity forever. |
 | P1-203 | ACTIVE | Injected frame-agent may outlive MV3 worker registry; new worker must re-handshake/reconcile/clean rather than infer authority. |
 | P1-204 | ACTIVE | Browser-owned context-menu destructive rebuild needs generation durable across worker restart; old remove/create settlement cannot overtake new repair. |
 | P1-205 | ACTIVE | OperationLog retention cleanup and queued writes need one history-generation linearization so late writer cannot resurrect expired history. |
