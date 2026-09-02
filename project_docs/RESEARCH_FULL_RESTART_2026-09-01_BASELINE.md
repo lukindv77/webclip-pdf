@@ -73,7 +73,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C07 | Fonts/typography | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-003, P1-187)` |
 | C08 | Raster images / crop/object-fit | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-187)` |
 | C09 | Responsive images / picture/srcset/currentSrc | `L4-REVALIDATED / FINDING + POSITIVE/NEGATIVE/CAUSAL CONTROLS (P0-004, P0-070, P0-075, P1-003, P1-187)` |
-| C10 | SVG visual state/resources | `NOT-TRIAGED / UNKNOWN` |
+| C10 | SVG visual state/resources | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-003, P1-187)` |
 | C11 | Canvas | `NOT-TRIAGED / UNKNOWN` |
 | C12 | Video / replaced media / current frame | `NOT-TRIAGED / UNKNOWN` |
 | C13 | Form / renderer-owned controls | `NOT-TRIAGED / UNKNOWN` |
@@ -224,6 +224,20 @@ A delayed 2.5 s candidate introduced only by the flattened proxy freshly revalid
 Fresh duplicate/root-cause reconciliation maps C09 to existing **P0-004 / P0-070 / P0-075 / P1-003 / P1-187 ACTIVE** owners, with P1-167 supporting the bounded preparation/diagnostic layer. Historical responsive evidence was used only for hypothesis/duplicate lookup; no historical PASS/FINDING itself advanced C09. No new P-code or owner status transition occurs.
 
 C09 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NEGATIVE/CAUSAL CONTROLS (P0-004, P0-070, P0-075, P1-003, P1-187)`. C10 is the next sequential untriaged coordinate.
+
+## Fresh continuation checkpoint — focused C10 SVG visual state/resources
+
+`RESEARCH_FULL_RESTART_C10_SVG_VISUAL_STATE_2026-09-02.md` records the fresh C10 tranche on exact canonical source `be223420aa8b060526e1699c477e89f9f37bb0d0`. Local-first managed Chromium `144.0.7559.96` plus `Page.printToPDF`/PyMuPDF physical checks were used; generated PDFs remain untracked and the durable project harness is `project_tools/research_c10_svg_visual_state.py`.
+
+Positive controls prove that current Chromium physically preserves ordinary inline SVG with local `clipPath`, SVG `<foreignObject>` content/text, and a self-contained local `<use href="#sym">` through an ordinary clone. These controls reject a blanket Chromium/PDF SVG limitation.
+
+A delayed selected SVG `<image href>` exposes a fresh **P1-003 ACTIVE** readiness gap: the immediate `Page.printToPDF` cut returns in about `9.235 ms` with zero red pixels while the SVG image resource is still pending; after the same resource settles, the same SVG prints `30374` red pixels. Current explicit resource convergence has an HTML `IMG` task but no corresponding SVG `<image>` task, so print completion is not final SVG-resource readiness proof.
+
+Two same-origin flattened-frame controls freshly revalidate **P1-187 ACTIVE**. Frame-local CSS `fill:red; stroke:blue; stroke-width:12px` becomes black fill / no stroke / 1px default in the proxy because SVG presentation properties are outside the current computed-style allowlist. Separately, relative SVG `<image href="asset.svg">` changes physical artwork from red to blue when flattening changes owner-document/base from `/nested/` to `/` while leaving the literal relative href unchanged.
+
+Historical flattened-document namespace evidence was used only for duplicate/root-cause reconciliation. It already proves SVG fragment/gradient/`<use>` namespace collisions under the same secondary-representation family, so no new SVG-specific P-code is allocated. Registry status is unchanged.
+
+C10 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-003, P1-187)`. C11 — Canvas — is the next sequential untriaged coordinate.
 
 ## Delivery rule
 
