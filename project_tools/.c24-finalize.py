@@ -1,0 +1,26 @@
+from pathlib import Path
+
+p = Path('project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md')
+text = p.read_text(encoding='utf-8')
+old = '| C24 | Spoilers/disclosures / inert expansion | `NOT-TRIAGED / UNKNOWN` |'
+new = '| C24 | Spoilers/disclosures / inert expansion | `L4-REVALIDATED / FINDING + POSITIVE/GUARDED-ACTIVATION/INERT-STATIC/NAMED-DETAILS/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-167 supporting)` |'
+if old not in text:
+    raise SystemExit('C24 baseline row did not match expected current text')
+text = text.replace(old, new, 1)
+checkpoint = """
+
+## Fresh continuation checkpoint — focused C24 Spoilers/disclosures / inert expansion
+
+`RESEARCH_FULL_RESTART_C24_INERT_DISCLOSURE_2026-09-02.md` records the fresh C24 exact-source physical tranche on canonical source `c2f4648cf073070f74c188e7ff9f50d3e30ed05b`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, exact host-control guard blob `5b98e046a69f5389271f626536b02e6f073ca7fb`, Google Chrome `151.0.7922.173`, workflow run `33608253236`, job `100177131433`, exact accepted workflow head `445866d20f2caec910db6edb853b428524b9d51f` and conclusion SUCCESS.
+
+Fresh production-shaped evidence corrects the older unguarded C24 narrative: P0-067's current isolated-world activation guard blocks all four tested page-owned programmatic disclosure clicks (`blockedPageClicks=4`, page `clicks=[]`, `submits=0`), so P0-067 remains DONE. C24 nevertheless remains a finding because current live `details.open=true` fires page-observable state transition and can admit post-admission page-created content into the physical PDF; fallback ARIA/hidden-panel expansion directly mutates the live source and persists after print; no `sourceState/staticRepresentation` disclosure receipt is emitted.
+
+A disconnected static-materialization causal control preserves all tested pre-existing disclosure content with zero source click/submit/toggle-created/stateful-created content and leaves the source native details closed. A fresh `<details name=\"faq\">` control additionally proves that live mutually-exclusive widget semantics can defeat the product's safe expanded-static completeness contract: current preparation leaves only one group member open/printed, while a private static representation can preserve both bodies without mutating source state.
+
+Duplicate/root-cause reconciliation maps the remaining C24 failures to existing **P0-075 / P0-070 / P0-004 ACTIVE**, with **P1-167 ACTIVE** supporting bounded-preparation ownership. **P1-004 ACTIVE** remains the source-level cross-origin disclosure-parity umbrella. No new P-code or Registry status change is warranted. C24 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/GUARDED-ACTIVATION/INERT-STATIC/NAMED-DETAILS/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-167 supporting)`. C25 — Dialog / popover / top layer — is the next sequential coordinate.
+"""
+anchor = '\n## Delivery rule\n'
+if anchor not in text:
+    raise SystemExit('Delivery rule anchor missing')
+text = text.replace(anchor, checkpoint + anchor, 1)
+p.write_text(text, encoding='utf-8')
