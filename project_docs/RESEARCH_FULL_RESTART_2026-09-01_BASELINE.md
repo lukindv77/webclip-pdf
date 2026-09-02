@@ -77,7 +77,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C11 | Canvas | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-187)` |
 | C12 | Video / replaced media / current frame | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-187)` |
 | C13 | Form / renderer-owned controls | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)` |
-| C14 | Pseudo/generated content | `NOT-TRIAGED / UNKNOWN` |
+| C14 | Pseudo/generated content | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P0-004, P1-003, P1-187)` |
 | C15 | Links / anchors / internal destinations | `NOT-TRIAGED / UNKNOWN` |
 | C16 | Same-origin iframe | `PARTIAL / L4 POSITIVE CONTROLS` |
 | C17 | Cross-origin iframe capture/print boundary | `NOT-TRIAGED / UNKNOWN` |
@@ -278,6 +278,20 @@ The production-shaped proxy PDF contains `DEFAULT_INPUT` / `DEFAULT_TEXTAREA` / 
 Fresh duplicate/root-cause reconciliation maps the failure to existing **P1-187 ACTIVE**. Historical capture-representation evidence had already treated browser-owned flattened state under P1-187, but it was used only for duplicate/hypothesis lookup and did not itself advance C13. P0-068 remains DONE: any P1-187 repair must preserve inertness and must not restore submission/action/event authority. Sensitive/password/autofill/file-picker semantics remain deferred to C39 privacy/data-minimization rather than being silently serialized.
 
 C13 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)`. C14 — Pseudo/generated content — is the next sequential untriaged coordinate.
+
+## Fresh continuation checkpoint — focused C14 Pseudo/generated content
+
+`RESEARCH_FULL_RESTART_C14_PSEUDO_GENERATED_2026-09-02.md` records the fresh C14 tranche on exact canonical source `baa0d0d747df5a0801511813c5a74913278733f8`, with exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`.
+
+Fresh source inspection confirms that resource preparation derives CSS background/font work from ordinary selected DOM-element computed styles and does not acquire `::before` / `::after` / `::marker` computed resource state. Same-origin flattening clones real BODY DOM children and applies a bounded real-element computed-style allowlist; it does not explicitly reconstruct pseudo boxes.
+
+Managed Chromium `144.0.7559.96` gives a clean positive control: direct top-document `::before` / DOM / `::after` text physically prints as `BEFORE_TOKEN BODY_TOKEN AFTER_TOKEN`. A generated-counter fixture then freshly revalidates **P0-004 ACTIVE**: full source prints `3. GAMMA`, but selected-only filtering that hides the two earlier counter-incrementing siblings prints `1. GAMMA`, proving that selected generated presentation can depend on unselected context.
+
+A delayed 2.5 s image used only by `#x::before` freshly revalidates **P1-003 ACTIVE**. The real element reports `backgroundImage=none` while its pseudo reports the delayed URL; immediate physical PDF has `0` red pixels and SHA `317ef086fe610cc391a03c4c85435bcb19e79f51469e12414438259681d4d572`, whereas the settled PDF has `59643` red pixels and SHA `6b7bf9b66c5fdb604b68064ddf460f93e276b38c6a909cf186702a1edeb8624f`. `Page.printToPDF` is therefore not a substitute for the missing pseudo-resource readiness task.
+
+A same-origin child `.x::before/.x::after` control freshly revalidates **P1-187 ACTIVE**. Direct child PDF contains `FRAME_BEFORE FRAME_BODY FRAME_AFTER`; after production-shaped BODY flattening the top proxy pseudo computed content is `none/none` and physical PDF contains only `FRAME_BODY`. Test-only static materialization of the admitted generated text into the final proxy restores `FRAME_BEFORE FRAME_BODY FRAME_AFTER`, proving a secondary-representation gap rather than Chromium PDF inability.
+
+Historical pseudo/resource/counter findings were used only for duplicate/root-cause lookup. No new P-code is allocated and no owner status changes. C14 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P0-004, P1-003, P1-187)`. C15 — Links / anchors / internal destinations — is the next sequential untriaged coordinate.
 
 ## Delivery rule
 
