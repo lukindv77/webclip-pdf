@@ -85,7 +85,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C19 | Ordinary long-page existing content | `L4-REVALIDATED / PASS` |
 | C20 | Nested scroll / retained scrollports | `L4-REVALIDATED / FINDING + POSITIVE/SCROLL-POSITION/NESTED/CAUSAL CONTROLS (P0-004)` |
 | C21 | Lazy/offscreen resources already belonging to content | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CUSTOM/FRAME/SETTLED/CAUSAL CONTROLS (P1-003)` |
-| C22 | Scroll-triggered new logical content / user-reached max boundary | `NOT-TRIAGED / UNKNOWN` |
+| C22 | Scroll-triggered new logical content / user-reached max boundary | `L4-REVALIDATED / FINDING + POSITIVE/NO-AUTOSCROLL/TRUSTED-WHEEL/SCROLL-BACK CONTROLS (P1-230)` |
 | C23 | Virtualized/windowed content history within user-reached range | `NOT-TRIAGED / UNKNOWN` |
 | C24 | Spoilers/disclosures / inert expansion | `NOT-TRIAGED / UNKNOWN` |
 | C25 | Dialog / popover / top layer | `NOT-TRIAGED / UNKNOWN` |
@@ -357,6 +357,14 @@ Duplicate/root-cause reconciliation maps the fresh failure directly to existing 
 Fresh positive controls prove that current bounded preparation loads and physically preserves far-offscreen native `IMG[loading=lazy]`, `IMG[data-src]`, `IMG[data-srcset]`, and an accessible same-origin-frame native lazy image without live-page auto-scroll. A narrower `<picture><source data-srcset>` case proves that URL completion is not final renderer-resource convergence: the expected candidate is requested and the resource report is clean, yet the owning IMG remains on its transparent fallback and the physical PDF contains zero expected orange pixels even after an additional 2.5-second settlement wait. Test-only final-IMG materialization of the already-known candidate restores the expected `220×140` image and `17,056` orange pixels.
 
 Duplicate/root-cause reconciliation maps the fresh failure directly to existing **P1-003 ACTIVE**; no new P-code or Registry wording/status change is required. C09 responsive-image findings are adjacent context, while P1-167/C38 and P1-230/C22/C23 remain outside this bounded matrix. C21 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CUSTOM/FRAME/SETTLED/CAUSAL CONTROLS (P1-003)`. C22 — Scroll-triggered new logical content / user-reached max boundary — is the next sequential coordinate.
+
+## Fresh continuation checkpoint — focused C22 User-reached dynamic scroll
+
+`RESEARCH_FULL_RESTART_C22_USER_REACHED_DYNAMIC_SCROLL_2026-09-02.md` records the accepted C22 exact-source physical tranche on canonical source `05dc44e43765c37a24a8b4a6d6621c92e7e0b759`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33606163625`, job `100170513908`, exact accepted workflow head `a0f0ded486020e0b3b9405903f4b14fdd1717ff1`, conclusion SUCCESS and raw result SHA-256 `803d23630e2f50ee78446e532b489e936d08be7373c1c9411af03a921ca92911`.
+
+The no-user-scroll control remains at exactly 20 additive items through current WebClip preparation and physical print, proving that the current save path does not auto-scroll/create N+1 content. A browser wheel trajectory grows the selected feed to 40, returns to `scrollY=0`, and the physical selected PDF preserves exactly items 1…40 while WebClip preparation/print creates no 41+ batch. Exclude/outside controls remain omitted.
+
+Fresh source and actual save-request inspection still find no WebClip-owned generation-bound maximum user-reached boundary/history receipt: scroll handling is outline-update only and `userBoundaryMetaPaths=[]`. Duplicate/root-cause reconciliation therefore revalidates existing **P1-230 ACTIVE** without a new P-code or Registry change. C22 advances to `L4-REVALIDATED / FINDING + POSITIVE/NO-AUTOSCROLL/TRUSTED-WHEEL/SCROLL-BACK CONTROLS (P1-230)`. C23 — Virtualized/windowed content history within user-reached range — is the next sequential coordinate.
 
 ## Delivery rule
 
