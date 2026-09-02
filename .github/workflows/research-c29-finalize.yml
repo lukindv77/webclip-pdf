@@ -1,0 +1,55 @@
+name: Research C29 finalize
+
+on:
+  push:
+    branches: [research/evidence-c29-viewport-container-geometry-2026-09-02]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-c29:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Advance C29 baseline and remove temporary finalizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md')
+          text = p.read_text(encoding='utf-8')
+          old = '| C29 | Viewport units / container-query dependent geometry | `NOT-TRIAGED / UNKNOWN` |'
+          new = '| C29 | Viewport units / container-query dependent geometry | `L4-REVALIDATED / FINDING + POSITIVE/DIRECT/ALIGNED/CONTAINER/FROZEN/CAUSAL CONTROLS (P0-070, P0-004)` |'
+          if old not in text:
+              raise SystemExit('C29 baseline row did not match expected current text')
+          text = text.replace(old, new, 1)
+          checkpoint = '''
+
+## Fresh continuation checkpoint — focused C29 Viewport units / container-query dependent geometry
+
+`RESEARCH_FULL_RESTART_C29_VIEWPORT_CONTAINER_GEOMETRY_2026-09-02.md` records the accepted C29 exact-source physical tranche on canonical source `4508b7abce73366fd796c0d662f15d3bbb112df8`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33626492404`, job `100235352749`, exact accepted workflow head `78ae97da0b1741529ec9736ab06ca25c608bc49d`, conclusion SUCCESS and raw result SHA-256 `b3d60e267efe3797f877ea1266fe94c1f084ce875a6ac1bc81b9d8a787d33d0a`.
+
+At the admitted 1200×800 screen state, `50vw=600px`, the percentage query container is about `937.6px`, its `50cqw` child is about `458.8px`, and the container-query branch is WIDE. Current WebClip preparation and `beforeprint` continue to report that source-like geometry, yet the physical A4 PDF contains the NARROW branch. Direct Chromium and a source already aligned to 703×1031 produce the same scale-invariant physical geometry ratios as current WebClip (`viewport/fixed≈1.04`, `cqw/fixed≈0.779`). An explicit 800px query-container remains WIDE, rejecting a generic container-query failure.
+
+A test-only freeze of admitted source used geometry into explicit pixel values preserves the WIDE branch and restores source-shaped physical ratios (`viewport/fixed≈1.542`, `cqw/fixed≈1.176`) while Exclude and outside-scope controls remain omitted. Two earlier runs are retained as rejected harness hypotheses: `beforeprint` was not a receipt of final paged used geometry, and absolute PDF pixel widths were not comparable across differently page-fitted documents; the accepted gate uses within-PDF scale-invariant ratios.
+
+Duplicate/root-cause reconciliation maps C29 to existing **P0-070 / P0-004 ACTIVE**. No new P-code, Registry wording/status or runtime/release change is warranted. C29 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/DIRECT/ALIGNED/CONTAINER/FROZEN/CAUSAL CONTROLS (P0-070, P0-004)`. C30 — Clipping / overflow / paint containment — is the next sequential coordinate.
+'''
+          anchor = '\n## Delivery rule\n'
+          if anchor not in text:
+              raise SystemExit('Delivery rule anchor missing')
+          text = text.replace(anchor, checkpoint + anchor, 1)
+          p.write_text(text, encoding='utf-8')
+          PY
+          git rm .github/workflows/research-c29-finalize.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md
+          git commit -m 'research: finalize fresh C29 evidence'
+          git push origin HEAD:research/evidence-c29-viewport-container-geometry-2026-09-02
