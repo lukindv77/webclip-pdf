@@ -6,6 +6,7 @@ name: Research C36 resource byte generation
       - research/evidence-c36-resource-byte-generation-2026-09-02
     paths-ignore:
       - project_tools/.c36-physical-result.json
+      - project_tools/.c36-cache-result.json
 
 permissions:
   contents: write
@@ -37,8 +38,14 @@ jobs:
           result="$(grep '^C36_RESULT_JSON=' "$RUNNER_TEMP/c36-result.log" | tail -n 1 | sed 's/^C36_RESULT_JSON=//')"
           [[ -n "$result" ]] || { echo 'C36 result missing' >&2; exit 1; }
           printf '%s\n' "$result" > project_tools/.c36-physical-result.json
+
+          python project_tools/research_c36_cache_clear_control.py --chrome "$chrome" --out "$RUNNER_TEMP/c36-cache" | tee "$RUNNER_TEMP/c36-cache.log"
+          cache="$(grep '^C36_CACHE_RESULT_JSON=' "$RUNNER_TEMP/c36-cache.log" | tail -n 1 | sed 's/^C36_CACHE_RESULT_JSON=//')"
+          [[ -n "$cache" ]] || { echo 'C36 cache result missing' >&2; exit 1; }
+          printf '%s\n' "$cache" > project_tools/.c36-cache-result.json
+
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -f project_tools/.c36-physical-result.json
-          git commit -m 'research: persist temporary C36 physical result'
+          git add -f project_tools/.c36-physical-result.json project_tools/.c36-cache-result.json
+          git commit -m 'research: persist temporary C36 physical results'
           git push origin HEAD:research/evidence-c36-resource-byte-generation-2026-09-02
