@@ -6,6 +6,8 @@ on:
     paths-ignore:
       - project_tools/.c17-physical-result.json
       - project_tools/.c17-geometry-result.json
+      - project_tools/.c17-geometry-log.txt
+      - project_tools/.c17-geometry-status.txt
 
 permissions:
   contents: write
@@ -28,43 +30,44 @@ jobs:
       - name: Install bounded harness dependencies
         run: python -m pip install --disable-pip-version-check playwright==1.55.0 pypdf==6.0.0
 
-      - name: Run exact-source physical C17 matrix
+      - name: Run C17 effective-geometry causal control
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           if [[ -z "$chrome" ]]; then
             echo 'Google Chrome/Chromium is unavailable on runner' >&2
-            exit 1
+            printf '127\n' > project_tools/.c17-geometry-status.txt
+            exit 0
           fi
           "$chrome" --version
           export CONTENT_BLOB_SHA="$(git rev-parse HEAD:content.js)"
           export FRAME_AGENT_BLOB_SHA="$(git rev-parse HEAD:frame-agent.js)"
-          python project_tools/research_c17_cross_origin_iframe.py --chrome "$chrome" --out "$RUNNER_TEMP/c17-pdfs" | tee "$RUNNER_TEMP/c17-result.log"
-          result="$(grep '^C17_RESULT_JSON=' "$RUNNER_TEMP/c17-result.log" | tail -n 1 | sed 's/^C17_RESULT_JSON=//')"
-          if [[ -z "$result" ]]; then
-            echo 'C17 result JSON missing' >&2
-            exit 1
+          set +e
+          python project_tools/research_c17_cross_origin_geometry_control.py --chrome "$chrome" --out "$RUNNER_TEMP/c17-geometry-pdfs" 2>&1 | tee project_tools/.c17-geometry-log.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$status" > project_tools/.c17-geometry-status.txt
+          geometry="$(grep '^C17_GEOMETRY_RESULT_JSON=' project_tools/.c17-geometry-log.txt | tail -n 1 | sed 's/^C17_GEOMETRY_RESULT_JSON=//' || true)"
+          if [[ -n "$geometry" ]]; then
+            printf '%s\n' "$geometry" > project_tools/.c17-geometry-result.json
+            echo "::notice title=C17_GEOMETRY_RESULT::$geometry"
           fi
-          printf '%s\n' "$result" > project_tools/.c17-physical-result.json
-          echo "::notice title=C17_RESULT::$result"
 
-          python project_tools/research_c17_cross_origin_geometry_control.py --chrome "$chrome" --out "$RUNNER_TEMP/c17-geometry-pdfs" | tee "$RUNNER_TEMP/c17-geometry-result.log"
-          geometry="$(grep '^C17_GEOMETRY_RESULT_JSON=' "$RUNNER_TEMP/c17-geometry-result.log" | tail -n 1 | sed 's/^C17_GEOMETRY_RESULT_JSON=//')"
-          if [[ -z "$geometry" ]]; then
-            echo 'C17 geometry result JSON missing' >&2
-            exit 1
-          fi
-          printf '%s\n' "$geometry" > project_tools/.c17-geometry-result.json
-          echo "::notice title=C17_GEOMETRY_RESULT::$geometry"
-
-      - name: Persist temporary exact result receipts
+      - name: Persist temporary geometry receipt
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add project_tools/.c17-physical-result.json project_tools/.c17-geometry-result.json
+          git add project_tools/.c17-geometry-result.json project_tools/.c17-geometry-log.txt project_tools/.c17-geometry-status.txt 2>/dev/null || true
           git diff --cached --quiet && exit 0
-          git commit -m 'research: persist temporary C17 physical results'
+          git commit -m 'research: persist temporary C17 geometry result'
           git push origin HEAD:research/evidence-c17-cross-origin-iframe-2026-09-02
+
+      - name: Assert geometry harness status
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(cat project_tools/.c17-geometry-status.txt)"
+          [[ "$status" == '0' ]]
