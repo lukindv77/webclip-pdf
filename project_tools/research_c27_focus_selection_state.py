@@ -170,7 +170,10 @@ def source_contract() -> dict:
         "finishPreventsPointerFocus": "preventDefault" in finish,
         "printUiHidden": "state.host.style.display = 'none';" in CONTENT,
         "bodyFlatten": "selectedBodyForSameOriginFrame" in CONTENT and "createFlattenedBodyFramePrintProxy" in CONTENT,
-        "prepareHasFocusReceipt": any(word in prepare for word in ("activeelement", "focuswithin", "focus-visible", "getselection", "selectionstart", "selectionend")),
+        # selectionStart/selectionEnd already belong to ordinary form-control
+        # value fidelity; they are not proof that active focus or a document
+        # Selection was admitted. Guard only renderer/user-interaction state.
+        "prepareHasFocusReceipt": any(word in prepare for word in ("activeelement", "focuswithin", "focus-visible", "getselection")),
         "screenMedia": "media: 'screen'" in SERVICE_WORKER,
         "printToPdf": "Page.printToPDF" in SERVICE_WORKER,
     }
