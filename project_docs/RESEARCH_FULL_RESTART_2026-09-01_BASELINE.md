@@ -86,7 +86,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C20 | Nested scroll / retained scrollports | `L4-REVALIDATED / FINDING + POSITIVE/SCROLL-POSITION/NESTED/CAUSAL CONTROLS (P0-004)` |
 | C21 | Lazy/offscreen resources already belonging to content | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CUSTOM/FRAME/SETTLED/CAUSAL CONTROLS (P1-003)` |
 | C22 | Scroll-triggered new logical content / user-reached max boundary | `L4-REVALIDATED / FINDING + POSITIVE/NO-AUTOSCROLL/TRUSTED-WHEEL/SCROLL-BACK CONTROLS (P1-230)` |
-| C23 | Virtualized/windowed content history within user-reached range | `NOT-TRIAGED / UNKNOWN` |
+| C23 | Virtualized/windowed content history within user-reached range | `L4-REVALIDATED / FINDING + POSITIVE/GRADUAL-WHEEL/SCROLL-BACK/RECYCLED-HISTORY/CAUSAL CONTROLS (P1-230)` |
 | C24 | Spoilers/disclosures / inert expansion | `NOT-TRIAGED / UNKNOWN` |
 | C25 | Dialog / popover / top layer | `NOT-TRIAGED / UNKNOWN` |
 | C26 | Hover exclusion | `NOT-TRIAGED / UNKNOWN` |
@@ -365,6 +365,14 @@ Duplicate/root-cause reconciliation maps the fresh failure directly to existing 
 The no-user-scroll control remains at exactly 20 additive items through current WebClip preparation and physical print, proving that the current save path does not auto-scroll/create N+1 content. A browser wheel trajectory grows the selected feed to 40, returns to `scrollY=0`, and the physical selected PDF preserves exactly items 1…40 while WebClip preparation/print creates no 41+ batch. Exclude/outside controls remain omitted.
 
 Fresh source and actual save-request inspection still find no WebClip-owned generation-bound maximum user-reached boundary/history receipt: scroll handling is outline-update only and `userBoundaryMetaPaths=[]`. Duplicate/root-cause reconciliation therefore revalidates existing **P1-230 ACTIVE** without a new P-code or Registry change. C22 advances to `L4-REVALIDATED / FINDING + POSITIVE/NO-AUTOSCROLL/TRUSTED-WHEEL/SCROLL-BACK CONTROLS (P1-230)`. C23 — Virtualized/windowed content history within user-reached range — is the next sequential coordinate.
+
+## Fresh continuation checkpoint — focused C23 Virtualized/windowed user-reached history
+
+`RESEARCH_FULL_RESTART_C23_VIRTUALIZED_HISTORY_2026-09-02.md` records the accepted C23 exact-source physical tranche on canonical source `7d0774054d434b4dd897af3a14a51732018c4cb9`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33606883094`, job `100172789243`, exact accepted workflow head `355cc40f5d754b45d3da29c69fb466b50e187ef5`, conclusion SUCCESS and raw result SHA-256 `67d332fc775670fec9b2c42a4d6952a9f8df948f40d2e8789e246b18211d3964`.
+
+A window-scrolling virtualizer reuses eight DOM rows. Browser wheel input gradually mounts every logical ID `1…57`; at the deepest point the current window is `50…57`, and after returning to `scrollY=0` the current DOM window is again `1…8` while the fixture still proves every `1…57` was actually mounted/seen. Current WebClip physical PDF after scroll-back contains only IDs `1…8`. Test-only static materialization of the exact seen history inside the same selected host restores IDs `1…57` and the reached-last sentinel, with Exclude/outside controls still omitted.
+
+Duplicate/root-cause reconciliation maps this direct B6 history-loss finding to existing **P1-230 ACTIVE**. No new P-code or Registry wording/status change is required; C20 is excluded by fixture design because no retained nested scrollport exists. C23 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/GRADUAL-WHEEL/SCROLL-BACK/RECYCLED-HISTORY/CAUSAL CONTROLS (P1-230)`. C24 — Spoilers/disclosures / inert expansion — is next.
 
 ## Delivery rule
 
