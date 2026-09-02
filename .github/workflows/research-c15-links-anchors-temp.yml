@@ -3,6 +3,8 @@ name: Temporary C15 links and anchors evidence
 on:
   push:
     branches: [research/c15-links-anchors-2026-09-02]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
