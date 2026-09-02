@@ -96,7 +96,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C30 | Clipping / overflow / paint containment | `L4-REVALIDATED / FINDING + POSITIVE/HIDDEN/CLIP/PAINT/CLIP-PATH/CAUSAL CONTROLS (P0-004)` |
 | C31 | Fixed / sticky | `L4-REVALIDATED / FINDING + POSITIVE/FIXED-REPEAT/STICKY/TRANSFORMED/FRAME/CAUSAL CONTROLS (P0-004; P1-187 supporting)` |
 | C32 | Pagination / physical page breaks | `L4-REVALIDATED / FINDING + POSITIVE/FORCED/ROOT-OVERRIDE/DESCENDANT-AVOID/OVERSIZED/WIDOW-ORPHAN/FRAME/RASTER/CAUSAL CONTROLS (P1-187)` |
-| C33 | CSS/WAAPI animations/transitions | `NOT-TRIAGED / UNKNOWN` |
+| C33 | CSS/WAAPI animations/transitions | `L4-REVALIDATED / FINDING + POSITIVE/CSS/WAAPI/TRANSITION/PAUSED/FROZEN/FRAME/CAUSAL CONTROLS (P0-070, P1-187; P0-075 supporting)` |
 | C34 | Animated image/GIF frame | `NOT-TRIAGED / UNKNOWN` |
 | C35 | Mutation during preparation / beforeprint / physical render cut | `PARTIAL / L4 FINDING` |
 | C36 | Same locator/URL, different resource bytes/generation | `NOT-TRIAGED / UNKNOWN` |
@@ -457,6 +457,15 @@ Duplicate/root-cause reconciliation maps the top-document repeated presentation 
 Fresh top-document controls preserve descendant `break-before:page`, descendant `break-inside:avoid-page`, oversized avoided content and `widows/orphans`; all selected tokens remain complete. WebClip explicitly normalizes an Include-root authored `avoid-page` to `auto`, changing page grouping but not content/order; reasserting only that root avoid hint moves the complete block to the next page. A red/green raster control independently proves the forced boundary is visibly painted on separate pages rather than existing only in the PDF text layer.
 
 The material C32 finding is representation-path parity: an equivalent frame source computes `break-before=page` / `break-inside=avoid-page` and physically spans two pages, while the current same-origin BODY flattened proxy computes those descendants as `auto` / `auto` and puts all tokens on one page. Duplicate/root-cause reconciliation maps this directly to existing **P1-187 ACTIVE** rendered-state fidelity. No new P-code, Registry wording/status, runtime or release change is warranted. C32 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/FORCED/ROOT-OVERRIDE/DESCENDANT-AVOID/OVERSIZED/WIDOW-ORPHAN/FRAME/RASTER/CAUSAL CONTROLS (P1-187)`. C33 — CSS/WAAPI animations/transitions — is the next sequential coordinate.
+
+
+## Fresh continuation checkpoint — focused C33 CSS/WAAPI animations/transitions
+
+`RESEARCH_FULL_RESTART_C33_CSS_WAAPI_TEMPORAL_2026-09-02.md` records the accepted fresh C33 exact-source physical tranche on canonical source `72a2efc2ca298b623d5650d44f8430163f0aa876`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, exact `pdf-print-guard.js` blob `423c79143df37a80fbabf8cbbf7570a4a2ca4e2a`, Google Chrome `151.0.7922.173`, workflow run `33650829793`, job `100317097988`, exact workflow head `eea937d13bc5eb66a930a530c624d5f44e649845`, conclusion SUCCESS and raw result SHA-256 `29d5a8cbda55f1edcc2a7e91150a94a8029aa5a429050af73026a2f22c5b2388`.
+
+Fresh top-document evidence proves CSS animation, WAAPI animation and CSS transition advance materially after admission and the physical PDF reflects the later render-cut phase rather than the admitted phase. Already-paused and sampled/frozen controls remain stable and physically reproduce the sampled state, proving current Chrome can serialize a stable non-zero temporal presentation when the final representation is made time-invariant. The current render-cut script-execution guard is therefore not a temporal timeline snapshot, and actual save metadata contains no temporal phase receipt.
+
+Same-origin BODY flattening independently revalidates **P1-187 ACTIVE**: the source has one running WAAPI animation and non-zero sampled transform, while the final proxy has zero animations, `transform:none`, and zero temporal displacement. Applying only the admitted sampled transform to the final proxy restores the temporal displacement in physical PDF. The top-document drift maps primarily to **P0-070 ACTIVE**; **P0-075 ACTIVE** remains supporting isolation architecture. No new P-code or Registry wording/status change is warranted. C33 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CSS/WAAPI/TRANSITION/PAUSED/FROZEN/FRAME/CAUSAL CONTROLS (P0-070, P1-187; P0-075 supporting)`. C34 — Animated image/GIF frame — is the next sequential coordinate.
 
 ## Delivery rule
 
