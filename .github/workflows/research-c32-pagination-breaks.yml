@@ -5,6 +5,7 @@ on:
     branches: [research/evidence-c32-pagination-breaks-2026-09-02]
     paths-ignore:
       - project_tools/.c32-physical-result.json
+      - project_tools/.c32-visual-result.json
 
 permissions:
   contents: write
@@ -23,26 +24,38 @@ jobs:
         with:
           python-version: '3.12.14'
       - name: Install bounded harness dependencies
-        run: python -m pip install --disable-pip-version-check playwright==1.55.0 pypdf==6.0.0
+        run: python -m pip install --disable-pip-version-check playwright==1.55.0 pypdf==6.0.0 pymupdf==1.26.4
       - name: Run exact-source physical C32 matrix
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           [[ -n "$chrome" ]] || { echo 'Chrome unavailable' >&2; exit 1; }
           "$chrome" --version
           export CONTENT_BLOB_SHA="$(git rev-parse HEAD:content.js)"
-          status=0
-          python project_tools/research_c32_pagination_breaks.py --chrome "$chrome" --out "$RUNNER_TEMP/c32-pdfs" | tee "$RUNNER_TEMP/c32-result.log" || status=$?
+
+          python project_tools/research_c32_pagination_breaks.py --chrome "$chrome" --out "$RUNNER_TEMP/c32-pdfs" | tee "$RUNNER_TEMP/c32-result.log"
           result="$(grep '^C32_RESULT_JSON=' "$RUNNER_TEMP/c32-result.log" | tail -n 1 | sed 's/^C32_RESULT_JSON=//')"
-          [[ -n "$result" ]] || { echo 'C32 result JSON missing' >&2; exit "$status"; }
+          [[ -n "$result" ]] || { echo 'C32 result JSON missing' >&2; exit 1; }
           printf '%s\n' "$result" > project_tools/.c32-physical-result.json
           echo "::notice title=C32_RESULT::$result"
+
+          python project_tools/research_c32_visual_boundary.py --chrome "$chrome" --out "$RUNNER_TEMP/c32-visual" | tee "$RUNNER_TEMP/c32-visual.log"
+          visual="$(grep '^C32_VISUAL_RESULT_JSON=' "$RUNNER_TEMP/c32-visual.log" | tail -n 1 | sed 's/^C32_VISUAL_RESULT_JSON=//')"
+          [[ -n "$visual" ]] || { echo 'C32 visual result JSON missing' >&2; exit 1; }
+          printf '%s\n' "$visual" > project_tools/.c32-visual-result.json
+          echo "::notice title=C32_VISUAL_RESULT::$visual"
+
+      - name: Persist temporary exact result receipts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -f project_tools/.c32-physical-result.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'research: persist temporary C32 physical result'
-            git push origin HEAD:research/evidence-c32-pagination-breaks-2026-09-02
-          fi
-          exit "$status"
+          for f in project_tools/.c32-physical-result.json project_tools/.c32-visual-result.json; do
+            if [[ -s "$f" ]]; then git add -f "$f"; fi
+          done
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: persist temporary C32 physical results'
+          git push origin HEAD:research/evidence-c32-pagination-breaks-2026-09-02
