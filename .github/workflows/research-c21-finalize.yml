@@ -1,0 +1,48 @@
+name: Research C21 finalize
+
+on:
+  push:
+    branches: [research/evidence-c21-lazy-offscreen-resources-2026-09-02]
+    paths:
+      - .github/workflows/research-c21-finalize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-c21:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Advance C21 baseline and remove temporary receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md')
+          s=p.read_text(encoding='utf-8')
+          old='| C21 | Lazy/offscreen resources already belonging to content | `NOT-TRIAGED / UNKNOWN` |'
+          new='| C21 | Lazy/offscreen resources already belonging to content | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CUSTOM/FRAME/SETTLED/CAUSAL CONTROLS (P1-003)` |'
+          if old not in s:
+              raise SystemExit('C21 UNKNOWN row not found exactly once')
+          s=s.replace(old,new,1)
+          marker='\n## Delivery rule\n'
+          if marker not in s:
+              raise SystemExit('Delivery rule marker missing')
+          checkpoint='''\n## Fresh continuation checkpoint — focused C21 Lazy/offscreen resources already belonging to content\n\n`RESEARCH_FULL_RESTART_C21_LAZY_OFFSCREEN_RESOURCES_2026-09-02.md` records the accepted C21 exact-source physical tranche on canonical source `c7f0416c356c7c6cca787bffcee00f68312ada4e`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33602471295`, job `100159038407`, exact accepted workflow head `aa3d291b83f5727e5f3db15d9c0052ccc294feab`, conclusion SUCCESS, primary raw result SHA-256 `3d78c8ba76617536baea85c765106049c61378fdcc7640117a371d76da43d614` and focused picture-control SHA-256 `93f688c8da66f853463bd6928ef5df5fb8082c8b1822ecc972ae0cd7bb27cfbd`.\n\nFresh positive controls prove that current bounded preparation loads and physically preserves far-offscreen native `IMG[loading=lazy]`, `IMG[data-src]`, `IMG[data-srcset]`, and an accessible same-origin-frame native lazy image without live-page auto-scroll. A narrower `<picture><source data-srcset>` case proves that URL completion is not final renderer-resource convergence: the expected candidate is requested and the resource report is clean, yet the owning IMG remains on its transparent fallback and the physical PDF contains zero expected orange pixels even after an additional 2.5-second settlement wait. Test-only final-IMG materialization of the already-known candidate restores the expected `220×140` image and `17,056` orange pixels.\n\nDuplicate/root-cause reconciliation maps the fresh failure directly to existing **P1-003 ACTIVE**; no new P-code or Registry wording/status change is required. C09 responsive-image findings are adjacent context, while P1-167/C38 and P1-230/C22/C23 remain outside this bounded matrix. C21 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CUSTOM/FRAME/SETTLED/CAUSAL CONTROLS (P1-003)`. C22 — Scroll-triggered new logical content / user-reached max boundary — is the next sequential coordinate.\n'''
+          s=s.replace(marker,checkpoint+marker,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          rm -f .github/workflows/research-c21-lazy-offscreen.yml
+          rm -f .github/workflows/research-c21-finalize.yml
+          rm -f project_tools/.c21-physical-result.json project_tools/.c21-picture-control-result.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'research: finalize fresh C21 evidence'
+          git push origin HEAD:research/evidence-c21-lazy-offscreen-resources-2026-09-02
