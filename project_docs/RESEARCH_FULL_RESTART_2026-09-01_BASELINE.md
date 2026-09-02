@@ -83,7 +83,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C17 | Cross-origin iframe capture/print boundary | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL/NESTED-BOUNDARY CONTROLS (P1-229, P1-004 umbrella)` |
 | C18 | Shadow DOM / slots / composed tree | `L4-REVALIDATED / FINDING + POSITIVE PHYSICAL CONTROL (P2-006)` |
 | C19 | Ordinary long-page existing content | `L4-REVALIDATED / PASS` |
-| C20 | Nested scroll / retained scrollports | `NOT-TRIAGED / UNKNOWN` |
+| C20 | Nested scroll / retained scrollports | `L4-REVALIDATED / FINDING + POSITIVE/SCROLL-POSITION/NESTED/CAUSAL CONTROLS (P0-004)` |
 | C21 | Lazy/offscreen resources already belonging to content | `NOT-TRIAGED / UNKNOWN` |
 | C22 | Scroll-triggered new logical content / user-reached max boundary | `NOT-TRIAGED / UNKNOWN` |
 | C23 | Virtualized/windowed content history within user-reached range | `NOT-TRIAGED / UNKNOWN` |
@@ -341,6 +341,14 @@ Google Chrome `151.0.7922.173` exact-source physical evidence at workflow run `3
 No C19-specific defect was observed and no P-code changes. This fresh PASS is deliberately limited to ordinary already-mounted top-document content: P1-150 remains the iframe-specific >200000px owner and P1-230 dynamic/virtualized history remains outside this fixture.
 
 C19 therefore advances to `L4-REVALIDATED / PASS`. C20 — Nested scroll / retained scrollports — is the next sequential coordinate.
+
+## Fresh continuation checkpoint — focused C20 Nested scroll / retained scrollports
+
+`RESEARCH_FULL_RESTART_C20_NESTED_SCROLL_2026-09-02.md` records the accepted C20 exact-source physical tranche on canonical source `ae2f6110901471b5a9968cc77c3a58dffe3d7700`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, evidence head `7b48bd919e0ce6a16457893d50346abb0c929306`, Google Chrome `151.0.7922.173`, workflow run `33601196091`, job `100155044941`, conclusion SUCCESS and raw result SHA-256 `a58e76e49b94dd52f95257e507c1220b66c656d6222b21896ccb15104e78a89f`.
+
+Fresh normal-flow control preserves all `120/120` mounted rows. Current WebClip keeps an ordinary selected `overflow:auto` scrollbox at its `360px` live viewport and physically preserves only rows `1…8`; moving the Include to the long descendant behind that retained ancestor still yields only `1…8`. Setting the same ancestor to `scrollTop=2404` changes the PDF to rows `58…65`. A two-level nested scrollport case preserves only rows `28…34`. Test-only static expansion of the exact prepared nested scrollports to auto height / visible overflow restores all `120/120` rows and FIRST/MIDDLE/LAST while Exclude and outside controls remain omitted.
+
+Duplicate/root-cause reconciliation maps the fresh failure directly to existing **P0-004 ACTIVE**; no new P-code or Registry wording/status change is required. P1-230 remains the separate dynamic/virtualized user-reached-history owner and is not exercised because every C20 node already exists and remains mounted. C20 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/SCROLL-POSITION/NESTED/CAUSAL CONTROLS (P0-004)`. C21 — Lazy/offscreen resources already belonging to content — is the next sequential coordinate.
 
 ## Delivery rule
 
