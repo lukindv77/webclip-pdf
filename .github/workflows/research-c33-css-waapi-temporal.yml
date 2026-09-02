@@ -33,9 +33,9 @@ jobs:
           "$chrome" --version
           export CONTENT_BLOB_SHA="$(git rev-parse HEAD:content.js)"
           status=0
-          python -m py_compile project_tools/research_c33_css_waapi_temporal.py || status=$?
+          python -m py_compile project_tools/research_c33_temporal_matrix.py || status=$?
           if [[ "$status" = 0 ]]; then
-            python project_tools/research_c33_css_waapi_temporal.py --chrome "$chrome" --out "$RUNNER_TEMP/c33-pdfs" | tee "$RUNNER_TEMP/c33-result.log" || status=${PIPESTATUS[0]}
+            python project_tools/research_c33_temporal_matrix.py --chrome "$chrome" --out "$RUNNER_TEMP/c33-pdfs" | tee "$RUNNER_TEMP/c33-result.log" || status=${PIPESTATUS[0]}
           fi
           result="$(grep '^C33_RESULT_JSON=' "$RUNNER_TEMP/c33-result.log" 2>/dev/null | tail -n 1 | sed 's/^C33_RESULT_JSON=//')"
           if [[ -n "$result" ]]; then
