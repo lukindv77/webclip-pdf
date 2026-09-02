@@ -61,7 +61,6 @@ Every tranche must explicitly map relevant work to:
 ## Fresh restart matrix
 
 All 46 previously identified material families are retained as coverage coordinates, but their previous outcomes are reset for this campaign.
-
 | ID | Surface family | Restart state |
 |---|---|---|
 | C01 | Manual Include/Exclude / selected-scope authority | `L4-REVALIDATED / FINDING (P1-154)` |
@@ -79,7 +78,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C13 | Form / renderer-owned controls | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)` |
 | C14 | Pseudo/generated content | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P0-004, P1-003, P1-187)` |
 | C15 | Links / anchors / internal destinations | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)` |
-| C16 | Same-origin iframe | `PARTIAL / L4 POSITIVE CONTROLS` |
+| C16 | Same-origin iframe | `L4-REVALIDATED / FINDING + POSITIVE/NESTED/CAUSAL CONTROLS (P1-150; P0-004 supporting)` |
 | C17 | Cross-origin iframe capture/print boundary | `NOT-TRIAGED / UNKNOWN` |
 | C18 | Shadow DOM / slots / composed tree | `NOT-TRIAGED / UNKNOWN` |
 | C19 | Ordinary long-page existing content | `NOT-TRIAGED / UNKNOWN` |
@@ -256,7 +255,6 @@ C11 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (
 ## Fresh continuation checkpoint — focused C12 Video / replaced media / current frame
 
 `RESEARCH_FULL_RESTART_C12_VIDEO_CURRENT_FRAME_2026-09-02.md` records the fresh C12 tranche on exact canonical source `335423d995b15d77869b6b6a6dc4fde700ebf688`, with exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`.
-
 Fresh source inspection confirms that same-origin flattening copies video/media `src` and video `poster` but not `currentTime` or the decoded/composited current frame. A self-contained two-phase VP9 fixture (`0–1 s` red, `1–2 s` blue) avoids network timing. In Chromium `144.0.7559.96`, both top-document and direct child video paused at `1.5 s` physically print only blue (`130351` measured blue pixels). The production-shaped fully loaded clone resets to `currentTime=0` / `readyState=4` and physically prints only red (`130351` red pixels). A test-only seek of the final proxy back to `1.5 s` restores the blue physical result.
 
 This is fresh direct revalidation of **P1-187 ACTIVE**: the final same-origin secondary representation preserves the media URL but not the admitted renderer-owned current video frame. P0-070/P0-075 remain supporting generation/isolation context. P1-003 remains adjacent resource-readiness ownership, but is deliberately not added to the fresh C12 outcome because this tranche did not physically prove a distinct delayed-media readiness failure.
@@ -301,7 +299,15 @@ Google Chrome `151.0.7922.173` provides clean native controls: direct top-docume
 
 The production-shaped inert flattened-frame representation retains the visible destination text but strips its `id`, keeps the former child document's absolute fragment URL and emits no internal PDF destination. Instead, the annotation is a URI back to the child source URL. A test-only collision-safe final-document identity plus local fragment rewrite restores the internal target while preserving external/image URI controls.
 
-Fresh duplicate/root-cause reconciliation maps the focused failure to existing **P1-187 ACTIVE**. No new P-code is allocated and no owner status changes. C15 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)`. C16 — Same-origin iframe — remains `PARTIAL / L4 POSITIVE CONTROLS` and is the next sequential coordinate for bounded gap inspection.
+Fresh duplicate/root-cause reconciliation maps the focused failure to existing **P1-187 ACTIVE**. No new P-code is allocated and no owner status changes. C15 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)`.
+
+## Fresh continuation checkpoint — focused C16 Same-origin iframe
+
+`RESEARCH_FULL_RESTART_C16_SAME_ORIGIN_IFRAME_2026-09-02.md` records the accepted C16 exact-source physical tranche on canonical source `2bdd469be3e6a5a14f70123d42ec7fa01a7994e8`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, evidence head `bda5f1e655e7276d6654a0a0051f97a184c4bb85`, Google Chrome `151.0.7922.173`, workflow run `33593581470`, job `100132387642`, conclusion SUCCESS and result JSON SHA-256 `73cc3a7f59c42cfa906cbc57132ee77c286199211df3c30ee544427975e05de3`.
+
+Fresh positive controls reject the broad hypothesis that ordinary long live/nested same-origin selections necessarily clip: one-level BODY, long non-BODY, nested BODY and nested non-BODY cases preserve FIRST/MIDDLE/LAST through the physical PDF. A separate over-bound non-BODY case proves the narrower current failure: the frame requires approximately `210016px`, current stabilization applies about `200004px`, and the physical PDF loses the final selected sentinel/rows. Test-only top-document materialization of the same selected 4200-row content restores all rows and LAST.
+
+Duplicate/root-cause reconciliation reactivates historical **P1-150 ACTIVE** rather than allocating a new P-code; **P0-004 ACTIVE** remains supporting selected-PDF completeness ownership. C16 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NESTED/CAUSAL CONTROLS (P1-150; P0-004 supporting)`. C17 — Cross-origin iframe capture/print boundary — is the next sequential coordinate.
 
 ## Delivery rule
 
