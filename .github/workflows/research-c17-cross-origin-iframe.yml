@@ -3,9 +3,11 @@ name: Research C17 cross-origin iframe
 on:
   push:
     branches: [research/evidence-c17-cross-origin-iframe-2026-09-02]
+    paths-ignore:
+      - project_tools/.c17-physical-result.json
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   physical-c17:
@@ -43,4 +45,16 @@ jobs:
             echo 'C17 result JSON missing' >&2
             exit 1
           fi
+          printf '%s\n' "$result" > project_tools/.c17-physical-result.json
           echo "::notice title=C17_RESULT::$result"
+
+      - name: Persist temporary exact result receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add project_tools/.c17-physical-result.json
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: persist temporary C17 physical result'
+          git push origin HEAD:research/evidence-c17-cross-origin-iframe-2026-09-02
