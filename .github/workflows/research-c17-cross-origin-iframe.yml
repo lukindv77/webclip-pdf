@@ -5,6 +5,7 @@ on:
     branches: [research/evidence-c17-cross-origin-iframe-2026-09-02]
     paths-ignore:
       - project_tools/.c17-physical-result.json
+      - project_tools/.c17-geometry-result.json
 
 permissions:
   contents: write
@@ -48,13 +49,22 @@ jobs:
           printf '%s\n' "$result" > project_tools/.c17-physical-result.json
           echo "::notice title=C17_RESULT::$result"
 
-      - name: Persist temporary exact result receipt
+          python project_tools/research_c17_cross_origin_geometry_control.py --chrome "$chrome" --out "$RUNNER_TEMP/c17-geometry-pdfs" | tee "$RUNNER_TEMP/c17-geometry-result.log"
+          geometry="$(grep '^C17_GEOMETRY_RESULT_JSON=' "$RUNNER_TEMP/c17-geometry-result.log" | tail -n 1 | sed 's/^C17_GEOMETRY_RESULT_JSON=//')"
+          if [[ -z "$geometry" ]]; then
+            echo 'C17 geometry result JSON missing' >&2
+            exit 1
+          fi
+          printf '%s\n' "$geometry" > project_tools/.c17-geometry-result.json
+          echo "::notice title=C17_GEOMETRY_RESULT::$geometry"
+
+      - name: Persist temporary exact result receipts
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add project_tools/.c17-physical-result.json
+          git add project_tools/.c17-physical-result.json project_tools/.c17-geometry-result.json
           git diff --cached --quiet && exit 0
-          git commit -m 'research: persist temporary C17 physical result'
+          git commit -m 'research: persist temporary C17 physical results'
           git push origin HEAD:research/evidence-c17-cross-origin-iframe-2026-09-02
