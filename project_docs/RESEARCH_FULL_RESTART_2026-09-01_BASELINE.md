@@ -88,7 +88,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C22 | Scroll-triggered new logical content / user-reached max boundary | `L4-REVALIDATED / FINDING + POSITIVE/NO-AUTOSCROLL/TRUSTED-WHEEL/SCROLL-BACK CONTROLS (P1-230)` |
 | C23 | Virtualized/windowed content history within user-reached range | `L4-REVALIDATED / FINDING + POSITIVE/GRADUAL-WHEEL/SCROLL-BACK/RECYCLED-HISTORY/CAUSAL CONTROLS (P1-230)` |
 | C24 | Spoilers/disclosures / inert expansion | `L4-REVALIDATED / FINDING + POSITIVE/GUARDED-ACTIVATION/INERT-STATIC/NAMED-DETAILS/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-167 supporting)` |
-| C25 | Dialog / popover / top layer | `NOT-TRIAGED / UNKNOWN` |
+| C25 | Dialog / popover / top layer | `L4-REVALIDATED / FINDING + POSITIVE/AUTO-LIGHT-DISMISS/MANUAL/MODAL/CLOSED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P1-187; P0-004 supporting)` |
 | C26 | Hover exclusion | `NOT-TRIAGED / UNKNOWN` |
 | C27 | Focus / selection / interaction-induced page state | `NOT-TRIAGED / UNKNOWN` |
 | C28 | Responsive/environment state | `NOT-TRIAGED / UNKNOWN` |
@@ -385,6 +385,18 @@ A disconnected static-materialization causal control preserves all tested pre-ex
 
 Duplicate/root-cause reconciliation maps the remaining C24 failures to existing **P0-075 / P0-070 / P0-004 ACTIVE**, with **P1-167 ACTIVE** supporting bounded-preparation ownership. **P1-004 ACTIVE** remains the source-level cross-origin disclosure-parity umbrella. No new P-code or Registry status change is warranted. C24 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/GUARDED-ACTIVATION/INERT-STATIC/NAMED-DETAILS/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-167 supporting)`. C25 — Dialog / popover / top layer — is the next sequential coordinate.
 
+
+## Fresh continuation checkpoint — focused C25 Dialog / popover / top layer
+
+`RESEARCH_FULL_RESTART_C25_TOP_LAYER_2026-09-02.md` records the fresh C25 exact-source physical tranche on canonical source `6e61f8db7b77737c34a8290cea11bc8b8aff51e6`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e` and Google Chrome `151.0.7922.173`.
+
+Fresh top-document controls distinguish browser semantics from WebClip drift. An open selected `popover=auto` physically prints with its backdrop when no trusted review click intervenes, but the real trusted WebClip `Готово` click light-dismisses it before render; save still proceeds and the selected token/backdrop disappear. The same click leaves `popover=manual` open and printable. A page `dialog.showModal()` keeps its own modal/backdrop state but makes WebClip same-document Finish UI inert; test-only forced preparation proves Chromium can physically print that admitted modal state. Corrected closed-state and genuinely-marked Exclude controls both pass.
+
+Fresh same-origin BODY flattening independently revalidates **P1-187 ACTIVE**. Source popover starts `:popover-open=true`; the final proxy contains the popover text but `:popover-open=false`, and native child backdrop signal falls from `472830` blue pixels to `0`. Test-only top-layer re-entry on the connected final proxy restores about `388963` backdrop pixels while keeping Exclude omitted.
+
+Accepted case-level execution: workflow run `33610993477`, job `100185833170`, exact head `040bee0dc466e9dec376405de6e0b48c9f7feb50`, SUCCESS, raw result SHA-256 `940b81c1b1ae52c0e7e1808e84daaa10e27605a36d4510989f758192d1fc732f`. Accepted final controls: run `33611864788`, job `100188651541`, exact head `c2bea7a0bf0d0454d55cb23ca570e0134cff44ad`, SUCCESS, raw result SHA-256 `1af09abbf1b44d257dc420d55a84791874c341506d81e644541a02fa4de8cc48`.
+
+Duplicate/root-cause reconciliation maps C25 to existing **P0-075 / P0-070 / P1-187 ACTIVE**, with **P0-004 ACTIVE** supporting physical selected-copy consequences. No new P-code or Registry status/writing change is warranted. C25 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/AUTO-LIGHT-DISMISS/MANUAL/MODAL/CLOSED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P1-187; P0-004 supporting)`. C26 — Hover exclusion — is the next sequential coordinate.
 ## Delivery rule
 
 This baseline is research evidence only. It does not change runtime, P-code status, manifest version or release readiness. Subsequent restart tranches update this document or add narrowly scoped durable evidence only when the current tree has actually been inspected/tested.
