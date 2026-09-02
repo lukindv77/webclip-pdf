@@ -64,7 +64,7 @@ def validate_current_source(repo_root: Path) -> dict[str, object]:
     source = path.read_text(encoding="utf-8")
 
     prefetch_start = source.find("async function prefetchIncludedResources() {")
-    prefetch_end = source.find("function restoreTemporaryResourceAttributes", prefetch_start)
+    prefetch_end = source.find("async function prepareForPrint(meta) {", prefetch_start)
     assert prefetch_start >= 0 and prefetch_end > prefetch_start
     prefetch = source[prefetch_start:prefetch_end]
     assert "getComputedStyle?.(element)" in prefetch
