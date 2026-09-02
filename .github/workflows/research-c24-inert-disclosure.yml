@@ -5,6 +5,7 @@ on:
     branches: [research/evidence-c24-inert-disclosure-2026-09-02]
     paths-ignore:
       - project_tools/.c24-physical-result.json
+      - project_tools/.c24-named-result.json
 
 permissions:
   contents: write
@@ -39,6 +40,7 @@ jobs:
           "$chrome" --version
           export CONTENT_BLOB_SHA="$(git rev-parse HEAD:content.js)"
           export HOST_GUARD_BLOB_SHA="$(git rev-parse HEAD:host-control-activation-guard.js)"
+
           python project_tools/research_c24_inert_disclosure.py --chrome "$chrome" --out "$RUNNER_TEMP/c24-pdfs" | tee "$RUNNER_TEMP/c24-result.log"
           result="$(grep '^C24_RESULT_JSON=' "$RUNNER_TEMP/c24-result.log" | tail -n 1 | sed 's/^C24_RESULT_JSON=//')"
           if [[ -z "$result" ]]; then
@@ -48,17 +50,25 @@ jobs:
           printf '%s\n' "$result" > project_tools/.c24-physical-result.json
           echo "::notice title=C24_RESULT::$result"
 
-      - name: Persist temporary exact result receipt
+          python project_tools/research_c24_named_details.py --chrome "$chrome" --out "$RUNNER_TEMP/c24-named-pdfs" | tee "$RUNNER_TEMP/c24-named-result.log"
+          named="$(grep '^C24_NAMED_RESULT_JSON=' "$RUNNER_TEMP/c24-named-result.log" | tail -n 1 | sed 's/^C24_NAMED_RESULT_JSON=//')"
+          if [[ -z "$named" ]]; then
+            echo 'C24 named-details result JSON missing' >&2
+            exit 1
+          fi
+          printf '%s\n' "$named" > project_tools/.c24-named-result.json
+          echo "::notice title=C24_NAMED_RESULT::$named"
+
+      - name: Persist temporary exact result receipts
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! -s project_tools/.c24-physical-result.json ]]; then
-            exit 0
-          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add project_tools/.c24-physical-result.json
+          for f in project_tools/.c24-physical-result.json project_tools/.c24-named-result.json; do
+            if [[ -s "$f" ]]; then git add "$f"; fi
+          done
           git diff --cached --quiet && exit 0
-          git commit -m 'research: persist temporary C24 physical result'
+          git commit -m 'research: persist temporary C24 physical results'
           git push origin HEAD:research/evidence-c24-inert-disclosure-2026-09-02
