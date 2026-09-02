@@ -81,7 +81,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C15 | Links / anchors / internal destinations | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)` |
 | C16 | Same-origin iframe | `L4-REVALIDATED / FINDING + POSITIVE/NESTED/CAUSAL CONTROLS (P1-150; P0-004 supporting)` |
 | C17 | Cross-origin iframe capture/print boundary | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL/NESTED-BOUNDARY CONTROLS (P1-229, P1-004 umbrella)` |
-| C18 | Shadow DOM / slots / composed tree | `NOT-TRIAGED / UNKNOWN` |
+| C18 | Shadow DOM / slots / composed tree | `L4-REVALIDATED / FINDING + POSITIVE PHYSICAL CONTROL (P2-006)` |
 | C19 | Ordinary long-page existing content | `NOT-TRIAGED / UNKNOWN` |
 | C20 | Nested scroll / retained scrollports | `NOT-TRIAGED / UNKNOWN` |
 | C21 | Lazy/offscreen resources already belonging to content | `NOT-TRIAGED / UNKNOWN` |
@@ -321,6 +321,16 @@ The one-level remote positive control receives one Include plus one nested Exclu
 A nested `top A -> cross-origin outer B -> same-origin inner B` control shows the outer agent active and selectable while the inner agent self-exits because its immediate parent is same-origin; top recursion cannot cross the outer SOP boundary, so inner selection remains unchanged. This strengthens existing **P1-004 ACTIVE** umbrella rather than allocating a new P-code. A supplementary geometry development run is retained only as rejected-harness provenance: after top had already expanded the iframe, child `scrollHeight` was lower-bounded by that viewport, invalidating a post-hoc shrink assertion; it does not change the accepted primary C17 result.
 
 C17 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL/NESTED-BOUNDARY CONTROLS (P1-229, P1-004 umbrella)`. Existing permission/session/print-generation/rollback owners remain open and C46 real unpacked permission/debugger UI is not claimed exercised. C18 — Shadow DOM / slots / composed tree — is the next sequential untriaged coordinate.
+
+## Fresh continuation checkpoint — focused C18 Shadow DOM / slots / composed tree
+
+`RESEARCH_FULL_RESTART_C18_SHADOW_DOM_2026-09-02.md` records the fresh C18 tranche on exact canonical source `3082da345ad49f10969211d20ad45d04bbb1238f`, with exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`.
+
+Google Chrome `151.0.7922.173` exact-source evidence at workflow run `33599090493`, job `100148598093`, evidence head `2db00d627ca72b2281e8ac89e29a970e2629a49c`, conclusion SUCCESS, proves the current manual-selection boundary: composed clicks on open- or closed-shadow descendants are observed as the light-DOM host, while a slotted light-DOM node remains independently selectable. An attempted Exclude on an internal open-shadow descendant cannot create an internal Exclude and leaves the host Include unchanged.
+
+A physical selected-host positive control contains both open-shadow descendants and the slotted token while excluding an outside light-DOM sibling. Thus the focused defect is not a blanket Chromium/PDF Shadow DOM rendering failure; it is the already-owned explicit-selection-scope product gap **P2-006 BACKLOG**. No new P-code or P0/P1 status transition occurs.
+
+C18 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE PHYSICAL CONTROL (P2-006)`. C19 — Ordinary long-page existing content — is the next sequential coordinate.
 
 ## Delivery rule
 
