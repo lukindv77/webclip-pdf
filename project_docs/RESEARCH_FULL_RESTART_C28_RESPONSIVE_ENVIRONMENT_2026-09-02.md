@@ -164,7 +164,7 @@ The physical PDF then contained:
 - mobile/portrait/DPR1/light — absent;
 - Exclude/outside — absent.
 
-PDF SHA-256: `d67094abda4bb056d53771e14fdb82ae6d12ca2b9f1ca4594d9a6ca060d559d4` in the rejected-development execution and an equivalent accepted-run result under the same causal discriminator.
+Accepted-run PDF SHA-256: `ebc39fda8180faf122b68b419f7e184e6bb53d54377c8bc84fbc913651261124`.
 
 This is a causal architecture control only. It does not claim that copying a small fixed list of computed properties is a complete production solution.
 

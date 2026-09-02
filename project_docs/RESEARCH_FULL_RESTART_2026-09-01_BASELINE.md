@@ -91,7 +91,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C25 | Dialog / popover / top layer | `L4-REVALIDATED / FINDING + POSITIVE/AUTO-LIGHT-DISMISS/MANUAL/MODAL/CLOSED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P1-187; P0-004 supporting)` |
 | C26 | Hover exclusion | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/PAGE-CLEANED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004)` |
 | C27 | Focus / selection / interaction-induced page state | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/TRUSTED-CLICK/EXPLICIT-FOCUS/REFOCUS/SELECTION/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-187 supporting)` |
-| C28 | Responsive/environment state | `NOT-TRIAGED / UNKNOWN` |
+| C28 | Responsive/environment state | `L4-REVALIDATED / FINDING + POSITIVE/NARROW/DPR/SCHEME/FRAME/CAUSAL CONTROLS (P0-070, P0-004)` |
 | C29 | Viewport units / container-query dependent geometry | `NOT-TRIAGED / UNKNOWN` |
 | C30 | Clipping / overflow / paint containment | `NOT-TRIAGED / UNKNOWN` |
 | C31 | Fixed / sticky | `NOT-TRIAGED / UNKNOWN` |
@@ -412,6 +412,15 @@ Duplicate/root-cause reconciliation maps the fresh failure to existing **P0-075 
 Native Chrome preserves material `:focus`, `:focus-within` and `:focus-visible` presentation in physical PDF. Current WebClip's real trusted Finish activation and explicit review textarea focus instead dispatch page-observable `change → blur → focusout` before isolation; a blur-created mutation reaches the selected PDF while focus-only presentation is lost. Post-hoc refocus restores pixels but neither rolls back the blur mutation nor avoids a new focus mutation. Same-origin BODY flattening repeats the boundary. A live DOM Selection Range survives, but Chrome omits the visible `::selection` overlay. A pre-interaction disconnected static causal receipt preserves admitted focus pixels and content while excluding the later blur mutation.
 
 Duplicate/root-cause reconciliation maps C27 to existing **P0-075 / P0-070 / P0-004 ACTIVE**, with **P1-187 ACTIVE** supporting frame parity. No new P-code or Registry wording/status change is warranted. C27 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/TRUSTED-CLICK/EXPLICIT-FOCUS/REFOCUS/SELECTION/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-187 supporting)`. C28 — Responsive/environment state — remains the next unstarted sequential coordinate.
+
+
+## Fresh continuation checkpoint — focused C28 Responsive/environment state
+
+`RESEARCH_FULL_RESTART_C28_RESPONSIVE_ENVIRONMENT_2026-09-02.md` records the accepted C28 exact-source physical tranche on canonical source `880256a7d6bfd612c3abdd5f11c0ffdd33190033`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33623739974`, job `100226506745`, exact accepted workflow head `4280a1b33c321bcff7de234ebb459c20dbe45e3b`, conclusion SUCCESS and raw result SHA-256 `9715b5f36b39d9331302b815f7637ee12e286dd590d9090c5ac114991ac159d4`.
+
+A source `1200×700`, DPR2, dark desktop/landscape representation remains desktop/landscape in live `matchMedia()` through both beforeprint observers, yet production-shaped `media:'screen'` + A4 portrait physical PDF selects the mobile/portrait branches while retaining DPR2/dark. The generated request already contains bounded diagnostic `viewportWidth`/`viewportHeight`; those values do not freeze renderer representation. Test-only CDP width/height/orientation media features also fail to prevent the switch. A bounded admission-style used-state materialization restores desktop/landscape under the same A4 renderer, while a narrow mobile/portrait source is a positive control. Same-origin BODY flattening is also positive in this coordinate because copied used state preserves the child desktop/landscape branch.
+
+Duplicate/root-cause reconciliation maps C28 to existing **P0-070 / P0-004 ACTIVE**. P0-075 is not needed because the drift reproduces without WebClip UI interaction; P1-187 is a positive rather than a fresh finding here. No new P-code or Registry wording/status change is warranted. C28 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NARROW/DPR/SCHEME/FRAME/CAUSAL CONTROLS (P0-070, P0-004)`. C29 — Viewport units / container-query dependent geometry — is the next sequential coordinate.
 
 ## Delivery rule
 
