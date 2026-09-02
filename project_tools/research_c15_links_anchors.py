@@ -313,6 +313,10 @@ def run(repo_root: Path) -> dict[str, object]:
             server.server_close()
             thread.join(timeout=5)
 
+    return result
+
+
+def validate_result(result: dict[str, object]) -> None:
     assert result["top_direct"]["goto_count"] >= 1
     assert result["top_prepared"]["goto_count"] >= 1
     assert result["frame_direct"]["goto_count"] >= 1
@@ -324,7 +328,6 @@ def run(repo_root: Path) -> dict[str, object]:
     assert any("frame-external.example/path" in uri for uri in result["frame_flattened"]["uris"])
     assert any("/red.svg" in uri for uri in result["top_prepared"]["uris"])
     assert any("/blue.svg" in uri for uri in result["frame_flattened"]["uris"])
-    return result
 
 
 if __name__ == "__main__":
@@ -335,3 +338,4 @@ if __name__ == "__main__":
     encoded = json.dumps(data, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8")
     print(encoded.decode("utf-8"))
     print("RESULT_SHA256", sha256(encoded))
+    validate_result(data)
