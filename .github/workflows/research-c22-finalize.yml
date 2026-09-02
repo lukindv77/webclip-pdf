@@ -1,0 +1,47 @@
+name: Research C22 finalize
+
+on:
+  push:
+    branches: [research/evidence-c22-user-reached-dynamic-scroll-2026-09-02]
+    paths:
+      - .github/workflows/research-c22-finalize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-c22:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Advance C22 baseline and remove temporary receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md')
+          s=p.read_text(encoding='utf-8')
+          old='| C22 | Scroll-triggered new logical content / user-reached max boundary | `NOT-TRIAGED / UNKNOWN` |'
+          new='| C22 | Scroll-triggered new logical content / user-reached max boundary | `L4-REVALIDATED / FINDING + POSITIVE/NO-AUTOSCROLL/TRUSTED-WHEEL/SCROLL-BACK CONTROLS (P1-230)` |'
+          if s.count(old)!=1:
+              raise SystemExit(f'C22 row count={s.count(old)}')
+          s=s.replace(old,new,1)
+          marker='\n## Delivery rule\n'
+          checkpoint='''\n## Fresh continuation checkpoint — focused C22 User-reached dynamic scroll\n\n`RESEARCH_FULL_RESTART_C22_USER_REACHED_DYNAMIC_SCROLL_2026-09-02.md` records the accepted C22 exact-source physical tranche on canonical source `05dc44e43765c37a24a8b4a6d6621c92e7e0b759`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33606163625`, job `100170513908`, exact accepted workflow head `a0f0ded486020e0b3b9405903f4b14fdd1717ff1`, conclusion SUCCESS and raw result SHA-256 `803d23630e2f50ee78446e532b489e936d08be7373c1c9411af03a921ca92911`.\n\nThe no-user-scroll control remains at exactly 20 additive items through current WebClip preparation and physical print, proving that the current save path does not auto-scroll/create N+1 content. A browser wheel trajectory grows the selected feed to 40, returns to `scrollY=0`, and the physical selected PDF preserves exactly items 1…40 while WebClip preparation/print creates no 41+ batch. Exclude/outside controls remain omitted.\n\nFresh source and actual save-request inspection still find no WebClip-owned generation-bound maximum user-reached boundary/history receipt: scroll handling is outline-update only and `userBoundaryMetaPaths=[]`. Duplicate/root-cause reconciliation therefore revalidates existing **P1-230 ACTIVE** without a new P-code or Registry change. C22 advances to `L4-REVALIDATED / FINDING + POSITIVE/NO-AUTOSCROLL/TRUSTED-WHEEL/SCROLL-BACK CONTROLS (P1-230)`. C23 — Virtualized/windowed content history within user-reached range — is the next sequential coordinate.\n'''
+          if marker not in s: raise SystemExit('Delivery marker missing')
+          s=s.replace(marker,checkpoint+marker,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          rm -f .github/workflows/research-c22-user-reached-dynamic-scroll.yml
+          rm -f .github/workflows/research-c22-finalize.yml
+          rm -f project_tools/.c22-physical-result.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'research: finalize fresh C22 evidence'
+          git push origin HEAD:research/evidence-c22-user-reached-dynamic-scroll-2026-09-02
