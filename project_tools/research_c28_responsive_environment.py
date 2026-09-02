@@ -38,6 +38,10 @@ CHROME_DEFAULT = os.environ.get(
 )
 EXPECTED_BASE = "880256a7d6bfd612c3abdd5f11c0ffdd33190033"
 EXPECTED_CONTENT_BLOB = "f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e"
+EXPECTED_VIEWPORT_META_PATHS = [
+    "meta.pageAnalysis.document.viewportWidth",
+    "meta.pageAnalysis.document.viewportHeight",
+]
 
 MOCK = r"""
 (()=>{
@@ -387,7 +391,7 @@ def run(chrome:str,out:pathlib.Path) -> dict:
     assert wide["pdf"]["tokens"]["C28_DPR2_TOKEN"] is True and wide["pdf"]["tokens"]["C28_DPR1_TOKEN"] is False,wide
     assert wide["pdf"]["tokens"]["C28_DARK_TOKEN"] is True and wide["pdf"]["tokens"]["C28_LIGHT_TOKEN"] is False,wide
     assert wide["pdf"]["tokens"]["C28_EXCLUDE_TOKEN"] is False and wide["pdf"]["tokens"]["C28_OUTSIDE_TOKEN"] is False,wide
-    assert wide["requestResponsiveMetaPaths"] == [],wide
+    assert wide["requestResponsiveMetaPaths"] == EXPECTED_VIEWPORT_META_PATHS,wide
     assert all(item["desktop"] and item["landscape"] for item in wide["beforePrint"]),wide["beforePrint"]
 
     overridden=result["wideFeatureOverride"]
@@ -414,7 +418,7 @@ def run(chrome:str,out:pathlib.Path) -> dict:
     assert frame["pdf"]["tokens"]["C28_DESKTOP_TOKEN"] is True and frame["pdf"]["tokens"]["C28_LANDSCAPE_TOKEN"] is True,frame
     assert frame["pdf"]["tokens"]["C28_MOBILE_TOKEN"] is False and frame["pdf"]["tokens"]["C28_PORTRAIT_TOKEN"] is False,frame
     assert frame["pdf"]["tokens"]["C28_EXCLUDE_TOKEN"] is False and frame["pdf"]["tokens"]["C28_OUTSIDE_TOKEN"] is False,frame
-    assert frame["requestResponsiveMetaPaths"] == [],frame
+    assert frame["requestResponsiveMetaPaths"] == EXPECTED_VIEWPORT_META_PATHS,frame
     return result
 
 
