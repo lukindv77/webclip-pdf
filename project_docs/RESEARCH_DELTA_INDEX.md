@@ -44,6 +44,7 @@ Eight older staged families were already present outside that cleanup set when t
 
 ### PDF representation, resource and render-cut fidelity
 
+- `RESEARCH_FULL_RESTART_C16_SAME_ORIGIN_IFRAME_2026-09-02.md` — fresh exact-source C16 physical evidence for ordinary/nested same-origin selections and the P1-150 `200000px` stabilization-boundary finding.
 - `RESEARCH_CAPTURE_ADMISSION_RESOURCE_FIDELITY_EVIDENCE_2026-08-29.md`
 - `RESEARCH_COMPLEX_LAYOUT_FRAME_PROXY_FIDELITY_EVIDENCE_2026-08-29.md`
 - `RESEARCH_CAPTURE_REPRESENTATION_DEPENDENCY_EVIDENCE.md`
