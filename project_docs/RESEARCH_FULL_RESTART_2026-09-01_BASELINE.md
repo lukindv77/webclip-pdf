@@ -72,7 +72,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C06 | Colors/backgrounds/compositing | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P0-004, P1-003)` |
 | C07 | Fonts/typography | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-003, P1-187)` |
 | C08 | Raster images / crop/object-fit | `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-187)` |
-| C09 | Responsive images / picture/srcset/currentSrc | `NOT-TRIAGED / UNKNOWN` |
+| C09 | Responsive images / picture/srcset/currentSrc | `L4-REVALIDATED / FINDING + POSITIVE/NEGATIVE/CAUSAL CONTROLS (P0-004, P0-070, P0-075, P1-003, P1-187)` |
 | C10 | SVG visual state/resources | `NOT-TRIAGED / UNKNOWN` |
 | C11 | Canvas | `NOT-TRIAGED / UNKNOWN` |
 | C12 | Video / replaced media / current frame | `NOT-TRIAGED / UNKNOWN` |
@@ -208,6 +208,22 @@ Fresh positive controls physically preserve ordinary top-document `object-fit:co
 A same-origin selected-BODY control freshly revalidates **P1-187 ACTIVE**. The child stylesheet renders a `400×200` red/blue image as `220×220 / object-fit:cover / object-position:left`, producing a red-only admitted crop. Current flattened representation does not copy the stylesheet-owned used dimensions/object-fit/object-position: the proxy becomes `400×200 / fill / center`, shows both red and blue, and the physical PDF preserves that wrong proxy state while the resource report remains clean. This is the existing flattened-secondary-representation root, not a new raster-specific owner.
 
 C08 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE CONTROLS (P1-187)` within the explicit C08 boundary. C09 and every later untested sequential coordinate remain unchanged here.
+
+## Fresh continuation checkpoint — focused C09 responsive images / `picture` / `srcset` / `currentSrc`
+
+`RESEARCH_FULL_RESTART_C09_RESPONSIVE_IMAGES_2026-09-02.md` records the fresh C09 tranche on exact canonical source `da0775f0a06e58b12aabe53bfad80c9a76052c9c`, with exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`.
+
+Local-first managed Chromium `144.0.7559.96` L3/L4 evidence was used because the current tool environment could physically execute CDP/PDF/raster checks without consuming a research GitHub Actions runner. Exact-source L1 inspection was bound separately to current GitHub `main`; `project_tools/research_c09_responsive_images.py` is the durable reproduction harness for a normal checkout.
+
+Positive/negative controls show that ordinary top-document width-descriptor `srcset` stays on the admitted red candidate and a DPR-1 `1x/2x` image does not switch merely because iframe width changes. A plain flattened IMG also stays red when the admitted `currentSrc` is copied to `src` and IMG `srcset` is removed.
+
+Two fresh findings reproduce existing owners. First, current selected-frame `width:100%` normalization changes a 420 px child from admitted red to 1200 px blue and the physical PDF contains only blue. Second, a child `<picture>` admitted as red is cloned into the top document with its responsive `<source>` still active; browser selection becomes blue even though cloned IMG `src` remains red, and the physical PDF contains blue. A test-only frozen control that removes the responsive `<source>` preserves red, proving the owner-document re-selection cause.
+
+A delayed 2.5 s candidate introduced only by the flattened proxy freshly revalidates resource-readiness ownership: the first `Page.printToPDF` returns in `8.42 ms` while the proxy is still incomplete and produces a PDF with neither red nor blue; after settlement, the same representation prints blue. Thus the final representation can introduce a resource after the current single convergence barrier.
+
+Fresh duplicate/root-cause reconciliation maps C09 to existing **P0-004 / P0-070 / P0-075 / P1-003 / P1-187 ACTIVE** owners, with P1-167 supporting the bounded preparation/diagnostic layer. Historical responsive evidence was used only for hypothesis/duplicate lookup; no historical PASS/FINDING itself advanced C09. No new P-code or owner status transition occurs.
+
+C09 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NEGATIVE/CAUSAL CONTROLS (P0-004, P0-070, P0-075, P1-003, P1-187)`. C10 is the next sequential untriaged coordinate.
 
 ## Delivery rule
 
