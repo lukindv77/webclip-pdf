@@ -90,7 +90,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C24 | Spoilers/disclosures / inert expansion | `L4-REVALIDATED / FINDING + POSITIVE/GUARDED-ACTIVATION/INERT-STATIC/NAMED-DETAILS/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-167 supporting)` |
 | C25 | Dialog / popover / top layer | `L4-REVALIDATED / FINDING + POSITIVE/AUTO-LIGHT-DISMISS/MANUAL/MODAL/CLOSED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P1-187; P0-004 supporting)` |
 | C26 | Hover exclusion | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/PAGE-CLEANED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004)` |
-| C27 | Focus / selection / interaction-induced page state | `NOT-TRIAGED / UNKNOWN` |
+| C27 | Focus / selection / interaction-induced page state | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/TRUSTED-CLICK/EXPLICIT-FOCUS/REFOCUS/SELECTION/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-187 supporting)` |
 | C28 | Responsive/environment state | `NOT-TRIAGED / UNKNOWN` |
 | C29 | Viewport units / container-query dependent geometry | `NOT-TRIAGED / UNKNOWN` |
 | C30 | Clipping / overflow / paint containment | `NOT-TRIAGED / UNKNOWN` |
@@ -404,6 +404,14 @@ Duplicate/root-cause reconciliation maps C25 to existing **P0-075 / P0-070 / P1-
 Native Chrome physically prints active CSS hover, hover pseudo-content and page-JS hover-mounted DOM. Current WebClip's full-screen review backdrop changes hit-testing and fires page-observable `pointerleave`: ordinary CSS/pseudo hover clears, but a page-JS flyout deliberately retained after leave remains selected DOM and reaches the physical PDF. A page-owned cleanup control removes it, same-origin selected BODY flattening repeats the sticky-DOM result, and a test-only provenance control removes exactly the hover-created node while preserving legitimate pre-existing content, a non-hover dialog, Exclude and outside-shell boundaries.
 
 Duplicate/root-cause reconciliation maps the fresh failure to existing **P0-075 / P0-070 / P0-004 ACTIVE**. Historical reservation against a standalone P1-231 remains correct: no new P-code or Registry wording/status change is warranted. C26 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/PAGE-CLEANED/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004)`. C27 — Focus / selection / interaction-induced page state — is the next sequential coordinate.
+
+## Fresh continuation checkpoint — focused C27 Focus / selection / interaction-induced page state
+
+`RESEARCH_FULL_RESTART_C27_FOCUS_SELECTION_STATE_2026-09-02.md` records the fresh C27 exact-source physical tranche on canonical source `6fa613f24116c48a76ee45d7bf75d127884e79f5`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33620748418`, job `100216951047`, exact accepted workflow head `903d432f1d4f047f71b5f21e7cd11821ba2b3957`, conclusion SUCCESS and raw result SHA-256 `03b91d0f683b924de2ebea3a73749a2e38203a8d259cd5a3e2b3c44da230d036`.
+
+Native Chrome preserves material `:focus`, `:focus-within` and `:focus-visible` presentation in physical PDF. Current WebClip's real trusted Finish activation and explicit review textarea focus instead dispatch page-observable `change → blur → focusout` before isolation; a blur-created mutation reaches the selected PDF while focus-only presentation is lost. Post-hoc refocus restores pixels but neither rolls back the blur mutation nor avoids a new focus mutation. Same-origin BODY flattening repeats the boundary. A live DOM Selection Range survives, but Chrome omits the visible `::selection` overlay. A pre-interaction disconnected static causal receipt preserves admitted focus pixels and content while excluding the later blur mutation.
+
+Duplicate/root-cause reconciliation maps C27 to existing **P0-075 / P0-070 / P0-004 ACTIVE**, with **P1-187 ACTIVE** supporting frame parity. No new P-code or Registry wording/status change is warranted. C27 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/TRUSTED-CLICK/EXPLICIT-FOCUS/REFOCUS/SELECTION/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-187 supporting)`. C28 — Responsive/environment state — remains the next unstarted sequential coordinate.
 
 ## Delivery rule
 
