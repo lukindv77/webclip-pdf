@@ -61,6 +61,7 @@ Every tranche must explicitly map relevant work to:
 ## Fresh restart matrix
 
 All 46 previously identified material families are retained as coverage coordinates, but their previous outcomes are reset for this campaign.
+
 | ID | Surface family | Restart state |
 |---|---|---|
 | C01 | Manual Include/Exclude / selected-scope authority | `L4-REVALIDATED / FINDING (P1-154)` |
@@ -255,6 +256,7 @@ C11 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (
 ## Fresh continuation checkpoint — focused C12 Video / replaced media / current frame
 
 `RESEARCH_FULL_RESTART_C12_VIDEO_CURRENT_FRAME_2026-09-02.md` records the fresh C12 tranche on exact canonical source `335423d995b15d77869b6b6a6dc4fde700ebf688`, with exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`.
+
 Fresh source inspection confirms that same-origin flattening copies video/media `src` and video `poster` but not `currentTime` or the decoded/composited current frame. A self-contained two-phase VP9 fixture (`0–1 s` red, `1–2 s` blue) avoids network timing. In Chromium `144.0.7559.96`, both top-document and direct child video paused at `1.5 s` physically print only blue (`130351` measured blue pixels). The production-shaped fully loaded clone resets to `currentTime=0` / `readyState=4` and physically prints only red (`130351` red pixels). A test-only seek of the final proxy back to `1.5 s` restores the blue physical result.
 
 This is fresh direct revalidation of **P1-187 ACTIVE**: the final same-origin secondary representation preserves the media URL but not the admitted renderer-owned current video frame. P0-070/P0-075 remain supporting generation/isolation context. P1-003 remains adjacent resource-readiness ownership, but is deliberately not added to the fresh C12 outcome because this tranche did not physically prove a distinct delayed-media readiness failure.
