@@ -150,7 +150,7 @@ After normal current WebClip preparation, the test-only causal control changes o
 
 For both the original `overflow:hidden` and `contain:paint` fixtures, physical PDF then preserves `120/120`, FIRST/MIDDLE/LAST and 5 pages, with Exclude/outside controls still absent.
 
-Hidden-causal PDF SHA-256: `3f37b1f26d4a47393518ff5a03e5d024e3f20cf218099bfdf39e16750b9` is not used because the authoritative raw receipt records `3f37b1f26d4a47393518ff5a03e5d024e3f20cf218099bfdf2043593c16750b9`.
+Hidden-causal PDF SHA-256: `3f37b1f26d4a47393518ff5a03e5d024e3f20cf218099bfdf2043593c16750b9`.
 
 Paint-causal PDF SHA-256: `2228906fcb4f141ff4cf565d1f00c0700325c98ccbb2ac210643229d531e6ddd`.
 

@@ -93,7 +93,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C27 | Focus / selection / interaction-induced page state | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/TRUSTED-CLICK/EXPLICIT-FOCUS/REFOCUS/SELECTION/FRAME/CAUSAL CONTROLS (P0-075, P0-070, P0-004; P1-187 supporting)` |
 | C28 | Responsive/environment state | `L4-REVALIDATED / FINDING + POSITIVE/NARROW/DPR/SCHEME/FRAME/CAUSAL CONTROLS (P0-070, P0-004)` |
 | C29 | Viewport units / container-query dependent geometry | `L4-REVALIDATED / FINDING + POSITIVE/DIRECT/ALIGNED/CONTAINER/FROZEN/CAUSAL CONTROLS (P0-070, P0-004)` |
-| C30 | Clipping / overflow / paint containment | `NOT-TRIAGED / UNKNOWN` |
+| C30 | Clipping / overflow / paint containment | `L4-REVALIDATED / FINDING + POSITIVE/HIDDEN/CLIP/PAINT/CLIP-PATH/CAUSAL CONTROLS (P0-004)` |
 | C31 | Fixed / sticky | `NOT-TRIAGED / UNKNOWN` |
 | C32 | Pagination / physical page breaks | `NOT-TRIAGED / UNKNOWN` |
 | C33 | CSS/WAAPI animations/transitions | `NOT-TRIAGED / UNKNOWN` |
@@ -432,6 +432,14 @@ At the admitted 1200×800 screen state, `50vw=600px`, the percentage query conta
 A test-only freeze of admitted source used geometry into explicit pixel values preserves the WIDE branch and restores source-shaped physical ratios (`viewport/fixed≈1.542`, `cqw/fixed≈1.176`) while Exclude and outside-scope controls remain omitted. Two earlier runs are retained as rejected harness hypotheses: `beforeprint` was not a receipt of final paged used geometry, and absolute PDF pixel widths were not comparable across differently page-fitted documents; the accepted gate uses within-PDF scale-invariant ratios.
 
 Duplicate/root-cause reconciliation maps C29 to existing **P0-070 / P0-004 ACTIVE**. No new P-code, Registry wording/status or runtime/release change is warranted. C29 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/DIRECT/ALIGNED/CONTAINER/FROZEN/CAUSAL CONTROLS (P0-070, P0-004)`. C30 — Clipping / overflow / paint containment — is the next sequential coordinate.
+
+## Fresh continuation checkpoint — focused C30 Clipping / overflow / paint containment
+
+`RESEARCH_FULL_RESTART_C30_CLIPPING_CONTAINMENT_2026-09-02.md` records the accepted fresh C30 exact-source physical tranche on canonical source `cd0f1d6aaf5bc874a2b8e791c2c0fd2c6a52fbd0`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33635043627`, job `100263691851`, exact workflow head `6969bcbfcf07d46fddf559fb1fe50dbe5f487ed3`, conclusion SUCCESS and accepted raw result SHA-256 `b45411ad9a8abdba69b438c29b69007714ccf7618879864918e562629f34dfca`.
+
+Fresh current-path physical results preserve only `8/120` mounted selected rows under `overflow:hidden`, `overflow:clip`, and `contain:paint` even when the latter keeps authored `overflow:visible`. A separate `clip-path:inset(0)` variant preserves only 40 unique rows and loses LAST. In contrast, `contain:layout` and `max-height:360px + overflow:visible` preserve `120/120`, rejecting a broad height/containment hypothesis. Test-only normalization of the exact prepared hidden/paint ancestors to auto-height, visible overflow, `contain:none` and no clip-path restores `120/120` while Exclude/outside controls remain omitted.
+
+Duplicate/root-cause reconciliation maps C30 directly to existing **P0-004 ACTIVE**; C20 remains adjacent retained-scrollport evidence under the same owner. No new P-code, Registry wording/status, runtime or release change is warranted. C30 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/HIDDEN/CLIP/PAINT/CLIP-PATH/CAUSAL CONTROLS (P0-004)`. C31 — Fixed / sticky — is the next sequential coordinate.
 
 ## Delivery rule
 
