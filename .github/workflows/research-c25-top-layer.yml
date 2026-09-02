@@ -27,16 +27,18 @@ jobs:
       - name: Run exact-source physical C25 matrix
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           [[ -n "$chrome" ]] || { echo 'Chrome unavailable' >&2; exit 1; }
           "$chrome" --version
           export CONTENT_BLOB_SHA="$(git rev-parse HEAD:content.js)"
-          python project_tools/research_c25_top_layer.py --chrome "$chrome" --out "$RUNNER_TEMP/c25-pdfs" | tee "$RUNNER_TEMP/c25-result.log"
+          status=0
+          python project_tools/research_c25_top_layer.py --chrome "$chrome" --out "$RUNNER_TEMP/c25-pdfs" | tee "$RUNNER_TEMP/c25-result.log" || status=$?
           result="$(grep '^C25_RESULT_JSON=' "$RUNNER_TEMP/c25-result.log" | tail -n 1 | sed 's/^C25_RESULT_JSON=//')"
-          [[ -n "$result" ]] || { echo 'C25 result JSON missing' >&2; exit 1; }
+          [[ -n "$result" ]] || { echo 'C25 result JSON missing' >&2; exit "$status"; }
           printf '%s\n' "$result" > project_tools/.c25-physical-result.json
           echo "::notice title=C25_RESULT::$result"
+          exit "$status"
       - name: Persist temporary exact result receipt
         if: always()
         shell: bash
