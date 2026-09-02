@@ -33,8 +33,16 @@ jobs:
       - name: Show browser identity
         run: |
           set -euo pipefail
-          command -v google-chrome-stable || command -v google-chrome || command -v chromium
-          (google-chrome-stable || google-chrome || chromium) --version
+          if command -v google-chrome-stable >/dev/null; then
+            google-chrome-stable --version
+          elif command -v google-chrome >/dev/null; then
+            google-chrome --version
+          elif command -v chromium >/dev/null; then
+            chromium --version
+          else
+            echo "No Chrome/Chromium executable is available." >&2
+            exit 1
+          fi
 
       - name: Run C15 physical PDF matrix
         run: python project_tools/research_c15_links_anchors.py
