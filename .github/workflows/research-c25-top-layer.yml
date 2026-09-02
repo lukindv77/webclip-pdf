@@ -4,7 +4,7 @@ on:
   push:
     branches: [research/evidence-c25-top-layer-2026-09-02]
     paths-ignore:
-      - project_tools/.c25-exclude-result.json
+      - project_tools/.c25-final-controls-result.json
 
 permissions:
   contents: write
@@ -24,7 +24,7 @@ jobs:
           python-version: '3.12.14'
       - name: Install bounded harness dependencies
         run: python -m pip install --disable-pip-version-check playwright==1.55.0 pypdf==6.0.0 pymupdf==1.26.4
-      - name: Run focused C25 top-layer Exclude control
+      - name: Run final C25 top-layer controls
         shell: bash
         run: |
           set -euo pipefail
@@ -32,13 +32,13 @@ jobs:
           [[ -n "$chrome" ]] || { echo 'Chrome unavailable' >&2; exit 1; }
           "$chrome" --version
           export CONTENT_BLOB_SHA="$(git rev-parse HEAD:content.js)"
-          python project_tools/research_c25_top_layer_exclude.py --chrome "$chrome" --out "$RUNNER_TEMP/c25-exclude-pdfs" | tee "$RUNNER_TEMP/c25-exclude.log"
-          result="$(grep '^C25_EXCLUDE_JSON=' "$RUNNER_TEMP/c25-exclude.log" | tail -n 1 | sed 's/^C25_EXCLUDE_JSON=//')"
-          [[ -n "$result" ]] || { echo 'C25 exclude result missing' >&2; exit 1; }
-          printf '%s\n' "$result" > project_tools/.c25-exclude-result.json
-          echo "::notice title=C25_EXCLUDE_RESULT::$result"
+          python project_tools/research_c25_top_layer_final_controls.py --chrome "$chrome" --out "$RUNNER_TEMP/c25-final-pdfs" | tee "$RUNNER_TEMP/c25-final.log"
+          result="$(grep '^C25_FINAL_CONTROLS_JSON=' "$RUNNER_TEMP/c25-final.log" | tail -n 1 | sed 's/^C25_FINAL_CONTROLS_JSON=//')"
+          [[ -n "$result" ]] || { echo 'C25 final controls result missing' >&2; exit 1; }
+          printf '%s\n' "$result" > project_tools/.c25-final-controls-result.json
+          echo "::notice title=C25_FINAL_CONTROLS::$result"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -f project_tools/.c25-exclude-result.json
-          git commit -m 'research: persist temporary C25 exclude result'
+          git add -f project_tools/.c25-final-controls-result.json
+          git commit -m 'research: persist temporary C25 final controls'
           git push origin HEAD:research/evidence-c25-top-layer-2026-09-02
