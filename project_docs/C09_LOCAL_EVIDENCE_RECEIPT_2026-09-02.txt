@@ -1,0 +1,19 @@
+C09 local-first execution receipt
+
+Canonical main: da0775f0a06e58b12aabe53bfad80c9a76052c9c
+content.js blob: f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e
+Browser: Chromium 144.0.7559.96
+Local probe SHA-256: 53c10ac4d2bd9410f907ba7bafe914d265f417c8fa7047c19228f3ecfa09f5ad
+Machine result SHA-256: bf9d4fce442436dc2ba65b19080cd44eb7a28f3045c24ff1e781edfa674b7901
+
+Physical PDF SHA-256:
+- top_plain_srcset.pdf c3ecc9ce115a31b4b984f5a6d396fe26c26160973a08c0b66ef24e272061f152
+- live_frame_width_mutation.pdf 55d2f8d0dd43b923ce9a37dd819903f7b8db08fd1579ce090984cf9db0a98491
+- density_1x_negative.pdf 5ac930ef0cfdcb827ab9863588cb4c73d5687592961e8c3edd6556cc57903f0c
+- plain_img_flatten_positive.pdf 442c7931a8f2304f03316192c5a4f8c0151d427e41d31411d35c6ca5fda24a24
+- picture_flatten_reselection.pdf a40eb87a1207e793ad21c6845471bbc4f33c9388191aa1086004f5f36f4a32e1
+- picture_test_only_frozen.pdf 70132f0b26682f304c37a71aa15fbf22e3ded57241c040560ad31ecc5a6c8c15
+- delayed_proxy_first_cut.pdf d6419ff9ff9a5b888788fa9753d159ad04791848382e854b6fc69cc47c50d608
+- delayed_proxy_settled.pdf 727e78d2f23b371d93fc414555c965d6fcf9eaf4fa124098563da488e06c9eb9
+
+This receipt is text-only. Generated PDFs are intentionally not committed. Full measurements, controls, interpretation and root-cause reconciliation are in RESEARCH_FULL_RESTART_C09_RESPONSIVE_IMAGES_2026-09-02.md. Reproduction logic is in project_tools/research_c09_responsive_images.py.
