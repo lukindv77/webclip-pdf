@@ -379,12 +379,16 @@ CAPTURE_STATIC = r"""()=>{
   const cloneElements=[clone,...clone.querySelectorAll('*')];
   const sourceInput=source.querySelector('#edit');
   const cloneInput=cloneElements[sourceElements.indexOf(sourceInput)];
+  const sourceFocusOnly=source.querySelector('#focusOnly');
+  const cloneFocusOnly=cloneElements[sourceElements.indexOf(sourceFocusOnly)];
   const properties=['display','position','width','height','box-sizing','margin','padding','background-color','color','border-top-width','border-right-width','border-bottom-width','border-left-width','border-top-style','border-right-style','border-bottom-style','border-left-style','border-top-color','border-right-color','border-bottom-color','border-left-color','outline-width','outline-style','outline-color','outline-offset','font-size','font-family','line-height'];
   for(let i=0;i<Math.min(sourceElements.length,cloneElements.length);i++){
     const computed=getComputedStyle(sourceElements[i]);
     for(const property of properties){const value=computed.getPropertyValue(property);if(value)cloneElements[i].style.setProperty(property,value,'important')}
   }
   if(!(cloneInput instanceof HTMLInputElement)) throw new Error('static receipt input mapping missing');
+  if(!(cloneFocusOnly instanceof HTMLElement)) throw new Error('static receipt focus-only mapping missing');
+  cloneFocusOnly.setAttribute('data-c27-static-focus-only','');
   cloneInput.value=sourceInput.value;cloneInput.setAttribute('value',sourceInput.value);
   clone.querySelector('.omit')?.remove();
   clone.querySelector('#mutationMount')?.replaceChildren();
@@ -402,7 +406,7 @@ def inert_static_causal(context, out: pathlib.Path) -> dict:
     page.wait_for_timeout(160)
     after_review = page.evaluate("c27Metrics()")
     request = click_generate(page)
-    swapped = page.evaluate("""()=>{const source=document.querySelector('#scope');source.remove();document.body.appendChild(window.__c27StaticReceipt);return {connected:window.__c27StaticReceipt.isConnected,blurInStatic:window.__c27StaticReceipt.innerText.includes('C27_BLUR_MUTATION'),focusOnlyDisplay:getComputedStyle(window.__c27StaticReceipt.querySelector('#focusOnly')).display}}""")
+    swapped = page.evaluate("""()=>{const source=document.querySelector('#scope');source.remove();document.body.appendChild(window.__c27StaticReceipt);return {connected:window.__c27StaticReceipt.isConnected,blurInStatic:window.__c27StaticReceipt.innerText.includes('C27_BLUR_MUTATION'),focusOnlyDisplay:getComputedStyle(window.__c27StaticReceipt.querySelector('[data-c27-static-focus-only]')).display}}""")
     pdf = print_pdf(page, out / "inert_static_causal.pdf")
     resolve_prepare(page)
     page.close()
