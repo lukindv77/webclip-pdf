@@ -35,7 +35,7 @@ BUDGET = (ROOT / "frame-proxy-budget-guard.js").read_text(encoding="utf-8")
 INERT = (ROOT / "frame-proxy-inert-guard.js").read_text(encoding="utf-8")
 HOST_GUARD = (ROOT / "host-control-activation-guard.js").read_text(encoding="utf-8")
 CONTENT = (ROOT / "content.js").read_text(encoding="utf-8")
-SERVICE_WORKER = (ROOT / "service_worker.js").read_text(encoding="utf-8")
+SERVICE_WORKER = (ROOT / "service-worker.js").read_text(encoding="utf-8")
 CHROME_DEFAULT = os.environ.get(
     "CHROMIUM_BIN",
     shutil.which("google-chrome") or shutil.which("chromium") or "",
