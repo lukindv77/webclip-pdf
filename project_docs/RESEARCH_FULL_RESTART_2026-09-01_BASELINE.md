@@ -94,7 +94,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C28 | Responsive/environment state | `L4-REVALIDATED / FINDING + POSITIVE/NARROW/DPR/SCHEME/FRAME/CAUSAL CONTROLS (P0-070, P0-004)` |
 | C29 | Viewport units / container-query dependent geometry | `L4-REVALIDATED / FINDING + POSITIVE/DIRECT/ALIGNED/CONTAINER/FROZEN/CAUSAL CONTROLS (P0-070, P0-004)` |
 | C30 | Clipping / overflow / paint containment | `L4-REVALIDATED / FINDING + POSITIVE/HIDDEN/CLIP/PAINT/CLIP-PATH/CAUSAL CONTROLS (P0-004)` |
-| C31 | Fixed / sticky | `NOT-TRIAGED / UNKNOWN` |
+| C31 | Fixed / sticky | `L4-REVALIDATED / FINDING + POSITIVE/FIXED-REPEAT/STICKY/TRANSFORMED/FRAME/CAUSAL CONTROLS (P0-004; P1-187 supporting)` |
 | C32 | Pagination / physical page breaks | `NOT-TRIAGED / UNKNOWN` |
 | C33 | CSS/WAAPI animations/transitions | `NOT-TRIAGED / UNKNOWN` |
 | C34 | Animated image/GIF frame | `NOT-TRIAGED / UNKNOWN` |
@@ -440,6 +440,14 @@ Duplicate/root-cause reconciliation maps C29 to existing **P0-070 / P0-004 ACTIV
 Fresh current-path physical results preserve only `8/120` mounted selected rows under `overflow:hidden`, `overflow:clip`, and `contain:paint` even when the latter keeps authored `overflow:visible`. A separate `clip-path:inset(0)` variant preserves only 40 unique rows and loses LAST. In contrast, `contain:layout` and `max-height:360px + overflow:visible` preserve `120/120`, rejecting a broad height/containment hypothesis. Test-only normalization of the exact prepared hidden/paint ancestors to auto-height, visible overflow, `contain:none` and no clip-path restores `120/120` while Exclude/outside controls remain omitted.
 
 Duplicate/root-cause reconciliation maps C30 directly to existing **P0-004 ACTIVE**; C20 remains adjacent retained-scrollport evidence under the same owner. No new P-code, Registry wording/status, runtime or release change is warranted. C30 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/HIDDEN/CLIP/PAINT/CLIP-PATH/CAUSAL CONTROLS (P0-004)`. C31 — Fixed / sticky — is the next sequential coordinate.
+
+## Fresh continuation checkpoint — focused C31 Fixed / sticky
+
+`RESEARCH_FULL_RESTART_C31_FIXED_STICKY_2026-09-02.md` records the accepted fresh C31 exact-source physical tranche on canonical source `2b47d4f47a90882b2c3466e8af9f5b7b8477a015`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33636534741`, job `100268696867`, exact workflow head `a3ee43fa8e03219023b7240095c7b8f7d5a414ff` and conclusion SUCCESS.
+
+Fresh physical output preserves all 120 selected rows in the top-document cases, but one admitted `position:fixed` token is repeated exactly `6` times across `6` PDF pages because current top preparation keeps viewport-fixed semantics. The sticky control occurs once, fixed inside a transformed containing block occurs once, unrelated unselected fixed content occurs zero times, and test-only fixed→static normalization reduces the admitted fixed token to one occurrence without losing selected content. Same-origin BODY flattening already converts fixed and sticky proxy descendants to `position:static`, and each appears once, proving a representation-path semantic split.
+
+Duplicate/root-cause reconciliation maps the top-document repeated presentation directly to existing **P0-004 ACTIVE**, with **P1-187 ACTIVE** supporting frame-parity evidence. No new P-code, Registry wording/status, runtime or release change is warranted. C31 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/FIXED-REPEAT/STICKY/TRANSFORMED/FRAME/CAUSAL CONTROLS (P0-004; P1-187 supporting)`. C32 — Pagination / physical page breaks — is the next sequential coordinate.
 
 ## Delivery rule
 
