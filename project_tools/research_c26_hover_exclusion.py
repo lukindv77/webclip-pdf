@@ -155,7 +155,7 @@ def source_contract() -> dict:
         "backdropShown": "state.modalBackdrop.style.display = 'flex';" in CONTENT,
         "reviewFocus": "setTimeout(() => textarea.focus(), 0);" in CONTENT,
         "printUiHidden": "state.host.style.display = 'none';" in CONTENT,
-        "bodyFlatten": "FLATTENED_FRAME_ATTR" in CONTENT and "sourceRoot.tagName === 'BODY'" in CONTENT,
+        "bodyFlatten": "selectedBodyForSameOriginFrame" in CONTENT and "createFlattenedBodyFramePrintProxy" in CONTENT,
         "prepareHasHoverReceipt": any(word in prepare.lower() for word in ("hover", "pointerenter", "pointerleave", "provenance")),
         "screenMedia": "media: 'screen'" in SERVICE_WORKER,
         "printToPdf": "Page.printToPDF" in SERVICE_WORKER,
