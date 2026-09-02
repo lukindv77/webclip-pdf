@@ -137,9 +137,16 @@ def run(browser, base: str, out: pathlib.Path) -> dict[str, object]:
     settled=p.eval_on_selector('#m img','i=>({src:i.currentSrc,complete:i.complete,nw:i.naturalWidth})'); second=pdf(p,out,'delayed_proxy_settled'); p.close()
     assert 'red.svg' in admitted['src'] and admitted['complete']
     assert 'blue-delay.svg' in settled['src'] and second['blue_pixels'] > 10000
-    waited = first['print_ms'] >= 1500 and first['blue_pixels'] > 10000
-    transitional = first['print_ms'] < 1500 and first['blue_pixels'] < 10000
-    assert waited or transitional, f'unclassified delayed proxy behavior: {first}'
+    waited_blue = first['print_ms'] >= 1500 and first['blue_pixels'] > 10000
+    fast_transitional = first['print_ms'] < 1500 and first['blue_pixels'] < 10000
+    bounded_wait_empty = first['print_ms'] >= 1500 and first['red_pixels'] < 100 and first['blue_pixels'] < 100
+    assert waited_blue or fast_transitional or bounded_wait_empty, f'unclassified delayed proxy behavior: {first}'
+    if waited_blue:
+        classification = 'renderer-waited-for-new-candidate'
+    elif bounded_wait_empty:
+        classification = 'bounded-wait-empty-cut'
+    else:
+        classification = 'transitional-cut-before-new-candidate'
     tests['delayed_proxy_renderer_boundary']={
         'admitted':admitted,
         'immediate_state':immediate,
@@ -147,7 +154,7 @@ def run(browser, base: str, out: pathlib.Path) -> dict[str, object]:
         'first_pdf':first,
         'settled_state':settled,
         'settled_pdf':second,
-        'classification':'renderer-waited-for-new-candidate' if waited else 'transitional-cut-before-new-candidate',
+        'classification':classification,
     }
     return tests
 
@@ -160,7 +167,11 @@ def main() -> int:
         with sync_playwright() as pw:
             browser=pw.chromium.launch(executable_path=args.chrome,headless=True,args=['--no-sandbox','--disable-dev-shm-usage']); version=browser.version; tests=run(browser,base,out); browser.close()
     finally: s.shutdown(); s.server_close()
-    result={'schema':1,'coordinate':'C09','verdict':'ARTIFACT-COVERED / FINDING + POSITIVE/NEGATIVE/RENDERER-BOUNDARY CONTROLS','primary_existing_owners':['P0-004','P0-070','P0-075','P1-187'],'conditional_related_owner':'P1-003 only if the current browser produces a truthful final-resource readiness failure; source ordering alone is not a fresh C09 P1-003 finding','browser':version,'source_contract':contract,'tests':tests}
+    renderer_class = tests['delayed_proxy_renderer_boundary']['classification']
+    owners = ['P0-004','P0-070','P0-075','P1-187']
+    if renderer_class in {'bounded-wait-empty-cut','transitional-cut-before-new-candidate'}:
+        owners.append('P1-003')
+    result={'schema':1,'coordinate':'C09','verdict':'ARTIFACT-COVERED / FINDING + POSITIVE/NEGATIVE/RENDERER-BOUNDARY CONTROLS','existing_owners':owners,'browser':version,'source_contract':contract,'tests':tests}
     (out/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n',encoding='utf-8'); print(json.dumps(result,ensure_ascii=False,indent=2)); return 0
 
 if __name__=='__main__': raise SystemExit(main())
