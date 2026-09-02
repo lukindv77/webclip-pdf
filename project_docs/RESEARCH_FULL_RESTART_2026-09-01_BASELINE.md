@@ -84,7 +84,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C18 | Shadow DOM / slots / composed tree | `L4-REVALIDATED / FINDING + POSITIVE PHYSICAL CONTROL (P2-006)` |
 | C19 | Ordinary long-page existing content | `L4-REVALIDATED / PASS` |
 | C20 | Nested scroll / retained scrollports | `L4-REVALIDATED / FINDING + POSITIVE/SCROLL-POSITION/NESTED/CAUSAL CONTROLS (P0-004)` |
-| C21 | Lazy/offscreen resources already belonging to content | `NOT-TRIAGED / UNKNOWN` |
+| C21 | Lazy/offscreen resources already belonging to content | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CUSTOM/FRAME/SETTLED/CAUSAL CONTROLS (P1-003)` |
 | C22 | Scroll-triggered new logical content / user-reached max boundary | `NOT-TRIAGED / UNKNOWN` |
 | C23 | Virtualized/windowed content history within user-reached range | `NOT-TRIAGED / UNKNOWN` |
 | C24 | Spoilers/disclosures / inert expansion | `NOT-TRIAGED / UNKNOWN` |
@@ -349,6 +349,14 @@ C19 therefore advances to `L4-REVALIDATED / PASS`. C20 — Nested scroll / retai
 Fresh normal-flow control preserves all `120/120` mounted rows. Current WebClip keeps an ordinary selected `overflow:auto` scrollbox at its `360px` live viewport and physically preserves only rows `1…8`; moving the Include to the long descendant behind that retained ancestor still yields only `1…8`. Setting the same ancestor to `scrollTop=2404` changes the PDF to rows `58…65`. A two-level nested scrollport case preserves only rows `28…34`. Test-only static expansion of the exact prepared nested scrollports to auto height / visible overflow restores all `120/120` rows and FIRST/MIDDLE/LAST while Exclude and outside controls remain omitted.
 
 Duplicate/root-cause reconciliation maps the fresh failure directly to existing **P0-004 ACTIVE**; no new P-code or Registry wording/status change is required. P1-230 remains the separate dynamic/virtualized user-reached-history owner and is not exercised because every C20 node already exists and remains mounted. C20 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/SCROLL-POSITION/NESTED/CAUSAL CONTROLS (P0-004)`. C21 — Lazy/offscreen resources already belonging to content — is the next sequential coordinate.
+
+## Fresh continuation checkpoint — focused C21 Lazy/offscreen resources already belonging to content
+
+`RESEARCH_FULL_RESTART_C21_LAZY_OFFSCREEN_RESOURCES_2026-09-02.md` records the accepted C21 exact-source physical tranche on canonical source `c7f0416c356c7c6cca787bffcee00f68312ada4e`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33602471295`, job `100159038407`, exact accepted workflow head `aa3d291b83f5727e5f3db15d9c0052ccc294feab`, conclusion SUCCESS, primary raw result SHA-256 `3d78c8ba76617536baea85c765106049c61378fdcc7640117a371d76da43d614` and focused picture-control SHA-256 `93f688c8da66f853463bd6928ef5df5fb8082c8b1822ecc972ae0cd7bb27cfbd`.
+
+Fresh positive controls prove that current bounded preparation loads and physically preserves far-offscreen native `IMG[loading=lazy]`, `IMG[data-src]`, `IMG[data-srcset]`, and an accessible same-origin-frame native lazy image without live-page auto-scroll. A narrower `<picture><source data-srcset>` case proves that URL completion is not final renderer-resource convergence: the expected candidate is requested and the resource report is clean, yet the owning IMG remains on its transparent fallback and the physical PDF contains zero expected orange pixels even after an additional 2.5-second settlement wait. Test-only final-IMG materialization of the already-known candidate restores the expected `220×140` image and `17,056` orange pixels.
+
+Duplicate/root-cause reconciliation maps the fresh failure directly to existing **P1-003 ACTIVE**; no new P-code or Registry wording/status change is required. C09 responsive-image findings are adjacent context, while P1-167/C38 and P1-230/C22/C23 remain outside this bounded matrix. C21 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CUSTOM/FRAME/SETTLED/CAUSAL CONTROLS (P1-003)`. C22 — Scroll-triggered new logical content / user-reached max boundary — is the next sequential coordinate.
 
 ## Delivery rule
 
