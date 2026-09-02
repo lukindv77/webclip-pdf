@@ -305,7 +305,9 @@ def prepared_top(context, out: pathlib.Path, *, remove_on_leave: bool, causal: b
 
 
 def frame_fixture() -> str:
-    return fixture(remove_on_leave=False)
+    return fixture(remove_on_leave=False).replace(
+        "<div class='outside'>C26_OUTSIDE_TOKEN</div>", ""
+    )
 
 
 def same_origin_frame(context, out: pathlib.Path) -> dict:
