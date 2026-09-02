@@ -1,0 +1,53 @@
+name: Research C32 finalize
+
+on:
+  push:
+    branches: [research/evidence-c32-pagination-breaks-2026-09-02]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-c32:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Advance C32 baseline and remove temporary finalizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md')
+          text = p.read_text(encoding='utf-8')
+          old = '| C32 | Pagination / physical page breaks | `NOT-TRIAGED / UNKNOWN` |'
+          new = '| C32 | Pagination / physical page breaks | `L4-REVALIDATED / FINDING + POSITIVE/FORCED/ROOT-OVERRIDE/DESCENDANT-AVOID/OVERSIZED/WIDOW-ORPHAN/FRAME/RASTER/CAUSAL CONTROLS (P1-187)` |'
+          if old not in text:
+              raise SystemExit('C32 baseline row did not match expected current text')
+          text = text.replace(old, new, 1)
+          checkpoint = '''
+
+## Fresh continuation checkpoint — focused C32 Pagination / physical page breaks
+
+`RESEARCH_FULL_RESTART_C32_PAGINATION_BREAKS_2026-09-02.md` records the accepted fresh C32 exact-source physical tranche on canonical source `dc068bf6a378f8846d57660303415d5761a32045`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33647162999`, job `100304713322`, exact workflow head `e177f6cfc4e22972daf6bffe54ab5030b9883071`, conclusion SUCCESS, primary result SHA-256 `851c17097ccc32b83c4d59aadf8a92ecc3e72aded30545b6d16e0ef54bbf9cdf` and raster-boundary result SHA-256 `af1430c3b7819b6d91210a68d25d0dc068366ee883a214d1cfa391cc47c1fa13`.
+
+Fresh top-document controls preserve descendant `break-before:page`, descendant `break-inside:avoid-page`, oversized avoided content and `widows/orphans`; all selected tokens remain complete. WebClip explicitly normalizes an Include-root authored `avoid-page` to `auto`, changing page grouping but not content/order; reasserting only that root avoid hint moves the complete block to the next page. A red/green raster control independently proves the forced boundary is visibly painted on separate pages rather than existing only in the PDF text layer.
+
+The material C32 finding is representation-path parity: an equivalent frame source computes `break-before=page` / `break-inside=avoid-page` and physically spans two pages, while the current same-origin BODY flattened proxy computes those descendants as `auto` / `auto` and puts all tokens on one page. Duplicate/root-cause reconciliation maps this directly to existing **P1-187 ACTIVE** rendered-state fidelity. No new P-code, Registry wording/status, runtime or release change is warranted. C32 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/FORCED/ROOT-OVERRIDE/DESCENDANT-AVOID/OVERSIZED/WIDOW-ORPHAN/FRAME/RASTER/CAUSAL CONTROLS (P1-187)`. C33 — CSS/WAAPI animations/transitions — is the next sequential coordinate.
+'''
+          anchor = '\n## Delivery rule\n'
+          if anchor not in text:
+              raise SystemExit('Delivery rule anchor missing')
+          text = text.replace(anchor, checkpoint + anchor, 1)
+          p.write_text(text, encoding='utf-8')
+          PY
+          git rm .github/workflows/research-c32-finalize.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md
+          git commit -m 'research: finalize fresh C32 evidence'
+          git push origin HEAD:research/evidence-c32-pagination-breaks-2026-09-02
