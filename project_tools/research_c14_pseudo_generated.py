@@ -75,7 +75,7 @@ def validate_current_source(repo_root: Path) -> dict[str, object]:
     assert 'getComputedStyle?.(element, "::after")' not in prefetch
 
     flatten_start = source.find("function createFlattenedBodyFramePrintProxy(frame, sourceBody) {")
-    flatten_end = source.find("function removeFlattenedFramePrintProxies", flatten_start)
+    flatten_end = source.find("state.flattenedFramePrintProxies.push", flatten_start)
     assert flatten_start >= 0 and flatten_end > flatten_start
     flatten = source[flatten_start:flatten_end]
     assert "node.cloneNode(true)" in flatten
