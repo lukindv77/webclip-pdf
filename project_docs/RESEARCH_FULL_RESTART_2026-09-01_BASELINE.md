@@ -95,7 +95,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C29 | Viewport units / container-query dependent geometry | `L4-REVALIDATED / FINDING + POSITIVE/DIRECT/ALIGNED/CONTAINER/FROZEN/CAUSAL CONTROLS (P0-070, P0-004)` |
 | C30 | Clipping / overflow / paint containment | `L4-REVALIDATED / FINDING + POSITIVE/HIDDEN/CLIP/PAINT/CLIP-PATH/CAUSAL CONTROLS (P0-004)` |
 | C31 | Fixed / sticky | `L4-REVALIDATED / FINDING + POSITIVE/FIXED-REPEAT/STICKY/TRANSFORMED/FRAME/CAUSAL CONTROLS (P0-004; P1-187 supporting)` |
-| C32 | Pagination / physical page breaks | `NOT-TRIAGED / UNKNOWN` |
+| C32 | Pagination / physical page breaks | `L4-REVALIDATED / FINDING + POSITIVE/FORCED/ROOT-OVERRIDE/DESCENDANT-AVOID/OVERSIZED/WIDOW-ORPHAN/FRAME/RASTER/CAUSAL CONTROLS (P1-187)` |
 | C33 | CSS/WAAPI animations/transitions | `NOT-TRIAGED / UNKNOWN` |
 | C34 | Animated image/GIF frame | `NOT-TRIAGED / UNKNOWN` |
 | C35 | Mutation during preparation / beforeprint / physical render cut | `PARTIAL / L4 FINDING` |
@@ -448,6 +448,15 @@ Duplicate/root-cause reconciliation maps C30 directly to existing **P0-004 ACTIV
 Fresh physical output preserves all 120 selected rows in the top-document cases, but one admitted `position:fixed` token is repeated exactly `6` times across `6` PDF pages because current top preparation keeps viewport-fixed semantics. The sticky control occurs once, fixed inside a transformed containing block occurs once, unrelated unselected fixed content occurs zero times, and test-only fixed→static normalization reduces the admitted fixed token to one occurrence without losing selected content. Same-origin BODY flattening already converts fixed and sticky proxy descendants to `position:static`, and each appears once, proving a representation-path semantic split.
 
 Duplicate/root-cause reconciliation maps the top-document repeated presentation directly to existing **P0-004 ACTIVE**, with **P1-187 ACTIVE** supporting frame-parity evidence. No new P-code, Registry wording/status, runtime or release change is warranted. C31 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/FIXED-REPEAT/STICKY/TRANSFORMED/FRAME/CAUSAL CONTROLS (P0-004; P1-187 supporting)`. C32 — Pagination / physical page breaks — is the next sequential coordinate.
+
+
+## Fresh continuation checkpoint — focused C32 Pagination / physical page breaks
+
+`RESEARCH_FULL_RESTART_C32_PAGINATION_BREAKS_2026-09-02.md` records the accepted fresh C32 exact-source physical tranche on canonical source `dc068bf6a378f8846d57660303415d5761a32045`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33647162999`, job `100304713322`, exact workflow head `e177f6cfc4e22972daf6bffe54ab5030b9883071`, conclusion SUCCESS, primary result SHA-256 `851c17097ccc32b83c4d59aadf8a92ecc3e72aded30545b6d16e0ef54bbf9cdf` and raster-boundary result SHA-256 `af1430c3b7819b6d91210a68d25d0dc068366ee883a214d1cfa391cc47c1fa13`.
+
+Fresh top-document controls preserve descendant `break-before:page`, descendant `break-inside:avoid-page`, oversized avoided content and `widows/orphans`; all selected tokens remain complete. WebClip explicitly normalizes an Include-root authored `avoid-page` to `auto`, changing page grouping but not content/order; reasserting only that root avoid hint moves the complete block to the next page. A red/green raster control independently proves the forced boundary is visibly painted on separate pages rather than existing only in the PDF text layer.
+
+The material C32 finding is representation-path parity: an equivalent frame source computes `break-before=page` / `break-inside=avoid-page` and physically spans two pages, while the current same-origin BODY flattened proxy computes those descendants as `auto` / `auto` and puts all tokens on one page. Duplicate/root-cause reconciliation maps this directly to existing **P1-187 ACTIVE** rendered-state fidelity. No new P-code, Registry wording/status, runtime or release change is warranted. C32 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/FORCED/ROOT-OVERRIDE/DESCENDANT-AVOID/OVERSIZED/WIDOW-ORPHAN/FRAME/RASTER/CAUSAL CONTROLS (P1-187)`. C33 — CSS/WAAPI animations/transitions — is the next sequential coordinate.
 
 ## Delivery rule
 
