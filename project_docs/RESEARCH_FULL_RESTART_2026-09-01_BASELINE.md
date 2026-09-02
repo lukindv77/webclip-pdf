@@ -78,7 +78,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C12 | Video / replaced media / current frame | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P1-187)` |
 | C13 | Form / renderer-owned controls | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)` |
 | C14 | Pseudo/generated content | `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P0-004, P1-003, P1-187)` |
-| C15 | Links / anchors / internal destinations | `NOT-TRIAGED / UNKNOWN` |
+| C15 | Links / anchors / internal destinations | `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)` |
 | C16 | Same-origin iframe | `PARTIAL / L4 POSITIVE CONTROLS` |
 | C17 | Cross-origin iframe capture/print boundary | `NOT-TRIAGED / UNKNOWN` |
 | C18 | Shadow DOM / slots / composed tree | `NOT-TRIAGED / UNKNOWN` |
@@ -292,6 +292,16 @@ A delayed 2.5 s image used only by `#x::before` freshly revalidates **P1-003 ACT
 A same-origin child `.x::before/.x::after` control freshly revalidates **P1-187 ACTIVE**. Direct child PDF contains `FRAME_BEFORE FRAME_BODY FRAME_AFTER`; after production-shaped BODY flattening the top proxy pseudo computed content is `none/none` and physical PDF contains only `FRAME_BODY`. Test-only static materialization of the admitted generated text into the final proxy restores `FRAME_BEFORE FRAME_BODY FRAME_AFTER`, proving a secondary-representation gap rather than Chromium PDF inability.
 
 Historical pseudo/resource/counter findings were used only for duplicate/root-cause lookup. No new P-code is allocated and no owner status changes. C14 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CAUSAL CONTROLS (P0-004, P1-003, P1-187)`. C15 — Links / anchors / internal destinations — is the next sequential untriaged coordinate.
+
+## Fresh continuation checkpoint — focused C15 Links / anchors / internal destinations
+
+`RESEARCH_FULL_RESTART_C15_LINKS_ANCHORS_2026-09-02.md` records the fresh C15 tranche on exact canonical source `662bed0635d3cd909e4356fdc0b9cce5a2d7ae13`, with exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e` and `frame-proxy-inert-guard.js` blob `1197b4a5cf752c63ff3a3ecb3d1421aa51e59daa`.
+
+Google Chrome `151.0.7922.173` provides clean native controls: direct top-document, current-shaped prepared top-document and direct child-document fragment links each produce a physical PDF annotation targeting page 1. Ordinary external, mail, telephone and image links remain URI annotations.
+
+The production-shaped inert flattened-frame representation retains the visible destination text but strips its `id`, keeps the former child document's absolute fragment URL and emits no internal PDF destination. Instead, the annotation is a URI back to the child source URL. A test-only collision-safe final-document identity plus local fragment rewrite restores the internal target while preserving external/image URI controls.
+
+Fresh duplicate/root-cause reconciliation maps the focused failure to existing **P1-187 ACTIVE**. No new P-code is allocated and no owner status changes. C15 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/NATIVE/CAUSAL CONTROLS (P1-187)`. C16 — Same-origin iframe — remains `PARTIAL / L4 POSITIVE CONTROLS` and is the next sequential coordinate for bounded gap inspection.
 
 ## Delivery rule
 
