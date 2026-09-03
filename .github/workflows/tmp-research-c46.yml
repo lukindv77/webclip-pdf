@@ -14,31 +14,22 @@ jobs:
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          python-version: '3.12'
+          node-version: '22'
+      - name: Install supported extension test browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save puppeteer@25.9.0
       - name: Run C46 real-unpacked evidence
         shell: bash
         env:
           C46_SOURCE_BASELINE: 5ad7ba6b2f29502c3810a4b5d589dd0a965b270e
         run: |
           set -euo pipefail
-          chrome="$(command -v google-chrome || command -v chromium || true)"
           xvfb="$(command -v xvfb-run || true)"
-          test -n "$chrome"
           test -n "$xvfb"
-          "$chrome" --version
-          cat > /tmp/c46-chrome <<EOF
-          #!/usr/bin/env bash
-          set -euo pipefail
-          args=()
-          for arg in "\$@"; do
-            if [[ "\$arg" == "--headless=new" ]]; then continue; fi
-            args+=("\$arg")
-          done
-          exec "$chrome" "\${args[@]}"
-          EOF
-          chmod +x /tmp/c46-chrome
-          xvfb-run -a python project_tools/research_c46_unpacked_permissions_debugger.py --chrome /tmp/c46-chrome --source-baseline "$C46_SOURCE_BASELINE" | tee c46-result.txt
+          xvfb-run -a node project_tools/research_c46_unpacked_permissions_debugger.mjs | tee c46-result.txt
           sha256sum c46-result.txt
