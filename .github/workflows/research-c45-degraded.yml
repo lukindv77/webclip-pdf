@@ -37,7 +37,7 @@ jobs:
             exit 1
           fi
           "$chrome" --version
-          export C45_SOURCE_BASELINE="$(git rev-parse HEAD^)"
+          export C45_SOURCE_BASELINE="$(git merge-base HEAD origin/main)"
           export C45_CONTENT_BLOB_SHA="$(git rev-parse HEAD:content.js)"
           set +e
           python project_tools/research_c45_degraded_resource_truth.py --chrome "$chrome" | tee "$RUNNER_TEMP/c45-degraded.log"
