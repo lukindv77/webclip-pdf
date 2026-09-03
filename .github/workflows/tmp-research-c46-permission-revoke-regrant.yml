@@ -25,9 +25,7 @@ jobs:
         with:
           node-version: '22'
       - name: Install X11 prompt driver
-        run: |
-          command -v xdotool >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y xdotool; }
-          xdotool version
+        run: command -v xdotool >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y xdotool; }
       - name: Install bounded browser harness dependency
         run: npm install --no-save --package-lock=false puppeteer@25.9.0
       - name: Run native optional-permission seed diagnostic
