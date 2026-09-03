@@ -2,6 +2,8 @@
 
 Canonical source baseline: `5ad7ba6b2f29502c3810a4b5d589dd0a965b270e`.
 
+> Follow-up current authority: `RESEARCH_C46_DEBUGGER_GUARD_HANDSHAKE_2026-09-03_EVIDENCE.md` / `RESEARCH_FULL_RESTART_C46_DEBUGGER_GUARD_HANDSHAKE_2026-09-03.md` advance the production debugger sub-boundary to L4 after proving the earlier messaging error came from a missing render-state receiver in the synthetic fixture. This document remains the historical first C46 tranche.
+
 ## Classification
 
 **C46: `L3-REVALIDATED / PARTIAL/FINDING + BROWSER-BOUND PRECONDITION CONTROLS; ACTUAL-DEBUGGER/NATIVE-PERMISSION/INCOGNITO/RESTART-L5 OPEN (P0-045, P1-157, P1-193, P1-201; P1-004 umbrella)`**.
