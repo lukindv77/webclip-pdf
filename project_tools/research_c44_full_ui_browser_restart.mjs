@@ -129,10 +129,39 @@ async function openJournal(browser, extensionId) {
   page.on('console', message => console.log(`C44_PAGE_CONSOLE=${message.type()}:${message.text()}`));
   page.on('pageerror', error => console.log(`C44_PAGE_ERROR=${String(error?.stack || error)}`));
   await page.goto(`chrome-extension://${extensionId}/journal.html`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('#importFileInput', { timeout: 30000 });
-  await page.waitForFunction(() => /^Версия\s+\S+/.test(document.querySelector('#version')?.textContent || ''), { timeout: 30000 });
-  await page.waitForFunction(() => !document.querySelector('#entries')?.textContent?.includes('Загрузка'), { timeout: 30000 });
-  await page.waitForFunction(() => globalThis.__c44PreparedAdapter === 'native-save-as-substituted-in-disposable-copy', { timeout: 30000 });
+  // A freshly loaded unpacked MV3 extension can replace the first document
+  // context while Chrome settles its extension targets. Wait for one stable
+  // production journal context instead of attributing that setup transition
+  // to export/import behavior.
+  const deadline = Date.now() + 30000;
+  let stableSince = 0;
+  let lastState = null;
+  while (Date.now() < deadline) {
+    try {
+      lastState = await page.evaluate(() => ({
+        url: location.href,
+        hasInput: Boolean(document.querySelector('#importFileInput')),
+        version: document.querySelector('#version')?.textContent || '',
+        entries: document.querySelector('#entries')?.textContent || '',
+        adapter: globalThis.__c44PreparedAdapter || ''
+      }));
+      const ready = lastState.url.includes('/journal.html')
+        && lastState.hasInput
+        && /^Версия\s+\S+/.test(lastState.version)
+        && !lastState.entries.includes('Загрузка')
+        && lastState.adapter === 'native-save-as-substituted-in-disposable-copy';
+      if (ready) {
+        if (!stableSince) stableSince = Date.now();
+        if (Date.now() - stableSince >= 800) break;
+      } else {
+        stableSince = 0;
+      }
+    } catch (_) {
+      stableSince = 0;
+    }
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  assert(stableSince && Date.now() - stableSince >= 800, `journal context did not stabilize: ${JSON.stringify(lastState)}`);
   await installDbHelpers(page);
   return page;
 }
