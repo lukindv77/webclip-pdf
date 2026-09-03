@@ -1,0 +1,42 @@
+name: Research C46 Debugger Guard
+
+on:
+  push:
+    branches:
+      - research/c46-debugger-guard-handshake-2026-09-03
+
+permissions:
+  contents: read
+
+jobs:
+  c46:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+      - name: Install supported extension test browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save puppeteer@25.9.0
+      - name: Run C46 production debugger guard handshake
+        shell: bash
+        env:
+          C46_SOURCE_BASELINE: 8034fa3ed06227a7e21a6f511e54a2dd0ce5c583
+        run: |
+          set -euo pipefail
+          command -v xvfb-run >/dev/null
+          xvfb-run -a node project_tools/research_c46_debugger_guard_handshake.mjs | tee c46-result.txt
+          sha256sum c46-result.txt | tee c46-result.sha256
+      - name: Upload C46 receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: c46-debugger-guard-receipt
+          path: |
+            c46-result.txt
+            c46-result.sha256
+          if-no-files-found: error
