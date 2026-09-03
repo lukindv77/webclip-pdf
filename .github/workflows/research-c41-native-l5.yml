@@ -5,6 +5,7 @@ on:
     branches: [research/evidence-c41-native-l5-2026-09-03]
     paths-ignore:
       - project_tools/.c41-native-result.json
+      - project_tools/.c41-native-cancel-result.json
 
 permissions:
   contents: write
@@ -51,18 +52,22 @@ jobs:
             echo "::notice title=C41_NATIVE_RESULT::$result"
           fi
           cancel="$(grep '^C41_CANCEL_RESULT_JSON=' "$RUNNER_TEMP/c41-native-result.log" | tail -n 1 | sed 's/^C41_CANCEL_RESULT_JSON=//')"
-          if [[ -n "$cancel" ]]; then echo "::notice title=C41_CANCEL_RESULT::$cancel"; fi
+          if [[ -n "$cancel" ]]; then
+            printf '%s\n' "$cancel" > project_tools/.c41-native-cancel-result.json
+            echo "::notice title=C41_CANCEL_RESULT::$cancel"
+          fi
           exit 0
 
-      - name: Persist temporary exact result receipt
+      - name: Persist temporary exact result receipts
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          [[ -s project_tools/.c41-native-result.json ]] || exit 0
+          [[ -s project_tools/.c41-native-result.json || -s project_tools/.c41-native-cancel-result.json ]] || exit 0
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -f project_tools/.c41-native-result.json
+          [[ ! -s project_tools/.c41-native-result.json ]] || git add -f project_tools/.c41-native-result.json
+          [[ ! -s project_tools/.c41-native-cancel-result.json ]] || git add -f project_tools/.c41-native-cancel-result.json
           git diff --cached --quiet && exit 0
           git commit -m 'research: persist temporary C41 native result'
           git push origin HEAD:research/evidence-c41-native-l5-2026-09-03
