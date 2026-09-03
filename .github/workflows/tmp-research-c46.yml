@@ -23,11 +23,21 @@ jobs:
         run: |
           set -euo pipefail
           npm install --no-save puppeteer@25.9.0
-      - name: Trace C46 debugger API after disconnect
+      - name: Trace headed C46 chrome.debugger printing
         shell: bash
+        env:
+          C46_TRACE_HEADLESS: '0'
         run: |
           set -euo pipefail
           xvfb="$(command -v xvfb-run || true)"
           test -n "$xvfb"
-          xvfb-run -a node project_tools/research_c46_debugger_stage_v5.mjs | tee c46-v5.txt
-          sha256sum c46-v5.txt
+          xvfb-run -a node project_tools/.c46_debugger_trace.mjs | tee c46-headed-trace.txt
+          sha256sum c46-headed-trace.txt
+      - name: Trace headless C46 chrome.debugger printing
+        shell: bash
+        env:
+          C46_TRACE_HEADLESS: '1'
+        run: |
+          set -euo pipefail
+          node project_tools/.c46_debugger_trace.mjs | tee c46-headless-trace.txt
+          sha256sum c46-headless-trace.txt
