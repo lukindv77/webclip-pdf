@@ -87,7 +87,8 @@ jobs:
           [[ -s project_tools/.c40-physical-result.json || -s project_tools/.c41-physical-result.json ]] || exit 0
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -f project_tools/.c40-physical-result.json project_tools/.c41-physical-result.json 2>/dev/null || true
+          [[ ! -s project_tools/.c40-physical-result.json ]] || git add -f project_tools/.c40-physical-result.json
+          [[ ! -s project_tools/.c41-physical-result.json ]] || git add -f project_tools/.c41-physical-result.json
           git diff --cached --quiet && exit 0
           git commit -m 'research: persist temporary C40 C41 results'
           git push origin HEAD:research/evidence-c40-c41-2026-09-03

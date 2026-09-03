@@ -10,6 +10,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import tempfile
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -139,6 +140,29 @@ def parse_json_tail(output, marker=""):
     return json.loads(match.group(1))
 
 
+def run_unpacked_background_tab(env):
+    source_path = ROOT / "project_tools/browser_p1_007_unpacked_integration.js"
+    source = source_path.read_text(encoding="utf-8")
+    root_line = "const root = path.resolve(__dirname, '..');"
+    active_line = "const tab = await chrome.tabs.create({ url: ${js(fixture.articleUrl)}, active: true });"
+    if root_line not in source or active_line not in source:
+        raise AssertionError("current unpacked integration harness contract changed")
+    source = source.replace(root_line, f"const root = {json.dumps(str(ROOT))};", 1)
+    source = source.replace(active_line, "const tab = await chrome.tabs.create({ url: ${js(fixture.articleUrl)}, active: false });", 1)
+    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".js", delete=False)
+    try:
+        handle.write(source)
+        handle.close()
+        return run_command(
+            "real-unpacked-automatic-download-background-tab",
+            ["node", handle.name],
+            env,
+            180,
+        )
+    finally:
+        pathlib.Path(handle.name).unlink(missing_ok=True)
+
+
 def run(chrome):
     if not chrome:
         raise SystemExit("Chrome unavailable")
@@ -167,12 +191,7 @@ def run(chrome):
     save_as_result = parse_json_tail(save_as_browser["stdout"])
     tests.append({k: v for k, v in save_as_browser.items() if k != "stdout"})
 
-    automatic_browser = run_command(
-        "real-unpacked-automatic-download",
-        ["node", "project_tools/browser_p1_007_unpacked_integration.js"],
-        env,
-        180,
-    )
+    automatic_browser = run_unpacked_background_tab(env)
     automatic_result = parse_json_tail(
         automatic_browser["stdout"], "P1-007 real Chromium browser integration OK"
     )
