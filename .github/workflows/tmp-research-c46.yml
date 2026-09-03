@@ -1,0 +1,31 @@
+name: Research C46
+
+on:
+  push:
+    branches:
+      - research/evidence-c46-unpacked-permissions-debugger-2026-09-03
+
+permissions:
+  contents: read
+
+jobs:
+  c46:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - name: Run C46 real-unpacked evidence
+        shell: bash
+        env:
+          C46_SOURCE_BASELINE: 5ad7ba6b2f29502c3810a4b5d589dd0a965b270e
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v chromium || true)"
+          test -n "$chrome"
+          "$chrome" --version
+          python project_tools/research_c46_unpacked_permissions_debugger.py --chrome "$chrome" --source-baseline "$C46_SOURCE_BASELINE" | tee c46-result.txt
+          sha256sum c46-result.txt
