@@ -6,6 +6,8 @@ on:
     paths-ignore:
       - project_tools/.c41-native-result.json
       - project_tools/.c41-native-cancel-result.json
+      - project_tools/.c41-native-worker-restart-result.json
+      - project_tools/.c41-native-browser-restart-result.json
 
 permissions:
   contents: write
@@ -46,16 +48,20 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           echo "$status" > "$RUNNER_TEMP/c41-native-status"
-          result="$(grep '^C41_NATIVE_RESULT_JSON=' "$RUNNER_TEMP/c41-native-result.log" | tail -n 1 | sed 's/^C41_NATIVE_RESULT_JSON=//')"
-          if [[ -n "$result" ]]; then
-            printf '%s\n' "$result" > project_tools/.c41-native-result.json
-            echo "::notice title=C41_NATIVE_RESULT::$result"
-          fi
-          cancel="$(grep '^C41_CANCEL_RESULT_JSON=' "$RUNNER_TEMP/c41-native-result.log" | tail -n 1 | sed 's/^C41_CANCEL_RESULT_JSON=//')"
-          if [[ -n "$cancel" ]]; then
-            printf '%s\n' "$cancel" > project_tools/.c41-native-cancel-result.json
-            echo "::notice title=C41_CANCEL_RESULT::$cancel"
-          fi
+          for spec in \
+            'C41_NATIVE_RESULT_JSON project_tools/.c41-native-result.json' \
+            'C41_CANCEL_RESULT_JSON project_tools/.c41-native-cancel-result.json' \
+            'C41_WORKER_RESTART_RESULT_JSON project_tools/.c41-native-worker-restart-result.json' \
+            'C41_BROWSER_RESTART_RESULT_JSON project_tools/.c41-native-browser-restart-result.json'
+          do
+            marker="${spec%% *}"
+            target="${spec#* }"
+            value="$(grep "^${marker}=" "$RUNNER_TEMP/c41-native-result.log" | tail -n 1 | sed "s/^${marker}=//")"
+            if [[ -n "$value" ]]; then
+              printf '%s\n' "$value" > "$target"
+              echo "::notice title=${marker}::$value"
+            fi
+          done
           exit 0
 
       - name: Persist temporary exact result receipts
@@ -63,13 +69,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ -s project_tools/.c41-native-result.json || -s project_tools/.c41-native-cancel-result.json ]] || exit 0
+          files=(
+            project_tools/.c41-native-result.json
+            project_tools/.c41-native-cancel-result.json
+            project_tools/.c41-native-worker-restart-result.json
+            project_tools/.c41-native-browser-restart-result.json
+          )
+          found=0
+          for file in "${files[@]}"; do
+            if [[ -s "$file" ]]; then git add -f "$file"; found=1; fi
+          done
+          [[ "$found" = 1 ]] || exit 0
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          [[ ! -s project_tools/.c41-native-result.json ]] || git add -f project_tools/.c41-native-result.json
-          [[ ! -s project_tools/.c41-native-cancel-result.json ]] || git add -f project_tools/.c41-native-cancel-result.json
           git diff --cached --quiet && exit 0
           git commit -m 'research: persist temporary C41 native result'
+          git pull --rebase origin research/evidence-c41-native-l5-2026-09-03
           git push origin HEAD:research/evidence-c41-native-l5-2026-09-03
 
       - name: Assert native harness status
