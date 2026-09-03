@@ -266,7 +266,12 @@ async function installDbHelpers(page) {
       const db = await open('WebClipOffscreenTransfers', 1);
       const beforeTx = db.transaction('payloads', 'readonly');
       const rows = await requestResult(beforeTx.objectStore('payloads').getAll());
+      const manifest = rows.find(row => row?.id === stagingKey && row?.kind === 'journal-import-manifest');
       const blob = new Blob([String(text)], { type: 'application/json' });
+      if (!manifest || Number(manifest.chunkCount) !== 1 || blob.size !== Number(manifest.totalBytes)) {
+        db.close();
+        throw new Error('C44 retarget control requires one same-size manifest generation.');
+      }
       const tx = db.transaction('payloads', 'readwrite');
       const done = txDone(tx);
       const store = tx.objectStore('payloads');
@@ -280,14 +285,10 @@ async function installDbHelpers(page) {
         chunkIndex: 0,
         blob,
         byteCount: blob.size,
-        createdAt: Date.now()
+        createdAt: Number(manifest.createdAt) || Date.now()
       });
       store.put({
-        id: stagingKey,
-        kind: 'journal-import-manifest',
-        chunkCount: 1,
-        totalBytes: blob.size,
-        createdAt: Date.now()
+        ...manifest
       });
       await done;
       db.close();
@@ -361,14 +362,17 @@ function makeRetargetBackup(exportedText) {
   parsed.exportedAt = '2044-04-04T04:44:44.000Z';
   parsed.journal.entries[0] = {
     ...parsed.journal.entries[0],
-    id: 'retarget-import-B',
-    title: 'C44_RETARGET_IMPORT_B',
-    url: 'https://retarget.example/b',
-    operationId: 'retarget-op-B',
-    provenance: { marker: 'C44_RETARGET_PROVENANCE_B' },
-    selectionSnapshot: { version: 3, marker: 'C44_RETARGET_SELECTION_B' }
+    id: 'copy-b',
+    title: 'C44_COPY_B',
+    url: 'https://b.invalid/',
+    operationId: 'copy-b'
   };
-  return JSON.stringify(parsed);
+  const retargeted = JSON.stringify(parsed);
+  const paddingBytes = Buffer.byteLength(exportedText) - Buffer.byteLength(retargeted);
+  assert(paddingBytes >= 0, 'retarget fixture must fit the original byte length');
+  const sameSizeRetargeted = retargeted + ' '.repeat(paddingBytes);
+  assert.equal(Buffer.byteLength(sameSizeRetargeted), Buffer.byteLength(exportedText));
+  return sameSizeRetargeted;
 }
 
 async function captureProductionExport(page) {
@@ -446,7 +450,7 @@ async function run() {
     assert(beforeRetargetCommit.entries.some(row => row.id === 'concurrent-retarget'));
     assert(afterRetargetCommit.entries.some(row => row.id === 'current-retarget-base'));
     assert(afterRetargetCommit.entries.some(row => row.id === 'concurrent-retarget'));
-    assert(!afterRetargetCommit.entries.some(row => row.id === 'retarget-import-B'));
+    assert(!afterRetargetCommit.entries.some(row => row.id === 'copy-b'));
     assert.equal(afterRetargetCommit.revision, beforeRetargetCommit.revision);
     assert.deepEqual(
       afterRetargetCommit.pendingAppends.map(row => row.operationId).sort(),
@@ -582,7 +586,7 @@ async function run() {
         failClosed: retargetStatus.includes('Копия или параметры импорта изменились после проверки'),
         entryIdsBeforeCommit: beforeRetargetCommit.entries.map(row => row.id),
         entryIdsAfterCommit: afterRetargetCommit.entries.map(row => row.id),
-        retargetBytesImported: afterRetargetCommit.entries.some(row => row.id === 'retarget-import-B'),
+        retargetBytesImported: afterRetargetCommit.entries.some(row => row.id === 'copy-b'),
         concurrentEntryPreserved: afterRetargetCommit.entries.some(row => row.id === 'concurrent-retarget'),
         pendingCountsBeforeCommit: {
           appends: beforeRetargetCommit.pendingAppends.length,
