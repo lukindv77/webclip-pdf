@@ -101,7 +101,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C35 | Mutation during preparation / beforeprint / physical render cut | `L4-REVALIDATED / FINDING + POSITIVE/PREPARATION/RENDER-STATE/BEFOREPRINT-GUARD/POST-CUT/FROZEN/CAUSAL CONTROLS (P0-070, P0-075, P0-004; P0-071 positive)` |
 | C36 | Same locator/URL, different resource bytes/generation | `L4-REVALIDATED / FINDING + POSITIVE/STABLE-IMG/SAME-URL/SRCSET/BACKGROUND/CACHE-EVICTION/FROZEN/CAUSAL CONTROLS (P0-070, P0-004; P1-003 supporting)` |
 | C37 | Failure/retry/rollback/convergence | `L4-REVALIDATED / FINDING + POSITIVE/CLEAN-RETRY/STALE-RESOURCE/DETACHED-LINK/WRAPPER-TOPOLOGY CONTROLS (P1-218, P1-219, P1-221; P1-199, P1-214 supporting/source)` |
-| C38 | Node/byte/time/resource budgets | `NOT-TRIAGED / UNKNOWN` |
+| C38 | Node/byte/time/resource budgets | `L4-REVALIDATED / FINDING + POSITIVE/PREFLIGHT/SCAN-CAP/LINK-COLLECTOR/DIAGNOSTIC/DISCLOSURE/RESOURCE-PROMOTION CONTROLS (P1-167, P1-003; P1-154 supporting/source)` |
 | C39 | Privacy / data minimization | `NOT-TRIAGED / UNKNOWN` |
 | C40 | Physical PDF bytes / cache identity | `L2-REVALIDATED / FINDING (P0-023, P0-079)` |
 | C41 | Local download physical settlement / native Save As | `NOT-TRIAGED / UNKNOWN` |
@@ -502,6 +502,14 @@ Duplicate/root-cause reconciliation maps C36 to existing **P0-070 / P0-004 ACTIV
 Fresh clean retry is a positive convergence control: after a failure and after a successful retry, temporary header/style/wrapper/link-marker counts return to zero and the retry PDF remains selection-correct. Three host-supersession schedules remain broken: stale resource rollback overwrites a newer host `src` and the retry physically serializes the old red candidate (**P1-218**); wrapper cleanup disconnects a page-added child inserted after WebClip wrapped the image (**P1-219**); and a detached normalized link skips cleanup, then retry turns the temporary absolute href into the new rollback identity and permanently loses the authored relative href (**P1-221**).
 
 Current source still exposes the already-owned remote restore ordering/settlement boundary under **P1-199/P1-214** (fire-and-forget restore followed by a second awaited call after shared bookkeeping may already be consumed), but C37 does not claim a fresh remote-frame L4 result. No new P-code, Registry wording/status, runtime or release change is warranted. C37 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CLEAN-RETRY/STALE-RESOURCE/DETACHED-LINK/WRAPPER-TOPOLOGY CONTROLS (P1-218, P1-219, P1-221; P1-199, P1-214 supporting/source)`. C38 — Node / byte / time / resource budgets — is the next sequential coordinate.
+
+## Fresh continuation checkpoint — focused C38 Node / byte / time / resource budgets
+
+`RESEARCH_FULL_RESTART_C38_NODE_BYTE_TIME_RESOURCE_BUDGETS_2026-09-03.md` records the accepted fresh C38 exact-source tranche on canonical source `b07547385c5aed6a631d7e263f1f9d9c35da2c56`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33707672607`, job `100500232853`, exact accepted workflow head `2696ad9b2f9b19f9cdbbeb985af80feb14944dc2`, conclusion SUCCESS and raw result SHA-256 `145f435455e14115676e09b764b89032b178339114fd96c59d41260c572b6456`.
+
+Fresh positive controls show that the flattened-frame preflight rejects node `5001` against the `5000`-node budget before full materialization and that the resource selected-element TreeWalker truncates at `5000` on a `12002`-descendant selection. Neighboring preparation domains remain independently unbounded: the link collector materializes and marks all `12000` matching links despite resource `scanTruncated=true`; `400` disclosure controls take about `17.10s` while the nominal `15000ms` resource deadline still reports `deadlineExceeded=false`; diagnostics materialize a full `2,097,152`-character body string before bounded output; and `800` lazy images trigger `800` URL promotions/HTTP requests even though resource task/report admission stops at `500`.
+
+Duplicate/root-cause reconciliation maps the shared node/time/mutation/string preparation budget finding to **P1-167 ACTIVE** and the pre-admission resource/network side-effect finding to **P1-003 ACTIVE**, with **P1-154 ACTIVE** supporting/source. **P0-064 DONE** remains a positive architecture example and is not reopened. No new P-code, Registry wording/status, runtime or release change is warranted. C38 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/PREFLIGHT/SCAN-CAP/LINK-COLLECTOR/DIAGNOSTIC/DISCLOSURE/RESOURCE-PROMOTION CONTROLS (P1-167, P1-003; P1-154 supporting/source)`. C39 — Privacy / data minimization — is the next sequential coordinate.
 
 ## Delivery rule
 
