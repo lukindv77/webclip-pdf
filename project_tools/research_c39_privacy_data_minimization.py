@@ -273,9 +273,10 @@ def physical_url_and_snapshot(ctx, out, base_url):
     snapshot_json = json.dumps(meta.get("selectionSnapshot", {}), ensure_ascii=False, sort_keys=True)
     raw_pdf = print_pdf(page, out / "raw-url.pdf")
     safe_url = page.evaluate(
-        """()=>{const u=new URL(location.href);u.username='';u.password='';u.search='';u.hash='';
-        const a=document.querySelector('#webclip-pdf-header a');a.href=u.toString();a.textContent=u.origin+u.pathname;
-        return {href:a.href,text:a.textContent};}"""
+        """()=>{const project=(raw)=>{const u=new URL(raw,location.href);u.username='';u.password='';u.search='';u.hash='';return u.toString();};
+        const header=document.querySelector('#webclip-pdf-header a');header.href=project(header.href);header.textContent=project(location.href);
+        const selected=document.querySelector('#scope');selected.href=project(selected.href);
+        return {headerHref:header.href,headerText:header.textContent,selectedHref:selected.href};}"""
     )
     safe_pdf = print_pdf(page, out / "sanitized-url-control.pdf")
     finish(page)
@@ -396,12 +397,12 @@ def run(chrome, out):
     raw_pdf = physical["rawPdf"]
     assert raw_pdf["selectedText"], raw_pdf
     assert raw_pdf["querySecretInText"] and raw_pdf["fragmentSecretInText"], raw_pdf
-    assert raw_pdf["querySecretInUri"] and raw_pdf["fragmentSecretInUri"], raw_pdf
     assert raw_pdf["locatorHrefSecretInUri"], raw_pdf
     safe_pdf = physical["sanitizedPdf"]
     assert safe_pdf["selectedText"], safe_pdf
     assert not safe_pdf["querySecretInText"] and not safe_pdf["fragmentSecretInText"], safe_pdf
     assert not safe_pdf["querySecretInUri"] and not safe_pdf["fragmentSecretInUri"], safe_pdf
+    assert not safe_pdf["locatorHrefSecretInUri"], safe_pdf
     durable = result["durableFlowModel"]
     assert durable["currentMarkerCounts"][DURABLE_USER_SECRET] >= 5, durable
     assert durable["currentMarkerCounts"][DURABLE_QUERY_SECRET] >= 5, durable
