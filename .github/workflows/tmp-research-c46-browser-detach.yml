@@ -1,0 +1,28 @@
+name: Research C46 Browser Detach
+
+on:
+  push:
+    branches:
+      - research/evidence-c46-browser-detach-2026-09-03
+
+permissions:
+  contents: read
+
+jobs:
+  c46-browser-detach:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+      - name: Install Puppeteer
+        run: npm install --no-save puppeteer@25.9.0
+      - name: Run headed C46 browser-detach harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a node project_tools/research_c46_browser_detach.mjs | tee c46-browser-detach.txt
+          sha256sum c46-browser-detach.txt
