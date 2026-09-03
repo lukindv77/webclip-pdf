@@ -867,6 +867,20 @@ async function discardStagedJournalImport(stagingKey) {
   await chrome.runtime.sendMessage({ type: 'WEBCLIP_JOURNAL_IMPORT_DISCARD_STAGED', stagingKey: key }).catch(() => {});
 }
 
+function requireJournalImportPreviewReceipt(response) {
+  const receipt = response?.previewReceipt;
+  if (
+    !receipt
+    || typeof receipt !== 'object'
+    || receipt.mode !== 'replace'
+    || !/^[0-9a-f]{64}$/.test(String(receipt.contentSha256 || ''))
+    || receipt.contentSha256 !== response.contentSha256
+  ) {
+    throw new Error('Service worker не вернул корректную квитанцию проверки резервной копии. Импорт остановлен.');
+  }
+  return receipt;
+}
+
 function openJournalDbForView() {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -2730,11 +2744,13 @@ async function importJournalFromSelectedFile() {
       source: 'file'
     });
     requireOk(preview);
+    const previewReceipt = requireJournalImportPreviewReceipt(preview);
     const confirmed = await requestDangerousConfirmation({
       title: 'Импорт полного журнала',
       text: `Импорт полностью заменит текущий локальный журнал данными из файла «${file.name}».
 Записей в файле: ${preview.entryCount}.
 Дата экспорта: ${preview.exportedAt || 'не указана'}.
+SHA-256 проверенной копии: ${preview.contentSha256}.
 Действие нельзя отменить.`
     });
     if (!confirmed) {
@@ -2751,7 +2767,8 @@ async function importJournalFromSelectedFile() {
       type: 'WEBCLIP_JOURNAL_IMPORT_REPLACE_STAGED',
       stagingKey,
       operationId,
-      source: 'file'
+      source: 'file',
+      previewReceipt
     });
     stagingKey = '';
     requireOk(result);
@@ -2943,11 +2960,12 @@ async function importSelectedYandexBackup() {
       operationId
     });
     requireOk(fetched);
+    const previewReceipt = requireJournalImportPreviewReceipt(fetched);
     yandexStagingKey = String(fetched.stagingKey || '');
     closeYandexBackupPicker();
     const confirmed = await requestDangerousConfirmation({
       title: 'Восстановление журнала с Яндекс Диска',
-      text: `Текущий локальный журнал будет полностью заменён выбранной резервной копией:\n${fetched.remotePath}\nЗаписей: ${fetched.entryCount}.\nДата экспорта: ${fetched.exportedAt || 'не указана'}.\nДействие нельзя отменить.`
+      text: `Текущий локальный журнал будет полностью заменён выбранной резервной копией:\n${fetched.remotePath}\nЗаписей: ${fetched.entryCount}.\nДата экспорта: ${fetched.exportedAt || 'не указана'}.\nSHA-256 проверенной копии: ${fetched.contentSha256}.\nДействие нельзя отменить.`
     });
     if (!confirmed) {
       await discardStagedJournalImport(fetched.stagingKey);
@@ -2965,7 +2983,8 @@ async function importSelectedYandexBackup() {
       type: 'WEBCLIP_JOURNAL_IMPORT_REPLACE_STAGED',
       stagingKey: fetched.stagingKey,
       operationId,
-      source: 'yandex'
+      source: 'yandex',
+      previewReceipt
     });
     yandexStagingKey = '';
     requireOk(imported);

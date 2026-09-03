@@ -1,4 +1,4 @@
-importScripts('public-suffix.js', 'journal-import-stream.js', 'journal-text-filter.js', 'local-download-identity.js');
+importScripts('public-suffix.js', 'journal-import-stream.js', 'journal-import-digest.js', 'journal-text-filter.js', 'local-download-identity.js');
 
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
 const YANDEX_API_BASE = 'https://cloud-api.yandex.net/v1/disk';
@@ -98,6 +98,7 @@ const MAX_JOURNAL_IMPORT_ENTRY_CHARS = 8 * 1024 * 1024;
 const JOURNAL_IMPORT_PARSE_TIMEOUT_MS = 5 * 60 * 1000;
 const JOURNAL_IMPORT_STAGING_TTL_MS = 2 * 60 * 60 * 1000;
 const JOURNAL_IMPORT_STAGE_BATCH_ENTRIES = 100;
+const JOURNAL_IMPORT_PREVIEW_RECEIPT_VERSION = 1;
 const MAX_INLINE_JOURNAL_IMPORT_JSON_CHARS = 1024 * 1024;
 const JOURNAL_BACKUP_ALARM = 'webclip-journal-backup';
 const JOURNAL_BACKUP_RETRY_ALARM = `${JOURNAL_BACKUP_ALARM}-retry`;
@@ -2971,12 +2972,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       case 'WEBCLIP_JOURNAL_IMPORT_PREVIEW_STAGED':
+        if (senderKind !== 'extension') throw new Error('Проверка резервной копии журнала доступна только странице расширения.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
         return previewStagedJournalImport(String(message.stagingKey || ''), String(message.operationId || ''), String(message.source || 'file'));
 
       case 'WEBCLIP_JOURNAL_IMPORT_REPLACE_STAGED':
-        return runExclusiveJournalDestructiveMutation('импорт подготовленного журнала', () => importJournalReplaceStaged(String(message.stagingKey || ''), String(message.operationId || ''), String(message.source || 'file')));
+        if (senderKind !== 'extension') throw new Error('Замена журнала доступна только странице расширения.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return runExclusiveJournalDestructiveMutation('импорт подготовленного журнала', () => importJournalReplaceStaged(
+          String(message.stagingKey || ''),
+          String(message.operationId || ''),
+          String(message.source || 'file'),
+          message.previewReceipt
+        ));
 
       case 'WEBCLIP_JOURNAL_IMPORT_DISCARD_STAGED':
+        if (senderKind !== 'extension') throw new Error('Очистка подготовленного импорта доступна только странице расширения.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
         await deleteTransferPayloadGroup(String(message.stagingKey || ''));
         return { ok: true };
 
@@ -7321,9 +7333,143 @@ async function cleanupExpiredJournalImportStaging() {
   return deleted;
 }
 
+function journalImportStagingGeneration(manifest) {
+  const createdAt = Math.max(0, Math.floor(Number(manifest?.createdAt) || 0));
+  if (manifest?.kind === 'journal-import-manifest') {
+    const chunkCount = Math.max(0, Math.floor(Number(manifest.chunkCount) || 0));
+    const totalBytes = Math.max(0, Math.floor(Number(manifest.totalBytes) || 0));
+    return `manifest:${createdAt}:${chunkCount}:${totalBytes}`;
+  }
+  const textLength = typeof manifest?.text === 'string' ? manifest.text.length : 0;
+  return `legacy:${createdAt}:${textLength}`;
+}
+
+function createJournalImportStreamObservation() {
+  const digest = WebClipSha256.create();
+  let stagingGeneration = '';
+  return {
+    onManifest(manifest) {
+      if (stagingGeneration) throw new Error('Поток импорта сообщил manifest более одного раза.');
+      stagingGeneration = journalImportStagingGeneration(manifest);
+    },
+    onBytes(bytes) {
+      digest.update(bytes);
+    },
+    finish(inspected) {
+      if (!stagingGeneration) throw new Error('Поток импорта не сообщил поколение staging.');
+      return {
+        ...inspected,
+        stagingGeneration,
+        contentSha256: digest.digestHex()
+      };
+    }
+  };
+}
+
+function journalImportPreviewMismatch(detail = '') {
+  const suffix = String(detail || '').trim();
+  const error = new Error(`Копия или параметры импорта изменились после проверки${suffix ? `: ${suffix}` : ''}. Повторите preview перед заменой журнала.`);
+  error.code = 'JOURNAL_IMPORT_PREVIEW_MISMATCH';
+  return error;
+}
+
+function journalImportStaleRevision() {
+  const error = new Error('Журнал изменился после проверки резервной копии. Повторите preview перед заменой журнала.');
+  error.code = 'JOURNAL_IMPORT_STALE_REVISION';
+  return error;
+}
+
+function normalizeJournalImportPreviewReceipt(value, expected = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw journalImportPreviewMismatch('отсутствует квитанция preview');
+  const fields = [
+    'version',
+    'mode',
+    'stagingKey',
+    'stagingGeneration',
+    'source',
+    'operationId',
+    'contentSha256',
+    'entryCount',
+    'exportedAt',
+    'expectedJournalRevision'
+  ];
+  const actualKeys = Object.keys(value).sort();
+  const expectedKeys = [...fields].sort();
+  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])) {
+    throw journalImportPreviewMismatch('состав квитанции не совпадает с контрактом');
+  }
+  if (value.version !== JOURNAL_IMPORT_PREVIEW_RECEIPT_VERSION) throw journalImportPreviewMismatch('неподдерживаемая версия квитанции');
+  if (value.mode !== 'replace') throw journalImportPreviewMismatch('режим не равен replace');
+  const stagingKey = typeof value.stagingKey === 'string' ? value.stagingKey : '';
+  const stagingGeneration = typeof value.stagingGeneration === 'string' ? value.stagingGeneration : '';
+  const source = typeof value.source === 'string' ? value.source : '';
+  const operationId = typeof value.operationId === 'string' ? value.operationId : '';
+  const contentSha256 = typeof value.contentSha256 === 'string' ? value.contentSha256 : '';
+  const exportedAt = typeof value.exportedAt === 'string' ? value.exportedAt : '';
+  const expectedJournalRevision = typeof value.expectedJournalRevision === 'string' ? value.expectedJournalRevision : '';
+  if (!stagingKey || stagingKey.length > 240 || stagingKey.trim() !== stagingKey) throw journalImportPreviewMismatch('некорректный stagingKey');
+  if (!/^(?:manifest|legacy):[0-9]+:[0-9]+(?::[0-9]+)?$/.test(stagingGeneration) || stagingGeneration.length > 240) {
+    throw journalImportPreviewMismatch('некорректное поколение staging');
+  }
+  if (source !== 'file' && source !== 'yandex') throw journalImportPreviewMismatch('некорректный источник');
+  if (!operationId || operationId.length > 240) throw journalImportPreviewMismatch('некорректный operationId');
+  if (!/^[0-9a-f]{64}$/.test(contentSha256)) throw journalImportPreviewMismatch('некорректный SHA-256');
+  if (!Number.isSafeInteger(value.entryCount) || value.entryCount < 0 || value.entryCount > 100000) {
+    throw journalImportPreviewMismatch('некорректное число записей');
+  }
+  if (exportedAt.length > MAX_IMPORTED_DATETIME_CHARS) throw journalImportPreviewMismatch('некорректная дата экспорта');
+  if (expectedJournalRevision.length > 240) throw journalImportPreviewMismatch('некорректная ожидаемая ревизия журнала');
+  const receipt = Object.freeze({
+    version: JOURNAL_IMPORT_PREVIEW_RECEIPT_VERSION,
+    mode: 'replace',
+    stagingKey,
+    stagingGeneration,
+    source,
+    operationId,
+    contentSha256,
+    entryCount: value.entryCount,
+    exportedAt,
+    expectedJournalRevision
+  });
+  for (const [key, expectedValue] of Object.entries(expected || {})) {
+    if (!Object.prototype.hasOwnProperty.call(receipt, key) || receipt[key] !== expectedValue) {
+      throw journalImportPreviewMismatch(`поле ${key} не совпадает`);
+    }
+  }
+  return receipt;
+}
+
+function createJournalImportPreviewReceipt(stagingKey, source, operationId, inspected, expectedJournalRevision) {
+  return normalizeJournalImportPreviewReceipt({
+    version: JOURNAL_IMPORT_PREVIEW_RECEIPT_VERSION,
+    mode: 'replace',
+    stagingKey,
+    stagingGeneration: inspected?.stagingGeneration,
+    source,
+    operationId,
+    contentSha256: inspected?.contentSha256,
+    entryCount: inspected?.entryCount,
+    exportedAt: String(inspected?.exportedAt || ''),
+    expectedJournalRevision: String(expectedJournalRevision || '')
+  });
+}
+
+function assertPreparedJournalImportMatchesPreview(prepared, receipt) {
+  normalizeJournalImportPreviewReceipt(receipt, {
+    stagingGeneration: String(prepared?.stagingGeneration || ''),
+    contentSha256: String(prepared?.contentSha256 || ''),
+    entryCount: Math.max(0, Number(prepared?.entryCount) || 0),
+    exportedAt: String(prepared?.exportedAt || '')
+  });
+}
+
 async function inspectStagedJournalImportStream(stagingKey) {
   const deadlineAt = Date.now() + JOURNAL_IMPORT_PARSE_TIMEOUT_MS;
-  return WebClipJournalImportStream.process(streamStagedJournalImportText(stagingKey, deadlineAt), {
+  const observation = createJournalImportStreamObservation();
+  const inspected = await WebClipJournalImportStream.process(streamStagedJournalImportText(stagingKey, deadlineAt, {
+    onManifest: observation.onManifest,
+    onBytes: observation.onBytes
+  }), {
     expectedSchema: JOURNAL_EXPORT_SCHEMA,
     expectedVersion: JOURNAL_EXPORT_VERSION,
     maxTotalChars: MAX_JOURNAL_EXPORT_TEXT_CHARS,
@@ -7331,6 +7477,7 @@ async function inspectStagedJournalImportStream(stagingKey) {
     maxEntries: 100000,
     deadlineAt
   });
+  return observation.finish(inspected);
 }
 
 async function normalizeStagedJournalImportStream(stagingKey) {
@@ -7341,6 +7488,7 @@ async function normalizeStagedJournalImportStream(stagingKey) {
     : Math.min(MAX_JOURNAL_IMPORT_BYTES, Math.max(0, String(sourceManifest?.text || '').length * 2));
   await ensureStorageBudget(Math.min(128 * 1024 * 1024, stagedBytes + 16 * 1024 * 1024), 'потоковой нормализации импорта журнала');
   const importId = makeJournalImportStageId();
+  const observation = createJournalImportStreamObservation();
   const db = await openJournalDb();
   let batch = [];
   let batchChars = 0;
@@ -7352,7 +7500,10 @@ async function normalizeStagedJournalImportStream(stagingKey) {
     await writeJournalImportStageBatch(db, importId, current);
   };
   try {
-    const inspected = await WebClipJournalImportStream.process(streamStagedJournalImportText(stagingKey, deadlineAt), {
+    const inspected = await WebClipJournalImportStream.process(streamStagedJournalImportText(stagingKey, deadlineAt, {
+      onManifest: observation.onManifest,
+      onBytes: observation.onBytes
+    }), {
       expectedSchema: JOURNAL_EXPORT_SCHEMA,
       expectedVersion: JOURNAL_EXPORT_VERSION,
       maxTotalChars: MAX_JOURNAL_EXPORT_TEXT_CHARS,
@@ -7370,7 +7521,14 @@ async function normalizeStagedJournalImportStream(stagingKey) {
       }
     });
     await flushBatch();
-    return { importId, entryCount: inspected.entryCount, exportedAt: inspected.exportedAt || '' };
+    const observed = observation.finish(inspected);
+    return {
+      importId,
+      entryCount: observed.entryCount,
+      exportedAt: observed.exportedAt || '',
+      stagingGeneration: observed.stagingGeneration,
+      contentSha256: observed.contentSha256
+    };
   } catch (error) {
     try { db.close(); } catch (_) {}
     await deleteJournalImportStage(importId).catch(() => {});
@@ -7380,15 +7538,21 @@ async function normalizeStagedJournalImportStream(stagingKey) {
   }
 }
 
-async function commitStagedJournalImport(prepared, operationId) {
+async function commitStagedJournalImport(prepared, operationId, expectedJournalRevision) {
   const importId = String(prepared?.importId || '');
   const expectedCount = Math.max(0, Number(prepared?.entryCount) || 0);
+  const expectedRevision = String(expectedJournalRevision || '');
   if (!importId) throw new Error('Не подготовлены нормализованные записи импорта.');
   await migrateLegacyPendingJournalAppends();
+  const revisionBefore = await journalRevisionSnapshot(Date.now() + JOURNAL_IMPORT_PARSE_TIMEOUT_MS);
+  if (revisionBefore !== expectedRevision) throw journalImportStaleRevision();
+
   const statsToken = await beginJournalStatsMutation('import-replace');
-  const db = await openJournalDb();
+  let db = null;
   let copiedCount = 0;
+  let transactionCommitted = false;
   try {
+    db = await openJournalDb();
     await new Promise((resolve, reject) => {
       const tx = db.transaction([
         JOURNAL_STORE,
@@ -7400,6 +7564,7 @@ async function commitStagedJournalImport(prepared, operationId) {
       ], 'readwrite');
       const journalStore = tx.objectStore(JOURNAL_STORE);
       const importStore = tx.objectStore(JOURNAL_IMPORT_STAGING_STORE);
+      const metaStore = tx.objectStore(JOURNAL_META_STORE);
       let timedOut = false;
       let abortError = null;
       const timer = setTimeout(() => {
@@ -7407,54 +7572,58 @@ async function commitStagedJournalImport(prepared, operationId) {
         try { tx.abort(); } catch (_) {}
       }, 5 * 60 * 1000);
 
-      tx.objectStore(JOURNAL_PENDING_STORE).clear();
-      tx.objectStore(JOURNAL_PENDING_DOWNLOAD_STORE).clear();
-      tx.objectStore(JOURNAL_PENDING_REMOTE_STORE).clear();
-      touchJournalDbRevision(tx, 'import-replace');
-      const clearRequest = journalStore.clear();
-      clearRequest.onerror = () => {
-        abortError = clearRequest.error || new Error('Не удалось очистить старый журнал перед импортом.');
+      const abort = (error) => {
+        abortError = error;
         try { tx.abort(); } catch (_) {}
       };
-      clearRequest.onsuccess = () => {
-        const cursorRequest = importStore.index('importId').openCursor(IDBKeyRange.only(importId), 'next');
-        cursorRequest.onerror = () => {
-          abortError = cursorRequest.error || new Error('Не удалось прочитать нормализованный staging импорта.');
-          try { tx.abort(); } catch (_) {}
-        };
-        cursorRequest.onsuccess = () => {
-          const cursor = cursorRequest.result;
-          if (!cursor) {
-            if (copiedCount !== expectedCount) {
-              abortError = new Error(`Staging импорта содержит ${copiedCount} записей вместо ожидаемых ${expectedCount}.`);
-              abortError.code = 'JOURNAL_IMPORT_STAGING_COUNT_MISMATCH';
-              try { tx.abort(); } catch (_) {}
+      const beginReplace = () => {
+        tx.objectStore(JOURNAL_PENDING_STORE).clear();
+        tx.objectStore(JOURNAL_PENDING_DOWNLOAD_STORE).clear();
+        tx.objectStore(JOURNAL_PENDING_REMOTE_STORE).clear();
+        touchJournalDbRevision(tx, 'import-replace');
+        const clearRequest = journalStore.clear();
+        clearRequest.onerror = () => abort(clearRequest.error || new Error('Не удалось очистить старый журнал перед импортом.'));
+        clearRequest.onsuccess = () => {
+          const cursorRequest = importStore.index('importId').openCursor(IDBKeyRange.only(importId), 'next');
+          cursorRequest.onerror = () => abort(cursorRequest.error || new Error('Не удалось прочитать нормализованный staging импорта.'));
+          cursorRequest.onsuccess = () => {
+            const cursor = cursorRequest.result;
+            if (!cursor) {
+              if (copiedCount !== expectedCount) {
+                const error = new Error(`Staging импорта содержит ${copiedCount} записей вместо ожидаемых ${expectedCount}.`);
+                error.code = 'JOURNAL_IMPORT_STAGING_COUNT_MISMATCH';
+                abort(error);
+              }
+              return;
             }
-            return;
-          }
-          const entry = cursor.value?.entry;
-          if (!entry || typeof entry !== 'object') {
-            abortError = new Error('Staging импорта содержит повреждённую запись.');
-            try { tx.abort(); } catch (_) {}
-            return;
-          }
-          const put = journalStore.put(entry);
-          put.onerror = () => {
-            abortError = put.error || new Error('Не удалось записать импортируемую запись журнала.');
-            try { tx.abort(); } catch (_) {}
-          };
-          put.onsuccess = () => {
-            const del = cursor.delete();
-            del.onerror = () => {
-              abortError = del.error || new Error('Не удалось очистить использованную staging-запись импорта.');
-              try { tx.abort(); } catch (_) {}
-            };
-            del.onsuccess = () => {
-              copiedCount += 1;
-              cursor.continue();
+            const entry = cursor.value?.entry;
+            if (!entry || typeof entry !== 'object') {
+              abort(new Error('Staging импорта содержит повреждённую запись.'));
+              return;
+            }
+            const put = journalStore.put(entry);
+            put.onerror = () => abort(put.error || new Error('Не удалось записать импортируемую запись журнала.'));
+            put.onsuccess = () => {
+              const del = cursor.delete();
+              del.onerror = () => abort(del.error || new Error('Не удалось очистить использованную staging-запись импорта.'));
+              del.onsuccess = () => {
+                copiedCount += 1;
+                cursor.continue();
+              };
             };
           };
         };
+      };
+
+      const revisionRequest = metaStore.get(JOURNAL_META_REVISION_KEY);
+      revisionRequest.onerror = () => abort(revisionRequest.error || new Error('Не удалось сверить ревизию журнала перед импортом.'));
+      revisionRequest.onsuccess = () => {
+        const currentRevision = String(revisionRequest.result?.value || '');
+        if (currentRevision !== expectedRevision) {
+          abort(journalImportStaleRevision());
+          return;
+        }
+        beginReplace();
       };
       tx.oncomplete = () => { clearTimeout(timer); resolve(); };
       tx.onerror = () => { clearTimeout(timer); reject(abortError || tx.error || new Error('Не удалось восстановить журнал из staged import.')); };
@@ -7467,8 +7636,12 @@ async function commitStagedJournalImport(prepared, operationId) {
         reject(abortError || (timedOut ? error : (tx.error || error)));
       };
     });
+    transactionCommitted = true;
+  } catch (error) {
+    if (!transactionCommitted) await completeJournalStatsMutation(statsToken).catch(() => {});
+    throw error;
   } finally {
-    db.close();
+    if (db) db.close();
   }
 
   recordOperationStage(operationId, 'stats', 'Перестраиваем агрегированную статистику URL…', 80);
@@ -7493,23 +7666,33 @@ async function previewStagedJournalImport(stagingKey, operationId = '', source =
   await startOperationLog(operationId, sourceKind === 'yandex' ? 'journal-import-yandex' : 'journal-import-file', sourceKind === 'yandex' ? 'Восстановление журнала с Яндекс Диска' : 'Импорт журнала из файла', {
     source: sourceKind
   });
-  recordOperationStage(operationId, 'validate', 'Потоково проверяем подготовленную резервную копию журнала…', 15);
+  recordOperationStage(operationId, 'validate', 'Потоково проверяем подготовленную резервную копию журнала и вычисляем SHA-256…', 15);
   const inspected = await inspectStagedJournalImportStream(key);
+  const expectedJournalRevision = await journalRevisionSnapshot(Date.now() + JOURNAL_IMPORT_PARSE_TIMEOUT_MS);
+  const previewReceipt = createJournalImportPreviewReceipt(key, sourceKind, operationId, inspected, expectedJournalRevision);
   appendOperationLogEvent(operationId, {
     category: 'checkpoint', level: 'info', stage: 'await-confirmation',
     message: 'Резервная копия потоково проверена. Ожидается подтверждение замены локального журнала.',
-    data: { source: sourceKind, entryCount: inspected.entryCount, stagingKey: '[INTERNAL]' }
+    data: {
+      source: sourceKind,
+      entryCount: inspected.entryCount,
+      contentSha256: inspected.contentSha256,
+      expectedJournalRevision,
+      stagingKey: '[INTERNAL]'
+    }
   });
   return {
     ok: true,
     stagingKey: key,
     entryCount: inspected.entryCount,
     exportedAt: inspected.exportedAt || '',
-    operationId
+    contentSha256: inspected.contentSha256,
+    operationId,
+    previewReceipt
   };
 }
 
-async function importJournalReplaceStaged(stagingKey, operationId = '', source = 'file') {
+async function importJournalReplaceStaged(stagingKey, operationId = '', source = 'file', previewReceiptValue = null) {
   const key = String(stagingKey || '').trim();
   if (!key || key.length > 240) throw new Error('Некорректный идентификатор подготовленного импорта журнала.');
   operationId = String(operationId || '') || makeOperationLogId('journal-import');
@@ -7519,15 +7702,25 @@ async function importJournalReplaceStaged(stagingKey, operationId = '', source =
     source: sourceKind
   });
   try {
-    recordOperationStage(operationId, 'validate', 'Потоково проверяем и нормализуем резервную копию журнала…', 15);
+    const previewReceipt = normalizeJournalImportPreviewReceipt(previewReceiptValue, {
+      stagingKey: key,
+      source: sourceKind,
+      operationId
+    });
+    recordOperationStage(operationId, 'validate', 'Повторно проверяем резервную копию и сверяем её с квитанцией preview…', 15);
     prepared = await normalizeStagedJournalImportStream(key);
-    recordOperationStage(operationId, 'replace', `Атомарно заменяем локальный журнал. Записей: ${prepared.entryCount}.`, 45, 'running', { entryCount: prepared.entryCount });
-    const committed = await commitStagedJournalImport(prepared, operationId);
+    assertPreparedJournalImportMatchesPreview(prepared, previewReceipt);
+    recordOperationStage(operationId, 'replace', `Атомарно заменяем локальный журнал. Записей: ${prepared.entryCount}.`, 45, 'running', {
+      entryCount: prepared.entryCount,
+      contentSha256: prepared.contentSha256
+    });
+    const committed = await commitStagedJournalImport(prepared, operationId, previewReceipt.expectedJournalRevision);
     recordOperationStage(operationId, 'complete', `Импорт завершён. Записей: ${committed.importedCount}.`, 100, 'success', { entryCount: committed.importedCount });
     return {
       ok: true,
       importedCount: committed.importedCount,
       exportedAt: prepared.exportedAt || '',
+      contentSha256: prepared.contentSha256,
       operationId,
       statsWarning: committed.statsWarning || ''
     };
@@ -8332,10 +8525,23 @@ async function fetchJournalBackupFromYandex(requestedPath, operationId = '') {
     try {
       recordOperationStage(operationId, 'validate', 'Потоково проверяем структуру скачанной резервной копии…', 60, 'running');
       const inspected = await inspectStagedJournalImportStream(responsePayloadKey);
+      const expectedJournalRevision = await journalRevisionSnapshot(Date.now() + JOURNAL_IMPORT_PARSE_TIMEOUT_MS);
+      const previewReceipt = createJournalImportPreviewReceipt(
+        responsePayloadKey,
+        'yandex',
+        operationId,
+        inspected,
+        expectedJournalRevision
+      );
       appendOperationLogEvent(operationId, {
         category: 'checkpoint', level: 'info', stage: 'await-confirmation',
         message: 'Резервная копия скачана и потоково проверена. Ожидается подтверждение замены локального журнала.',
-        data: { remotePath, entryCount: inspected.entryCount }
+        data: {
+          remotePath,
+          entryCount: inspected.entryCount,
+          contentSha256: inspected.contentSha256,
+          expectedJournalRevision
+        }
       });
       return {
         ok: true,
@@ -8343,7 +8549,9 @@ async function fetchJournalBackupFromYandex(requestedPath, operationId = '') {
         stagingKey: responsePayloadKey,
         entryCount: inspected.entryCount,
         exportedAt: inspected.exportedAt || '',
-        operationId
+        contentSha256: inspected.contentSha256,
+        operationId,
+        previewReceipt
       };
     } catch (error) {
       await deleteTransferPayloadGroup(responsePayloadKey).catch(() => {});
@@ -8655,10 +8863,17 @@ async function getTransferImportRecord(id, timeoutMs = 20_000) {
   } finally { db.close(); }
 }
 
-async function* streamStagedJournalImportText(stagingKey, deadlineAt = Date.now() + JOURNAL_IMPORT_PARSE_TIMEOUT_MS) {
+async function* streamStagedJournalImportText(
+  stagingKey,
+  deadlineAt = Date.now() + JOURNAL_IMPORT_PARSE_TIMEOUT_MS,
+  observers = {}
+) {
   const key = String(stagingKey || '').trim();
+  const onManifest = typeof observers?.onManifest === 'function' ? observers.onManifest : null;
+  const onBytes = typeof observers?.onBytes === 'function' ? observers.onBytes : null;
   const manifest = await getTransferImportRecord(key, Math.min(20_000, Math.max(1000, deadlineAt - Date.now())));
   if (!manifest) throw new Error('Подготовленные данные импорта журнала не найдены.');
+  if (onManifest) await onManifest(manifest);
 
   if (manifest.kind === 'journal-import-manifest') {
     const chunkCount = Math.max(0, Number(manifest.chunkCount) || 0);
@@ -8684,6 +8899,7 @@ async function* streamStagedJournalImportText(stagingKey, deadlineAt = Date.now(
       if (actualBytes > MAX_JOURNAL_IMPORT_BYTES) throw new Error('Файл журнала больше безопасного предела 50 МБ.');
       const remainingMs = Math.min(20_000, Math.max(1000, deadlineAt - Date.now()));
       const bytes = await withOperationTimeout(blob.arrayBuffer(), remainingMs, 'Чтение chunk импорта журнала');
+      if (onBytes) await onBytes(new Uint8Array(bytes));
       const text = decoder.decode(bytes, { stream: index + 1 < chunkCount });
       if (text) yield text;
     }
@@ -8699,8 +8915,29 @@ async function* streamStagedJournalImportText(stagingKey, deadlineAt = Date.now(
   // before this worker upgrade. New imports never create a whole 50 MiB string.
   if (typeof manifest.text === 'string') {
     if (manifest.text.length > MAX_JOURNAL_EXPORT_TEXT_CHARS) throw new Error('Файл журнала превышает безопасный размер импорта.');
-    for (let offset = 0; offset < manifest.text.length; offset += TRANSFER_TEXT_CHUNK_CHARS) {
-      yield manifest.text.slice(offset, offset + TRANSFER_TEXT_CHUNK_CHARS);
+    const encoder = new TextEncoder();
+    let actualBytes = 0;
+    for (let offset = 0; offset < manifest.text.length;) {
+      if (Date.now() >= deadlineAt) {
+        const error = new Error('Чтение потокового импорта превысило безопасный deadline.');
+        error.code = 'JOURNAL_IMPORT_PARSE_TIMEOUT';
+        throw error;
+      }
+      let end = Math.min(manifest.text.length, offset + TRANSFER_TEXT_CHUNK_CHARS);
+      const finalCodeUnit = manifest.text.charCodeAt(end - 1);
+      const nextCodeUnit = manifest.text.charCodeAt(end);
+      if (
+        end < manifest.text.length
+        && finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff
+        && nextCodeUnit >= 0xdc00 && nextCodeUnit <= 0xdfff
+      ) end -= 1;
+      const text = manifest.text.slice(offset, end);
+      const bytes = encoder.encode(text);
+      actualBytes += bytes.byteLength;
+      if (actualBytes > MAX_JOURNAL_IMPORT_BYTES) throw new Error('Файл журнала больше безопасного предела 50 МБ.');
+      if (onBytes) await onBytes(bytes);
+      if (text) yield text;
+      offset = end;
     }
     return;
   }

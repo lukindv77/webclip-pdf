@@ -1,0 +1,45 @@
+name: Research C44 Preview Receipt CAS
+
+on:
+  push:
+    branches:
+      - fix/c44-preview-receipt-cas-2026-09-03
+
+permissions:
+  contents: read
+
+jobs:
+  c44-preview-receipt-cas:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact evidence head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.2'
+
+      - name: Install bounded browser harness dependency
+        run: npm install --no-save puppeteer@25.9.0
+
+      - name: Run C44 preview-receipt and revision-CAS browser matrix
+        env:
+          C44_SOURCE_BASELINE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          export C44_SOURCE_BASELINE="$(git merge-base HEAD origin/main)"
+          xvfb-run -a node project_tools/research_c44_full_ui_browser_restart.mjs | tee /tmp/c44-ui-restart.log
+          sed -n 's/^C44_UI_RESTART_RESULT_JSON=//p' /tmp/c44-ui-restart.log > project_tools/c44-ui-restart-result.json
+          test -s project_tools/c44-ui-restart-result.json
+
+      - name: Upload exact result receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: c44-preview-receipt-cas-receipt
+          path: project_tools/c44-ui-restart-result.json
+          if-no-files-found: error
+          retention-days: 7
