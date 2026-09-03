@@ -104,6 +104,8 @@ async function discoverExtensionId(browser) {
 
 async function openJournal(browser, extensionId) {
   const page = await browser.newPage();
+  page.on('console', message => console.log(`C44_PAGE_CONSOLE=${message.type()}:${message.text()}`));
+  page.on('pageerror', error => console.log(`C44_PAGE_ERROR=${String(error?.stack || error)}`));
   await page.goto(`chrome-extension://${extensionId}/journal.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#importFileInput', { timeout: 30000 });
   await page.waitForFunction(() => !document.querySelector('#status')?.textContent?.includes('Загрузка'), { timeout: 30000 }).catch(() => {});
@@ -317,7 +319,20 @@ async function captureProductionExport(page) {
     });
   });
   await page.click('#exportFile');
-  await page.waitForFunction(() => Boolean(globalThis.__c44CapturedExport?.text), { timeout: 90000 });
+  try {
+    await page.waitForFunction(() => Boolean(globalThis.__c44CapturedExport?.text), { timeout: 30000 });
+  } catch (error) {
+    const diagnostic = await page.evaluate(() => ({
+      status: document.querySelector('#status')?.textContent || '',
+      statusClass: document.querySelector('#status')?.className || '',
+      operationId: document.querySelector('#lastOperationId')?.textContent || '',
+      exportDisabled: Boolean(document.querySelector('#exportFile')?.disabled),
+      proxyInstalled: Boolean(globalThis.__c44NativeSaveAsSubstituted),
+      captured: Boolean(globalThis.__c44CapturedExport),
+      preparedType: typeof globalThis.WebClipPreparedSaveAs?.start
+    }));
+    throw new Error(`C44 export capture timeout: ${JSON.stringify(diagnostic)}; ${error?.message || error}`);
+  }
   const captured = await page.evaluate(() => globalThis.__c44CapturedExport);
   const status = await page.$eval('#status', item => item.textContent || '');
   await page.evaluate(async capturedExport => {
