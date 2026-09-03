@@ -100,7 +100,7 @@ All 46 previously identified material families are retained as coverage coordina
 | C34 | Animated image/GIF frame | `L4-REVALIDATED / FINDING + POSITIVE/DIRECT/STATIC-PNG/ADMISSION-RASTER/EMBEDDED-IMAGE/CAUSAL CONTROLS (P0-004, P0-070; P1-003 supporting)` |
 | C35 | Mutation during preparation / beforeprint / physical render cut | `L4-REVALIDATED / FINDING + POSITIVE/PREPARATION/RENDER-STATE/BEFOREPRINT-GUARD/POST-CUT/FROZEN/CAUSAL CONTROLS (P0-070, P0-075, P0-004; P0-071 positive)` |
 | C36 | Same locator/URL, different resource bytes/generation | `L4-REVALIDATED / FINDING + POSITIVE/STABLE-IMG/SAME-URL/SRCSET/BACKGROUND/CACHE-EVICTION/FROZEN/CAUSAL CONTROLS (P0-070, P0-004; P1-003 supporting)` |
-| C37 | Failure/retry/rollback/convergence | `NOT-TRIAGED / UNKNOWN` |
+| C37 | Failure/retry/rollback/convergence | `L4-REVALIDATED / FINDING + POSITIVE/CLEAN-RETRY/STALE-RESOURCE/DETACHED-LINK/WRAPPER-TOPOLOGY CONTROLS (P1-218, P1-219, P1-221; P1-199, P1-214 supporting/source)` |
 | C38 | Node/byte/time/resource budgets | `NOT-TRIAGED / UNKNOWN` |
 | C39 | Privacy / data minimization | `NOT-TRIAGED / UNKNOWN` |
 | C40 | Physical PDF bytes / cache identity | `L2-REVALIDATED / FINDING (P0-023, P0-079)` |
@@ -493,6 +493,15 @@ Duplicate/root-cause reconciliation maps C35 to existing **P0-070 / P0-075 / P0-
 Fresh controls prove that ordinary already-decoded IMG/currentSrc reuse can preserve admitted bytes despite a newer server generation, and a frozen admission-byte data URL remains stable. The decisive case clears browser cache after admitted red pixels, changes the origin to green bytes at the exact same URL, then lets current WebClip promote same-URL `data-srcset`. Browser candidate resolution fetches green; DOM locator, src/currentSrc URL and natural dimensions remain textually unchanged, but physical PDF changes from admitted red to green. A background control separately fetches green during readiness probing while final PDF remains red despite a clean loaded report, proving URL task settlement is not final renderer byte-generation identity.
 
 Duplicate/root-cause reconciliation maps C36 to existing **P0-070 / P0-004 ACTIVE**, with **P1-003 ACTIVE** supporting readiness/provenance. C40/P0-023/P0-079 are not exercised because no PDF retry/cache reuse occurs. No new P-code or Registry wording/status change is warranted. C36 advances to `L4-REVALIDATED / FINDING + POSITIVE/STABLE-IMG/SAME-URL/SRCSET/BACKGROUND/CACHE-EVICTION/FROZEN/CAUSAL CONTROLS (P0-070, P0-004; P1-003 supporting)`. C37 — Failure / retry / rollback / convergence — is the next sequential coordinate.
+
+
+## Fresh continuation checkpoint — focused C37 Failure / retry / rollback / convergence
+
+`RESEARCH_FULL_RESTART_C37_FAILURE_RETRY_ROLLBACK_2026-09-03.md` records the accepted fresh C37 exact-source tranche on canonical source `a6be4cfdb7a3affd385479f04d333e75847ee94c`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, Google Chrome `151.0.7922.173`, workflow run `33702598102`, job `100484895616`, exact accepted workflow head `f5516c6f33e379d3fb9f99c0dcf666bda208d441`, conclusion SUCCESS and raw result SHA-256 `206ee2c9991f20864bc9f24e6c34fcbdd4e74e59c4d60914b58c137c4f9ddc36`.
+
+Fresh clean retry is a positive convergence control: after a failure and after a successful retry, temporary header/style/wrapper/link-marker counts return to zero and the retry PDF remains selection-correct. Three host-supersession schedules remain broken: stale resource rollback overwrites a newer host `src` and the retry physically serializes the old red candidate (**P1-218**); wrapper cleanup disconnects a page-added child inserted after WebClip wrapped the image (**P1-219**); and a detached normalized link skips cleanup, then retry turns the temporary absolute href into the new rollback identity and permanently loses the authored relative href (**P1-221**).
+
+Current source still exposes the already-owned remote restore ordering/settlement boundary under **P1-199/P1-214** (fire-and-forget restore followed by a second awaited call after shared bookkeeping may already be consumed), but C37 does not claim a fresh remote-frame L4 result. No new P-code, Registry wording/status, runtime or release change is warranted. C37 therefore advances to `L4-REVALIDATED / FINDING + POSITIVE/CLEAN-RETRY/STALE-RESOURCE/DETACHED-LINK/WRAPPER-TOPOLOGY CONTROLS (P1-218, P1-219, P1-221; P1-199, P1-214 supporting/source)`. C38 — Node / byte / time / resource budgets — is the next sequential coordinate.
 
 ## Delivery rule
 
