@@ -45,8 +45,7 @@ function makeTemp() {
     }
   });
   fs.mkdirSync(profile, { recursive: true });
-  fs.writeFileSync(path.join(ext, 'probe.html'), '<!doctype html><meta charset="utf-8"><button id="grant">grant</button><script src="probe.js"></script>\n');
-  fs.writeFileSync(path.join(ext, 'probe.js'), `const P=${JSON.stringify(CHILD)};document.getElementById('grant').addEventListener('click',async()=>{document.body.dataset.started=String(Date.now());try{const granted=await chrome.permissions.request({origins:[P]});document.body.dataset.granted=String(Boolean(granted));}catch(e){document.body.dataset.granted='error';document.body.dataset.error=String(e?.message||e)}finally{document.body.dataset.settled=String(Date.now())}});\n`);
+  fs.writeFileSync(path.join(ext, 'probe.html'), '<!doctype html><meta charset="utf-8"><title>C46 permission probe</title>\n');
   return { root, ext, profile };
 }
 
@@ -90,7 +89,7 @@ async function contains(page) {
   return bounded(page.evaluate((p) => chrome.permissions.contains({ origins: [p] }), CHILD), 5000, 'permissions.contains');
 }
 
-async function removeHost(browser, id) {
+async function openManager(browser) {
   const page = await bounded(browser.newPage(), 10000, 'manager newPage');
   await bounded(page.goto('chrome://extensions/', { waitUntil: 'domcontentloaded', timeout: 20000 }), 25000, 'manager goto');
   const shape = await bounded(page.evaluate(() => ({
@@ -99,37 +98,29 @@ async function removeHost(browser, id) {
   })), 5000, 'developerPrivate shape');
   log('manager-shape', shape);
   assert.equal(shape.remove, 'function');
-  await bounded(page.evaluate(async ({ id, child }) => {
-    await chrome.developerPrivate.removeHostPermission(id, child);
-  }, { id, child: CHILD }), 10000, 'developerPrivate.removeHostPermission');
-  log('manager-remove-done');
-  await page.close();
+  assert.equal(shape.add, 'function');
+  return page;
 }
 
-async function trustedRequest(probe) {
-  const requestedAt = Date.now();
-  await bounded(probe.click('#grant'), 5000, 'probe click');
-  const deadline = Date.now() + 12000;
-  let contextReloaded = false;
+async function hostPermission(manager, method, id) {
+  await bounded(manager.evaluate(async ({ method, id, child }) => {
+    await chrome.developerPrivate[method](id, child);
+  }, { method, id, child: CHILD }), 10000, 'developerPrivate.' + method);
+  log('manager-' + method + '-done');
+}
+
+async function waitContains(probe, expected, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
   let lastError = '';
   while (Date.now() < deadline) {
     try {
-      const granted = await contains(probe);
-      if (granted) {
-        return { requestedAt, granted: true, contextReloaded, observedAt: Date.now() };
-      }
+      if (Boolean(await contains(probe)) === Boolean(expected)) return true;
     } catch (error) {
-      const message = String(error?.message || error);
-      lastError = message;
-      if (/Execution context was destroyed|Cannot find context|detached Frame/i.test(message)) {
-        contextReloaded = true;
-      } else {
-        throw error;
-      }
+      lastError = String(error?.message || error);
     }
     await sleep(100);
   }
-  throw new Error('trusted permissions.request did not produce granted permission; lastError=' + lastError);
+  throw new Error('permission did not become ' + expected + '; lastError=' + lastError);
 }
 
 const temp = makeTemp();
@@ -151,22 +142,32 @@ try {
   browser = await launch(temp.ext, temp.profile, 'production');
   const id = await extensionId(browser, 'production');
   assert.equal(id, seedId);
-  const probe = await openProbe(browser, id, 'production');
+  let probe = await openProbe(browser, id, 'production');
   const version = await probe.evaluate(() => chrome.runtime.getManifest().version);
-  const beforeNormalize = await contains(probe);
-  log('production-state', { version, beforeNormalize });
+  const beforeGrant = await contains(probe);
+  log('production-state', { version, beforeGrant });
   assert.equal(version, CURRENT.version);
-  if (beforeNormalize) {
-    await removeHost(browser, id);
-  }
-  const beforeRequest = await contains(probe);
-  log('before-request', { beforeRequest });
-  assert.equal(beforeRequest, false);
-  const request = await trustedRequest(probe);
-  const afterRequest = await contains(probe);
-  log('after-request', { request, afterRequest });
-  assert.equal(request.granted, true, JSON.stringify(request));
-  assert.equal(afterRequest, true);
+  assert.equal(beforeGrant, false);
+
+  const manager = await openManager(browser);
+  await hostPermission(manager, 'addHostPermission', id);
+  await waitContains(probe, true);
+  const afterManagerAdd = await contains(probe);
+  log('after-manager-add', { afterManagerAdd });
+  assert.equal(afterManagerAdd, true);
+
+  await hostPermission(manager, 'removeHostPermission', id);
+  await waitContains(probe, false);
+  const afterManagerRemove = await contains(probe);
+  log('after-manager-remove', { afterManagerRemove });
+  assert.equal(afterManagerRemove, false);
+
+  await hostPermission(manager, 'addHostPermission', id);
+  await waitContains(probe, true);
+  const afterManagerReAdd = await contains(probe);
+  log('after-manager-readd', { afterManagerReAdd });
+  assert.equal(afterManagerReAdd, true);
+
   console.log('C46_PERMISSION_SEED_JSON=' + JSON.stringify({
     browserVersion: await browser.version(),
     seedId,
@@ -174,10 +175,10 @@ try {
     seedVersion,
     seedContains,
     version,
-    beforeNormalize,
-    beforeRequest,
-    request,
-    afterRequest
+    beforeGrant,
+    afterManagerAdd,
+    afterManagerRemove,
+    afterManagerReAdd
   }));
 } finally {
   await closeBrowser(browser, 'final');
