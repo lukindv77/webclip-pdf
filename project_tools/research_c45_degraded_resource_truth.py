@@ -133,6 +133,10 @@ def source_contract():
             "throw new Error('image-load-error')" in CONTENT
             and "addResourceFailure(report, task" in CONTENT
         ),
+        "unlinkedImageUsesExactUrlForPdfLink": (
+            "const imageUrl = image.currentSrc || image.src;" in CONTENT
+            and "link.href = imageUrl;" in CONTENT
+        ),
     }
 
 
@@ -269,6 +273,14 @@ def run(chrome):
                 "pypdf": artifact_truth(pypdf_result),
                 "pymupdf": artifact_truth(pymupdf_result),
             },
+            "artifactFinding": {
+                "pypdfFailedResourceUriLeakCount": sum(
+                    1 for uri in pypdf_result["externalUris"] if QUERY_SECRET in str(uri)
+                ),
+                "pymupdfFailedResourceUriLeakCount": sum(
+                    1 for uri in pymupdf_result["externalUris"] if QUERY_SECRET in str(uri)
+                ),
+            },
             "evidenceBoundary": {
                 "level": "L4 physical degraded-resource PDF reopened by two independent parsers",
                 "manualGuiReader": False,
@@ -290,6 +302,8 @@ def run(chrome):
         assert "missing-resource.png" in str(image_failures[0].get("resource") or ""), image_failures[0]
         assert QUERY_SECRET not in json.dumps(image_failures[0]), image_failures[0]
         assert Handler.missing_requests >= 1
+        assert result["artifactFinding"]["pypdfFailedResourceUriLeakCount"] >= 1
+        assert result["artifactFinding"]["pymupdfFailedResourceUriLeakCount"] >= 1
         for key in ("pypdf", "pymupdf"):
             reader = result[key]
             assert reader["selectedPresent"] and reader["outsideAbsent"], reader
