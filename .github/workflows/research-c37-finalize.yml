@@ -1,0 +1,33 @@
+name: Research C37 finalize
+
+on:
+  push:
+    branches:
+      - research/evidence-c37-failure-retry-rollback-2026-09-03
+
+permissions:
+  contents: write
+
+jobs:
+  finalize_c37:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Finalize C37 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python project_tools/.c37-finalize.py
+          git rm .github/workflows/research-c37-failure-retry-rollback.yml .github/workflows/research-c37-finalize.yml project_tools/.c37-finalize.py
+          for f in project_tools/.c37-capture-result.json project_tools/.c37-link-result.json project_tools/.c37-physical-result.json project_tools/research_c37_failure_retry_capture.py project_tools/research_c37_link_disconnect_control.py; do
+            if [[ -e "$f" ]]; then git rm -f "$f"; fi
+          done
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md
+          git commit -m 'research: finalize fresh C37 evidence'
+          git push origin HEAD:research/evidence-c37-failure-retry-rollback-2026-09-03
