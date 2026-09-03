@@ -1,0 +1,37 @@
+name: Research C46 Permission Revoke Regrant
+
+on:
+  push:
+    branches:
+      - research/evidence-c46-permission-revoke-regrant-2026-09-03
+
+permissions:
+  contents: read
+
+jobs:
+  permission-revoke-regrant:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Install bounded browser harness dependency
+        run: npm install --no-save --package-lock=false puppeteer@25.9.0
+      - name: Run real-unpacked permission revoke/regrant evidence
+        run: |
+          set -o pipefail
+          xvfb-run -a node project_tools/research_c46_permission_revoke_regrant.mjs | tee c46-permission-revoke-regrant-result.txt
+      - name: Hash receipt
+        if: always()
+        run: sha256sum c46-permission-revoke-regrant-result.txt 2>/dev/null || true
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: c46-permission-revoke-regrant-receipt
+          path: c46-permission-revoke-regrant-result.txt
+          if-no-files-found: warn
