@@ -74,6 +74,27 @@ function makeTempProject() {
       return !['.git', 'node_modules'].includes(rel.split(path.sep)[0]);
     }
   });
+  // Keep journal.js + the worker export/serialization path byte-identical to
+  // the source baseline. Substitute only the native Save As adapter inside
+  // the disposable extension copy so CI never opens an OS-owned dialog.
+  fs.writeFileSync(path.join(extension, 'prepared-save-as.js'), `(() => {
+    'use strict';
+    async function start(prepared) {
+      const response = await fetch(prepared.blobUrl);
+      const text = await response.text();
+      globalThis.__c44NativeSaveAsSubstituted = true;
+      globalThis.__c44CapturedExport = {
+        blobUrl: prepared.blobUrl,
+        filename: prepared.filename,
+        saveAsSessionId: prepared.saveAsSessionId,
+        operationId: prepared.operationId,
+        entryCount: prepared.entryCount,
+        text
+      };
+      return 440044;
+    }
+    globalThis.WebClipPreparedSaveAs = Object.freeze({ start });
+  })();\n`, 'utf8');
   fs.mkdirSync(profile, { recursive: true });
   return { tempRoot, extension, profile };
 }
@@ -108,7 +129,8 @@ async function openJournal(browser, extensionId) {
   page.on('pageerror', error => console.log(`C44_PAGE_ERROR=${String(error?.stack || error)}`));
   await page.goto(`chrome-extension://${extensionId}/journal.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#importFileInput', { timeout: 30000 });
-  await page.waitForFunction(() => !document.querySelector('#status')?.textContent?.includes('Загрузка'), { timeout: 30000 }).catch(() => {});
+  await page.waitForFunction(() => /^Версия\s+\S+/.test(document.querySelector('#version')?.textContent || ''), { timeout: 30000 });
+  await page.waitForFunction(() => !document.querySelector('#entries')?.textContent?.includes('Загрузка'), { timeout: 30000 });
   await installDbHelpers(page);
   return page;
 }
@@ -298,26 +320,6 @@ function makeRetargetBackup(exportedText) {
 }
 
 async function captureProductionExport(page) {
-  await page.evaluate(() => {
-    const original = globalThis.WebClipPreparedSaveAs;
-    globalThis.__c44NativeSaveAsSubstituted = true;
-    globalThis.WebClipPreparedSaveAs = Object.freeze({
-      async start(prepared) {
-        const response = await fetch(prepared.blobUrl);
-        const text = await response.text();
-        globalThis.__c44CapturedExport = {
-          blobUrl: prepared.blobUrl,
-          filename: prepared.filename,
-          saveAsSessionId: prepared.saveAsSessionId,
-          operationId: prepared.operationId,
-          entryCount: prepared.entryCount,
-          text
-        };
-        return 440044;
-      },
-      original
-    });
-  });
   await page.click('#exportFile');
   try {
     await page.waitForFunction(() => Boolean(globalThis.__c44CapturedExport?.text), { timeout: 30000 });
