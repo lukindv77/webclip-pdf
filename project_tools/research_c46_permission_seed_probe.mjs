@@ -48,19 +48,31 @@ async function launch(temp) {
   }), 40000, 'launch');
 }
 
-async function getId(browser) {
-  const target = await bounded(browser.waitForTarget(t => t.type() === 'service_worker' && t.url().endsWith('/service-worker.js'), { timeout: 30000 }), 35000, 'worker');
-  return new URL(target.url()).host;
+async function getWorkerTarget(browser) {
+  const target = browser.targets().find(t => t.type() === 'service_worker' && t.url().endsWith('/service-worker.js'));
+  if (target) return target;
+  return bounded(browser.waitForTarget(t => t.type() === 'service_worker' && t.url().endsWith('/service-worker.js'), { timeout: 10000 }), 12000, 'worker');
 }
 
-async function freshContains(browser, id) {
-  const page = await browser.newPage();
-  try {
-    await page.goto(`chrome-extension://${id}/probe.html`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    return await page.evaluate((p) => chrome.permissions.contains({ origins: [p] }), CHILD);
-  } finally {
-    try { await page.close(); } catch {}
+async function getId(browser) {
+  return new URL((await getWorkerTarget(browser)).url()).host;
+}
+
+async function workerContains(browser) {
+  const deadline = Date.now() + 5000;
+  let lastError = '';
+  while (Date.now() < deadline) {
+    try {
+      const target = await getWorkerTarget(browser);
+      const worker = await bounded(target.worker(), 3000, 'worker object');
+      if (!worker) throw new Error('worker object unavailable');
+      return await bounded(worker.evaluate((p) => chrome.permissions.contains({ origins: [p] }), CHILD), 3000, 'worker permissions.contains');
+    } catch (error) {
+      lastError = String(error?.message || error);
+      await sleep(100);
+    }
   }
+  throw new Error('workerContains failed: ' + lastError);
 }
 
 function xdotool(args, allowFail = false) {
@@ -76,23 +88,45 @@ function xdotool(args, allowFail = false) {
   }
 }
 
-async function attempt(browser, id, keys, attempt) {
-  const page = await browser.newPage();
-  await page.goto(`chrome-extension://${id}/probe.html`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.bringToFront();
-  log('request-click', { attempt, keys });
-  await page.click('#grant');
+async function waitPermission(browser, expected, timeoutMs = 2200) {
+  const deadline = Date.now() + timeoutMs;
+  let observed = null;
+  while (Date.now() < deadline) {
+    try {
+      observed = Boolean(await workerContains(browser));
+      if (observed === Boolean(expected)) return true;
+    } catch {}
+    await sleep(100);
+  }
+  return false;
+}
+
+async function closePageBounded(page) {
+  try { await bounded(page.close(), 3000, 'page close'); } catch {}
+}
+
+async function attempt(browser, id, keys, attemptNumber) {
+  const page = await bounded(browser.newPage(), 5000, 'newPage');
+  await bounded(page.goto(`chrome-extension://${id}/probe.html`, { waitUntil: 'domcontentloaded', timeout: 10000 }), 12000, 'goto probe');
+  await bounded(page.bringToFront(), 3000, 'bringToFront');
+  log('request-click', { attempt: attemptNumber, keys });
+  await bounded(page.click('#grant'), 3000, 'click grant');
   await sleep(800);
+
   const active = xdotool(['getactivewindow'], true);
   if (active) {
     xdotool(['getwindowname', active], true);
     xdotool(['getwindowgeometry', '--shell', active], true);
   }
   xdotool(['key', '--clearmodifiers', ...keys]);
-  await sleep(1800);
-  const granted = await freshContains(browser, id);
-  log('request-result', { attempt, keys, granted });
-  try { await page.close(); } catch {}
+
+  const granted = await waitPermission(browser, true, 2200);
+  log('request-result', { attempt: attemptNumber, keys, granted });
+  if (!granted) {
+    xdotool(['key', '--clearmodifiers', 'Escape'], true);
+    await sleep(500);
+  }
+  await closePageBounded(page);
   return granted;
 }
 
@@ -102,16 +136,16 @@ try {
   browser = await launch(temp);
   const id = await getId(browser);
   const browserVersion = await browser.version();
-  const version = MANIFEST.version;
-  assert.equal(await freshContains(browser, id), false);
-  log('ready', { id, browserVersion, version });
+  assert.equal(await workerContains(browser), false);
+  log('ready', { id, browserVersion, manifestVersion: MANIFEST.version });
 
   const sequences = [
     ['Return'],
     ['Tab', 'Return'],
     ['Tab', 'Tab', 'Return'],
     ['Right', 'Return'],
-    ['Left', 'Return']
+    ['Left', 'Return'],
+    ['space']
   ];
   let accepted = false;
   let acceptedSequence = null;
@@ -122,7 +156,7 @@ try {
 
   console.log('C46_PERMISSION_PROMPT_SEED_JSON=' + JSON.stringify({
     browserVersion,
-    manifestVersion: version,
+    manifestVersion: MANIFEST.version,
     extensionId: id,
     accepted,
     acceptedSequence
