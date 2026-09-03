@@ -24,9 +24,13 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
+      - name: Install X11 prompt driver
+        run: |
+          command -v xdotool >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y xdotool; }
+          xdotool version
       - name: Install bounded browser harness dependency
         run: npm install --no-save --package-lock=false puppeteer@25.9.0
-      - name: Run permission grant-history seed diagnostic
+      - name: Run native optional-permission seed diagnostic
         run: |
           set -o pipefail
           xvfb-run -a node project_tools/research_c46_permission_seed_probe.mjs | tee c46-permission-revoke-regrant-result.txt
