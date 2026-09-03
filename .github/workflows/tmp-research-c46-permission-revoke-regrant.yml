@@ -6,6 +6,10 @@ on:
     branches:
       - research/evidence-c46-permission-revoke-regrant-2026-09-03
 
+concurrency:
+  group: c46-permission-revoke-regrant
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
