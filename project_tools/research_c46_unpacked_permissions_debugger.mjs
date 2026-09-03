@@ -110,6 +110,8 @@ async function runRealUnpacked(fixtureUrl, originPattern) {
     const extensionId = new URL(workerTarget.url()).host;
 
     const result = await worker.evaluate(async ({ fixtureUrl, originPattern }) => {
+      const out = { ok: false, stage: 'init' };
+      let tab = null;
       const waitForLoaded = async (tabId) => {
         const current = await chrome.tabs.get(tabId);
         if (current.status === 'complete') return;
@@ -129,19 +131,24 @@ async function runRealUnpacked(fixtureUrl, originPattern) {
         });
       };
 
-      const out = {
-        incognitoAllowed: await chrome.extension.isAllowedIncognitoAccess(),
-        optionalOriginGrantedInitially: await chrome.permissions.contains({ origins: [originPattern] }),
-      };
-      const tab = await chrome.tabs.create({ url: fixtureUrl, active: false });
-      out.tabId = tab.id;
       try {
+        out.stage = 'incognito-access';
+        out.incognitoAllowed = await chrome.extension.isAllowedIncognitoAccess();
+        out.stage = 'optional-permission-state';
+        out.optionalOriginGrantedInitially = await chrome.permissions.contains({ origins: [originPattern] });
+        out.stage = 'tab-create';
+        tab = await chrome.tabs.create({ url: fixtureUrl, active: false });
+        out.tabId = tab.id;
+        out.stage = 'tab-load';
         await waitForLoaded(tab.id);
         out.fixtureTitle = (await chrome.tabs.get(tab.id)).title || '';
+        out.stage = 'debugger-target-before';
         const before = (await chrome.debugger.getTargets()).find(x => x.tabId === tab.id);
         out.debuggerAttachedBefore = Boolean(before?.attached);
 
+        out.stage = 'production-generate-pdf';
         const pdfBlob = await generatePdfBlob(tab.id);
+        out.stage = 'pdf-digest';
         const bytes = new Uint8Array(await pdfBlob.arrayBuffer());
         const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
         let binary = '';
@@ -152,18 +159,26 @@ async function runRealUnpacked(fixtureUrl, originPattern) {
         out.pdfBytes = bytes.byteLength;
         out.pdfSha256 = [...digest].map(x => x.toString(16).padStart(2, '0')).join('');
 
+        out.stage = 'debugger-target-after';
         const after = (await chrome.debugger.getTargets()).find(x => x.tabId === tab.id);
         out.debuggerAttachedAfter = Boolean(after?.attached);
         out.debuggerActiveSetAfter = debuggerActiveTabs.has(tab.id);
         out.debuggerLateAttachCleanupAfter = debuggerLateAttachCleanupByTab.has(tab.id);
         out.debuggerPendingDetachAfter = debuggerPendingDetachByTab.has(tab.id);
         out.debuggerPendingActualSettlementCountAfter = debuggerPendingActualSettlements.size;
+        out.stage = 'done';
+        out.ok = true;
+      } catch (error) {
+        out.error = String(error?.stack || error?.message || error);
       } finally {
-        try { await chrome.tabs.remove(tab.id); } catch (_) {}
+        if (tab?.id) {
+          try { await chrome.tabs.remove(tab.id); } catch (_) {}
+        }
       }
       return out;
     }, { fixtureUrl, originPattern });
 
+    assert.equal(result.ok, true, `browser stage failed: ${JSON.stringify(result)}`);
     const pdf = Buffer.from(result.pdfBase64, 'base64');
     delete result.pdfBase64;
     assert(pdf.length > 1000, 'physical PDF bytes');
