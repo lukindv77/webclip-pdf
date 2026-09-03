@@ -1,0 +1,77 @@
+name: Temporary C46 Canonical Sync
+
+on:
+  push:
+    branches:
+      - research/c46-debugger-guard-handshake-2026-09-03
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Patch C46 canonical docs and remove temporary workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          baseline = Path('project_docs/RESEARCH_FULL_RESTART_2026-09-01_BASELINE.md')
+          text = baseline.read_text(encoding='utf-8')
+          old_row = "| C46 | Real unpacked Chrome / permission UI / actual chrome.debugger extension path | `NOT-TRIAGED / UNKNOWN` |"
+          new_row = "| C46 | Real unpacked Chrome / permission UI / actual chrome.debugger extension path | `L4-REVALIDATED / PARTIAL/FINDING + POSITIVE/REAL-UNPACKED/PRODUCTION-RENDER-STATE/PRODUCTION-DEBUGGER/PHYSICAL-PDF/DETACH-CLEANUP CONTROLS; NATIVE-PERMISSION/INCOGNITO/REVOKE-REGRANT/RESTART-L5 OPEN (P0-045, P1-157, P1-193, P1-201; P1-004 umbrella; P0-071 positive)` |"
+          assert text.count(old_row) == 1, text.count(old_row)
+          text = text.replace(old_row, new_row)
+
+          old_task = "| C46 | OPEN — unknown | Load the unpacked extension in real Chrome and exercise normal/incognito windows, optional-host permission prompt, revoke/regrant, worker restart and actual debugger attach/detach; prove fail-closed private state and exact session/generation cleanup. | P0-045, P1-157, P1-193, P1-201; P1-004 umbrella | B1/B2/B7/B9; real unpacked interactive Chrome (L5) |"
+          new_task = "| C46 | OPEN — L4 partial; native permission/incognito/revoke/restart L5 remains | In real interactive unpacked Chrome, exercise normal/incognito windows, the native optional-host permission prompt, revoke/regrant, service-worker/browser restart and browser-initiated debugger detach/recovery. Keep the accepted production `generatePdfBlob`/physical-PDF/normal-detach control and prove fail-closed private state plus exact permission/session/generation cleanup across restart. | P0-045, P1-157, P1-193, P1-201; P1-004 umbrella; P0-071 positive | B1/B2/B5/B6/B7/B9; production debugger L4 accepted, remaining user-owned/restart boundaries L5 |"
+          assert text.count(old_task) == 1, text.count(old_task)
+          text = text.replace(old_task, new_task)
+
+          old_seq = "Execution stays sequential unless an earlier row exposes a cross-boundary blocker. **C41 remains blocked on real native/restart L5; C42 remains blocked on an explicitly authorized Yandex test account/root; C43 remote shares the C42 external prerequisite. C44 and C45 have advanced locally to bounded L4 partials while their remaining UI/restart/degraded/external boundaries stay open. C46 is now the next not-triaged coordinate and requires real unpacked interactive Chrome L5.** External-account/user-owned UI work must not be simulated as L5; unavailable external prerequisites remain explicit blockers rather than inferred success."
+          new_seq = "Execution stays sequential unless an earlier row exposes a cross-boundary blocker. **C41 remains blocked on real native/restart L5; C42 remains blocked on an explicitly authorized Yandex test account/root; C43 remote shares the C42 external prerequisite. C44 and C45 remain bounded L4 partials. C46 now has accepted production real-unpacked debugger/physical-PDF/normal-detach L4 evidence; its native permission, incognito, revoke/regrant, browser-initiated detach and restart boundaries remain L5 open.** External-account/user-owned UI work must not be simulated as L5; unavailable external prerequisites remain explicit blockers rather than inferred success."
+          assert text.count(old_seq) == 1, text.count(old_seq)
+          text = text.replace(old_seq, new_seq)
+
+          marker = "\n\n## Fresh continuation checkpoint — focused C44 Backup / import / recovery"
+          checkpoint = """
+
+## Fresh continuation checkpoint — C46 production debugger guard handshake
+
+`RESEARCH_FULL_RESTART_C46_DEBUGGER_GUARD_HANDSHAKE_2026-09-03.md` records accepted Chrome for Testing `152.0.7977.54` evidence on canonical source `8034fa3ed06227a7e21a6f511e54a2dd0ce5c583`: workflow run `33737786060`, job `100592351286`, exact evidence head `fe698139bd30ca12141e9e7a88b94150376e5cdf`, conclusion SUCCESS, artifact `9886506845`, artifact digest `sha256:3e8c7ac53f99d20ccd77c0020e380004c10d97cb1cd8abdde330f73039fd867a`.
+
+Fresh source reconciliation corrects the earlier generic debugger blocker: `pdf-print-guard.js` intercepts `Page.printToPDF` and first sends `WEBCLIP_PRINT_RENDER_STATE` to production `content.js`; the earlier synthetic fixture had no receiver and therefore failed before raw CDP print. The corrected real-unpacked harness loads the exact production content script, disconnects the automation controller before target creation, proves render-state handshake before/after, calls unchanged production `generatePdfBlob(tabId)`, receives `16269` physical PDF bytes (`%PDF-1.4`, SHA-256 `867d58cfdcaee6355b090384f311c2a7ae1b2697914c235c91cddb81655a1f2f`) and ends with no attached debugger or active/late/pending same-worker debugger registry state.
+
+C46 therefore advances to bounded L4 partial. No new P-code or Registry status change is warranted. Native permission UI, incognito access, revoke/regrant, browser-initiated detach and service-worker/browser restart remain real interactive L5 open.
+"""
+          assert text.count(marker) == 1, text.count(marker)
+          text = text.replace(marker, checkpoint + marker)
+          baseline.write_text(text, encoding='utf-8')
+
+          for name in [
+              'project_docs/RESEARCH_C46_UNPACKED_PERMISSIONS_DEBUGGER_2026-09-03_EVIDENCE.md',
+              'project_docs/RESEARCH_FULL_RESTART_C46_UNPACKED_PERMISSIONS_DEBUGGER_2026-09-03.md',
+          ]:
+              path = Path(name)
+              body = path.read_text(encoding='utf-8')
+              needle = 'Canonical source baseline: `5ad7ba6b2f29502c3810a4b5d589dd0a965b270e`.'
+              note = needle + "\n\n> Follow-up current authority: `RESEARCH_C46_DEBUGGER_GUARD_HANDSHAKE_2026-09-03_EVIDENCE.md` / `RESEARCH_FULL_RESTART_C46_DEBUGGER_GUARD_HANDSHAKE_2026-09-03.md` advance the production debugger sub-boundary to L4 after proving the earlier messaging error came from a missing render-state receiver in the synthetic fixture. This document remains the historical first C46 tranche."
+              assert body.count(needle) == 1, (name, body.count(needle))
+              path.write_text(body.replace(needle, note), encoding='utf-8')
+          PY
+          rm -f .github/workflows/tmp-research-c46-debugger-guard.yml
+          rm -f .github/workflows/tmp-c46-sync.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add project_docs .github/workflows
+          git diff --cached --check
+          git commit -m "research: publish C46 debugger L4 evidence [skip ci]"
+          git push origin HEAD:"${GITHUB_REF_NAME}"
