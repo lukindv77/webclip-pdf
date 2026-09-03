@@ -1,4 +1,4 @@
-# Temporary browser-bound C46 evidence workflow; removed before integration.
+# Temporary browser-bound C46 diagnostic workflow; removed before integration.
 name: Research C46 Permission Revoke Regrant
 
 on:
@@ -12,7 +12,7 @@ permissions:
 jobs:
   permission-revoke-regrant:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - name: Checkout exact branch head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -22,10 +22,10 @@ jobs:
           node-version: '22'
       - name: Install bounded browser harness dependency
         run: npm install --no-save --package-lock=false puppeteer@25.9.0
-      - name: Run real-unpacked permission revoke/regrant evidence
+      - name: Run permission grant-history seed diagnostic
         run: |
           set -o pipefail
-          xvfb-run -a node project_tools/research_c46_permission_revoke_regrant.mjs | tee c46-permission-revoke-regrant-result.txt
+          xvfb-run -a node project_tools/research_c46_permission_seed_probe.mjs | tee c46-permission-revoke-regrant-result.txt
       - name: Hash receipt
         if: always()
         run: sha256sum c46-permission-revoke-regrant-result.txt 2>/dev/null || true
