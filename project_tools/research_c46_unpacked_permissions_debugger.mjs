@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
@@ -75,11 +76,29 @@ function sourceChecks() {
 }
 
 async function startFixture() {
+  let reportResolve;
+  let reportReject;
+  const reportPromise = new Promise((resolve, reject) => {
+    reportResolve = resolve;
+    reportReject = reject;
+  });
   const server = http.createServer((req, res) => {
-    if (req.url?.startsWith('/fixture')) {
+    const url = new URL(req.url || '/', 'http://127.0.0.1');
+    if (url.pathname === '/fixture') {
       const body = `<!doctype html><meta charset="utf-8"><title>${FIXTURE_TITLE}</title><main><h1>${FIXTURE_MARKER}</h1><p>Production debugger path fixture.</p></main>`;
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
       res.end(body);
+      return;
+    }
+    if (url.pathname === '/report') {
+      try {
+        reportResolve(JSON.parse(url.searchParams.get('data') || '{}'));
+        res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' });
+        res.end('ok');
+      } catch (error) {
+        reportReject(error);
+        res.writeHead(400); res.end('bad report');
+      }
       return;
     }
     res.writeHead(404); res.end('not found');
@@ -89,125 +108,93 @@ async function startFixture() {
     server.listen(0, '127.0.0.1', resolve);
   });
   const address = server.address();
-  const url = `http://127.0.0.1:${address.port}/fixture`;
-  return { server, url, originPattern: `http://127.0.0.1:${address.port}/*` };
+  const base = `http://127.0.0.1:${address.port}`;
+  return {
+    server,
+    fixtureUrl: `${base}/fixture`,
+    reportUrl: `${base}/report`,
+    originPattern: `${base}/*`,
+    reportPromise,
+  };
 }
 
-async function runRealUnpacked(fixtureUrl, originPattern) {
-  const browser = await puppeteer.launch({
-    headless: false,
-    pipe: true,
-    enableExtensions: [ROOT],
-    args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check'],
+function testDriver({ fixtureUrl, reportUrl, originPattern }) {
+  return `\n\n// C46 test-only sidecar appended only to a temporary unpacked copy.\n(async () => {\n  const out = { ok: false, stage: 'startup' };\n  let tab = null;\n  const report = async () => {\n    const data = encodeURIComponent(JSON.stringify(out));\n    try {\n      if (tab?.id) await chrome.tabs.update(tab.id, { url: ${JSON.stringify(reportUrl)} + '?data=' + data });\n      else await chrome.tabs.create({ url: ${JSON.stringify(reportUrl)} + '?data=' + data, active: false });\n    } catch (_) {}\n  };\n  const waitForLoaded = async (tabId) => {\n    const current = await chrome.tabs.get(tabId);\n    if (current.status === 'complete') return;\n    await new Promise((resolve, reject) => {\n      const timer = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); reject(new Error('fixture-load-timeout')); }, 15000);\n      const listener = (updatedTabId, changeInfo) => {\n        if (updatedTabId === tabId && changeInfo.status === 'complete') {\n          clearTimeout(timer); chrome.tabs.onUpdated.removeListener(listener); resolve();\n        }\n      };\n      chrome.tabs.onUpdated.addListener(listener);\n    });\n  };\n  try {\n    await new Promise(resolve => setTimeout(resolve, 1500));\n    out.stage = 'incognito-access';\n    out.incognitoAllowed = await chrome.extension.isAllowedIncognitoAccess();\n    out.stage = 'optional-permission-state';\n    out.optionalOriginGrantedInitially = await chrome.permissions.contains({ origins: [${JSON.stringify(originPattern)}] });\n    out.stage = 'tab-create';\n    tab = await chrome.tabs.create({ url: ${JSON.stringify(fixtureUrl)}, active: false });\n    out.tabId = tab.id;\n    out.stage = 'tab-load';\n    await waitForLoaded(tab.id);\n    out.fixtureTitle = (await chrome.tabs.get(tab.id)).title || '';\n    out.stage = 'debugger-target-before';\n    const before = (await chrome.debugger.getTargets()).find(x => x.tabId === tab.id);\n    out.debuggerAttachedBefore = Boolean(before?.attached);\n    out.stage = 'production-generate-pdf';\n    const pdfBlob = await generatePdfBlob(tab.id);\n    out.stage = 'pdf-digest';\n    const bytes = new Uint8Array(await pdfBlob.arrayBuffer());\n    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));\n    out.pdfBytes = bytes.byteLength;\n    out.pdfSha256 = [...digest].map(x => x.toString(16).padStart(2, '0')).join('');\n    out.pdfHeaderHex = [...bytes.subarray(0, 8)].map(x => x.toString(16).padStart(2, '0')).join('');\n    out.stage = 'debugger-target-after';\n    const after = (await chrome.debugger.getTargets()).find(x => x.tabId === tab.id);\n    out.debuggerAttachedAfter = Boolean(after?.attached);\n    out.debuggerActiveSetAfter = debuggerActiveTabs.has(tab.id);\n    out.debuggerLateAttachCleanupAfter = debuggerLateAttachCleanupByTab.has(tab.id);\n    out.debuggerPendingDetachAfter = debuggerPendingDetachByTab.has(tab.id);\n    out.debuggerPendingActualSettlementCountAfter = debuggerPendingActualSettlements.size;\n    out.stage = 'done';\n    out.ok = true;\n  } catch (error) {\n    out.error = String(error?.stack || error?.message || error);\n  }\n  await report();\n})();\n`;
+}
+
+function makeTemporaryExtension(fixture) {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'webclip-c46-'));
+  const extensionRoot = path.join(tempRoot, 'extension');
+  fs.cpSync(ROOT, extensionRoot, {
+    recursive: true,
+    filter(source) {
+      const rel = path.relative(ROOT, source);
+      if (!rel) return true;
+      const first = rel.split(path.sep)[0];
+      return !['.git', 'node_modules'].includes(first);
+    },
   });
+  const workerPath = path.join(extensionRoot, 'service-worker.js');
+  fs.appendFileSync(workerPath, testDriver(fixture), 'utf8');
+  return { tempRoot, extensionRoot };
+}
+
+async function runRealUnpacked(fixture) {
+  const temporary = makeTemporaryExtension(fixture);
+  let browser = null;
+  let browserProcess = null;
   try {
+    browser = await puppeteer.launch({
+      headless: false,
+      pipe: true,
+      enableExtensions: [temporary.extensionRoot],
+      args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check'],
+    });
+    browserProcess = browser.process();
+    const browserVersion = await browser.version();
     const workerTarget = await browser.waitForTarget(
       target => target.type() === 'service_worker' && target.url().endsWith('/service-worker.js'),
       { timeout: 30000 },
     );
-    const worker = await workerTarget.worker();
-    assert(worker, 'MV3 service worker context is available');
     const extensionId = new URL(workerTarget.url()).host;
 
-    const result = await worker.evaluate(async ({ fixtureUrl, originPattern }) => {
-      const out = { ok: false, stage: 'init' };
-      let tab = null;
-      const waitForLoaded = async (tabId) => {
-        const current = await chrome.tabs.get(tabId);
-        if (current.status === 'complete') return;
-        await new Promise((resolve, reject) => {
-          const timer = setTimeout(() => {
-            chrome.tabs.onUpdated.removeListener(listener);
-            reject(new Error('fixture-load-timeout'));
-          }, 15000);
-          const listener = (updatedTabId, changeInfo) => {
-            if (updatedTabId === tabId && changeInfo.status === 'complete') {
-              clearTimeout(timer);
-              chrome.tabs.onUpdated.removeListener(listener);
-              resolve();
-            }
-          };
-          chrome.tabs.onUpdated.addListener(listener);
-        });
-      };
+    browser.disconnect();
+    browser = null;
 
-      try {
-        out.stage = 'incognito-access';
-        out.incognitoAllowed = await chrome.extension.isAllowedIncognitoAccess();
-        out.stage = 'optional-permission-state';
-        out.optionalOriginGrantedInitially = await chrome.permissions.contains({ origins: [originPattern] });
-        out.stage = 'tab-create';
-        tab = await chrome.tabs.create({ url: fixtureUrl, active: false });
-        out.tabId = tab.id;
-        out.stage = 'tab-load';
-        await waitForLoaded(tab.id);
-        out.fixtureTitle = (await chrome.tabs.get(tab.id)).title || '';
-        out.stage = 'debugger-target-before';
-        const before = (await chrome.debugger.getTargets()).find(x => x.tabId === tab.id);
-        out.debuggerAttachedBefore = Boolean(before?.attached);
-
-        out.stage = 'production-generate-pdf';
-        const pdfBlob = await generatePdfBlob(tab.id);
-        out.stage = 'pdf-digest';
-        const bytes = new Uint8Array(await pdfBlob.arrayBuffer());
-        const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
-        let binary = '';
-        for (let i = 0; i < bytes.length; i += 0x8000) {
-          binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-        }
-        out.pdfBase64 = btoa(binary);
-        out.pdfBytes = bytes.byteLength;
-        out.pdfSha256 = [...digest].map(x => x.toString(16).padStart(2, '0')).join('');
-
-        out.stage = 'debugger-target-after';
-        const after = (await chrome.debugger.getTargets()).find(x => x.tabId === tab.id);
-        out.debuggerAttachedAfter = Boolean(after?.attached);
-        out.debuggerActiveSetAfter = debuggerActiveTabs.has(tab.id);
-        out.debuggerLateAttachCleanupAfter = debuggerLateAttachCleanupByTab.has(tab.id);
-        out.debuggerPendingDetachAfter = debuggerPendingDetachByTab.has(tab.id);
-        out.debuggerPendingActualSettlementCountAfter = debuggerPendingActualSettlements.size;
-        out.stage = 'done';
-        out.ok = true;
-      } catch (error) {
-        out.error = String(error?.stack || error?.message || error);
-      } finally {
-        if (tab?.id) {
-          try { await chrome.tabs.remove(tab.id); } catch (_) {}
-        }
-      }
-      return out;
-    }, { fixtureUrl, originPattern });
+    const result = await Promise.race([
+      fixture.reportPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('C46 report timeout after Puppeteer disconnect')), 30000)),
+    ]);
 
     assert.equal(result.ok, true, `browser stage failed: ${JSON.stringify(result)}`);
-    const pdf = Buffer.from(result.pdfBase64, 'base64');
-    delete result.pdfBase64;
-    assert(pdf.length > 1000, 'physical PDF bytes');
-    assert.equal(pdf.subarray(0, 5).toString('ascii'), '%PDF-', 'PDF signature');
-    assert.equal(crypto.createHash('sha256').update(pdf).digest('hex'), result.pdfSha256, 'Node and worker PDF digest agree');
     assert.equal(result.optionalOriginGrantedInitially, false, 'optional host is not silently granted');
-    assert.equal(result.debuggerAttachedBefore, false, 'debugger starts detached');
+    assert.equal(result.debuggerAttachedBefore, false, 'debugger starts detached after Puppeteer disconnect');
     assert.equal(result.debuggerAttachedAfter, false, 'debugger finishes detached');
     assert.equal(result.debuggerActiveSetAfter, false, 'active registry cleaned');
     assert.equal(result.debuggerLateAttachCleanupAfter, false, 'late-attach registry cleaned');
     assert.equal(result.debuggerPendingDetachAfter, false, 'pending-detach registry cleaned');
     assert.equal(result.debuggerPendingActualSettlementCountAfter, 0, 'all debugger API promises settled');
     assert.equal(result.fixtureTitle, FIXTURE_TITLE, 'correct fixture tab was printed');
+    assert(Number(result.pdfBytes) > 1000, 'physical PDF bytes');
+    assert.match(String(result.pdfSha256 || ''), /^[0-9a-f]{64}$/);
+    assert(String(result.pdfHeaderHex || '').startsWith('255044462d'), 'physical PDF starts with %PDF-');
 
-    return {
-      browserVersion: await browser.version(),
-      extensionId,
-      ...result,
-      pdfHeader: pdf.subarray(0, 8).toString('ascii'),
-    };
+    return { browserVersion, extensionId, ...result };
   } finally {
-    await browser.close();
+    if (browser) {
+      try { await browser.close(); } catch (_) {}
+    }
+    if (browserProcess && browserProcess.exitCode == null) {
+      try { browserProcess.kill('SIGTERM'); } catch (_) {}
+    }
+    fs.rmSync(temporary.tempRoot, { recursive: true, force: true });
   }
 }
 
 const source = sourceChecks();
 const fixture = await startFixture();
 try {
-  const realUnpacked = await runRealUnpacked(fixture.url, fixture.originPattern);
+  const realUnpacked = await runRealUnpacked(fixture);
   const result = {
     sourceBaseline: process.env.C46_SOURCE_BASELINE || '',
     source,
