@@ -4,7 +4,7 @@ on:
   push:
     branches: [research/evidence-c37-failure-retry-rollback-2026-09-03]
     paths-ignore:
-      - project_tools/.c37-physical-result.json
+      - project_tools/.c37-capture-result.json
 
 permissions:
   contents: write
@@ -24,7 +24,7 @@ jobs:
           python-version: '3.12.14'
       - name: Install bounded harness dependencies
         run: python -m pip install --disable-pip-version-check playwright==1.55.0 pypdf==6.0.0 pymupdf==1.26.4
-      - name: Run exact-source physical C37 matrix
+      - name: Run exact-source C37 case-isolation capture
         shell: bash
         run: |
           set -euo pipefail
@@ -32,20 +32,20 @@ jobs:
           [[ -n "$chrome" ]] || { echo 'Chrome unavailable' >&2; exit 1; }
           "$chrome" --version
           export CONTENT_BLOB_SHA="$(git rev-parse HEAD:content.js)"
-          python project_tools/research_c37_failure_retry_rollback.py --chrome "$chrome" --out "$RUNNER_TEMP/c37-pdfs" | tee "$RUNNER_TEMP/c37-result.log"
-          result="$(grep '^C37_RESULT_JSON=' "$RUNNER_TEMP/c37-result.log" | tail -n 1 | sed 's/^C37_RESULT_JSON=//')"
-          [[ -n "$result" ]] || { echo 'C37 result JSON missing' >&2; exit 1; }
-          printf '%s\n' "$result" > project_tools/.c37-physical-result.json
-          echo "::notice title=C37_RESULT::$result"
-      - name: Persist temporary exact result receipt
+          python project_tools/research_c37_failure_retry_capture.py --chrome "$chrome" --out "$RUNNER_TEMP/c37-pdfs" | tee "$RUNNER_TEMP/c37-capture.log"
+          result="$(grep '^C37_CAPTURE_JSON=' "$RUNNER_TEMP/c37-capture.log" | tail -n 1 | sed 's/^C37_CAPTURE_JSON=//')"
+          [[ -n "$result" ]] || { echo 'C37 capture JSON missing' >&2; exit 1; }
+          printf '%s\n' "$result" > project_tools/.c37-capture-result.json
+          echo "::notice title=C37_CAPTURE::$result"
+      - name: Persist temporary exact capture receipt
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          [[ -s project_tools/.c37-physical-result.json ]] || exit 0
+          [[ -s project_tools/.c37-capture-result.json ]] || exit 0
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -f project_tools/.c37-physical-result.json
+          git add -f project_tools/.c37-capture-result.json
           git diff --cached --quiet && exit 0
-          git commit -m 'research: persist temporary C37 physical result'
+          git commit -m 'research: persist temporary C37 capture result'
           git push origin HEAD:research/evidence-c37-failure-retry-rollback-2026-09-03
