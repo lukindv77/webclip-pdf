@@ -79,6 +79,7 @@ function makeTempProject() {
   // the disposable extension copy so CI never opens an OS-owned dialog.
   fs.writeFileSync(path.join(extension, 'prepared-save-as.js'), `(() => {
     'use strict';
+    globalThis.__c44PreparedAdapter = 'native-save-as-substituted-in-disposable-copy';
     async function start(prepared) {
       const response = await fetch(prepared.blobUrl);
       const text = await response.text();
@@ -131,6 +132,7 @@ async function openJournal(browser, extensionId) {
   await page.waitForSelector('#importFileInput', { timeout: 30000 });
   await page.waitForFunction(() => /^Версия\s+\S+/.test(document.querySelector('#version')?.textContent || ''), { timeout: 30000 });
   await page.waitForFunction(() => !document.querySelector('#entries')?.textContent?.includes('Загрузка'), { timeout: 30000 });
+  await page.waitForFunction(() => globalThis.__c44PreparedAdapter === 'native-save-as-substituted-in-disposable-copy', { timeout: 30000 });
   await installDbHelpers(page);
   return page;
 }
@@ -320,7 +322,9 @@ function makeRetargetBackup(exportedText) {
 }
 
 async function captureProductionExport(page) {
-  await page.click('#exportFile');
+  // Dispatch through the real button listener without a viewport pointer hit;
+  // the latter can target transient browser chrome under Xvfb.
+  await page.$eval('#exportFile', button => button.click());
   try {
     await page.waitForFunction(() => Boolean(globalThis.__c44CapturedExport?.text), { timeout: 30000 });
   } catch (error) {
@@ -330,6 +334,7 @@ async function captureProductionExport(page) {
       operationId: document.querySelector('#lastOperationId')?.textContent || '',
       exportDisabled: Boolean(document.querySelector('#exportFile')?.disabled),
       proxyInstalled: Boolean(globalThis.__c44NativeSaveAsSubstituted),
+      preparedAdapter: globalThis.__c44PreparedAdapter || '',
       captured: Boolean(globalThis.__c44CapturedExport),
       preparedType: typeof globalThis.WebClipPreparedSaveAs?.start
     }));
