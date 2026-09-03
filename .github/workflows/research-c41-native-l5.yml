@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           python -m pip install --disable-pip-version-check playwright==1.55.0
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb xdotool wmctrl
+          sudo apt-get install -y -qq xvfb xdotool wmctrl openbox
 
       - name: Run real native Save As matrix
         id: native
@@ -45,7 +45,7 @@ jobs:
           fi
           "$chrome" --version
           set +e
-          xvfb-run -a -s '-screen 0 1280x900x24' python project_tools/research_c41_native_l5.py --chrome "$chrome" | tee "$RUNNER_TEMP/c41-native-result.log"
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c 'openbox >/tmp/c41-openbox.log 2>&1 & exec python project_tools/research_c41_native_l5_cdp_shim.py --chrome "$1"' _ "$chrome" | tee "$RUNNER_TEMP/c41-native-result.log"
           status=${PIPESTATUS[0]}
           set -e
           echo "$status" > "$RUNNER_TEMP/c41-native-status"
