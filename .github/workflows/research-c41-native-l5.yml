@@ -19,16 +19,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.12.14'
-
-      - name: Install browser/UI harness dependencies
+      - name: Install native X11 harness dependencies
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check playwright==1.55.0
           sudo apt-get update -qq
           sudo apt-get install -y -qq xvfb xdotool wmctrl openbox
 
@@ -44,8 +38,9 @@ jobs:
             exit 0
           fi
           "$chrome" --version
+          export WEBCLIP_CHROME_FOR_TESTING="$chrome"
           set +e
-          xvfb-run -a -s '-screen 0 1280x900x24' bash -c 'openbox >/tmp/c41-openbox.log 2>&1 & exec python project_tools/research_c41_native_l5_cdp_shim.py --chrome "$1"' _ "$chrome" | tee "$RUNNER_TEMP/c41-native-result.log"
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c 'openbox >/tmp/c41-openbox.log 2>&1 & exec node project_tools/research_c41_native_l5_cdp.js' | tee "$RUNNER_TEMP/c41-native-result.log"
           status=${PIPESTATUS[0]}
           set -e
           echo "$status" > "$RUNNER_TEMP/c41-native-status"
