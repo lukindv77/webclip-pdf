@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           npm install --no-save puppeteer@25.9.0
-      - name: Run C46 real-unpacked evidence
+      - name: Trace C46 debugger API path
         shell: bash
         env:
           C46_SOURCE_BASELINE: 5ad7ba6b2f29502c3810a4b5d589dd0a965b270e
@@ -31,5 +31,5 @@ jobs:
           set -euo pipefail
           xvfb="$(command -v xvfb-run || true)"
           test -n "$xvfb"
-          xvfb-run -a node project_tools/research_c46_unpacked_permissions_debugger.mjs | tee c46-result.txt
-          sha256sum c46-result.txt
+          xvfb-run -a node project_tools/.c46_debugger_trace.mjs | tee c46-trace.txt
+          sha256sum c46-trace.txt
