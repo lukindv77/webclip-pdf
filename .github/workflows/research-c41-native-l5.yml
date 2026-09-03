@@ -40,7 +40,7 @@ jobs:
           "$chrome" --version
           export WEBCLIP_CHROME_FOR_TESTING="$chrome"
           set +e
-          xvfb-run -a -s '-screen 0 1280x900x24' bash -c 'openbox >/tmp/c41-openbox.log 2>&1 & exec node project_tools/research_c41_native_l5_cdp.js' | tee "$RUNNER_TEMP/c41-native-result.log"
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c 'openbox >/tmp/c41-openbox.log 2>&1 & exec node project_tools/research_c41_native_l5_runner.js' | tee "$RUNNER_TEMP/c41-native-result.log"
           status=${PIPESTATUS[0]}
           set -e
           echo "$status" > "$RUNNER_TEMP/c41-native-status"
@@ -49,6 +49,8 @@ jobs:
             printf '%s\n' "$result" > project_tools/.c41-native-result.json
             echo "::notice title=C41_NATIVE_RESULT::$result"
           fi
+          cancel="$(grep '^C41_CANCEL_RESULT_JSON=' "$RUNNER_TEMP/c41-native-result.log" | tail -n 1 | sed 's/^C41_CANCEL_RESULT_JSON=//')"
+          if [[ -n "$cancel" ]]; then echo "::notice title=C41_CANCEL_RESULT::$cancel"; fi
           exit 0
 
       - name: Persist temporary exact result receipt
