@@ -1,101 +1,98 @@
 # WebClip — fresh full-project research — C45 Later reading / reopened PDF usefulness — 2026-09-03
 
 Date: 2026-09-03  
-Canonical source baseline: `22b13604c71b2c46e846850405a339cee7bdbff8`  
+Current degraded-control source baseline: `e7db9600ad1710c8996fc1d22da42dec7295ab82`  
 Exact `content.js` blob: `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`  
 Scope: fresh-restart coordinate **C45 — Later reading / reopened PDF usefulness**.
 
 ## Result
 
-**C45: `L4-REVALIDATED / PARTIAL/PASS + POSITIVE/PHYSICAL-PDF/TWO-INDEPENDENT-READERS/SELECTED-SCOPE/SEARCHABLE-TEXT/METADATA/EXTERNAL-URI/INTERNAL-DESTINATION CONTROLS; DEGRADED-RESOURCE/GUI-L5 OPEN (P0-004, P1-003, P1-187, P0-066 candidate/supporting map)`.**
+**C45: `L4-REVALIDATED / PARTIAL/FINDING + POSITIVE/PHYSICAL-PDF/TWO-INDEPENDENT-READERS/SELECTED-SCOPE/SEARCHABLE-TEXT/METADATA/EXTERNAL-URI/INTERNAL-DESTINATION/DEGRADED-DIAGNOSTIC CONTROLS + FAILED-RESOURCE-URI-QUERY FINDING; GUI/NATIVE-ACTIVATION-L5 OPEN (P0-066; P1-003 positive; P0-004/P1-187 supporting)`.**
 
-A physical PDF produced after the current WebClip selection/download preparation was reopened independently by pypdf and PyMuPDF. Both readers recovered the selected marker and search phrase, rejected an outside-scope marker, preserved the document title, preserved the external link URI and observed an internal PDF destination. This is direct positive evidence that an ordinary admitted selected artifact remains useful after reopening, not merely that Chromium finished `printToPDF`.
+The earlier clean physical-PDF control remains valid. A new exact-current-source run deliberately admitted one broken image, generated a physical PDF and reopened the saved bytes independently with pypdf and PyMuPDF. Both readers confirm selected scope, searchable text, title metadata, the intended external URI, an internal destination and a visible truthful resource-failure warning.
 
-The accepted request had a clean resource report (`3/3` loaded, zero failed/omitted, no deadline or scan truncation). Consequently C45 remains partial: truthful degraded-resource information was not exercised, and no manual GUI reader/text-selection interaction was performed.
+The same physical artifact exposes a confidentiality defect: its visible diagnostic removes the synthetic query token, but both parsers recover the broken image's exact URL with that token from PDF URI annotations. This is fresh physical evidence for existing **P0-066 ACTIVE**, not a new owner.
 
-No fresh root-cause failure was discovered in this tranche. No new P-code is warranted. Existing ACTIVE owners are neither closed nor reopened; the candidate map remains supporting context only.
+No runtime, Registry wording/status, manifest or release-state change is made. Manifest remains `0.9.8`; release remains **NOT READY**.
 
-Runtime, Registry wording/status, manifest `0.9.8` and release readiness are unchanged; release remains **NOT READY**.
+## Accepted degraded-control execution
 
-## Accepted exact-source execution
-
-- Google Chrome `151.0.7922.173`;
-- workflow run `33725415471`;
-- job `100553189070`;
-- exact workflow head `637f0c5f1b327c29fc070e011cc7f1679acd64ee`;
+- workflow: **Research C45 Degraded Resource**;
+- run `33755066731`;
+- job `100647417146`;
+- exact workflow head `daedc5cb95de26dc103a498c0b39d49ed0bf5eb4`;
+- canonical source receipt `e7db9600ad1710c8996fc1d22da42dec7295ab82`;
+- Chrome `151.0.7922.173`;
 - conclusion **SUCCESS**;
-- result SHA-256 `818d9b155a970300f5d55da527030f7b861e8df471362a5036ca18adc03e2bcc`;
-- physical PDF SHA-256 `48c9c910e2d009ecd009392e34e9c085ea835a18e1d25b5780841ed8c20978d3`;
-- durable harness `project_tools/research_c45_reopened_pdf_usefulness.py`.
+- result SHA-256 `1a0f0ef5f8a4f53b33bfaa6dae932e571b821e30591019113eb2e16b8229421f`;
+- physical PDF: `32,064` bytes, SHA-256 `a647a28ac104efa29b72b61a6b8685241440ab211ec6b42415e1e81aeedc8fa8`;
+- durable harness: `project_tools/research_c45_degraded_resource_truth.py`.
 
-## Physical later-reading matrix
+The workflow receipt was rejected until its baseline field was derived from `git merge-base HEAD origin/main`. The accepted result is therefore bound to the canonical main tree rather than to a preceding evidence/receipt commit.
+
+## Reopened-artifact matrix
 
 | Observation | pypdf | PyMuPDF |
 |---|---|---|
+| physical PDF reopened | PASS | PASS |
 | selected marker present | PASS | PASS |
 | outside-scope marker absent | PASS | PASS |
 | internal target text present | PASS | PASS |
 | search phrase extractable | PASS | PASS |
-| external URI preserved | PASS | PASS |
+| intended external URI preserved | PASS | PASS |
 | internal destination/link | `>=1` | `>=1` |
-| title metadata | `C45 Reader Metadata Title` | same |
+| document title | `C45 Degraded Resource Reader Title` | same |
+| visible resource summary | PASS | PASS |
+| visible failed count/detail | PASS | PASS |
+| synthetic query token absent from extracted text | PASS | PASS |
+| failed-resource URI annotations containing query token | `2` | `2` |
 
-The physical artifact was 26,692 bytes. The independent parsers agree on the substantive later-reading properties while using different PDF implementations.
+The two parsers agree on the same substantive properties while using independent PDF implementations. The duplicate annotation count is recorded as an artifact observation only.
 
-## Selected-scope control
+## Admission and truthful-degradation control
 
-The source fixture placed `C45_OUTSIDE_SCOPE_MARKER_9B2D` outside the selected `article`. The admitted selected article contained `C45_SELECTED_SEARCHABLE_MARKER_7C1A`, a searchable sentence, external link and an internal anchor target. After the current content-script preparation, both reopened PDF parsers found the selected marker and did not find the outside marker.
+The admitted request contains resource report version 1 with attempted=4, loaded=3, failed=1, omittedByLimit=0, deadlineExceeded=false and scanTruncated=false. The failed item is the intentionally missing image and is classified `image-load-error`.
 
-This is a direct positive B6/B9 control for selected-scope usefulness. It does not erase earlier fidelity findings under P0-004/P1-187; it proves this bounded ordinary case survives into the reopened artifact.
+Current source attaches the resource report before print-header rendering, prints the failed count and bounded failure details, and strips query/fragment material from the diagnostic label. Both reopened readers see the degraded warning and missing path. **P1-003 ACTIVE** is therefore positive for this bounded admitted-failure case; this does not close its broader owner contract.
 
-## Searchable text / metadata
+## Failed-resource URI-query finding
 
-Both readers extracted `independent reopened reader verification` as text. That establishes machine-readable/searchable text in the resulting PDF for this ordinary selected content. Both also recovered the document Title `C45 Reader Metadata Title`.
+Current `wrapUnlinkedImagesForPdf()` creates a temporary link for an unlinked image with:
 
-This is stronger than a raster-only visual check, but does not substitute for manual GUI selection ergonomics or accessibility semantics.
+1. `const imageUrl = image.currentSrc || image.src;`
+2. `link.href = imageUrl;`
 
-## Link usefulness
+That exact failed-resource URL reaches physical PDF URI annotations even though the printed diagnostic uses a sanitized origin/path projection. Both parsers recover the synthetic query-token marker from the URI list, while neither finds it in extracted visible text.
 
-Both readers recovered the exact external URI `https://example.com/c45-external?marker=keep-path`. Both also observed at least one internal PDF destination/link corresponding to the selected document's `#target` anchor.
-
-The run therefore supplies fresh positive B9 evidence that ordinary external and internal navigation survive reopening. It does not close the broader P1-187 link/fidelity owner because C15 has already shown wider link cases and current owner authority remains canonical in the Registry.
-
-## Resource/degradation boundary
-
-The exact generation request carried `resourceReport` version 1 with attempted=3, loaded=3, failed=0, omittedByLimit=0, deadlineExceeded=false and scanTruncated=false. No degraded-resource condition existed.
-
-Accordingly the harness records `degradedResourceSignalPresentInRequest=false`. That is a scope boundary, not a failure: the research deliberately refuses to claim that degraded-resource information is truthful without a physical degraded case.
-
-A C45 exit tranche still needs an admitted operation with an intentionally unavailable/omitted visual resource whose degradation receipt is carried truthfully into the user-visible artifact/provenance and remains understandable after reopening.
+This reconciles directly to **P0-066 ACTIVE**: one durable/display URL sanitizer is not applied to every PDF persistence surface. No Registry wording/status change is required because the current owner already covers query/userinfo minimization across durable/display surfaces.
 
 ## B1–B9 mapping
 
 | Boundary | Fresh C45 result |
 |---|---|
-| B1 User Intent | One explicit selected article defines the intended saved scope. |
-| B2 Admission / exact generation | Current WebClip request records one selected top-document article and exact source URL/title. |
-| B3 Capture | Selected marker/text/link targets are captured; outside marker is not admitted. |
-| B4 Static Materialization | Current content preparation produces printable selected representation. |
-| B5 Renderer | Chromium emits a valid 26,692-byte PDF. |
-| B6 Physical Artifact | Exact SHA-256 recorded; both PDF parsers reopen the same bytes. |
+| B1 User Intent | One explicit selected article defines the saved scope. |
+| B2 Admission / exact generation | The request carries exact selected scope and one admitted resource failure. |
+| B3 Capture | Selected content is present and the outside marker is absent. |
+| B4 Static Materialization | Current preparation renders selected content and a truthful degraded warning. |
+| B5 Renderer | Chrome emits a valid physical PDF; it also serializes the unsafe failed-resource URI. |
+| B6 Physical Artifact | Exact bytes/hash recorded and reopened by two parsers. |
 | B7 Persistence / Transfer | Not the primary boundary in this tranche. |
-| B8 Journal / Provenance | Clean resourceReport is present in the admitted request; no degraded case was exercised. |
-| B9 Later Reading / Recovery | Two independent readers recover selected text, metadata and external/internal navigation. |
+| B8 Journal / Provenance | Admission resource receipt is checked; full exact-artifact Journal linkage remains governed by C43. |
+| B9 Later Reading / Recovery | Text, metadata, intended navigation and degraded warning survive reopening; GUI activation is open. |
 
 ## Owner reconciliation
 
-- **P0-004 ACTIVE** remains a candidate/supporting fidelity owner; this ordinary selected-scope case is positive only.
-- **P1-003 ACTIVE** remains a candidate/supporting resource-readiness/degradation owner; the clean resource case does not close it.
-- **P1-187 ACTIVE** remains a candidate/supporting PDF fidelity/link owner; this bounded reopened-reader control is positive only.
-- **P0-066 ACTIVE** remains a candidate/supporting confidentiality owner; the external URI here is synthetic and intentionally non-secret.
+- **P0-066 ACTIVE**: direct finding — the failed-resource query survives in PDF URI annotations.
+- **P1-003 ACTIVE**: positive bounded control — admitted resource failure and visible diagnostic agree.
+- **P0-004 / P1-187 ACTIVE**: supporting selected-scope/link-fidelity context; neither is closed by this ordinary fixture.
 
-No owner status or wording changes are justified.
+No new P-code, owner-status change or runtime fix is justified by this research-only tranche.
 
 ## Remaining C45 exit evidence
 
-1. generate a physical PDF from an admitted operation with a deliberately unavailable/omitted resource and a truthful degradation receipt;
-2. reopen the saved artifact independently and prove the user can distinguish complete vs degraded output without relying on transient extension UI;
-3. exercise a real GUI reader for text selection/search and link activation, without substituting parser extraction for user interaction;
-4. preserve the exact artifact hash/admitted operation linkage when recording that later-reading result.
+1. Open the accepted physical degraded PDF in a real GUI reader and perform actual text selection/search.
+2. Activate the intended external link and internal destination through the GUI/native reader path.
+3. After remediation under P0-066, prove that the failed-resource target is omitted or query-sanitized while the visible degraded warning remains truthful.
+4. Preserve exact artifact/admission linkage when recording those results.
 
-Until those boundaries are covered, C45 remains OPEN at L4 partial rather than being declared complete.
+Until those user-owned boundaries are exercised, C45 remains OPEN at L4 partial/finding rather than complete.
