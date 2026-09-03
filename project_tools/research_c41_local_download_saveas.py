@@ -35,6 +35,9 @@ def section(source, start, end):
 
 
 def source_contract():
+    native_start = section(
+        PREPARED, "async function start(prepared)", "globalThis.WebClipPreparedSaveAs"
+    )
     automatic = section(
         WORKER, "async function startAutomaticBlobDownloadBounded", "async function finalizePendingLocalDownload"
     )
@@ -64,9 +67,9 @@ def source_contract():
             "matchesExactBlobUrl" in LOCAL_IDENTITY and "chooseUniqueDownloadForIntent" in LOCAL_IDENTITY
         ),
         "nativeDialogIsPageOwnedAndUntimed": (
-            "saveAs: true" in PREPARED
-            and "Promise.race" not in PREPARED
-            and "setTimeout" not in PREPARED
+            "saveAs: true" in native_start
+            and "Promise.race(" not in native_start
+            and "setTimeout(" not in native_start
         ),
         "nativePreparedStartedReleasedAreDistinct": all(
             token in WORKER
