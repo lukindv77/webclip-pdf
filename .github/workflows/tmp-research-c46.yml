@@ -25,7 +25,20 @@ jobs:
         run: |
           set -euo pipefail
           chrome="$(command -v google-chrome || command -v chromium || true)"
+          xvfb="$(command -v xvfb-run || true)"
           test -n "$chrome"
+          test -n "$xvfb"
           "$chrome" --version
-          python project_tools/research_c46_unpacked_permissions_debugger.py --chrome "$chrome" --source-baseline "$C46_SOURCE_BASELINE" | tee c46-result.txt
+          cat > /tmp/c46-chrome <<EOF
+          #!/usr/bin/env bash
+          set -euo pipefail
+          args=()
+          for arg in "\$@"; do
+            if [[ "\$arg" == "--headless=new" ]]; then continue; fi
+            args+=("\$arg")
+          done
+          exec "$chrome" "\${args[@]}"
+          EOF
+          chmod +x /tmp/c46-chrome
+          xvfb-run -a python project_tools/research_c46_unpacked_permissions_debugger.py --chrome /tmp/c46-chrome --source-baseline "$C46_SOURCE_BASELINE" | tee c46-result.txt
           sha256sum c46-result.txt
