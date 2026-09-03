@@ -11,7 +11,6 @@ import shutil
 import subprocess
 import tempfile
 import threading
-import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -26,32 +25,19 @@ FIXTURE_TITLE = 'C46 real unpacked debugger fixture'
 FIXTURE_MARKER = 'C46_REAL_UNPACKED_DEBUGGER_MARKER_4A7F'
 
 
-def function_slice(text: str, name: str, span: int = 18000) -> str:
-    marker = f'function {name}'
-    idx = text.find(marker)
-    if idx < 0:
-        marker = f'async function {name}'
-        idx = text.find(marker)
-    if idx < 0:
-        return ''
-    return text[idx:idx + span]
-
-
 def source_checks() -> dict:
     permissions = set(MANIFEST.get('permissions') or [])
     optional_hosts = set(MANIFEST.get('optional_host_permissions') or [])
 
-    dom_idx = POPUP.find("document.addEventListener('DOMContentLoaded'")
-    startup = POPUP[dom_idx:dom_idx + 7000] if dom_idx >= 0 else ''
-    backup_idx = startup.find('loadBackupStatus')
-    active_tab_idx = startup.find('getActiveSourceTab')
+    backup_call_idx = POPUP.find('loadBackupStatus();')
+    active_tab_def_idx = POPUP.find('async function getActiveSourceTab')
 
-    enable_frame = function_slice(POPUP, 'enableFrameAgents')
-    discover_idx = enable_frame.find('discoverFrameOrigins')
-    request_idx = enable_frame.find('requestOptionalOrigins')
+    grant_idx = POPUP.find("grantFrameAccessButton?.addEventListener('click'")
+    grant_block = POPUP[grant_idx:grant_idx + 12000] if grant_idx >= 0 else ''
+    discovery_idx = grant_block.find('await collectCrossOriginFrameOrigins')
+    permission_request_idx = grant_block.find('chrome.permissions.request')
 
-    request_optional = function_slice(POPUP, 'requestOptionalOrigins')
-    popup_timeout_match = re.search(r'POPUP_OPERATION_TIMEOUT_MS\s*=\s*([0-9_]+)', POPUP)
+    popup_timeout_match = re.search(r'POPUP_EXTENSION_API_TIMEOUT_MS\s*=\s*([0-9_]+)', POPUP)
     popup_timeout = int(popup_timeout_match.group(1).replace('_', '')) if popup_timeout_match else None
 
     checks = {
@@ -59,20 +45,21 @@ def source_checks() -> dict:
         'manifestOptionalHttpHost': 'http://*/*' in optional_hosts,
         'manifestOptionalHttpsHost': 'https://*/*' in optional_hosts,
         'manifestIncognitoKeyPresent': 'incognito' in MANIFEST,
-        'popupBackupStatusBeforeActiveTabClassification': dom_idx >= 0 and backup_idx >= 0 and active_tab_idx >= 0 and backup_idx < active_tab_idx,
-        'popupPermissionRequestAfterAsyncDiscovery': discover_idx >= 0 and request_idx >= 0 and discover_idx < request_idx,
-        'popupCallsChromePermissionsRequest': 'chrome.permissions.request' in request_optional or 'chrome.permissions.request' in POPUP,
-        'popupOperationTimeoutMs': popup_timeout,
-        'contentSenderIncognitoGuardPresent': 'sender.tab.incognito' in WORKER,
+        'popupBackupStatusBeforeActiveTabClassification': backup_call_idx >= 0 and active_tab_def_idx >= 0 and backup_call_idx < active_tab_def_idx,
+        'popupPermissionRequestAfterAsyncDiscovery': discovery_idx >= 0 and permission_request_idx >= 0 and discovery_idx < permission_request_idx,
+        'popupCallsChromePermissionsRequest': 'chrome.permissions.request' in POPUP,
+        'popupExtensionApiTimeoutMs': popup_timeout,
+        'contentSenderIncognitoGuardPresent': 'sender?.tab?.incognito' in WORKER,
         'permissionsOnRemovedListenerPresent': 'chrome.permissions.onRemoved' in WORKER,
         'frameAgentPermissionRecheckPresent': 'frameAgentHasGrantedHostPermission' in WORKER,
         'frameAgentMemoryRegistryPresent': 'frameAgentsByTab = new Map()' in WORKER,
-        'frameAgentReinjectReregistersWithoutReset': '__WEBCLIP_FRAME_AGENT_LOADED__' in FRAME_AGENT and "WEBCLIP_FRAME_AGENT_REGISTER" in FRAME_AGENT and FRAME_AGENT.find('__WEBCLIP_FRAME_AGENT_LOADED__') < FRAME_AGENT.find("const state ="),
+        'frameAgentReinjectReregistersWithoutReset': '__WEBCLIP_FRAME_AGENT_LOADED__' in FRAME_AGENT and 'WEBCLIP_FRAME_AGENT_REGISTER' in FRAME_AGENT and FRAME_AGENT.find('__WEBCLIP_FRAME_AGENT_LOADED__') < FRAME_AGENT.find('const state ='),
         'debuggerActiveRegistryPresent': 'debuggerActiveTabs = new Set()' in WORKER,
         'debuggerLateAttachCleanupPresent': 'debuggerLateAttachCleanupByTab = new Map()' in WORKER,
         'debuggerPendingDetachPresent': 'debuggerPendingDetachByTab = new Map()' in WORKER,
         'debuggerActualSettlementTrackingPresent': 'debuggerPendingActualSettlements = new Set()' in WORKER,
         'boundedDebuggerAttachPresent': 'async function attachDebuggerBounded' in WORKER,
+        'boundedDebuggerDetachPresent': 'async function detachDebuggerBounded' in WORKER,
         'physicalDebuggerPdfPathPresent': "chrome.debugger.sendCommand(debuggee, 'Page.printToPDF'" in WORKER,
         'debuggerFinallyDropsActiveTab': 'debuggerActiveTabs.delete(tabId)' in WORKER,
         'debuggerOnDetachHandlingPresent': 'debugger.onDetach' in WORKER,
@@ -94,6 +81,7 @@ def source_checks() -> dict:
         'debuggerPendingDetachPresent',
         'debuggerActualSettlementTrackingPresent',
         'boundedDebuggerAttachPresent',
+        'boundedDebuggerDetachPresent',
         'physicalDebuggerPdfPathPresent',
         'debuggerFinallyDropsActiveTab',
     ]
@@ -101,7 +89,8 @@ def source_checks() -> dict:
         assert checks[key] is True, (key, checks)
     assert checks['manifestIncognitoKeyPresent'] is False, checks
     assert checks['permissionsOnRemovedListenerPresent'] is False, checks
-    assert checks['popupOperationTimeoutMs'] == 10_000, checks
+    assert checks['debuggerOnDetachHandlingPresent'] is False, checks
+    assert checks['popupExtensionApiTimeoutMs'] == 10_000, checks
     return checks
 
 
@@ -154,8 +143,8 @@ def browser_version(chrome: str) -> str:
 
 
 def js_driver(fixture_url: str, report_url: str) -> str:
-    origin_pattern = urllib.parse.urlsplit(fixture_url)
-    pattern = f'{origin_pattern.scheme}://{origin_pattern.hostname}:{origin_pattern.port}/*'
+    origin = urllib.parse.urlsplit(fixture_url)
+    pattern = f'{origin.scheme}://{origin.hostname}:{origin.port}/*'
     return f'''
 
 // C46 test-only driver appended to a temporary unpacked copy by the durable Python harness.
@@ -224,11 +213,7 @@ def run_real_unpacked(chrome: str, timeout_seconds: int = 45) -> dict:
     ext_root = temp_root / 'extension'
     profile = temp_root / 'profile'
     try:
-        shutil.copytree(
-            ROOT,
-            ext_root,
-            ignore=shutil.ignore_patterns('.git', '__pycache__', '*.pyc'),
-        )
+        shutil.copytree(ROOT, ext_root, ignore=shutil.ignore_patterns('.git', '__pycache__', '*.pyc'))
         worker_path = ext_root / 'service-worker.js'
         worker_path.write_text(WORKER + js_driver(fixture_url, report_url), encoding='utf-8')
 
