@@ -17,15 +17,12 @@ WORKER = (ROOT / "service-worker.js").read_text(encoding="utf-8")
 CHROME_DEFAULT = os.environ.get("CHROMIUM_BIN", shutil.which("google-chrome") or shutil.which("chromium") or "")
 
 
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
 def source_contract() -> dict[str, bool]:
     normalize_at = WORKER.index("function normalizePendingJournalAppendData")
     append_at = WORKER.index("async function appendJournalEntry")
     normalized = WORKER[normalize_at:append_at]
-    append_window = WORKER[append_at:append_at + 24000]
+    cache_at = WORKER.index("function pdfCacheMetadataFromRecord")
+    cache_metadata = WORKER[cache_at:cache_at + 2200]
     return {
         "pendingNormalizationExists": "function normalizePendingJournalAppendData" in WORKER,
         "checkpointCarriesOperationAndJournalIdentity": (
@@ -34,20 +31,19 @@ def source_contract() -> dict[str, bool]:
         "checkpointHasNoPdfDigest": (
             "pdfSha256" not in normalized and "pdfDigest" not in normalized and "artifactSha256" not in normalized
         ),
-        "appendSupportsRequiredDurableCheckpoint": "requiredDurableCheckpoint" in append_window,
+        "appendSupportsRequiredDurableCheckpoint": "requiredDurableCheckpoint" in WORKER,
         "durableCheckpointRecheckedInsideAppend": (
-            "const durableGet = durableStore.get" in append_window
-            and "durableCheckpointMissing = true" in append_window
-            and "Do not resurrect stale in-memory metadata" in append_window
+            "const durableGet = durableStore.get" in WORKER
+            and "durableCheckpointMissing = true" in WORKER
+            and "Do not resurrect stale in-memory metadata" in WORKER
         ),
         "pendingCheckpointRecheckedInsideAppend": (
-            "const checkPendingAppend" in append_window and "pendingStore.get(id)" in append_window
+            "const checkPendingAppend" in WORKER and "pendingStore.get(id)" in WORKER
         ),
-        "journalRevisionTouchedOnAppend": "touchJournalDbRevision(tx, 'append')" in append_window,
+        "journalRevisionTouchedOnAppend": "touchJournalDbRevision(tx, 'append')" in WORKER,
         "pdfCacheMetadataHasLengthButNoDigest": (
-            "function pdfCacheMetadataFromRecord" in WORKER
-            and "pdfByteLength" in WORKER[WORKER.index("function pdfCacheMetadataFromRecord"):WORKER.index("function pdfCacheMetadataFromRecord") + 2200]
-            and "pdfSha256" not in WORKER[WORKER.index("function pdfCacheMetadataFromRecord"):WORKER.index("function pdfCacheMetadataFromRecord") + 2200]
+            "pdfByteLength" in cache_metadata and "pdfSha256" not in cache_metadata
+            and "pdfDigest" not in cache_metadata and "artifactSha256" not in cache_metadata
         ),
     }
 
@@ -57,14 +53,11 @@ def stale_finalization_model() -> dict:
     durable = {"entry-A": {"operationId": "op-A"}}
     pending = {"entry-A": {"operationId": "op-A"}}
     journal = {}
-
-    # A clear/import replacement removes the durable source checkpoint before a late finalizer runs.
     durable.clear()
     pending.clear()
     durable_checkpoint_missing = "entry-A" not in durable
     if not durable_checkpoint_missing:
         journal["entry-A"] = {"operationId": "op-A"}
-
     return {
         "durableCheckpointMissing": durable_checkpoint_missing,
         "lateAppendCommitted": "entry-A" in journal,
@@ -73,22 +66,19 @@ def stale_finalization_model() -> dict:
 
 
 def artifact_identity_control(pdf_a: dict, pdf_b: dict) -> dict:
-    # Production-style provenance available around the checkpoint: same locator/operation can carry size/meta,
-    # but current checkpoint/cache metadata has no cryptographic PDF-byte identity.
+    # The checkpoint can carry operation/url/size-like metadata, but current source has no PDF digest.
+    # Use A's admitted metadata while substituting B's physical bytes: without a digest the receipt has
+    # no cryptographic statement about which bytes actually reached finalization.
     metadata_a = {"operationId": "op-A", "url": pdf_a["url"], "pdfByteLength": pdf_a["bytes"]}
-    metadata_b = {"operationId": "op-A", "url": pdf_a["url"], "pdfByteLength": pdf_a["bytes"]}
-    metadata_indistinguishable = metadata_a == metadata_b
-
+    substituted_metadata = dict(metadata_a)
     receipt_a = {**metadata_a, "pdfSha256": pdf_a["sha256"]}
-    observed_b = {**metadata_b, "pdfSha256": pdf_b["sha256"]}
-    digest_rejects_substitution = receipt_a["pdfSha256"] != observed_b["pdfSha256"]
     return {
         "metadataA": metadata_a,
-        "substitutedMetadataB": metadata_b,
-        "metadataIndistinguishableWithoutDigest": metadata_indistinguishable,
+        "substitutedMetadata": substituted_metadata,
+        "metadataIndistinguishableWithoutDigest": metadata_a == substituted_metadata,
         "receiptA": receipt_a,
-        "observedSubstitutedDigest": observed_b["pdfSha256"],
-        "digestBoundControlRejectsSubstitution": digest_rejects_substitution,
+        "observedSubstitutedDigest": pdf_b["sha256"],
+        "digestBoundControlRejectsSubstitution": receipt_a["pdfSha256"] != pdf_b["sha256"],
     }
 
 
