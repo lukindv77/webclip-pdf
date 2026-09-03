@@ -19,24 +19,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install native X11 harness dependencies
+      - name: Install pinned Chrome and native X11 harness dependencies
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb xdotool wmctrl openbox
+          sudo apt-get install -y -qq xvfb xdotool wmctrl openbox unzip curl
+          curl --fail --location --silent --show-error \
+            https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.64/linux64/chrome-linux64.zip \
+            -o "$RUNNER_TEMP/chrome-152.zip"
+          unzip -q "$RUNNER_TEMP/chrome-152.zip" -d "$RUNNER_TEMP/chrome-152"
+          "$RUNNER_TEMP/chrome-152/chrome-linux64/chrome" --version
 
       - name: Run real native Save As matrix
         id: native
         shell: bash
         run: |
           set -uo pipefail
-          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
-          if [[ -z "$chrome" ]]; then
-            echo 'Google Chrome/Chromium unavailable' >&2
-            echo 1 > "$RUNNER_TEMP/c41-native-status"
-            exit 0
-          fi
+          chrome="$RUNNER_TEMP/chrome-152/chrome-linux64/chrome"
+          test -x "$chrome" || { echo 'Pinned Chrome unavailable' >&2; echo 1 > "$RUNNER_TEMP/c41-native-status"; exit 0; }
           "$chrome" --version
           export WEBCLIP_CHROME_FOR_TESTING="$chrome"
           set +e
