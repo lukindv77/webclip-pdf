@@ -31,5 +31,5 @@ jobs:
           set -euo pipefail
           xvfb="$(command -v xvfb-run || true)"
           test -n "$xvfb"
-          xvfb-run -a node project_tools/research_c46_unpacked_permissions_debugger_v2.mjs | tee c46-result.txt
+          xvfb-run -a node project_tools/research_c46_unpacked_permissions_debugger_v3.mjs | tee c46-result.txt
           sha256sum c46-result.txt
