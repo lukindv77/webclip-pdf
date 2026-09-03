@@ -8,6 +8,7 @@ on:
       - project_tools/.c41-native-cancel-result.json
       - project_tools/.c41-native-worker-restart-result.json
       - project_tools/.c41-native-browser-restart-result.json
+      - project_tools/.c41-native-owner-page-race-result.json
 
 permissions:
   contents: write
@@ -44,7 +45,14 @@ jobs:
           "$chrome" --version
           export WEBCLIP_CHROME_FOR_TESTING="$chrome"
           set +e
-          xvfb-run -a -s '-screen 0 1280x900x24' bash -c 'openbox >/tmp/c41-openbox.log 2>&1 & exec node project_tools/research_c41_native_l5_runner.js' | tee "$RUNNER_TEMP/c41-native-result.log"
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            openbox >/tmp/c41-openbox.log 2>&1 &
+            node project_tools/research_c41_native_l5_runner.js
+            first=$?
+            node project_tools/research_c41_owner_page_race_runner.js
+            second=$?
+            if [[ "$first" != 0 || "$second" != 0 ]]; then exit 1; fi
+          ' | tee "$RUNNER_TEMP/c41-native-result.log"
           status=${PIPESTATUS[0]}
           set -e
           echo "$status" > "$RUNNER_TEMP/c41-native-status"
@@ -52,7 +60,8 @@ jobs:
             'C41_NATIVE_RESULT_JSON project_tools/.c41-native-result.json' \
             'C41_CANCEL_RESULT_JSON project_tools/.c41-native-cancel-result.json' \
             'C41_WORKER_RESTART_RESULT_JSON project_tools/.c41-native-worker-restart-result.json' \
-            'C41_BROWSER_RESTART_RESULT_JSON project_tools/.c41-native-browser-restart-result.json'
+            'C41_BROWSER_RESTART_RESULT_JSON project_tools/.c41-native-browser-restart-result.json' \
+            'C41_OWNER_PAGE_RACE_RESULT_JSON project_tools/.c41-native-owner-page-race-result.json'
           do
             marker="${spec%% *}"
             target="${spec#* }"
@@ -74,6 +83,7 @@ jobs:
             project_tools/.c41-native-cancel-result.json
             project_tools/.c41-native-worker-restart-result.json
             project_tools/.c41-native-browser-restart-result.json
+            project_tools/.c41-native-owner-page-race-result.json
           )
           found=0
           for file in "${files[@]}"; do
