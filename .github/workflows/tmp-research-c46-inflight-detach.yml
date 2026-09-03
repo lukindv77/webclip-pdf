@@ -1,0 +1,50 @@
+name: Research C46 Inflight Detach
+
+on:
+  push:
+    branches:
+      - research/evidence-c46-inflight-detach-2026-09-03
+    paths:
+      - 'project_tools/research_c46_inflight_detach.mjs'
+      - '.github/workflows/tmp-research-c46-inflight-detach.yml'
+      - 'manifest.json'
+      - 'content.js'
+      - 'pdf-print-guard.js'
+      - 'service-worker.js'
+
+permissions:
+  contents: read
+
+jobs:
+  inflight-detach:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install bounded browser harness dependency
+        run: npm install --no-save --package-lock=false puppeteer@25.9.0
+
+      - name: Run real-unpacked in-flight detach control
+        run: |
+          set -o pipefail
+          xvfb-run -a node project_tools/research_c46_inflight_detach.mjs | tee c46-inflight-detach-result.txt
+
+      - name: Hash receipt
+        if: always()
+        run: |
+          sha256sum c46-inflight-detach-result.txt 2>/dev/null || true
+
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c46-inflight-detach-receipt
+          path: c46-inflight-detach-result.txt
+          if-no-files-found: warn
