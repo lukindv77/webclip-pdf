@@ -146,7 +146,7 @@ async function runRealUnpacked(fixture) {
   try {
     browser = await puppeteer.launch({
       headless: false,
-      pipe: true,
+      pipe: false,
       enableExtensions: [temporary.extensionRoot],
       args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check'],
     });
@@ -158,7 +158,7 @@ async function runRealUnpacked(fixture) {
     );
     const extensionId = new URL(workerTarget.url()).host;
 
-    browser.disconnect();
+    await browser.disconnect();
     browser = null;
 
     const result = await Promise.race([
