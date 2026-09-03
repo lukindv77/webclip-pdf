@@ -103,29 +103,28 @@ All 46 previously identified material families are retained as coverage coordina
 | C37 | Failure/retry/rollback/convergence | `L4-REVALIDATED / FINDING + POSITIVE/CLEAN-RETRY/STALE-RESOURCE/DETACHED-LINK/WRAPPER-TOPOLOGY CONTROLS (P1-218, P1-219, P1-221; P1-199, P1-214 supporting/source)` |
 | C38 | Node/byte/time/resource budgets | `L4-REVALIDATED / FINDING + POSITIVE/PREFLIGHT/SCAN-CAP/LINK-COLLECTOR/DIAGNOSTIC/DISCLOSURE/RESOURCE-PROMOTION CONTROLS (P1-167, P1-003; P1-154 supporting/source)` |
 | C39 | Privacy / data minimization | `L4-REVALIDATED / FINDING + POSITIVE/PHYSICAL-PDF-TEXT/URI/SELECTION-SNAPSHOT/DURABLE-FLOW/SANITIZED CONTROLS (P0-066, P1-182; P0-045 supporting/source, P0-033 positive)` |
-| C40 | Physical PDF bytes / cache identity | `L2-REVALIDATED / FINDING (P0-023, P0-079)` |
-| C41 | Local download physical settlement / native Save As | `NOT-TRIAGED / UNKNOWN` |
+| C40 | Physical PDF bytes / cache identity | `L4-REVALIDATED / FINDING + POSITIVE/PHYSICAL-PDF/SAME-URL/ACTUAL-IDB/MUTABLE-KEY/IMMUTABLE-KEY CONTROLS (P0-023, P0-079; P0-070 supporting)` |
+| C41 | Local download physical settlement / native Save As | `L4-REVALIDATED / PARTIAL/FINDING + POSITIVE/REAL-AUTOMATIC-DOWNLOAD/EXACT-ID/LATE-SETTLEMENT/PREPARED-STARTED-RELEASE/PAGE-OWNER CONTROLS; NATIVE-L5 OPEN (P1-146, P1-156; P1-064 supporting, P0-039/P0-048 positive)` |
 | C42 | Yandex upload/object/public identity | `NOT-TRIAGED / UNKNOWN` |
 | C43 | Journal / provenance / exact artifact linkage | `NOT-TRIAGED / UNKNOWN` |
 | C44 | Backup / import / recovery | `NOT-TRIAGED / UNKNOWN` |
 | C45 | Later reading / reopened PDF usefulness | `NOT-TRIAGED / UNKNOWN` |
 | C46 | Real unpacked Chrome / permission UI / actual chrome.debugger extension path | `NOT-TRIAGED / UNKNOWN` |
 
-### Published open-task projection — C40–C46
+### Published open-task projection — C41–C46
 
 This projection makes the remaining fresh-restart work executable without changing Registry ownership. Every row is **OPEN**; owner lists are existing direct/candidate owners for duplicate reconciliation, not new assignments or status changes.
 
 | ID | Status | Next falsifiable task / exit evidence | Existing owner map | Required boundary |
 |---|---|---|---|---|
-| C40 | OPEN — L2 finding; promote to L4 | Generate two distinguishable PDFs across same-URL document replacement/reload plus retry, then compare exact PDF SHA-256/cache generation and prove that retry cannot adopt the older document bytes. | P0-023, P0-079; P0-070 supporting | B2/B6/B7; physical Chrome PDF/cache |
-| C41 | OPEN — unknown | Exercise real automatic Chrome download and native Save As settlement through success, cancel/unknown, worker/owner-page restart and retry; prove one durable intent maps to at most one exact DownloadItem and one truthful Journal outcome. | P1-146, P1-156; P1-064 supporting | B6/B7/B8; real Downloads UI/native dialog (L5) |
+| C41 | OPEN — L4 partial; native/restart L5 remains | In real interactive unpacked Chrome, exercise automatic response-loss/worker restart and native Save As success, cancel/unresolved dialog, owner-page/worker restart and retry; reconcile exact DownloadItem terminality and prove one durable intent maps to at most one DownloadItem and one truthful Journal/OperationLog outcome. | P1-146, P1-156; P1-064 supporting, P0-039/P0-048 positive | B6/B7/B8/B9; real Downloads UI/native dialog/restart (L5) |
 | C42 | OPEN — unknown | With an explicitly authorized test account/root, bind upload/retry/unknown recovery/publication to exact PDF bytes, immutable account/root/config generation and exact remote object identity; record real object/public-link receipts. | P0-073, P0-074, P0-078, P1-184 | B7/B8; real Yandex account/network (L5) |
 | C43 | OPEN — unknown | Trace one local and one remote artifact from admitted document/PDF hash through cache/checkpoint/final append; inject Journal revision change during finalization and prove artifact, URL, operation and entry provenance remain one exact generation. | P0-070, P0-076, P1-206; P1-190/P1-216 supporting | B2/B6/B7/B8; deterministic race plus physical artifact |
 | C44 | OPEN — unknown | Complete full export → staged import → explicit replace/merge → restart/recovery round trips, including concurrent Journal revision, staging ownership and storage-durability classification; verify exact entry/selection/provenance preservation without silent deletion. | P0-013, P1-194, P1-207, P1-215; P0-077 DONE positive | B7/B8/B9; local first, real remote backup only where required |
 | C45 | OPEN — unknown | Reopen produced PDFs in an independent reader and verify selected-scope fidelity, readable metadata, external/internal links, text selection/search and truthful degraded-resource information against the admitted operation. | Candidate duplicate map: P0-004, P1-003, P1-187, P0-066 | B6/B9; physical saved/reopened artifacts (L4/L5) |
 | C46 | OPEN — unknown | Load the unpacked extension in real Chrome and exercise normal/incognito windows, optional-host permission prompt, revoke/regrant, worker restart and actual debugger attach/detach; prove fail-closed private state and exact session/generation cleanup. | P0-045, P1-157, P1-193, P1-201; P1-004 umbrella | B1/B2/B7/B9; real unpacked interactive Chrome (L5) |
 
-Execution stays sequential unless an earlier row exposes a cross-boundary blocker: **C40 is next**. External-account/user-owned UI work must not be simulated as L5; unavailable external prerequisites remain explicit blockers rather than inferred success.
+Execution stays sequential unless an earlier row exposes a cross-boundary blocker: **C41's native/restart L5 continuation remains next; C42 is queued**. External-account/user-owned UI work must not be simulated as L5; unavailable external prerequisites remain explicit blockers rather than inferred success.
 
 ## Coverage Sweep 1 — execution/authority skeleton
 
@@ -534,6 +533,24 @@ Duplicate/root-cause reconciliation maps the shared node/time/mutation/string pr
 Fresh physical evidence shows that synthetic query/fragment secrets from `location.href` enter visible PDF text, while a selected-content query secret enters an actual PDF `/URI` annotation. The actual SelectionSnapshot retains selected/parent/neighbor plaintext plus raw `href` and `src` markers. Exact-source durable-flow projection keeps userinfo/query data across cache, pending, Journal, template and export surfaces; current normalization removes only fragments from derived keys/templates. A single test-only origin/path projection removes all synthetic secrets from physical PDF text/URIs and every modeled durable surface while preserving selected content and usable links.
 
 Duplicate/root-cause reconciliation maps the URL/display/durable finding to **P0-066 ACTIVE** and portable locator-context finding to **P1-182 ACTIVE**, with **P0-045 ACTIVE** supporting/source for the popup's unfenced persistent-status/permission boundary. **P0-033 DONE** remains a positive OperationLog redaction example. No new P-code, Registry wording/status, runtime or release change is warranted. C39 advances to `L4-REVALIDATED / FINDING + POSITIVE/PHYSICAL-PDF-TEXT/URI/SELECTION-SNAPSHOT/DURABLE-FLOW/SANITIZED CONTROLS (P0-066, P1-182; P0-045 supporting/source, P0-033 positive)`. C40 — Physical PDF bytes / cache identity — is the next sequential coordinate.
+
+## Fresh continuation checkpoint — focused C40 Physical PDF bytes / cache identity
+
+`RESEARCH_FULL_RESTART_C40_PHYSICAL_PDF_CACHE_IDENTITY_2026-09-03.md` records the accepted fresh C40 exact-source physical tranche on canonical source `6960fab35f914b1e1e3ffe1bafa3d1f8d7ca144e`, exact `content.js` blob `f3ee7b51fe9ee94fdfe36e8a7c99f14a548fdc4e`, exact `service-worker.js` blob `cffe46adbd0227bae51c95462d6d705b264838fe`, exact `offscreen.js` blob `a5f84b928e530222c50c704b80ab30418349f68e`, Google Chrome `152.0.7977.64`, workflow run `33715164705`, job `100522698189`, exact accepted workflow head `577322daad134340d21a16a7938ff24c95c16174`, conclusion SUCCESS and result SHA-256 `658deaf3cd10c6b07734ea57c75f7397a4e1e931649a1046162618f851e4c034`.
+
+Two current-path physical PDFs generated from the exact same URL have distinct SHA-256 values and mutually exclusive A/B text markers. In a real browser IndexedDB using the production cache schema, generation B overwrites `tab:77`; a retry for doc-A and a deferred offscreen-key dereference for op-A both resolve B's exact PDF hash, `doc-B` and `op-B`. Immutable operation/document keys preserve both exact hashes as the causal positive control.
+
+Duplicate/root-cause reconciliation confirms existing **P0-023 / P0-079 ACTIVE**, with **P0-070 ACTIVE** supporting exact generation authority. No new P-code, Registry wording/status, runtime or release change is warranted. C40 advances to `L4-REVALIDATED / FINDING + POSITIVE/PHYSICAL-PDF/SAME-URL/ACTUAL-IDB/MUTABLE-KEY/IMMUTABLE-KEY CONTROLS (P0-023, P0-079; P0-070 supporting)` and leaves the open-task projection.
+
+## Fresh continuation checkpoint — focused C41 Local download settlement / native Save As
+
+`RESEARCH_FULL_RESTART_C41_LOCAL_DOWNLOAD_SAVE_AS_2026-09-03.md` records the accepted C41 tranche on the same canonical source and workflow run `33715164705` / job `100522698189`, exact accepted workflow head `577322daad134340d21a16a7938ff24c95c16174`, Google Chrome `152.0.7977.64`, conclusion SUCCESS and result SHA-256 `97f930df52c66a40bf7832d9d09b6347bc80af9f24d7db948287e4a6c4f0190a`.
+
+The real unpacked automatic path creates one 29,827-byte PDF plus a Journal entry. Current-source controls pass for durable pre-start intent, one-call/late settlement, exact Blob/DownloadItem identity, unknown retention and PREPARED/STARTED/RELEASE ordering. The Save As page-owner browser control also proves one untimed pending call and no premature caller release, but uses a mocked Downloads API and does not exercise the native file chooser.
+
+Fresh source evidence retains five material P1-156 gaps: the common 16-minute Blob TTL can expire PREPARED bytes before the native dialog settles; page loss can occur after a numeric id but before STARTED delivery; the worker watcher is armed before durable STARTED and is not reconstructed after restart; STARTED does not validate all immutable PREPARED fields; and Journal export STARTED is recorded as terminal OperationLog success before physical DownloadItem completion. Duplicate/root-cause reconciliation keeps **P1-146 / P1-156 ACTIVE**, with **P1-064 ACTIVE** supporting and **P0-039/P0-048 DONE** positive.
+
+C41 advances to `L4-REVALIDATED / PARTIAL/FINDING + POSITIVE/REAL-AUTOMATIC-DOWNLOAD/EXACT-ID/LATE-SETTLEMENT/PREPARED-STARTED-RELEASE/PAGE-OWNER CONTROLS; NATIVE-L5 OPEN (P1-146, P1-156; P1-064 supporting, P0-039/P0-048 positive)`. It remains the next open coordinate for real automatic-response-loss/worker-restart and native Save As success/cancel/unresolved-dialog plus owner-page/worker-restart evidence; C42 stays queued.
 
 ## Delivery rule
 
