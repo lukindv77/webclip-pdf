@@ -107,19 +107,29 @@ async function removeHost(browser, id) {
 }
 
 async function trustedRequest(probe) {
+  const requestedAt = Date.now();
   await bounded(probe.click('#grant'), 5000, 'probe click');
   const deadline = Date.now() + 12000;
+  let contextReloaded = false;
+  let lastError = '';
   while (Date.now() < deadline) {
-    const state = await probe.evaluate(() => ({
-      started: document.body.dataset.started || '',
-      settled: document.body.dataset.settled || '',
-      granted: document.body.dataset.granted || '',
-      error: document.body.dataset.error || ''
-    }));
-    if (state.settled) return state;
+    try {
+      const granted = await contains(probe);
+      if (granted) {
+        return { requestedAt, granted: true, contextReloaded, observedAt: Date.now() };
+      }
+    } catch (error) {
+      const message = String(error?.message || error);
+      lastError = message;
+      if (/Execution context was destroyed|Cannot find context|detached Frame/i.test(message)) {
+        contextReloaded = true;
+      } else {
+        throw error;
+      }
+    }
     await sleep(100);
   }
-  throw new Error('trusted permissions.request did not settle');
+  throw new Error('trusted permissions.request did not produce granted permission; lastError=' + lastError);
 }
 
 const temp = makeTemp();
@@ -155,7 +165,7 @@ try {
   const request = await trustedRequest(probe);
   const afterRequest = await contains(probe);
   log('after-request', { request, afterRequest });
-  assert.equal(request.granted, 'true', JSON.stringify(request));
+  assert.equal(request.granted, true, JSON.stringify(request));
   assert.equal(afterRequest, true);
   console.log('C46_PERMISSION_SEED_JSON=' + JSON.stringify({
     browserVersion: await browser.version(),
