@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
+// C44 local preview/commit authority regression for P0-013 and P1-207.
 const root = path.resolve(__dirname, '..');
 const worker = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
 const journal = fs.readFileSync(path.join(root, 'journal.js'), 'utf8');
