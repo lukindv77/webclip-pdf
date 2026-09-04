@@ -1,4 +1,5 @@
-importScripts('public-suffix.js', 'journal-import-stream.js', 'journal-import-digest.js', 'journal-text-filter.js', 'local-download-identity.js');
+importScripts('public-suffix.js', 'journal-import-stream.js', 'journal-text-filter.js', 'local-download-identity.js');
+importScripts('journal-import-digest.js');
 
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
 const YANDEX_API_BASE = 'https://cloud-api.yandex.net/v1/disk';
