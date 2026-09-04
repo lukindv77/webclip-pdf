@@ -150,3 +150,12 @@ C44 remains PARTIAL and OPEN. Remaining exit evidence:
 5. exercise remote backup only with an explicitly authorized isolated Yandex test context.
 
 This tranche changes runtime and adds a deterministic regression test. No new P-code or Registry status change is warranted; manifest remains `0.9.8` and release readiness remains NOT READY.
+
+
+## 2026-09-04 candidate — bounded restart ownership (verification pending)
+
+Branch `fix/c44-import-restart-lease-2026-09-04` is evaluating the next local-only C44 remediation for P1-215 while preserving P0-013 receipt binding. The candidate adds one durable `journalImportLease` checkpoint in `WebClipJournal.meta`, a rotating page-owner token with a two-minute renewable lease, a staging-generation-based two-hour hard deadline, explicit restart resume/cancel messages, and an in-transaction lease check ordered before revision CAS and destructive replacement.
+
+Generic transfer cleanup treats a valid hard-live checkpoint as protected. If checkpoint metadata is corrupt, cleanup fails closed for Journal-import record kinds instead of guessing ownership. Resume must first acquire an expired short lease, then re-read and re-hash the staged bytes and capture a fresh Journal revision before a new destructive confirmation. Missing, generation-invalid or hard-expired checkpoints are the only automatic reclamation cases.
+
+Current classification remains unchanged while verification is pending. The deterministic candidate is `project_tools/test_c44_import_restart_lease.js`; the physical full-browser-restart matrix and exact evidence receipt are not yet accepted. This work is strictly local synthetic-data integrity testing: no remote service, credential, user data, permission bypass or exploit path is exercised.
