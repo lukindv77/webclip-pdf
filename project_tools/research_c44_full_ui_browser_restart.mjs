@@ -35,8 +35,11 @@ function sourceContract() {
   const uiImport = sliceFrom(JOURNAL, 'async function importJournalFromSelectedFile', 6500);
   const preview = sliceFrom(WORKER, 'async function previewStagedJournalImport', 5500);
   const replace = sliceFrom(WORKER, 'async function importJournalReplaceStaged', 6500);
-  const commit = sliceFrom(WORKER, 'async function commitStagedJournalImport', 11000);
-  const revisionRead = commit.indexOf('metaStore.get(JOURNAL_META_REVISION_KEY)');
+  const commit = sliceFrom(WORKER, 'async function commitStagedJournalImport', 13000);
+  const leaseRead = commit.indexOf('metaStore.get(JOURNAL_IMPORT_LEASE_KEY)');
+  const leaseAuthority = commit.indexOf('assertJournalImportLeaseAuthority', leaseRead);
+  const revisionRead = commit.indexOf('metaStore.get(JOURNAL_META_REVISION_KEY)', leaseAuthority);
+  const leaseDelete = commit.indexOf('metaStore.delete(JOURNAL_IMPORT_LEASE_KEY)', revisionRead);
   const firstClear = commit.indexOf('tx.objectStore(JOURNAL_PENDING_STORE).clear();');
   const revisionCompare = commit.indexOf('currentRevision !== expectedRevision');
   const guardedReplace = commit.indexOf('beginReplace();', revisionCompare);
@@ -48,10 +51,13 @@ function sourceContract() {
     realUiReusesKeyAfterConfirmation: uiImport.includes("type: 'WEBCLIP_JOURNAL_IMPORT_REPLACE_STAGED'") && uiImport.includes('stagingKey,'),
     confirmationShowsCountDateAndDigest: uiImport.includes('Записей в файле: ${preview.entryCount}.') && uiImport.includes("Дата экспорта: ${preview.exportedAt || 'не указана'}.") && uiImport.includes('SHA-256 проверенной копии: ${preview.contentSha256}.'),
     previewBindsDigestGenerationModeAndRevision: preview.includes('inspectStagedJournalImportStream(key)') && preview.includes('createJournalImportPreviewReceipt') && preview.includes('expectedJournalRevision') && preview.includes('previewReceipt'),
-    uiReturnsPreviewReceiptUnchanged: uiImport.includes('const previewReceipt = requireJournalImportPreviewReceipt(preview);') && uiImport.includes('previewReceipt\n    });'),
+    uiReturnsPreviewReceiptUnchanged: uiImport.includes('const previewReceipt = requireJournalImportPreviewReceipt(preview);') && uiImport.includes('previewReceipt,') && uiImport.includes('leaseToken: importLease.leaseToken'),
+    renewableImportLease: WORKER.includes('async function renewJournalImportLease') && JOURNAL.includes("type: 'WEBCLIP_JOURNAL_IMPORT_LEASE_RENEW'"),
+    explicitRestartResumeCancel: JOURNAL.includes('async function recoverPendingJournalImport') && WORKER.includes("case 'WEBCLIP_JOURNAL_IMPORT_RESUME_PENDING'") && WORKER.includes("case 'WEBCLIP_JOURNAL_IMPORT_CANCEL_PENDING'"),
+    hardLiveImportProtectedFromGenericTtl: WORKER.includes('lease.hardExpiresAt > now') && WORKER.includes("kind === 'journal-import-manifest'") && WORKER.includes("kind === 'journal-import-chunk-blob'"),
     replaceRereadsAndMatchesTransferBytes: replace.includes('normalizeStagedJournalImportStream(key)') && replace.includes('assertPreparedJournalImportMatchesPreview(prepared, previewReceipt)'),
     replaceRequiresPreviewReceipt: replace.includes('normalizeJournalImportPreviewReceipt(previewReceiptValue') && replace.includes('stagingKey: key') && replace.includes('source: sourceKind') && replace.includes('operationId'),
-    expectedRevisionCasGuardsDestructiveWrites: revisionRead >= 0 && firstClear >= 0 && revisionCompare > revisionRead && guardedReplace > revisionCompare,
+    leaseAndRevisionCasGuardDestructiveWrites: leaseRead >= 0 && leaseAuthority > leaseRead && revisionRead > leaseAuthority && leaseDelete > revisionRead && firstClear >= 0 && revisionCompare > revisionRead && guardedReplace > leaseDelete,
     incrementalDigestModulePresent: IMPORT_DIGEST.includes('class IncrementalSha256') && IMPORT_DIGEST.includes('digestHex()'),
     replaceClearsRecoveryStores: [
       'JOURNAL_PENDING_STORE',
@@ -295,13 +301,49 @@ async function installDbHelpers(page) {
       return { byteCount: blob.size };
     }
 
+    async function journalImportLease() {
+      const db = await open('WebClipJournal', 7);
+      const tx = db.transaction('meta', 'readonly');
+      const record = await requestResult(tx.objectStore('meta').get('journalImportLease'));
+      db.close();
+      return record?.value || null;
+    }
+
+    async function expireJournalImportLease() {
+      const db = await open('WebClipJournal', 7);
+      const tx = db.transaction('meta', 'readwrite');
+      const done = txDone(tx);
+      const store = tx.objectStore('meta');
+      const record = await requestResult(store.get('journalImportLease'));
+      if (!record?.value) {
+        db.close();
+        throw new Error('C44 import lease missing');
+      }
+      const now = Date.now();
+      store.put({
+        ...record,
+        value: {
+          ...record.value,
+          updatedAt: now,
+          leaseExpiresAt: Math.min(Number(record.value.hardExpiresAt || now), now - 1)
+        },
+        changedAt: now,
+        reason: 'c44-physical-expire-short-lease'
+      });
+      await done;
+      db.close();
+      return true;
+    }
+
     globalThis.__c44ui = Object.freeze({
       seedCurrent,
       injectConcurrent,
       journalSnapshot,
       importManifests,
       transferGroup,
-      replaceTransferGroup
+      replaceTransferGroup,
+      journalImportLease,
+      expireJournalImportLease
     });
   });
 }
@@ -328,6 +370,26 @@ async function uploadAndAwaitConfirmation(page, filePath) {
   assert.match(state.code, /^\d{9}$/);
   assert(state.manifests.length >= 1, JSON.stringify(state));
   return state;
+}
+
+
+async function confirmVisibleDialog(page) {
+  const code = await page.$eval('#confirmCode', item => item.textContent || '');
+  assert.match(code, /^\d{9}$/);
+  await page.$eval('#confirmInput', (item, value) => {
+    item.value = value;
+    item.dispatchEvent(new Event('input', { bubbles: true }));
+  }, code);
+  await page.click('#confirmProceed');
+}
+
+async function confirmResumedImport(page) {
+  await confirmVisibleDialog(page);
+  await page.waitForFunction(
+    () => document.querySelector('#status')?.textContent?.includes('Незавершённый импорт возобновлён'),
+    { timeout: 90000 }
+  );
+  return page.$eval('#status', item => item.textContent || '');
 }
 
 async function confirmImport(page) {
@@ -507,12 +569,18 @@ async function run() {
     assert.equal(afterSuccess.pendingRemoteSaves.length, 0);
     assert.equal(transferAfterSuccess.length, 0);
 
-    await seedCurrent(page, 'restart-base');
+    await seedCurrent(page, 'restart-resume-base');
     const restartPreview = await uploadAndAwaitConfirmation(page, backupAPath);
     const restartStagingKey = restartPreview.manifests.at(-1).id;
     const restartGroupBefore = await page.evaluate(key => globalThis.__c44ui.transferGroup(key), restartStagingKey);
     const restartJournalBefore = await journalSnapshot(page);
+    const restartLeaseBefore = restartJournalBefore.meta.find(row => row?.key === 'journalImportLease')?.value || null;
     assert(restartGroupBefore.length >= 2);
+    assert(restartLeaseBefore?.leaseToken);
+    assert(restartLeaseBefore?.ownerSessionId);
+    assert.equal(restartLeaseBefore?.previewReceipt?.stagingKey, restartStagingKey);
+    assert.equal(restartLeaseBefore?.previewReceipt?.operationId, restartPreview.operationId);
+    assert.equal(restartLeaseBefore?.previewReceipt?.contentSha256, sha256(exported.text));
 
     await browser.close();
     browser = null;
@@ -526,26 +594,168 @@ async function run() {
     const resumedUi = await page.evaluate(() => ({
       confirmationVisible: !document.querySelector('#confirmBackdrop')?.classList.contains('hidden'),
       selectedFileCount: document.querySelector('#importFileInput')?.files?.length || 0,
-      operationId: document.querySelector('#lastOperationId')?.textContent || ''
+      operationId: document.querySelector('#lastOperationId')?.textContent || '',
+      status: document.querySelector('#status')?.textContent || ''
     }));
     assert(restartGroupAfter.length >= 2, JSON.stringify(restartGroupAfter));
     assert.equal(resumedUi.confirmationVisible, false);
     assert.equal(resumedUi.selectedFileCount, 0);
-    assert(restartJournalAfter.entries.some(row => row.id === 'current-restart-base'));
+    assert(resumedUi.status.includes('принадлежит другой странице'), resumedUi.status);
+    assert(restartJournalAfter.entries.some(row => row.id === 'current-restart-resume-base'));
     assert.equal(restartJournalAfter.pendingAppends.length, restartJournalBefore.pendingAppends.length);
     assert.equal(restartJournalAfter.pendingDownloads.length, restartJournalBefore.pendingDownloads.length);
     assert.equal(restartJournalAfter.pendingRemoteSaves.length, restartJournalBefore.pendingRemoteSaves.length);
 
-    const retryPreview = await uploadAndAwaitConfirmation(page, backupAPath);
-    const retryStagingKey = retryPreview.manifests.map(row => row.id).find(id => id !== restartStagingKey);
-    assert(retryStagingKey, JSON.stringify(retryPreview.manifests));
-    const retryStatus = await confirmImport(page);
-    const afterRetry = await journalSnapshot(page);
-    const abandonedAfterRetry = await page.evaluate(key => globalThis.__c44ui.transferGroup(key), restartStagingKey);
-    const retryGroupAfter = await page.evaluate(key => globalThis.__c44ui.transferGroup(key), retryStagingKey);
-    assert(afterRetry.entries.some(row => row.title === 'C44_CURRENT_export-A'));
-    assert(abandonedAfterRetry.length >= 2);
-    assert.equal(retryGroupAfter.length, 0);
+    await page.evaluate(() => globalThis.__c44ui.expireJournalImportLease());
+    await page.evaluate(() => {
+      void globalThis.checkForPendingJournalImport();
+      return true;
+    });
+    await page.waitForFunction(
+      () => !document.querySelector('#confirmBackdrop')?.classList.contains('hidden')
+        && document.querySelector('#confirmTitle')?.textContent === 'Незавершённый импорт журнала',
+      { timeout: 30000 }
+    );
+    const recoveryPrompt = await page.evaluate(() => ({
+      title: document.querySelector('#confirmTitle')?.textContent || '',
+      text: document.querySelector('#confirmText')?.textContent || ''
+    }));
+    assert(recoveryPrompt.text.includes(restartLeaseBefore.previewReceipt.contentSha256), recoveryPrompt.text);
+    const journalAtRecoveryPrompt = await journalSnapshot(page);
+    assert.deepEqual(
+      journalAtRecoveryPrompt.entries.map(row => row.id).sort(),
+      restartJournalBefore.entries.map(row => row.id).sort()
+    );
+
+    await confirmVisibleDialog(page);
+    await page.waitForFunction(
+      () => !document.querySelector('#confirmBackdrop')?.classList.contains('hidden')
+        && document.querySelector('#confirmTitle')?.textContent === 'Подтвердите восстановление журнала',
+      { timeout: 90000 }
+    );
+    const resumedConfirmation = await page.evaluate(() => ({
+      title: document.querySelector('#confirmTitle')?.textContent || '',
+      text: document.querySelector('#confirmText')?.textContent || ''
+    }));
+    const claimedLease = await page.evaluate(() => globalThis.__c44ui.journalImportLease());
+    assert(claimedLease?.leaseToken);
+    assert.notEqual(claimedLease.leaseToken, restartLeaseBefore.leaseToken);
+    assert.notEqual(claimedLease.ownerSessionId, restartLeaseBefore.ownerSessionId);
+    assert.equal(claimedLease.previewReceipt.stagingKey, restartStagingKey);
+    assert.equal(claimedLease.previewReceipt.contentSha256, restartLeaseBefore.previewReceipt.contentSha256);
+    assert(resumedConfirmation.text.includes(claimedLease.previewReceipt.contentSha256), resumedConfirmation.text);
+
+    const staleOwnerAttempt = await page.evaluate(oldLease => chrome.runtime.sendMessage({
+      type: 'WEBCLIP_JOURNAL_IMPORT_REPLACE_STAGED',
+      stagingKey: oldLease.previewReceipt.stagingKey,
+      operationId: oldLease.previewReceipt.operationId,
+      source: oldLease.previewReceipt.source,
+      previewReceipt: oldLease.previewReceipt,
+      leaseToken: oldLease.leaseToken,
+      ownerSessionId: oldLease.ownerSessionId
+    }), restartLeaseBefore);
+    assert.equal(staleOwnerAttempt?.ok, false, JSON.stringify(staleOwnerAttempt));
+    assert.match(String(staleOwnerAttempt?.error || ''), /Lease|владе|истёк/i);
+    const journalAfterStaleOwnerAttempt = await journalSnapshot(page);
+    const stagedAfterStaleOwnerAttempt = await page.evaluate(
+      key => globalThis.__c44ui.transferGroup(key),
+      restartStagingKey
+    );
+    assert.deepEqual(
+      journalAfterStaleOwnerAttempt.entries.map(row => row.id).sort(),
+      restartJournalBefore.entries.map(row => row.id).sort()
+    );
+    assert.deepEqual(
+      journalAfterStaleOwnerAttempt.pendingAppends.map(row => row.operationId).sort(),
+      restartJournalBefore.pendingAppends.map(row => row.operationId).sort()
+    );
+    assert.deepEqual(
+      journalAfterStaleOwnerAttempt.pendingDownloads.map(row => row.operationId).sort(),
+      restartJournalBefore.pendingDownloads.map(row => row.operationId).sort()
+    );
+    assert.deepEqual(
+      journalAfterStaleOwnerAttempt.pendingRemoteSaves.map(row => row.operationId).sort(),
+      restartJournalBefore.pendingRemoteSaves.map(row => row.operationId).sort()
+    );
+    assert(stagedAfterStaleOwnerAttempt.length >= 2);
+
+    const resumeStatus = await confirmResumedImport(page);
+    const afterResume = await journalSnapshot(page);
+    const restartGroupAfterResume = await page.evaluate(
+      key => globalThis.__c44ui.transferGroup(key),
+      restartStagingKey
+    );
+    const leaseAfterResume = await page.evaluate(() => globalThis.__c44ui.journalImportLease());
+    assert(afterResume.entries.some(row => row.title === 'C44_CURRENT_export-A'));
+    assert(!afterResume.entries.some(row => row.id === 'current-restart-resume-base'));
+    assert.equal(afterResume.pendingAppends.length, 0);
+    assert.equal(afterResume.pendingDownloads.length, 0);
+    assert.equal(afterResume.pendingRemoteSaves.length, 0);
+    assert.equal(restartGroupAfterResume.length, 0);
+    assert.equal(leaseAfterResume, null);
+
+    await seedCurrent(page, 'restart-cancel-base');
+    const cancelPreview = await uploadAndAwaitConfirmation(page, backupAPath);
+    const cancelStagingKey = cancelPreview.manifests.at(-1).id;
+    const cancelGroupBefore = await page.evaluate(key => globalThis.__c44ui.transferGroup(key), cancelStagingKey);
+    const cancelJournalBefore = await journalSnapshot(page);
+    const cancelLeaseBefore = cancelJournalBefore.meta.find(row => row?.key === 'journalImportLease')?.value || null;
+    assert(cancelGroupBefore.length >= 2);
+    assert(cancelLeaseBefore?.leaseToken);
+
+    await browser.close();
+    browser = null;
+
+    browser = await launchBrowser(temp.extension, temp.profile);
+    page = await openJournal(browser, extensionId);
+    const extensionIdAfterCancelRestart = await discoverExtensionId(browser);
+    assert.equal(extensionIdAfterCancelRestart, extensionId);
+    const cancelInitialUi = await page.evaluate(() => ({
+      confirmationVisible: !document.querySelector('#confirmBackdrop')?.classList.contains('hidden'),
+      status: document.querySelector('#status')?.textContent || ''
+    }));
+    assert.equal(cancelInitialUi.confirmationVisible, false);
+    assert(cancelInitialUi.status.includes('принадлежит другой странице'), cancelInitialUi.status);
+
+    await page.evaluate(() => globalThis.__c44ui.expireJournalImportLease());
+    await page.evaluate(() => {
+      void globalThis.checkForPendingJournalImport();
+      return true;
+    });
+    await page.waitForFunction(
+      () => !document.querySelector('#confirmBackdrop')?.classList.contains('hidden')
+        && document.querySelector('#confirmTitle')?.textContent === 'Незавершённый импорт журнала',
+      { timeout: 30000 }
+    );
+    const cancelPrompt = await page.evaluate(() => ({
+      title: document.querySelector('#confirmTitle')?.textContent || '',
+      text: document.querySelector('#confirmText')?.textContent || ''
+    }));
+    assert(cancelPrompt.text.includes(cancelLeaseBefore.previewReceipt.contentSha256), cancelPrompt.text);
+    await page.click('#confirmCancel');
+    await page.waitForFunction(
+      () => document.querySelector('#status')?.textContent?.includes('Незавершённый staged import удалён'),
+      { timeout: 30000 }
+    );
+    const cancelStatus = await page.$eval('#status', item => item.textContent || '');
+    const afterCancel = await journalSnapshot(page);
+    const cancelGroupAfter = await page.evaluate(key => globalThis.__c44ui.transferGroup(key), cancelStagingKey);
+    const leaseAfterCancel = await page.evaluate(() => globalThis.__c44ui.journalImportLease());
+    assert(afterCancel.entries.some(row => row.id === 'current-restart-cancel-base'));
+    assert.deepEqual(
+      afterCancel.pendingAppends.map(row => row.operationId).sort(),
+      cancelJournalBefore.pendingAppends.map(row => row.operationId).sort()
+    );
+    assert.deepEqual(
+      afterCancel.pendingDownloads.map(row => row.operationId).sort(),
+      cancelJournalBefore.pendingDownloads.map(row => row.operationId).sort()
+    );
+    assert.deepEqual(
+      afterCancel.pendingRemoteSaves.map(row => row.operationId).sort(),
+      cancelJournalBefore.pendingRemoteSaves.map(row => row.operationId).sort()
+    );
+    assert.equal(cancelGroupAfter.length, 0);
+    assert.equal(leaseAfterCancel, null);
 
     const result = {
       sourceBaseline: BASELINE,
@@ -633,18 +843,45 @@ async function run() {
         status: successStatus
       },
       fullBrowserRestart: {
-        extensionIdStable: extensionIdAfter === extensionId,
+        extensionIdStable: extensionIdAfter === extensionId && extensionIdAfterCancelRestart === extensionId,
         stagedRowsBeforeRestart: restartGroupBefore.length,
         stagedRowsAfterRestart: restartGroupAfter.length,
-        journalEntryIdsBefore: restartJournalBefore.entries.map(row => row.id),
-        journalEntryIdsAfter: restartJournalAfter.entries.map(row => row.id),
-        confirmationRestored: resumedUi.confirmationVisible,
+        automaticDestructiveResume: resumedUi.confirmationVisible,
         selectedFileRestored: resumedUi.selectedFileCount > 0,
         operationIdRestored: resumedUi.operationId === restartPreview.operationId,
-        freshRetrySucceeded: afterRetry.entries.some(row => row.title === 'C44_CURRENT_export-A'),
-        abandonedOriginalRowsAfterRetry: abandonedAfterRetry.length,
-        freshRetryRowsAfterCommit: retryGroupAfter.length,
-        retryStatus
+        resumePromptShown: recoveryPrompt.title === 'Незавершённый импорт журнала',
+        resumePromptSha256: sha256(recoveryPrompt.text),
+        journalEntryIdsBeforeRestart: restartJournalBefore.entries.map(row => row.id),
+        journalEntryIdsAtResumePrompt: journalAtRecoveryPrompt.entries.map(row => row.id),
+        secondConfirmationShown: resumedConfirmation.title === 'Подтвердите восстановление журнала',
+        secondConfirmationSha256: sha256(resumedConfirmation.text),
+        leaseTokenRotated: claimedLease.leaseToken !== restartLeaseBefore.leaseToken,
+        ownerSessionRotated: claimedLease.ownerSessionId !== restartLeaseBefore.ownerSessionId,
+        oldLeaseTokenRejected: staleOwnerAttempt?.ok === false,
+        oldLeaseError: String(staleOwnerAttempt?.error || ''),
+        journalEntryIdsAfterStaleOwnerAttempt: journalAfterStaleOwnerAttempt.entries.map(row => row.id),
+        stagedRowsAfterStaleOwnerAttempt: stagedAfterStaleOwnerAttempt.length,
+        resumedImportSucceeded: afterResume.entries.some(row => row.title === 'C44_CURRENT_export-A'),
+        priorEntryRemoved: !afterResume.entries.some(row => row.id === 'current-restart-resume-base'),
+        pendingCountsAfterResume: {
+          appends: afterResume.pendingAppends.length,
+          downloads: afterResume.pendingDownloads.length,
+          remote: afterResume.pendingRemoteSaves.length
+        },
+        checkpointRemovedAfterResume: leaseAfterResume === null,
+        stagedRowsAfterResume: restartGroupAfterResume.length,
+        resumeStatus,
+        cancelPromptShown: cancelPrompt.title === 'Незавершённый импорт журнала',
+        cancelPromptSha256: sha256(cancelPrompt.text),
+        cancelPreservedJournal: afterCancel.entries.some(row => row.id === 'current-restart-cancel-base'),
+        cancelPreservedPendingCounts: (
+          afterCancel.pendingAppends.length === cancelJournalBefore.pendingAppends.length
+          && afterCancel.pendingDownloads.length === cancelJournalBefore.pendingDownloads.length
+          && afterCancel.pendingRemoteSaves.length === cancelJournalBefore.pendingRemoteSaves.length
+        ),
+        cancelRemovedCheckpoint: leaseAfterCancel === null,
+        cancelRemovedStaging: cancelGroupAfter.length === 0,
+        cancelStatus
       },
       browserVersion,
       extensionId

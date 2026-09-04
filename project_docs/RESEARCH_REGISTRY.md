@@ -164,7 +164,6 @@ Every code in this range remains occupied. All are ACTIVE except `P1-213`, which
 | P1-211 | ACTIVE | Deleted comment tombstones need one lifecycle across retention/search/export/import and portable capacity debt; deleted payload cannot consume active capacity forever. |
 | P1-212 | ACTIVE | Print preparation must not synthesize activation of page-owned controls merely to reveal content. |
 | P1-214 | ACTIVE | Multi-frame remote print prepare/restore needs exact partial-success rollback receipts and actual restore settlement per child/generation. |
-| P1-215 | ACTIVE | Import staging displayed in a live destructive confirmation needs owner/lease; generic age cleanup cannot reclaim it while confirmation owns it. |
 | P1-216 | ACTIVE | Legacy and modern Journal rows share one derived URL identity domain for view/clear/delete/stats/templates; missing persisted urlKey cannot create ghost scope. |
 | P1-217 | ACTIVE | Chrome Action requires explicit unknown/degraded truth; failed current read cannot leave previous URL's icon/badge/title on the tab. |
 | P1-218 | ACTIVE | Temporary resource-attribute rollback (top + frame agent) is compare-before-restore and preparation-generation owned; stale cleanup cannot overwrite host changes. |
@@ -195,6 +194,7 @@ P1-230 is admitted from the 2026-08-30 C22/C23 contract tranche in `RESEARCH_USE
 | Code | Status | Direct closure |
 |---|---|---|
 | P1-153 | DONE | Original `its.1c.ru` root-document pagination/clipping repro: real Chrome generated complete 2-page PDF after root print-flow normalization. Historical measurements are in `TEST_EVIDENCE.md` / `RESEARCH_EVIDENCE.md`. Later print-safety/rollback owners do not reopen that exact clipping result. |
+| P1-215 | DONE | Journal import preview now owns exact raw staging through a durable v1 checkpoint: worker-issued receipt + rotating lease token/page owner, two-minute renewable lease, staging-generation-based two-hour hard deadline, fail-closed generic cleanup, explicit expired-lease resume/cancel, re-hash + fresh revision + second confirmation, and same-transaction lease/revision guards. Deterministic regression and real unpacked Chrome 152 run `33825545613` prove old-token rejection, successful resume and explicit cancel without unintended Journal mutation. |
 
 ## P2 — product/architecture backlog
 

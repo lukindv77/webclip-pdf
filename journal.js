@@ -171,6 +171,12 @@ const TRANSFER_DB_VERSION = 1;
 const TRANSFER_STORE = 'payloads';
 const MAX_JOURNAL_IMPORT_BYTES = 50 * 1024 * 1024;
 const JOURNAL_IMPORT_CHUNK_BYTES = 1024 * 1024;
+const JOURNAL_IMPORT_LEASE_HEARTBEAT_MS = 30 * 1000;
+const journalImportOwnerSessionId = `journal-page-${crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+let activeJournalImportLease = null;
+let journalImportLeaseHeartbeatTimer = 0;
+let journalImportLeaseLostError = null;
+let journalImportRecoveryTimer = 0;
 
 const versionEl = document.getElementById('version');
 const sourceUrlEl = document.getElementById('sourceUrl');
@@ -861,10 +867,18 @@ async function stageJournalImportFile(file) {
   return id;
 }
 
-async function discardStagedJournalImport(stagingKey) {
+async function discardStagedJournalImport(stagingKey, importLease = null) {
   const key = String(stagingKey || '');
-  if (!key) return;
-  await chrome.runtime.sendMessage({ type: 'WEBCLIP_JOURNAL_IMPORT_DISCARD_STAGED', stagingKey: key }).catch(() => {});
+  if (!key) return { ok: true };
+  const response = await chrome.runtime.sendMessage({
+    type: 'WEBCLIP_JOURNAL_IMPORT_DISCARD_STAGED',
+    stagingKey: key,
+    leaseToken: String(importLease?.leaseToken || ''),
+    ownerSessionId: journalImportOwnerSessionId
+  });
+  requireOk(response);
+  if (activeJournalImportLease?.leaseToken === importLease?.leaseToken) stopJournalImportLeaseHeartbeat();
+  return response;
 }
 
 function requireJournalImportPreviewReceipt(response) {
@@ -879,6 +893,79 @@ function requireJournalImportPreviewReceipt(response) {
     throw new Error('Service worker не вернул корректную квитанцию проверки резервной копии. Импорт остановлен.');
   }
   return receipt;
+}
+
+function requireJournalImportLease(response) {
+  const leaseToken = String(response?.leaseToken || '');
+  const leaseExpiresAt = Number(response?.leaseExpiresAt);
+  const hardExpiresAt = Number(response?.hardExpiresAt);
+  if (
+    !/^[A-Za-z0-9._:-]{1,180}$/.test(leaseToken)
+    || !Number.isSafeInteger(leaseExpiresAt)
+    || !Number.isSafeInteger(hardExpiresAt)
+    || leaseExpiresAt <= Date.now()
+    || hardExpiresAt < leaseExpiresAt
+  ) {
+    throw new Error('Service worker не вернул корректный lease подготовленного импорта. Импорт остановлен.');
+  }
+  return {
+    leaseToken,
+    leaseExpiresAt,
+    hardExpiresAt
+  };
+}
+
+function stopJournalImportLeaseHeartbeat() {
+  if (journalImportLeaseHeartbeatTimer) clearInterval(journalImportLeaseHeartbeatTimer);
+  journalImportLeaseHeartbeatTimer = 0;
+  activeJournalImportLease = null;
+  journalImportLeaseLostError = null;
+}
+
+function startJournalImportLeaseHeartbeat(importLease) {
+  if (journalImportLeaseHeartbeatTimer) clearInterval(journalImportLeaseHeartbeatTimer);
+  activeJournalImportLease = importLease;
+  journalImportLeaseLostError = null;
+  journalImportLeaseHeartbeatTimer = setInterval(async () => {
+    const current = activeJournalImportLease;
+    if (!current) return;
+    try {
+      const renewed = await chrome.runtime.sendMessage({
+        type: 'WEBCLIP_JOURNAL_IMPORT_LEASE_RENEW',
+        leaseToken: current.leaseToken,
+        ownerSessionId: journalImportOwnerSessionId
+      });
+      requireOk(renewed);
+      if (activeJournalImportLease?.leaseToken === current.leaseToken) {
+        current.leaseExpiresAt = Number(renewed.leaseExpiresAt || current.leaseExpiresAt);
+        current.hardExpiresAt = Number(renewed.hardExpiresAt || current.hardExpiresAt);
+      }
+    } catch (error) {
+      if (activeJournalImportLease?.leaseToken !== current.leaseToken) return;
+      journalImportLeaseLostError = error instanceof Error ? error : new Error(String(error || 'Lease импорта потерян.'));
+      clearInterval(journalImportLeaseHeartbeatTimer);
+      journalImportLeaseHeartbeatTimer = 0;
+    }
+  }, JOURNAL_IMPORT_LEASE_HEARTBEAT_MS);
+}
+
+function assertJournalImportLeaseUsable(importLease) {
+  if (
+    !importLease
+    || activeJournalImportLease?.leaseToken !== importLease.leaseToken
+    || journalImportLeaseLostError
+    || Number(importLease.leaseExpiresAt || 0) <= Date.now()
+  ) {
+    throw journalImportLeaseLostError || new Error('Lease импорта истёк. Перезагрузите Журнал и возобновите импорт явно.');
+  }
+}
+
+function journalImportReplaceConfirmationText(preview, sourceLabel) {
+  return `Текущий локальный журнал будет полностью заменён данными из ${sourceLabel}.
+Записей: ${preview.entryCount}.
+Дата экспорта: ${preview.exportedAt || 'не указана'}.
+SHA-256 проверенной копии: ${preview.contentSha256}.
+Действие нельзя отменить.`;
 }
 
 function openJournalDbForView() {
@@ -2732,6 +2819,7 @@ async function importJournalFromSelectedFile() {
   if (!beginJournalDestructiveOperation('Импорт журнала из файла')) return;
   let stagingKey = '';
   let operationId = '';
+  let importLease = null;
   try {
     if (file.size > 50 * 1024 * 1024) throw new Error('Файл журнала больше 50 МБ.');
     operationId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -2741,10 +2829,13 @@ async function importJournalFromSelectedFile() {
       type: 'WEBCLIP_JOURNAL_IMPORT_PREVIEW_STAGED',
       stagingKey,
       operationId,
-      source: 'file'
+      source: 'file',
+      ownerSessionId: journalImportOwnerSessionId
     });
     requireOk(preview);
     const previewReceipt = requireJournalImportPreviewReceipt(preview);
+    importLease = requireJournalImportLease(preview);
+    startJournalImportLeaseHeartbeat(importLease);
     const confirmed = await requestDangerousConfirmation({
       title: 'Импорт полного журнала',
       text: `Импорт полностью заменит текущий локальный журнал данными из файла «${file.name}».
@@ -2754,7 +2845,7 @@ SHA-256 проверенной копии: ${preview.contentSha256}.
 Действие нельзя отменить.`
     });
     if (!confirmed) {
-      await discardStagedJournalImport(stagingKey);
+      await discardStagedJournalImport(stagingKey, importLease);
       stagingKey = '';
       await chrome.runtime.sendMessage({
         type: 'WEBCLIP_OPERATION_LOG_FINISH', operationId, status: 'canceled',
@@ -2763,21 +2854,28 @@ SHA-256 проверенной копии: ${preview.contentSha256}.
       setStatus(`Импорт журнала отменён. · operationId: ${operationId}`, '');
       return;
     }
+    assertJournalImportLeaseUsable(importLease);
     const result = await chrome.runtime.sendMessage({
       type: 'WEBCLIP_JOURNAL_IMPORT_REPLACE_STAGED',
       stagingKey,
       operationId,
       source: 'file',
-      previewReceipt
+      previewReceipt,
+      leaseToken: importLease.leaseToken,
+      ownerSessionId: journalImportOwnerSessionId
     });
-    stagingKey = '';
     requireOk(result);
+    stagingKey = '';
     setStatus(`Журнал восстановлен из файла. Импортировано записей: ${result.importedCount}. · operationId: ${result.operationId || operationId}`, 'ok');
     await loadJournal();
   } catch (error) {
-    if (stagingKey) await discardStagedJournalImport(stagingKey);
+    const mayDiscard = !importLease || !journalImportLeaseLostError;
+    if (stagingKey && mayDiscard) {
+      await discardStagedJournalImport(stagingKey, importLease).catch(() => {});
+    }
     setStatus(`Ошибка импорта: ${error?.message || String(error)}${operationId ? ` · operationId: ${operationId}` : ''}`, 'error');
   } finally {
+    stopJournalImportLeaseHeartbeat();
     endJournalDestructiveOperation();
   }
 }
@@ -2952,15 +3050,19 @@ async function importSelectedYandexBackup() {
   const operationId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   showLastOperationId(operationId);
   let yandexStagingKey = '';
+  let importLease = null;
   backupPickerStatus.textContent += `\noperationId: ${operationId}`;
   try {
     const fetched = await chrome.runtime.sendMessage({
       type: 'WEBCLIP_JOURNAL_YANDEX_FETCH_BACKUP',
       path,
-      operationId
+      operationId,
+      ownerSessionId: journalImportOwnerSessionId
     });
     requireOk(fetched);
     const previewReceipt = requireJournalImportPreviewReceipt(fetched);
+    importLease = requireJournalImportLease(fetched);
+    startJournalImportLeaseHeartbeat(importLease);
     yandexStagingKey = String(fetched.stagingKey || '');
     closeYandexBackupPicker();
     const confirmed = await requestDangerousConfirmation({
@@ -2968,7 +3070,7 @@ async function importSelectedYandexBackup() {
       text: `Текущий локальный журнал будет полностью заменён выбранной резервной копией:\n${fetched.remotePath}\nЗаписей: ${fetched.entryCount}.\nДата экспорта: ${fetched.exportedAt || 'не указана'}.\nSHA-256 проверенной копии: ${fetched.contentSha256}.\nДействие нельзя отменить.`
     });
     if (!confirmed) {
-      await discardStagedJournalImport(fetched.stagingKey);
+      await discardStagedJournalImport(fetched.stagingKey, importLease);
       yandexStagingKey = '';
       await chrome.runtime.sendMessage({
         type: 'WEBCLIP_OPERATION_LOG_FINISH',
@@ -2979,23 +3081,30 @@ async function importSelectedYandexBackup() {
       setStatus(`Восстановление журнала отменено. · operationId: ${operationId}`, '');
       return;
     }
+    assertJournalImportLeaseUsable(importLease);
     const imported = await chrome.runtime.sendMessage({
       type: 'WEBCLIP_JOURNAL_IMPORT_REPLACE_STAGED',
       stagingKey: fetched.stagingKey,
       operationId,
       source: 'yandex',
-      previewReceipt
+      previewReceipt,
+      leaseToken: importLease.leaseToken,
+      ownerSessionId: journalImportOwnerSessionId
     });
-    yandexStagingKey = '';
     requireOk(imported);
+    yandexStagingKey = '';
     setStatus(`Журнал восстановлен с Яндекс Диска. Импортировано записей: ${imported.importedCount}. · operationId: ${imported.operationId || operationId}`, 'ok');
     await loadJournal();
   } catch (error) {
-    if (yandexStagingKey) await discardStagedJournalImport(yandexStagingKey);
+    const mayDiscard = !importLease || !journalImportLeaseLostError;
+    if (yandexStagingKey && mayDiscard) {
+      await discardStagedJournalImport(yandexStagingKey, importLease).catch(() => {});
+    }
     backupPickerStatus.textContent = `Ошибка импорта: ${error?.message || String(error)}`;
     backupPickerStatus.className = 'picker-status error';
     setStatus(`Ошибка импорта с Яндекс Диска: ${error?.message || String(error)}`, 'error');
   } finally {
+    stopJournalImportLeaseHeartbeat();
     backupPickerCancel.disabled = false;
     backupPickerCancelTop.disabled = false;
     backupPickerProceed.disabled = !selectedYandexBackupPath;
@@ -3297,8 +3406,116 @@ function formatDate(value) {
   try { return new Date(value).toLocaleString('ru-RU'); } catch (_) { return ''; }
 }
 
+let journalImportRecoveryRunning = false;
+
+function scheduleJournalImportRecoveryRetry(delayMs) {
+  if (journalImportRecoveryTimer) clearTimeout(journalImportRecoveryTimer);
+  const waitMs = Math.max(1000, Math.min(2 * 60 * 1000, Number(delayMs) || 1000));
+  journalImportRecoveryTimer = setTimeout(() => {
+    journalImportRecoveryTimer = 0;
+    checkForPendingJournalImport().catch((error) => {
+      setStatus(`Не удалось проверить незавершённый импорт: ${error?.message || String(error)}`, 'error');
+    });
+  }, waitMs);
+}
+
+async function checkForPendingJournalImport() {
+  if (journalImportRecoveryRunning || activeJournalImportLease) return;
+  journalImportRecoveryRunning = true;
+  try {
+    const pending = await chrome.runtime.sendMessage({ type: 'WEBCLIP_JOURNAL_IMPORT_PENDING' });
+    requireOk(pending);
+    if (!pending.pending) return;
+    showLastOperationId(pending.operationId);
+    if (!pending.available) {
+      const seconds = Math.max(1, Math.ceil(Number(pending.retryAfterMs || 0) / 1000));
+      setStatus(`Незавершённый импорт пока принадлежит другой странице Журнала. Повторная проверка через ${seconds} с. · operationId: ${pending.operationId}`, '');
+      scheduleJournalImportRecoveryRetry(Number(pending.retryAfterMs || 0) + 250);
+      return;
+    }
+    await recoverPendingJournalImport(pending);
+  } finally {
+    journalImportRecoveryRunning = false;
+  }
+}
+
+async function recoverPendingJournalImport(pending) {
+  if (!beginJournalDestructiveOperation('Возобновление незавершённого импорта')) return;
+  let stagingKey = String(pending.stagingKey || '');
+  let importLease = null;
+  try {
+    const sourceLabel = pending.source === 'yandex' ? 'резервной копии Яндекс Диска' : 'локального файла';
+    const resume = await requestDangerousConfirmation({
+      title: 'Незавершённый импорт журнала',
+      text: `После перезапуска найден проверенный staged import из ${sourceLabel}.
+Записей: ${pending.entryCount}.
+Дата экспорта: ${pending.exportedAt || 'не указана'}.
+SHA-256 прежней проверки: ${pending.contentSha256}.
+Введите код, чтобы явно возобновить и заново проверить backup. Кнопка «Отмена» удалит только временный staged import; текущий журнал не изменится.`
+    });
+    if (!resume) {
+      const canceled = await chrome.runtime.sendMessage({
+        type: 'WEBCLIP_JOURNAL_IMPORT_CANCEL_PENDING',
+        checkpointToken: pending.checkpointToken
+      });
+      requireOk(canceled);
+      stagingKey = '';
+      setStatus(`Незавершённый staged import удалён. Текущий журнал не изменён. · operationId: ${pending.operationId}`, '');
+      return;
+    }
+
+    const preview = await chrome.runtime.sendMessage({
+      type: 'WEBCLIP_JOURNAL_IMPORT_RESUME_PENDING',
+      checkpointToken: pending.checkpointToken,
+      ownerSessionId: journalImportOwnerSessionId
+    });
+    requireOk(preview);
+    const previewReceipt = requireJournalImportPreviewReceipt(preview);
+    importLease = requireJournalImportLease(preview);
+    startJournalImportLeaseHeartbeat(importLease);
+    stagingKey = String(preview.stagingKey || stagingKey);
+    showLastOperationId(preview.operationId);
+
+    const confirmed = await requestDangerousConfirmation({
+      title: 'Подтвердите восстановление журнала',
+      text: journalImportReplaceConfirmationText(preview, sourceLabel)
+    });
+    if (!confirmed) {
+      await discardStagedJournalImport(stagingKey, importLease);
+      stagingKey = '';
+      setStatus(`Возобновлённый импорт отменён. Текущий журнал не изменён. · operationId: ${preview.operationId}`, '');
+      return;
+    }
+
+    assertJournalImportLeaseUsable(importLease);
+    const imported = await chrome.runtime.sendMessage({
+      type: 'WEBCLIP_JOURNAL_IMPORT_REPLACE_STAGED',
+      stagingKey,
+      operationId: preview.operationId,
+      source: preview.source,
+      previewReceipt,
+      leaseToken: importLease.leaseToken,
+      ownerSessionId: journalImportOwnerSessionId
+    });
+    requireOk(imported);
+    stagingKey = '';
+    setStatus(`Незавершённый импорт возобновлён после повторной проверки. Импортировано записей: ${imported.importedCount}. · operationId: ${imported.operationId || preview.operationId}`, 'ok');
+    await loadJournal();
+  } catch (error) {
+    const mayDiscard = importLease && !journalImportLeaseLostError;
+    if (stagingKey && mayDiscard) {
+      await discardStagedJournalImport(stagingKey, importLease).catch(() => {});
+    }
+    setStatus(`Ошибка возобновления импорта: ${error?.message || String(error)}`, 'error');
+  } finally {
+    stopJournalImportLeaseHeartbeat();
+    endJournalDestructiveOperation();
+  }
+}
+
 Promise.all([resolveSourceContext(), loadJournalViewPreferences()])
   .then(() => loadJournal({ preserveScroll: false, clearStatus: true }))
+  .then(() => checkForPendingJournalImport())
   .then(async () => {
     if (!autoBackupRequested && !autoExportFileRequested) return;
     const cleanUrl = new URL(location.href);

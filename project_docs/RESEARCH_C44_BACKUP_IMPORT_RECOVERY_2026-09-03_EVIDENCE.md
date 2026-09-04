@@ -2,11 +2,36 @@
 
 ## Canonical classification
 
-**C44: `L4-REVALIDATED / PARTIAL/FINDING + POSITIVE/REAL-UNPACKED/PREVIEW-RECEIPT/SHA-256-BINDING/STAGING-GENERATION/REVISION-CAS/FAIL-CLOSED/CLEAN-IMPORT/FULL-BROWSER-RESTART CONTROLS + RECOVERY-CLEAR/RESTART-RESUME-LOSS/ORPHAN-STAGING FINDINGS; LEASE/CHECKPOINT/NATIVE-SAVE-AS/MERGE/REMOTE-L5 OPEN (P0-013, P0-072, P1-207, P1-215; P1-194 supporting; P0-077 positive)`.**
+**C44: `L4-REVALIDATED / PARTIAL/FINDING + POSITIVE/REAL-UNPACKED/PREVIEW-RECEIPT/SHA-256-BINDING/STAGING-GENERATION/REVISION-CAS/RENEWABLE-LEASE/EXPLICIT-RESTART-RESUME-CANCEL/FAIL-CLOSED/CLEAN-IMPORT/FULL-BROWSER-RESTART CONTROLS + RECOVERY-CHECKPOINT-CLEAR FINDING; CHECKPOINT/MERGE/NATIVE-SAVE-AS/REMOTE-L5 OPEN (P0-013, P0-072, P1-207; P1-194 supporting; P1-215/P0-077 DONE)`.**
 
 This evidence is a defensive architecture control over synthetic records in a disposable browser profile. It does not use user data, credentials, remote services, permission bypasses or exploit delivery.
 
-## Accepted post-remediation real-UI execution
+## Accepted restart-lease closure execution
+
+Canonical source baseline: `e4d7f02eac9f2c2879b6947e8ef06fb86546f432`  
+Accepted workflow head: `77cbd3bcc325dd57542993f94b85f7a08c8245da`  
+Workflow: **Research C44 Import Restart Lease**  
+Run: `33825545613`  
+Job: `100877305863`  
+Browser: Chrome `152.0.7977.54`  
+Conclusion: **SUCCESS**  
+Harness: `project_tools/research_c44_full_ui_browser_restart.mjs`  
+Deterministic regression: `project_tools/test_c44_import_restart_lease.js`  
+Result SHA-256: `59214943fa5d77e8147d527fff53fb88ccb1d4a51b972f03cabf9d9fd7e07e86`  
+Artifact: `c44-import-restart-lease-receipt`, id `9919809184`, archive SHA-256 `d0c0018e11b303f924e757e621de7d3c89fc281e28bc4d84f6f3c33c7e847789`
+
+Exact accepted source blobs:
+
+- `service-worker.js`: `6d61ac81befdbf2804ae9dbec425aa08d1194eb1`
+- `journal.js`: `1138e4fbf177e31008f510bc1addfd539885f10e`
+- `journal-import-digest.js`: `7b943119c712cc663ef766bd5a87cc75c70d346d`
+- physical harness: `1c3a1750b350d5c1383e36baee490a918b1d4cda`
+
+Harness-recorded source SHA-256 values: worker `bd29d5b66bf14bd6d972285c5a399bf1a98f6cd2ca709c4eaecb092f32d250f6`, journal `0e8d5a62ea0c529dec01cc73f7f2be279745498535e0c38b484b57c7cf295cd9`, incremental digest module `8f7906ec9157b5dbd4745d129581ce524803811af546764d064fc958cce88485`.
+
+The production path was exercised across two full browser-process restarts with the same disposable profile. On each restart no destructive action resumed while the old short lease remained current. After controlled expiry, the UI required an explicit recovery confirmation. Resume rotated both token and page owner, re-read/re-hashed the exact staged backup, captured a fresh Journal revision and displayed a second destructive confirmation. A direct attempt with the previous token failed closed with “Lease импорта истёк или принадлежит другой странице. Журнал не изменён”; Journal/pending state and both raw staging rows remained intact for the current owner. The new owner then committed exactly once and removed checkpoint/staging. The separate cancel schedule preserved Journal and every pending store while deleting only the expired checkpoint and its raw staging.
+
+## Previous accepted preview-receipt execution
 
 Canonical source baseline: `e4fdd7ba62d4d4d810be39f21e6e7c42e9ee3c0e`  
 Accepted workflow head: `3cbf4a2efe22034fdf4a8b61541f5b167a9df476`  
@@ -110,9 +135,9 @@ The post-remediation production path now implements that local CAS: a precheck a
 
 Production replace clears `pendingAppends`, `pendingDownloads` and `pendingRemoteSaves`. Those rows are durable reconciliation authority for already-admitted work; deletion does not prove the corresponding browser/remote side effect was cancelled. The actual UI run confirms the clear on the production commit path.
 
-### P1-215 / P1-194 — restart ownership and orphan staging
+### P1-215 DONE / P1-194 supporting — restart ownership and staging lifetime
 
-Transfer staging survives the full browser restart, but the UI owner/confirmation does not. A fresh retry creates and consumes another generation while the abandoned generation remains. Combined with the earlier accepted two-hour wall-clock cleanup/lease control, this confirms that C44 needs an explicit bounded lease/resume-or-cancel contract rather than age-only cleanup or indefinite orphan retention.
+The accepted restart-lease execution closes the exact P1-215 owner: a durable strict checkpoint binds one staging generation to the preview receipt, renewable token/page ownership and a hard lifetime; generic cleanup protects hard-live staging; restart requires explicit resume or cancel; resume rotates ownership and revalidates bytes/revision before a second confirmation; stale authority cannot mutate Journal or delete the current owner's staging. P1-194 remains supporting because ordinary browser-storage durability class and release-environment guarantees are broader than this local profile control.
 
 ### P0-077 positive envelope
 
@@ -139,7 +164,7 @@ Accepted at L4 because the unpacked extension, actual journal UI, production wor
 - native OS Save As success/cancel/unresolved-dialog behavior;
 - an import merge mode, because no production merge command/path exists;
 - remote/Yandex backup selection, transport or object identity;
-- post-remediation lease/restart-resume and recovery-checkpoint behavior.
+- reconciliation/migration/quarantine of already-admitted recovery checkpoints during replace.
 
 C44 remains PARTIAL and OPEN. Remaining exit evidence:
 
@@ -150,3 +175,18 @@ C44 remains PARTIAL and OPEN. Remaining exit evidence:
 5. exercise remote backup only with an explicitly authorized isolated Yandex test context.
 
 This tranche changes runtime and adds a deterministic regression test. No new P-code or Registry status change is warranted; manifest remains `0.9.8` and release readiness remains NOT READY.
+
+
+## 2026-09-04 accepted closure — bounded restart ownership
+
+P1-215 is **DONE** at the exact local defensive boundary. Deterministic regression and the accepted Chrome 152 execution above cover strict checkpoint shape, renewable owner/token semantics, generic-cleanup protection, hard-expiry reclamation, full-process restart, explicit resume/cancel, re-hash/fresh-revision revalidation, second confirmation, same-transaction authority order and stale-token rejection.
+
+C44 remains **PARTIAL / OPEN** for independent owners and external boundaries:
+
+1. P0-072 reconciliation/migration/quarantine of admitted pending side-effect receipts during replace;
+2. wider P0-013/P1-207 remote backup object/account/root/content/revision authority;
+3. explicit unsupported-merge product decision or separately specified merge semantics;
+4. native Save As L5 in a user-owned interactive context;
+5. authorized isolated Yandex backup/restore L5.
+
+Manifest remains `0.9.8`; release remains **NOT READY**.

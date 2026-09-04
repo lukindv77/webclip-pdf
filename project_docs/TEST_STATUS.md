@@ -41,7 +41,7 @@ Historical engineering evidence includes multiple PASS runs on managed Chromium 
 
 One specific real Chrome problem-page result is also preserved: the original `its.1c.ru` pagination/clipping reproduction reached a 2-page complete PDF after P1-153.
 
-Current focused C44 evidence adds a real unpacked Chrome `152.0.7977.54` local Journal control at workflow run `33790752301`: same-generation changed backup bytes fail closed on SHA-256 mismatch, stale Journal revision fails closed inside the destructive transaction, unchanged import succeeds, and no remote account, credentials or native Save As UI are used. Durable detail is in the C44 evidence/report; this does not close lease/checkpoint/native/remote release boundaries.
+Current focused C44 evidence adds real unpacked Chrome `152.0.7977.54` local Journal controls. Run `33790752301` proves SHA-256 preview binding, stale-revision fail-closed behavior and clean import. The newer run `33825545613` (job `100877305863`, head `77cbd3bcc325dd57542993f94b85f7a08c8245da`) proves durable renewable lease ownership across two full browser restarts: no automatic destructive resume, explicit token/owner rotation and revalidation, rejection of the previous token without Journal/staging loss, a second confirmation before successful commit, and an explicit cancel that preserves Journal/pending state while removing only checkpoint/staging. This closes P1-215. No remote account, credentials or native Save As UI were used; P0-072 checkpoint reconciliation and native/remote release boundaries remain open.
 
 None of these substitutes for the final release browser/service gate below.
 

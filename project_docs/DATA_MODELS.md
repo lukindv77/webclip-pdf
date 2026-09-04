@@ -297,7 +297,28 @@ The worker-issued value has this exact structured-clone contract:
 }
 ```
 
-Unknown/missing fields, invalid bounds, caller field mismatch, re-read digest/generation/count/export-time mismatch, or Journal revision mismatch all fail closed. The authoritative revision compare runs inside the same `WebClipJournal` readwrite transaction before replacement starts. The receipt is confirmation authority for one attempt, not a lease or browser-restart resume token.
+Unknown/missing fields, invalid bounds, caller field mismatch, re-read digest/generation/count/export-time mismatch, or Journal revision mismatch all fail closed. The receipt is immutable confirmation content; browser/page ownership is carried separately by the durable checkpoint below.
+
+### C44 Journal import lease checkpoint (P1-215)
+
+`WebClipJournal.meta["journalImportLease"]` stores one exact v1 value:
+
+```json
+{
+  "version": 1,
+  "leaseToken": "worker-issued opaque token",
+  "ownerSessionId": "journal-page session",
+  "previewReceipt": { "version": 1, "mode": "replace" },
+  "createdAt": 0,
+  "updatedAt": 0,
+  "leaseExpiresAt": 0,
+  "hardExpiresAt": 0
+}
+```
+
+The short lease is two minutes and can be renewed only by the exact token/owner; the hard deadline is two hours from the staged manifest generation. Resume is allowed only after short-lease expiry, rotates token/owner atomically, re-hashes the staged backup and replaces `previewReceipt.expectedJournalRevision` with a fresh revision before the second confirmation. Cancel is likewise allowed only for an expired short lease. Missing, corrupt, generation-mismatched or hard-expired state fails closed or is reclaimed according to the explicit checkpoint rules.
+
+The final `entries/meta/pending*/importStaging` transaction reads this exact lease and verifies token, owner, unexpired bounds and every preview-receipt field before the authoritative revision compare. It deletes the lease before invoking the transaction-local replacement function; because all steps share one transaction, any abort restores the pre-commit lease and Journal state. Generic raw-transfer TTL cleanup may not reclaim the exact hard-live staging generation.
 
 ### P1-004 cross-origin frame locators
 

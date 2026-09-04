@@ -100,6 +100,10 @@ const JOURNAL_IMPORT_PARSE_TIMEOUT_MS = 5 * 60 * 1000;
 const JOURNAL_IMPORT_STAGING_TTL_MS = 2 * 60 * 60 * 1000;
 const JOURNAL_IMPORT_STAGE_BATCH_ENTRIES = 100;
 const JOURNAL_IMPORT_PREVIEW_RECEIPT_VERSION = 1;
+const JOURNAL_IMPORT_LEASE_VERSION = 1;
+const JOURNAL_IMPORT_LEASE_KEY = 'journalImportLease';
+const JOURNAL_IMPORT_LEASE_TTL_MS = 2 * 60 * 1000;
+const JOURNAL_IMPORT_CHECKPOINT_TTL_MS = JOURNAL_IMPORT_STAGING_TTL_MS;
 const MAX_INLINE_JOURNAL_IMPORT_JSON_CHARS = 1024 * 1024;
 const JOURNAL_BACKUP_ALARM = 'webclip-journal-backup';
 const JOURNAL_BACKUP_RETRY_ALARM = `${JOURNAL_BACKUP_ALARM}-retry`;
@@ -2975,7 +2979,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case 'WEBCLIP_JOURNAL_IMPORT_PREVIEW_STAGED':
         if (senderKind !== 'extension') throw new Error('Проверка резервной копии журнала доступна только странице расширения.');
         assertSaveAsOwnerPage(sender, 'journal.html');
-        return previewStagedJournalImport(String(message.stagingKey || ''), String(message.operationId || ''), String(message.source || 'file'));
+        return previewStagedJournalImport(
+          String(message.stagingKey || ''),
+          String(message.operationId || ''),
+          String(message.source || 'file'),
+          String(message.ownerSessionId || '')
+        );
 
       case 'WEBCLIP_JOURNAL_IMPORT_REPLACE_STAGED':
         if (senderKind !== 'extension') throw new Error('Замена журнала доступна только странице расширения.');
@@ -2984,14 +2993,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           String(message.stagingKey || ''),
           String(message.operationId || ''),
           String(message.source || 'file'),
-          message.previewReceipt
+          message.previewReceipt,
+          String(message.leaseToken || ''),
+          String(message.ownerSessionId || '')
         ));
 
       case 'WEBCLIP_JOURNAL_IMPORT_DISCARD_STAGED':
         if (senderKind !== 'extension') throw new Error('Очистка подготовленного импорта доступна только странице расширения.');
         assertSaveAsOwnerPage(sender, 'journal.html');
-        await deleteTransferPayloadGroup(String(message.stagingKey || ''));
-        return { ok: true };
+        return discardOwnedJournalImport(
+          String(message.stagingKey || ''),
+          String(message.leaseToken || ''),
+          String(message.ownerSessionId || '')
+        );
+
+      case 'WEBCLIP_JOURNAL_IMPORT_PENDING':
+        if (senderKind !== 'extension') throw new Error('Checkpoint импорта доступен только странице расширения.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return getPendingJournalImportLease();
+
+      case 'WEBCLIP_JOURNAL_IMPORT_LEASE_RENEW':
+        if (senderKind !== 'extension') throw new Error('Продление lease импорта доступно только странице расширения.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return renewJournalImportLease(String(message.leaseToken || ''), String(message.ownerSessionId || ''));
+
+      case 'WEBCLIP_JOURNAL_IMPORT_RESUME_PENDING':
+        if (senderKind !== 'extension') throw new Error('Возобновление импорта доступно только странице расширения.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return resumePendingJournalImport(String(message.checkpointToken || ''), String(message.ownerSessionId || ''));
+
+      case 'WEBCLIP_JOURNAL_IMPORT_CANCEL_PENDING':
+        if (senderKind !== 'extension') throw new Error('Отмена checkpoint импорта доступна только странице расширения.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return cancelPendingJournalImport(String(message.checkpointToken || ''));
 
       case 'WEBCLIP_JOURNAL_YANDEX_EXPORT':
         return exportJournalBackupToYandex({
@@ -3003,7 +3037,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return listJournalBackupsOnYandex(String(message.month || ''));
 
       case 'WEBCLIP_JOURNAL_YANDEX_FETCH_BACKUP':
-        return fetchJournalBackupFromYandex(String(message.path || ''), String(message.operationId || ''));
+        if (senderKind !== 'extension') throw new Error('Импорт backup доступен только странице расширения.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return fetchJournalBackupFromYandex(
+          String(message.path || ''),
+          String(message.operationId || ''),
+          String(message.ownerSessionId || '')
+        );
 
       case 'WEBCLIP_JOURNAL_BACKUP_STATUS':
         return getJournalBackupStatus();
@@ -3230,6 +3270,7 @@ async function reloadOpenExtensionPagesAfterVersionChange() {
 // запуске проверяем, не пропущен ли настроенный период резервного копирования.
 reloadOpenExtensionPagesAfterVersionChange().catch((error) => console.warn('WebClip extension-page refresh:', error));
 reconcileUserSettingsImportMarker('worker-start').catch((error) => console.warn('WebClip settings import reconciliation:', error));
+reapExpiredJournalImportCheckpoint('worker-start').catch((error) => console.warn('WebClip Journal import checkpoint cleanup:', error));
 initializeJournalBackupScheduler('worker-start').catch((error) => console.warn('WebClip backup init:', error));
 initializeOperationLogCleanup().catch((error) => console.warn('WebClip operation log init:', error));
 
@@ -7464,6 +7505,578 @@ function assertPreparedJournalImportMatchesPreview(prepared, receipt) {
   });
 }
 
+function normalizeJournalImportOwnerSessionId(value) {
+  const id = String(value || '').trim();
+  if (!id || id.length > 180 || !/^[A-Za-z0-9._:-]+$/.test(id)) {
+    const error = new Error('Некорректный идентификатор страницы-владельца импорта журнала.');
+    error.code = 'JOURNAL_IMPORT_OWNER_INVALID';
+    throw error;
+  }
+  return id;
+}
+
+function normalizeJournalImportLeaseToken(value) {
+  const token = String(value || '').trim();
+  if (!token || token.length > 180 || !/^[A-Za-z0-9._:-]+$/.test(token)) {
+    const error = new Error('Некорректный токен владения импортом журнала.');
+    error.code = 'JOURNAL_IMPORT_LEASE_INVALID';
+    throw error;
+  }
+  return token;
+}
+
+function journalImportLeaseError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function journalImportGenerationCreatedAt(generation) {
+  const match = /^(?:manifest|legacy):([0-9]+):/.exec(String(generation || ''));
+  const value = match ? Number(match[1]) : 0;
+  return Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+
+function normalizeJournalImportLeaseRecord(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw journalImportLeaseError('JOURNAL_IMPORT_LEASE_CORRUPT', 'Checkpoint импорта журнала повреждён.');
+  }
+  const fields = [
+    'version',
+    'leaseToken',
+    'ownerSessionId',
+    'previewReceipt',
+    'createdAt',
+    'updatedAt',
+    'leaseExpiresAt',
+    'hardExpiresAt'
+  ];
+  const actualKeys = Object.keys(value).sort();
+  const expectedKeys = [...fields].sort();
+  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])) {
+    throw journalImportLeaseError('JOURNAL_IMPORT_LEASE_CORRUPT', 'Состав checkpoint импорта журнала не совпадает с контрактом.');
+  }
+  if (value.version !== JOURNAL_IMPORT_LEASE_VERSION) {
+    throw journalImportLeaseError('JOURNAL_IMPORT_LEASE_CORRUPT', 'Версия checkpoint импорта журнала не поддерживается.');
+  }
+  const leaseToken = normalizeJournalImportLeaseToken(value.leaseToken);
+  const ownerSessionId = normalizeJournalImportOwnerSessionId(value.ownerSessionId);
+  const previewReceipt = normalizeJournalImportPreviewReceipt(value.previewReceipt);
+  const createdAt = Number(value.createdAt);
+  const updatedAt = Number(value.updatedAt);
+  const leaseExpiresAt = Number(value.leaseExpiresAt);
+  const hardExpiresAt = Number(value.hardExpiresAt);
+  if (
+    ![createdAt, updatedAt, leaseExpiresAt, hardExpiresAt].every(Number.isSafeInteger)
+    || createdAt <= 0
+    || updatedAt < createdAt
+    || leaseExpiresAt < createdAt
+    || hardExpiresAt < leaseExpiresAt
+    || hardExpiresAt > createdAt + JOURNAL_IMPORT_CHECKPOINT_TTL_MS
+  ) {
+    throw journalImportLeaseError('JOURNAL_IMPORT_LEASE_CORRUPT', 'Временные границы checkpoint импорта журнала повреждены.');
+  }
+  return Object.freeze({
+    version: JOURNAL_IMPORT_LEASE_VERSION,
+    leaseToken,
+    ownerSessionId,
+    previewReceipt,
+    createdAt,
+    updatedAt,
+    leaseExpiresAt,
+    hardExpiresAt
+  });
+}
+
+function makeJournalImportLeaseRecord(previewReceiptValue, ownerSessionId, now = Date.now(), leaseToken = '') {
+  const previewReceipt = normalizeJournalImportPreviewReceipt(previewReceiptValue);
+  const owner = normalizeJournalImportOwnerSessionId(ownerSessionId);
+  const createdAt = journalImportGenerationCreatedAt(previewReceipt.stagingGeneration);
+  if (!createdAt || createdAt > now + 60_000) {
+    throw journalImportLeaseError('JOURNAL_IMPORT_LEASE_CORRUPT', 'Поколение staging не содержит допустимое время создания.');
+  }
+  const hardExpiresAt = createdAt + JOURNAL_IMPORT_CHECKPOINT_TTL_MS;
+  if (hardExpiresAt <= now) {
+    throw journalImportLeaseError('JOURNAL_IMPORT_CHECKPOINT_EXPIRED', 'Подготовленный импорт уже превысил жёсткий срок хранения.');
+  }
+  const token = leaseToken
+    ? normalizeJournalImportLeaseToken(leaseToken)
+    : normalizeJournalImportLeaseToken(crypto.randomUUID ? crypto.randomUUID() : `${now}-${Math.random().toString(16).slice(2)}`);
+  return normalizeJournalImportLeaseRecord({
+    version: JOURNAL_IMPORT_LEASE_VERSION,
+    leaseToken: token,
+    ownerSessionId: owner,
+    previewReceipt,
+    createdAt,
+    updatedAt: now,
+    leaseExpiresAt: Math.min(hardExpiresAt, now + JOURNAL_IMPORT_LEASE_TTL_MS),
+    hardExpiresAt
+  });
+}
+
+async function readJournalImportLeaseRecord() {
+  const db = await openJournalDb(MAINTENANCE_IDB_TX_TIMEOUT_MS);
+  let value = null;
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_META_STORE,
+      'readonly',
+      'Чтение checkpoint импорта журнала',
+      ({ store, setResult, fail }) => {
+        const req = store().get(JOURNAL_IMPORT_LEASE_KEY);
+        req.onsuccess = () => {
+          value = req.result?.value || null;
+          setResult(value);
+        };
+        req.onerror = () => fail(req.error || new Error('Не удалось прочитать checkpoint импорта журнала.'));
+      },
+      MAINTENANCE_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  return value ? normalizeJournalImportLeaseRecord(value) : null;
+}
+
+async function removeJournalImportLeaseIfToken(leaseToken) {
+  const token = normalizeJournalImportLeaseToken(leaseToken);
+  const db = await openJournalDb(MAINTENANCE_IDB_TX_TIMEOUT_MS);
+  let removed = null;
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_META_STORE,
+      'readwrite',
+      'Освобождение checkpoint импорта журнала',
+      ({ store, setResult, fail }) => {
+        const meta = store();
+        const req = meta.get(JOURNAL_IMPORT_LEASE_KEY);
+        req.onsuccess = () => {
+          const raw = req.result?.value || null;
+          if (!raw) return;
+          let current;
+          try { current = normalizeJournalImportLeaseRecord(raw); } catch (error) { fail(error); return; }
+          if (current.leaseToken !== token) return;
+          removed = current;
+          meta.delete(JOURNAL_IMPORT_LEASE_KEY);
+          setResult(current);
+        };
+        req.onerror = () => fail(req.error || new Error('Не удалось проверить checkpoint перед освобождением.'));
+      },
+      MAINTENANCE_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  return removed;
+}
+
+async function acquireJournalImportLease(previewReceiptValue, ownerSessionId) {
+  const previewReceipt = normalizeJournalImportPreviewReceipt(previewReceiptValue);
+  const next = makeJournalImportLeaseRecord(previewReceipt, ownerSessionId);
+  const now = Date.now();
+  const db = await openJournalDb(MAINTENANCE_IDB_TX_TIMEOUT_MS);
+  let orphanedStagingKey = '';
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_META_STORE,
+      'readwrite',
+      'Получение lease импорта журнала',
+      ({ store, setResult, fail }) => {
+        const meta = store();
+        const req = meta.get(JOURNAL_IMPORT_LEASE_KEY);
+        req.onsuccess = () => {
+          const raw = req.result?.value || null;
+          if (raw) {
+            let current;
+            try { current = normalizeJournalImportLeaseRecord(raw); } catch (error) { fail(error); return; }
+            if (current.hardExpiresAt > now) {
+              fail(journalImportLeaseError(
+                'JOURNAL_IMPORT_CHECKPOINT_EXISTS',
+                'Уже есть незавершённый импорт журнала. Возобновите или отмените его на странице Журнала.'
+              ));
+              return;
+            }
+            orphanedStagingKey = current.previewReceipt.stagingKey;
+          }
+          meta.put({ key: JOURNAL_IMPORT_LEASE_KEY, value: next, changedAt: now, reason: 'journal-import-preview-lease' });
+          setResult(next);
+        };
+        req.onerror = () => fail(req.error || new Error('Не удалось проверить текущий lease импорта журнала.'));
+      },
+      MAINTENANCE_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  if (orphanedStagingKey && orphanedStagingKey !== previewReceipt.stagingKey) {
+    await deleteTransferPayloadGroup(orphanedStagingKey).catch(() => {});
+  }
+  return next;
+}
+
+function journalImportLeaseResponse(record, now = Date.now()) {
+  const current = normalizeJournalImportLeaseRecord(record);
+  const receipt = current.previewReceipt;
+  return {
+    ok: true,
+    pending: true,
+    available: current.leaseExpiresAt <= now,
+    retryAfterMs: Math.max(0, current.leaseExpiresAt - now),
+    checkpointToken: current.leaseToken,
+    stagingKey: receipt.stagingKey,
+    source: receipt.source,
+    operationId: receipt.operationId,
+    entryCount: receipt.entryCount,
+    exportedAt: receipt.exportedAt,
+    contentSha256: receipt.contentSha256,
+    leaseExpiresAt: current.leaseExpiresAt,
+    hardExpiresAt: current.hardExpiresAt
+  };
+}
+
+async function getPendingJournalImportLease() {
+  const current = await readJournalImportLeaseRecord();
+  if (!current) return { ok: true, pending: false };
+  const now = Date.now();
+  const key = current.previewReceipt.stagingKey;
+  if (current.hardExpiresAt <= now) {
+    const removed = await removeJournalImportLeaseIfToken(current.leaseToken);
+    if (removed) await deleteTransferPayloadGroup(key).catch(() => {});
+    return { ok: true, pending: false, reclaimed: Boolean(removed) };
+  }
+  const manifest = await getTransferImportRecord(key, MAINTENANCE_IDB_TX_TIMEOUT_MS);
+  const generation = manifest ? journalImportStagingGeneration(manifest) : '';
+  if (!manifest || generation !== current.previewReceipt.stagingGeneration) {
+    const removed = await removeJournalImportLeaseIfToken(current.leaseToken);
+    if (removed) await deleteTransferPayloadGroup(key).catch(() => {});
+    return { ok: true, pending: false, reclaimed: Boolean(removed), invalidated: true };
+  }
+  return journalImportLeaseResponse(current, now);
+}
+
+async function renewJournalImportLease(leaseToken, ownerSessionId) {
+  const token = normalizeJournalImportLeaseToken(leaseToken);
+  const owner = normalizeJournalImportOwnerSessionId(ownerSessionId);
+  const now = Date.now();
+  const db = await openJournalDb(MAINTENANCE_IDB_TX_TIMEOUT_MS);
+  let renewed = null;
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_META_STORE,
+      'readwrite',
+      'Продление lease импорта журнала',
+      ({ store, setResult, fail }) => {
+        const meta = store();
+        const req = meta.get(JOURNAL_IMPORT_LEASE_KEY);
+        req.onsuccess = () => {
+          let current;
+          try { current = normalizeJournalImportLeaseRecord(req.result?.value || null); } catch (error) { fail(error); return; }
+          if (current.leaseToken !== token || current.ownerSessionId !== owner) {
+            fail(journalImportLeaseError('JOURNAL_IMPORT_LEASE_LOST', 'Владение подготовленным импортом перешло другой странице.'));
+            return;
+          }
+          if (current.leaseExpiresAt <= now || current.hardExpiresAt <= now) {
+            fail(journalImportLeaseError('JOURNAL_IMPORT_LEASE_EXPIRED', 'Lease подготовленного импорта истёк. Возобновите импорт явно.'));
+            return;
+          }
+          renewed = normalizeJournalImportLeaseRecord({
+            ...current,
+            updatedAt: now,
+            leaseExpiresAt: Math.min(current.hardExpiresAt, now + JOURNAL_IMPORT_LEASE_TTL_MS)
+          });
+          meta.put({ key: JOURNAL_IMPORT_LEASE_KEY, value: renewed, changedAt: now, reason: 'journal-import-lease-renew' });
+          setResult(renewed);
+        };
+        req.onerror = () => fail(req.error || new Error('Не удалось прочитать lease перед продлением.'));
+      },
+      MAINTENANCE_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  return {
+    ok: true,
+    leaseToken: renewed.leaseToken,
+    leaseExpiresAt: renewed.leaseExpiresAt,
+    hardExpiresAt: renewed.hardExpiresAt
+  };
+}
+
+async function expireJournalImportLeaseIfToken(leaseToken) {
+  const token = normalizeJournalImportLeaseToken(leaseToken);
+  const now = Date.now();
+  const db = await openJournalDb(MAINTENANCE_IDB_TX_TIMEOUT_MS);
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_META_STORE,
+      'readwrite',
+      'Возврат checkpoint импорта в состояние ожидания',
+      ({ store, fail }) => {
+        const meta = store();
+        const req = meta.get(JOURNAL_IMPORT_LEASE_KEY);
+        req.onsuccess = () => {
+          let current;
+          try { current = normalizeJournalImportLeaseRecord(req.result?.value || null); } catch (error) { fail(error); return; }
+          if (current.leaseToken !== token) return;
+          const expired = normalizeJournalImportLeaseRecord({
+            ...current,
+            updatedAt: now,
+            leaseExpiresAt: Math.min(current.hardExpiresAt, now)
+          });
+          meta.put({ key: JOURNAL_IMPORT_LEASE_KEY, value: expired, changedAt: now, reason: 'journal-import-resume-failed' });
+        };
+        req.onerror = () => fail(req.error || new Error('Не удалось вернуть checkpoint импорта в ожидание.'));
+      },
+      MAINTENANCE_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function updateClaimedJournalImportLease(leaseToken, ownerSessionId, previewReceiptValue) {
+  const token = normalizeJournalImportLeaseToken(leaseToken);
+  const owner = normalizeJournalImportOwnerSessionId(ownerSessionId);
+  const receipt = normalizeJournalImportPreviewReceipt(previewReceiptValue);
+  const now = Date.now();
+  const db = await openJournalDb(MAINTENANCE_IDB_TX_TIMEOUT_MS);
+  let updated = null;
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_META_STORE,
+      'readwrite',
+      'Обновление возобновлённого checkpoint импорта',
+      ({ store, setResult, fail }) => {
+        const meta = store();
+        const req = meta.get(JOURNAL_IMPORT_LEASE_KEY);
+        req.onsuccess = () => {
+          let current;
+          try { current = normalizeJournalImportLeaseRecord(req.result?.value || null); } catch (error) { fail(error); return; }
+          if (
+            current.leaseToken !== token
+            || current.ownerSessionId !== owner
+            || current.hardExpiresAt <= now
+            || current.previewReceipt.stagingKey !== receipt.stagingKey
+          ) {
+            fail(journalImportLeaseError('JOURNAL_IMPORT_LEASE_LOST', 'Возобновлённый checkpoint импорта больше не принадлежит этой странице.'));
+            return;
+          }
+          updated = normalizeJournalImportLeaseRecord({
+            ...current,
+            previewReceipt: receipt,
+            updatedAt: now,
+            leaseExpiresAt: Math.min(current.hardExpiresAt, now + JOURNAL_IMPORT_LEASE_TTL_MS)
+          });
+          meta.put({ key: JOURNAL_IMPORT_LEASE_KEY, value: updated, changedAt: now, reason: 'journal-import-resume-revalidated' });
+          setResult(updated);
+        };
+        req.onerror = () => fail(req.error || new Error('Не удалось обновить возобновлённый checkpoint импорта.'));
+      },
+      MAINTENANCE_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  return updated;
+}
+
+async function resumePendingJournalImport(checkpointToken, ownerSessionId) {
+  const token = normalizeJournalImportLeaseToken(checkpointToken);
+  const owner = normalizeJournalImportOwnerSessionId(ownerSessionId);
+  const pending = await getPendingJournalImportLease();
+  if (!pending.pending || pending.checkpointToken !== token) {
+    throw journalImportLeaseError('JOURNAL_IMPORT_CHECKPOINT_MISSING', 'Незавершённый импорт больше не найден.');
+  }
+  const now = Date.now();
+  if (!pending.available) {
+    throw journalImportLeaseError('JOURNAL_IMPORT_LEASE_BUSY', 'Импорт всё ещё принадлежит другой открытой странице Журнала.');
+  }
+
+  const db = await openJournalDb(MAINTENANCE_IDB_TX_TIMEOUT_MS);
+  let claimed = null;
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_META_STORE,
+      'readwrite',
+      'Получение владения возобновляемым импортом',
+      ({ store, setResult, fail }) => {
+        const meta = store();
+        const req = meta.get(JOURNAL_IMPORT_LEASE_KEY);
+        req.onsuccess = () => {
+          let current;
+          try { current = normalizeJournalImportLeaseRecord(req.result?.value || null); } catch (error) { fail(error); return; }
+          const claimNow = Date.now();
+          if (current.leaseToken !== token || current.hardExpiresAt <= claimNow) {
+            fail(journalImportLeaseError('JOURNAL_IMPORT_CHECKPOINT_MISSING', 'Checkpoint импорта изменился или истёк.'));
+            return;
+          }
+          if (current.leaseExpiresAt > claimNow) {
+            fail(journalImportLeaseError('JOURNAL_IMPORT_LEASE_BUSY', 'Импорт уже возобновлён другой страницей Журнала.'));
+            return;
+          }
+          claimed = normalizeJournalImportLeaseRecord({
+            ...current,
+            leaseToken: normalizeJournalImportLeaseToken(crypto.randomUUID ? crypto.randomUUID() : `${claimNow}-${Math.random().toString(16).slice(2)}`),
+            ownerSessionId: owner,
+            updatedAt: claimNow,
+            leaseExpiresAt: Math.min(current.hardExpiresAt, claimNow + JOURNAL_IMPORT_PARSE_TIMEOUT_MS + 60_000)
+          });
+          meta.put({ key: JOURNAL_IMPORT_LEASE_KEY, value: claimed, changedAt: claimNow, reason: 'journal-import-resume-claim' });
+          setResult(claimed);
+        };
+        req.onerror = () => fail(req.error || new Error('Не удалось получить checkpoint для возобновления.'));
+      },
+      MAINTENANCE_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+
+  try {
+    const oldReceipt = claimed.previewReceipt;
+    recordOperationStage(oldReceipt.operationId, 'resume-validate', 'Повторно проверяем backup после перезапуска…', 12);
+    const inspected = await inspectStagedJournalImportStream(oldReceipt.stagingKey);
+    const expectedJournalRevision = await journalRevisionSnapshot(Date.now() + JOURNAL_IMPORT_PARSE_TIMEOUT_MS);
+    const receipt = createJournalImportPreviewReceipt(
+      oldReceipt.stagingKey,
+      oldReceipt.source,
+      oldReceipt.operationId,
+      inspected,
+      expectedJournalRevision
+    );
+    const updated = await updateClaimedJournalImportLease(claimed.leaseToken, owner, receipt);
+    appendOperationLogEvent(receipt.operationId, {
+      category: 'checkpoint',
+      level: 'info',
+      stage: 'resume-await-confirmation',
+      message: 'Незавершённый импорт заново проверен после перезапуска. Ожидается новое подтверждение замены журнала.',
+      data: {
+        source: receipt.source,
+        entryCount: receipt.entryCount,
+        contentSha256: receipt.contentSha256,
+        expectedJournalRevision: receipt.expectedJournalRevision,
+        stagingKey: '[INTERNAL]'
+      }
+    });
+    return {
+      ok: true,
+      stagingKey: receipt.stagingKey,
+      source: receipt.source,
+      operationId: receipt.operationId,
+      entryCount: receipt.entryCount,
+      exportedAt: receipt.exportedAt,
+      contentSha256: receipt.contentSha256,
+      previewReceipt: receipt,
+      leaseToken: updated.leaseToken,
+      leaseExpiresAt: updated.leaseExpiresAt,
+      hardExpiresAt: updated.hardExpiresAt
+    };
+  } catch (error) {
+    await expireJournalImportLeaseIfToken(claimed.leaseToken).catch(() => {});
+    throw error;
+  }
+}
+
+async function cancelPendingJournalImport(checkpointToken) {
+  const token = normalizeJournalImportLeaseToken(checkpointToken);
+  const now = Date.now();
+  const db = await openJournalDb(MAINTENANCE_IDB_TX_TIMEOUT_MS);
+  let removed = null;
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_META_STORE,
+      'readwrite',
+      'Отмена незавершённого импорта журнала',
+      ({ store, setResult, fail }) => {
+        const meta = store();
+        const req = meta.get(JOURNAL_IMPORT_LEASE_KEY);
+        req.onsuccess = () => {
+          let current;
+          try { current = normalizeJournalImportLeaseRecord(req.result?.value || null); } catch (error) { fail(error); return; }
+          if (current.leaseToken !== token) {
+            fail(journalImportLeaseError('JOURNAL_IMPORT_LEASE_LOST', 'Checkpoint импорта уже изменился.'));
+            return;
+          }
+          if (current.leaseExpiresAt > now) {
+            fail(journalImportLeaseError('JOURNAL_IMPORT_LEASE_BUSY', 'Нельзя отменить импорт, пока им владеет другая открытая страница.'));
+            return;
+          }
+          removed = current;
+          meta.delete(JOURNAL_IMPORT_LEASE_KEY);
+          setResult(current);
+        };
+        req.onerror = () => fail(req.error || new Error('Не удалось проверить checkpoint перед отменой.'));
+      },
+      MAINTENANCE_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  if (removed) await deleteTransferPayloadGroup(removed.previewReceipt.stagingKey).catch(() => {});
+  return { ok: true, canceled: Boolean(removed) };
+}
+
+async function discardOwnedJournalImport(stagingKey, leaseToken = '', ownerSessionId = '') {
+  const key = String(stagingKey || '').trim();
+  if (!key || key.length > 240) throw new Error('Некорректный идентификатор подготовленного импорта журнала.');
+  const db = await openJournalDb(MAINTENANCE_IDB_TX_TIMEOUT_MS);
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_META_STORE,
+      'readwrite',
+      'Освобождение staged import журнала',
+      ({ store, fail }) => {
+        const meta = store();
+        const req = meta.get(JOURNAL_IMPORT_LEASE_KEY);
+        req.onsuccess = () => {
+          const raw = req.result?.value || null;
+          if (!raw) return;
+          let current;
+          try { current = normalizeJournalImportLeaseRecord(raw); } catch (error) { fail(error); return; }
+          if (current.previewReceipt.stagingKey !== key) return;
+          let token;
+          let owner;
+          try {
+            token = normalizeJournalImportLeaseToken(leaseToken);
+            owner = normalizeJournalImportOwnerSessionId(ownerSessionId);
+          } catch (error) { fail(error); return; }
+          if (current.leaseToken !== token || current.ownerSessionId !== owner) {
+            fail(journalImportLeaseError('JOURNAL_IMPORT_LEASE_LOST', 'Эта страница больше не владеет подготовленным импортом.'));
+            return;
+          }
+          meta.delete(JOURNAL_IMPORT_LEASE_KEY);
+        };
+        req.onerror = () => fail(req.error || new Error('Не удалось проверить владельца staged import.'));
+      },
+      MAINTENANCE_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  await deleteTransferPayloadGroup(key);
+  return { ok: true };
+}
+
+function assertJournalImportLeaseAuthority(currentValue, authority, now = Date.now()) {
+  const current = normalizeJournalImportLeaseRecord(currentValue);
+  const leaseToken = normalizeJournalImportLeaseToken(authority?.leaseToken);
+  const ownerSessionId = normalizeJournalImportOwnerSessionId(authority?.ownerSessionId);
+  const receipt = normalizeJournalImportPreviewReceipt(authority?.previewReceipt);
+  if (
+    current.leaseToken !== leaseToken
+    || current.ownerSessionId !== ownerSessionId
+    || current.leaseExpiresAt <= now
+    || current.hardExpiresAt <= now
+  ) {
+    throw journalImportLeaseError('JOURNAL_IMPORT_LEASE_LOST', 'Lease импорта истёк или принадлежит другой странице. Журнал не изменён.');
+  }
+  for (const key of Object.keys(receipt)) {
+    if (current.previewReceipt[key] !== receipt[key]) {
+      throw journalImportLeaseError('JOURNAL_IMPORT_LEASE_LOST', 'Квитанция preview не совпадает с текущим checkpoint импорта.');
+    }
+  }
+  return current;
+}
+
+async function reapExpiredJournalImportCheckpoint(reason = 'maintenance') {
+  const pending = await getPendingJournalImportLease();
+  if (pending.reclaimed) {
+    console.info(`WebClip reclaimed expired Journal import checkpoint (${String(reason || 'maintenance')}).`);
+  }
+  return pending;
+}
+
 async function inspectStagedJournalImportStream(stagingKey) {
   const deadlineAt = Date.now() + JOURNAL_IMPORT_PARSE_TIMEOUT_MS;
   const observation = createJournalImportStreamObservation();
@@ -7539,10 +8152,12 @@ async function normalizeStagedJournalImportStream(stagingKey) {
   }
 }
 
-async function commitStagedJournalImport(prepared, operationId, expectedJournalRevision) {
+async function commitStagedJournalImport(prepared, operationId, expectedJournalRevision, leaseAuthority = null) {
   const importId = String(prepared?.importId || '');
   const expectedCount = Math.max(0, Number(prepared?.entryCount) || 0);
   const expectedRevision = String(expectedJournalRevision || '');
+  const authorityReceipt = normalizeJournalImportPreviewReceipt(leaseAuthority?.previewReceipt);
+  if (authorityReceipt.expectedJournalRevision !== expectedRevision) throw journalImportPreviewMismatch('ожидаемая ревизия lease не совпадает');
   if (!importId) throw new Error('Не подготовлены нормализованные записи импорта.');
   await migrateLegacyPendingJournalAppends();
   const revisionBefore = await journalRevisionSnapshot(Date.now() + JOURNAL_IMPORT_PARSE_TIMEOUT_MS);
@@ -7616,15 +8231,30 @@ async function commitStagedJournalImport(prepared, operationId, expectedJournalR
         };
       };
 
-      const revisionRequest = metaStore.get(JOURNAL_META_REVISION_KEY);
-      revisionRequest.onerror = () => abort(revisionRequest.error || new Error('Не удалось сверить ревизию журнала перед импортом.'));
-      revisionRequest.onsuccess = () => {
-        const currentRevision = String(revisionRequest.result?.value || '');
-        if (currentRevision !== expectedRevision) {
-          abort(journalImportStaleRevision());
+      const leaseRequest = metaStore.get(JOURNAL_IMPORT_LEASE_KEY);
+      leaseRequest.onerror = () => abort(leaseRequest.error || new Error('Не удалось сверить lease импорта перед заменой журнала.'));
+      leaseRequest.onsuccess = () => {
+        try {
+          assertJournalImportLeaseAuthority(leaseRequest.result?.value || null, {
+            leaseToken: leaseAuthority?.leaseToken,
+            ownerSessionId: leaseAuthority?.ownerSessionId,
+            previewReceipt: authorityReceipt
+          });
+        } catch (error) {
+          abort(error);
           return;
         }
-        beginReplace();
+        const revisionRequest = metaStore.get(JOURNAL_META_REVISION_KEY);
+        revisionRequest.onerror = () => abort(revisionRequest.error || new Error('Не удалось сверить ревизию журнала перед импортом.'));
+        revisionRequest.onsuccess = () => {
+          const currentRevision = String(revisionRequest.result?.value || '');
+          if (currentRevision !== expectedRevision) {
+            abort(journalImportStaleRevision());
+            return;
+          }
+          metaStore.delete(JOURNAL_IMPORT_LEASE_KEY);
+          beginReplace();
+        };
       };
       tx.oncomplete = () => { clearTimeout(timer); resolve(); };
       tx.onerror = () => { clearTimeout(timer); reject(abortError || tx.error || new Error('Не удалось восстановить журнал из staged import.')); };
@@ -7659,7 +8289,7 @@ async function commitStagedJournalImport(prepared, operationId, expectedJournalR
   return { importedCount: copiedCount, statsWarning };
 }
 
-async function previewStagedJournalImport(stagingKey, operationId = '', source = 'file') {
+async function previewStagedJournalImport(stagingKey, operationId = '', source = 'file', ownerSessionId = '') {
   const key = String(stagingKey || '').trim();
   if (!key || key.length > 240) throw new Error('Некорректный идентификатор подготовленного импорта журнала.');
   operationId = String(operationId || '') || makeOperationLogId('journal-import');
@@ -7671,6 +8301,7 @@ async function previewStagedJournalImport(stagingKey, operationId = '', source =
   const inspected = await inspectStagedJournalImportStream(key);
   const expectedJournalRevision = await journalRevisionSnapshot(Date.now() + JOURNAL_IMPORT_PARSE_TIMEOUT_MS);
   const previewReceipt = createJournalImportPreviewReceipt(key, sourceKind, operationId, inspected, expectedJournalRevision);
+  const importLease = await acquireJournalImportLease(previewReceipt, ownerSessionId);
   appendOperationLogEvent(operationId, {
     category: 'checkpoint', level: 'info', stage: 'await-confirmation',
     message: 'Резервная копия потоково проверена. Ожидается подтверждение замены локального журнала.',
@@ -7689,11 +8320,14 @@ async function previewStagedJournalImport(stagingKey, operationId = '', source =
     exportedAt: inspected.exportedAt || '',
     contentSha256: inspected.contentSha256,
     operationId,
-    previewReceipt
+    previewReceipt,
+    leaseToken: importLease.leaseToken,
+    leaseExpiresAt: importLease.leaseExpiresAt,
+    hardExpiresAt: importLease.hardExpiresAt
   };
 }
 
-async function importJournalReplaceStaged(stagingKey, operationId = '', source = 'file', previewReceiptValue = null) {
+async function importJournalReplaceStaged(stagingKey, operationId = '', source = 'file', previewReceiptValue = null, leaseToken = '', ownerSessionId = '') {
   const key = String(stagingKey || '').trim();
   if (!key || key.length > 240) throw new Error('Некорректный идентификатор подготовленного импорта журнала.');
   operationId = String(operationId || '') || makeOperationLogId('journal-import');
@@ -7715,7 +8349,12 @@ async function importJournalReplaceStaged(stagingKey, operationId = '', source =
       entryCount: prepared.entryCount,
       contentSha256: prepared.contentSha256
     });
-    const committed = await commitStagedJournalImport(prepared, operationId, previewReceipt.expectedJournalRevision);
+    const committed = await commitStagedJournalImport(prepared, operationId, previewReceipt.expectedJournalRevision, {
+      previewReceipt,
+      leaseToken,
+      ownerSessionId
+    });
+    await deleteTransferPayloadGroup(key).catch(() => {});
     recordOperationStage(operationId, 'complete', `Импорт завершён. Записей: ${committed.importedCount}.`, 100, 'success', { entryCount: committed.importedCount });
     return {
       ok: true,
@@ -7729,7 +8368,6 @@ async function importJournalReplaceStaged(stagingKey, operationId = '', source =
     recordOperationStage(operationId, 'error', `Ошибка импорта: ${normalizeError(error)}`, 100, 'error');
     throw error;
   } finally {
-    await deleteTransferPayloadGroup(key).catch(() => {});
     if (prepared?.importId) await deleteJournalImportStage(prepared.importId).catch(() => {});
   }
 }
@@ -8491,7 +9129,7 @@ async function listJournalBackupsOnYandex(requestedMonth = '') {
   return { ok: true, journalRoot, selectedMonth, monthPath, files };
 }
 
-async function fetchJournalBackupFromYandex(requestedPath, operationId = '') {
+async function fetchJournalBackupFromYandex(requestedPath, operationId = '', ownerSessionId = '') {
   operationId = String(operationId || '') || makeOperationLogId('journal-import-yandex');
   const remotePath = normalizeDiskPath(requestedPath || '');
   await startOperationLog(operationId, 'journal-import-yandex', 'Восстановление журнала с Яндекс Диска', { remotePath });
@@ -8534,6 +9172,7 @@ async function fetchJournalBackupFromYandex(requestedPath, operationId = '') {
         inspected,
         expectedJournalRevision
       );
+      const importLease = await acquireJournalImportLease(previewReceipt, ownerSessionId);
       appendOperationLogEvent(operationId, {
         category: 'checkpoint', level: 'info', stage: 'await-confirmation',
         message: 'Резервная копия скачана и потоково проверена. Ожидается подтверждение замены локального журнала.',
@@ -8552,7 +9191,10 @@ async function fetchJournalBackupFromYandex(requestedPath, operationId = '') {
         exportedAt: inspected.exportedAt || '',
         contentSha256: inspected.contentSha256,
         operationId,
-        previewReceipt
+        previewReceipt,
+        leaseToken: importLease.leaseToken,
+        leaseExpiresAt: importLease.leaseExpiresAt,
+        hardExpiresAt: importLease.hardExpiresAt
       };
     } catch (error) {
       await deleteTransferPayloadGroup(responsePayloadKey).catch(() => {});
@@ -8961,7 +9603,18 @@ async function deleteTransferPayload(id) {
 }
 
 async function cleanupTransferPayloads() {
-  const cutoff = Date.now() - TRANSFER_PAYLOAD_TTL_MS;
+  const now = Date.now();
+  const cutoff = now - TRANSFER_PAYLOAD_TTL_MS;
+  let protectedImportKey = '';
+  try {
+    const lease = await readJournalImportLeaseRecord();
+    if (lease && lease.hardExpiresAt > now) protectedImportKey = lease.previewReceipt.stagingKey;
+  } catch (error) {
+    // Corrupt/unknown ownership is fail-closed: do not age-delete Journal
+    // import payloads until explicit recovery can inspect the checkpoint.
+    console.warn('WebClip Journal import lease cleanup guard:', error);
+    protectedImportKey = '*';
+  }
   const db = await openTransferPayloadDb(MAINTENANCE_IDB_TX_TIMEOUT_MS);
   let deleted = 0;
   try {
@@ -8975,7 +9628,14 @@ async function cleanupTransferPayloads() {
         req.onsuccess = () => {
           const cursor = req.result;
           if (!cursor) return;
-          if (Number(cursor.value?.createdAt || 0) < cutoff) {
+          const id = String(cursor.key || '');
+          const kind = String(cursor.value?.kind || '');
+          const protectedByLease = protectedImportKey && (
+            protectedImportKey === '*'
+              ? (kind === 'journal-import-manifest' || kind === 'journal-import-chunk-blob')
+              : (id === protectedImportKey || id.startsWith(`${protectedImportKey}:chunk:`))
+          );
+          if (!protectedByLease && Number(cursor.value?.createdAt || 0) < cutoff) {
             cursor.delete();
             deleted += 1;
           }
