@@ -40,12 +40,14 @@ const source = fs.readFileSync(path.join(ROOT, 'service-worker.js'), 'utf8');
     resetId: 'reset-001',
     kind: 'import-replace',
     scope: 'all',
-    scopeKey: '',
     sourceOperationId: 'op-001',
     state: 'quarantined',
     outcome: 'pending',
     resolution: 'reconciling'
   });
+
+  assert.equal(Object.prototype.hasOwnProperty.call(reset, 'scopeKey'), false,
+    'P0-072/P0-066 boundary: reset disposition must not duplicate a plaintext URL/site scope key.');
 
   const base = {
     operationId: 'op-001',
