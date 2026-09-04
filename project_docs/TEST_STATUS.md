@@ -41,6 +41,8 @@ Historical engineering evidence includes multiple PASS runs on managed Chromium 
 
 One specific real Chrome problem-page result is also preserved: the original `its.1c.ru` pagination/clipping reproduction reached a 2-page complete PDF after P1-153.
 
+Current focused C44 evidence adds a real unpacked Chrome `152.0.7977.54` local Journal control at workflow run `33790752301`: same-generation changed backup bytes fail closed on SHA-256 mismatch, stale Journal revision fails closed inside the destructive transaction, unchanged import succeeds, and no remote account, credentials or native Save As UI are used. Durable detail is in the C44 evidence/report; this does not close lease/checkpoint/native/remote release boundaries.
+
 None of these substitutes for the final release browser/service gate below.
 
 ## Release readiness

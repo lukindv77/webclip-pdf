@@ -18,6 +18,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE = process.env.C44_SOURCE_BASELINE || '';
 const WORKER = fs.readFileSync(path.join(ROOT, 'service-worker.js'), 'utf8');
 const JOURNAL = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
+const IMPORT_DIGEST = fs.readFileSync(path.join(ROOT, 'journal-import-digest.js'), 'utf8');
 const PREPARED_SAVE_AS = fs.readFileSync(path.join(ROOT, 'prepared-save-as.js'), 'utf8');
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
 
@@ -32,21 +33,26 @@ function sliceFrom(source, marker, span) {
 
 function sourceContract() {
   const uiImport = sliceFrom(JOURNAL, 'async function importJournalFromSelectedFile', 6500);
-  const preview = sliceFrom(WORKER, 'async function previewStagedJournalImport', 4500);
-  const replace = sliceFrom(WORKER, 'async function importJournalReplaceStaged', 5500);
-  const commit = sliceFrom(WORKER, 'async function commitStagedJournalImport', 15000);
+  const preview = sliceFrom(WORKER, 'async function previewStagedJournalImport', 5500);
+  const replace = sliceFrom(WORKER, 'async function importJournalReplaceStaged', 6500);
+  const commit = sliceFrom(WORKER, 'async function commitStagedJournalImport', 11000);
+  const revisionRead = commit.indexOf('metaStore.get(JOURNAL_META_REVISION_KEY)');
+  const firstClear = commit.indexOf('tx.objectStore(JOURNAL_PENDING_STORE).clear();');
+  const revisionCompare = commit.indexOf('currentRevision !== expectedRevision');
+  const guardedReplace = commit.indexOf('beginReplace();', revisionCompare);
   const result = {
     manifestVersion: MANIFEST.version,
     realUiFileBinding: JOURNAL.includes("importFileInput.addEventListener('change', importJournalFromSelectedFile)"),
     realUiStagesBlobChunks: uiImport.includes('stagingKey = await stageJournalImportFile(file);'),
     realUiPreviewsSameKey: uiImport.includes("type: 'WEBCLIP_JOURNAL_IMPORT_PREVIEW_STAGED'") && uiImport.includes('stagingKey,'),
     realUiReusesKeyAfterConfirmation: uiImport.includes("type: 'WEBCLIP_JOURNAL_IMPORT_REPLACE_STAGED'") && uiImport.includes('stagingKey,'),
-    confirmationShowsCountAndDateOnly: uiImport.includes('Записей в файле: ${preview.entryCount}.') && uiImport.includes("Дата экспорта: ${preview.exportedAt || 'не указана'}.") && !uiImport.includes('digest'),
-    previewInspectsTransferBytes: preview.includes('inspectStagedJournalImportStream(key)') && preview.includes('await-confirmation'),
-    replaceRereadsTransferBytes: replace.includes('normalizeStagedJournalImportStream(key)'),
-    noPreviewDigestBinding: !preview.includes('sha256') && !preview.includes('digest'),
-    noReplacePreviewReceiptBinding: !replace.includes('expectedDigest') && !replace.includes('previewReceipt'),
-    noExpectedRevisionCas: !commit.includes('expectedRevision') && !commit.includes('expectedJournalRevision'),
+    confirmationShowsCountDateAndDigest: uiImport.includes('Записей в файле: ${preview.entryCount}.') && uiImport.includes("Дата экспорта: ${preview.exportedAt || 'не указана'}.") && uiImport.includes('SHA-256 проверенной копии: ${preview.contentSha256}.'),
+    previewBindsDigestGenerationModeAndRevision: preview.includes('inspectStagedJournalImportStream(key)') && preview.includes('createJournalImportPreviewReceipt') && preview.includes('expectedJournalRevision') && preview.includes('previewReceipt'),
+    uiReturnsPreviewReceiptUnchanged: uiImport.includes('const previewReceipt = requireJournalImportPreviewReceipt(preview);') && uiImport.includes('previewReceipt\n    });'),
+    replaceRereadsAndMatchesTransferBytes: replace.includes('normalizeStagedJournalImportStream(key)') && replace.includes('assertPreparedJournalImportMatchesPreview(prepared, previewReceipt)'),
+    replaceRequiresPreviewReceipt: replace.includes('normalizeJournalImportPreviewReceipt(previewReceiptValue') && replace.includes('stagingKey: key') && replace.includes('source: sourceKind') && replace.includes('operationId'),
+    expectedRevisionCasGuardsDestructiveWrites: revisionRead >= 0 && firstClear >= 0 && revisionCompare > revisionRead && guardedReplace > revisionCompare,
+    incrementalDigestModulePresent: IMPORT_DIGEST.includes('class IncrementalSha256') && IMPORT_DIGEST.includes('digestHex()'),
     replaceClearsRecoveryStores: [
       'JOURNAL_PENDING_STORE',
       'JOURNAL_PENDING_DOWNLOAD_STORE',
@@ -260,7 +266,12 @@ async function installDbHelpers(page) {
       const db = await open('WebClipOffscreenTransfers', 1);
       const beforeTx = db.transaction('payloads', 'readonly');
       const rows = await requestResult(beforeTx.objectStore('payloads').getAll());
+      const manifest = rows.find(row => row?.id === stagingKey && row?.kind === 'journal-import-manifest');
       const blob = new Blob([String(text)], { type: 'application/json' });
+      if (!manifest || Number(manifest.chunkCount) !== 1 || blob.size !== Number(manifest.totalBytes)) {
+        db.close();
+        throw new Error('C44 retarget control requires one same-size manifest generation.');
+      }
       const tx = db.transaction('payloads', 'readwrite');
       const done = txDone(tx);
       const store = tx.objectStore('payloads');
@@ -274,14 +285,10 @@ async function installDbHelpers(page) {
         chunkIndex: 0,
         blob,
         byteCount: blob.size,
-        createdAt: Date.now()
+        createdAt: Number(manifest.createdAt) || Date.now()
       });
       store.put({
-        id: stagingKey,
-        kind: 'journal-import-manifest',
-        chunkCount: 1,
-        totalBytes: blob.size,
-        createdAt: Date.now()
+        ...manifest
       });
       await done;
       db.close();
@@ -331,6 +338,21 @@ async function confirmImport(page) {
   return page.$eval('#status', item => item.textContent || '');
 }
 
+async function confirmImportExpectError(page, expectedText) {
+  const code = await page.$eval('#confirmCode', item => item.textContent || '');
+  await page.$eval('#confirmInput', (item, value) => {
+    item.value = value;
+    item.dispatchEvent(new Event('input', { bubbles: true }));
+  }, code);
+  await page.click('#confirmProceed');
+  await page.waitForFunction(
+    text => document.querySelector('#status')?.textContent?.includes(text),
+    { timeout: 90000 },
+    expectedText
+  );
+  return page.$eval('#status', item => item.textContent || '');
+}
+
 function makeRetargetBackup(exportedText) {
   const parsed = JSON.parse(exportedText);
   assert.equal(parsed.schema, 'webclip-journal');
@@ -340,14 +362,17 @@ function makeRetargetBackup(exportedText) {
   parsed.exportedAt = '2044-04-04T04:44:44.000Z';
   parsed.journal.entries[0] = {
     ...parsed.journal.entries[0],
-    id: 'retarget-import-B',
-    title: 'C44_RETARGET_IMPORT_B',
-    url: 'https://retarget.example/b',
-    operationId: 'retarget-op-B',
-    provenance: { marker: 'C44_RETARGET_PROVENANCE_B' },
-    selectionSnapshot: { version: 3, marker: 'C44_RETARGET_SELECTION_B' }
+    id: 'copy-b',
+    title: 'C44_COPY_B',
+    url: 'https://b.invalid/',
+    operationId: 'copy-b'
   };
-  return JSON.stringify(parsed);
+  const retargeted = JSON.stringify(parsed);
+  const paddingBytes = Buffer.byteLength(exportedText) - Buffer.byteLength(retargeted);
+  assert(paddingBytes >= 0, 'retarget fixture must fit the original byte length');
+  const sameSizeRetargeted = retargeted + ' '.repeat(paddingBytes);
+  assert.equal(Buffer.byteLength(sameSizeRetargeted), Buffer.byteLength(exportedText));
+  return sameSizeRetargeted;
 }
 
 async function captureProductionExport(page) {
@@ -404,27 +429,83 @@ async function run() {
     const backupBText = makeRetargetBackup(exported.text);
 
     await seedCurrent(page, 'retarget-base');
-    const preview = await uploadAndAwaitConfirmation(page, backupAPath);
-    const stagingKey = preview.manifests.at(-1).id;
-    assert(preview.text.includes(path.basename(backupAPath)), preview.text);
-    assert(preview.text.includes('Записей в файле: 1'), preview.text);
-    assert(preview.text.includes(exportEnvelope.exportedAt), preview.text);
-    const transferBeforeRetarget = await page.evaluate(key => globalThis.__c44ui.transferGroup(key), stagingKey);
-    const retargetWrite = await page.evaluate((key, text) => globalThis.__c44ui.replaceTransferGroup(key, text), stagingKey, backupBText);
-    await page.evaluate(() => globalThis.__c44ui.injectConcurrent('after-preview'));
-    const beforeCommit = await journalSnapshot(page);
-    const retargetStatus = await confirmImport(page);
-    const afterCommit = await journalSnapshot(page);
-    const transferAfterCommit = await page.evaluate(key => globalThis.__c44ui.transferGroup(key), stagingKey);
+    const retargetPreview = await uploadAndAwaitConfirmation(page, backupAPath);
+    const retargetStagingKey = retargetPreview.manifests.at(-1).id;
+    assert(retargetPreview.text.includes(path.basename(backupAPath)), retargetPreview.text);
+    assert(retargetPreview.text.includes('Записей в файле: 1'), retargetPreview.text);
+    assert(retargetPreview.text.includes(exportEnvelope.exportedAt), retargetPreview.text);
+    assert(retargetPreview.text.includes(sha256(exported.text)), retargetPreview.text);
+    const transferBeforeRetarget = await page.evaluate(key => globalThis.__c44ui.transferGroup(key), retargetStagingKey);
+    const retargetWrite = await page.evaluate(
+      (key, text) => globalThis.__c44ui.replaceTransferGroup(key, text),
+      retargetStagingKey,
+      backupBText
+    );
+    await page.evaluate(() => globalThis.__c44ui.injectConcurrent('retarget'));
+    const beforeRetargetCommit = await journalSnapshot(page);
+    const retargetStatus = await confirmImportExpectError(page, 'Копия или параметры импорта изменились после проверки');
+    const afterRetargetCommit = await journalSnapshot(page);
+    const transferAfterRetarget = await page.evaluate(key => globalThis.__c44ui.transferGroup(key), retargetStagingKey);
 
-    assert(beforeCommit.entries.some(row => row.id === 'concurrent-after-preview'));
-    assert(afterCommit.entries.some(row => row.id === 'retarget-import-B'), JSON.stringify(afterCommit.entries));
-    assert(!afterCommit.entries.some(row => row.title === 'C44_CURRENT_export-A'));
-    assert(!afterCommit.entries.some(row => row.id === 'concurrent-after-preview'));
-    assert.equal(afterCommit.pendingAppends.length, 0);
-    assert.equal(afterCommit.pendingDownloads.length, 0);
-    assert.equal(afterCommit.pendingRemoteSaves.length, 0);
-    assert.equal(transferAfterCommit.length, 0);
+    assert(beforeRetargetCommit.entries.some(row => row.id === 'concurrent-retarget'));
+    assert(afterRetargetCommit.entries.some(row => row.id === 'current-retarget-base'));
+    assert(afterRetargetCommit.entries.some(row => row.id === 'concurrent-retarget'));
+    assert(!afterRetargetCommit.entries.some(row => row.id === 'copy-b'));
+    assert.equal(afterRetargetCommit.revision, beforeRetargetCommit.revision);
+    assert.deepEqual(
+      afterRetargetCommit.pendingAppends.map(row => row.operationId).sort(),
+      beforeRetargetCommit.pendingAppends.map(row => row.operationId).sort()
+    );
+    assert.deepEqual(
+      afterRetargetCommit.pendingDownloads.map(row => row.operationId).sort(),
+      beforeRetargetCommit.pendingDownloads.map(row => row.operationId).sort()
+    );
+    assert.deepEqual(
+      afterRetargetCommit.pendingRemoteSaves.map(row => row.operationId).sort(),
+      beforeRetargetCommit.pendingRemoteSaves.map(row => row.operationId).sort()
+    );
+    assert.equal(transferAfterRetarget.length, 0);
+
+    await seedCurrent(page, 'stale-base');
+    const stalePreview = await uploadAndAwaitConfirmation(page, backupAPath);
+    const staleStagingKey = stalePreview.manifests.at(-1).id;
+    assert(stalePreview.text.includes(sha256(exported.text)), stalePreview.text);
+    await page.evaluate(() => globalThis.__c44ui.injectConcurrent('stale'));
+    const beforeStaleCommit = await journalSnapshot(page);
+    const staleStatus = await confirmImportExpectError(page, 'Журнал изменился после проверки резервной копии');
+    const afterStaleCommit = await journalSnapshot(page);
+    const transferAfterStale = await page.evaluate(key => globalThis.__c44ui.transferGroup(key), staleStagingKey);
+
+    assert(afterStaleCommit.entries.some(row => row.id === 'current-stale-base'));
+    assert(afterStaleCommit.entries.some(row => row.id === 'concurrent-stale'));
+    assert.equal(afterStaleCommit.revision, beforeStaleCommit.revision);
+    assert.deepEqual(
+      afterStaleCommit.pendingAppends.map(row => row.operationId).sort(),
+      beforeStaleCommit.pendingAppends.map(row => row.operationId).sort()
+    );
+    assert.deepEqual(
+      afterStaleCommit.pendingDownloads.map(row => row.operationId).sort(),
+      beforeStaleCommit.pendingDownloads.map(row => row.operationId).sort()
+    );
+    assert.deepEqual(
+      afterStaleCommit.pendingRemoteSaves.map(row => row.operationId).sort(),
+      beforeStaleCommit.pendingRemoteSaves.map(row => row.operationId).sort()
+    );
+    assert.equal(transferAfterStale.length, 0);
+
+    await seedCurrent(page, 'success-base');
+    const successPreview = await uploadAndAwaitConfirmation(page, backupAPath);
+    const successStagingKey = successPreview.manifests.at(-1).id;
+    assert(successPreview.text.includes(sha256(exported.text)), successPreview.text);
+    const successStatus = await confirmImport(page);
+    const afterSuccess = await journalSnapshot(page);
+    const transferAfterSuccess = await page.evaluate(key => globalThis.__c44ui.transferGroup(key), successStagingKey);
+    assert(afterSuccess.entries.some(row => row.title === 'C44_CURRENT_export-A'));
+    assert(!afterSuccess.entries.some(row => row.id === 'current-success-base'));
+    assert.equal(afterSuccess.pendingAppends.length, 0);
+    assert.equal(afterSuccess.pendingDownloads.length, 0);
+    assert.equal(afterSuccess.pendingRemoteSaves.length, 0);
+    assert.equal(transferAfterSuccess.length, 0);
 
     await seedCurrent(page, 'restart-base');
     const restartPreview = await uploadAndAwaitConfirmation(page, backupAPath);
@@ -471,6 +552,7 @@ async function run() {
       sourceHashes: {
         worker: sha256(fs.readFileSync(path.join(ROOT, 'service-worker.js'))),
         journal: sha256(fs.readFileSync(path.join(ROOT, 'journal.js'))),
+        importDigest: sha256(fs.readFileSync(path.join(ROOT, 'journal-import-digest.js'))),
         preparedSaveAs: sha256(fs.readFileSync(path.join(ROOT, 'prepared-save-as.js'))),
         manifest: sha256(fs.readFileSync(path.join(ROOT, 'manifest.json')))
       },
@@ -497,26 +579,58 @@ async function run() {
         selectedFilename: path.basename(backupAPath),
         previewEntryCount: 1,
         previewExportedAt: exportEnvelope.exportedAt,
+        previewSha256Shown: retargetPreview.text.includes(sha256(exported.text)),
         stagingKeyStable: true,
         transferRowsBeforeRetarget: transferBeforeRetarget.length,
         replacementBytes: retargetWrite.byteCount,
-        importedIds: afterCommit.entries.map(row => row.id),
-        importedTitles: afterCommit.entries.map(row => row.title),
-        importedRetargetProvenance: afterCommit.entries.find(row => row.id === 'retarget-import-B')?.provenance?.marker || '',
-        concurrentEntryPresentBeforeCommit: beforeCommit.entries.some(row => row.id === 'concurrent-after-preview'),
-        concurrentEntryPresentAfterCommit: afterCommit.entries.some(row => row.id === 'concurrent-after-preview'),
+        failClosed: retargetStatus.includes('Копия или параметры импорта изменились после проверки'),
+        entryIdsBeforeCommit: beforeRetargetCommit.entries.map(row => row.id),
+        entryIdsAfterCommit: afterRetargetCommit.entries.map(row => row.id),
+        retargetBytesImported: afterRetargetCommit.entries.some(row => row.id === 'copy-b'),
+        concurrentEntryPreserved: afterRetargetCommit.entries.some(row => row.id === 'concurrent-retarget'),
         pendingCountsBeforeCommit: {
-          appends: beforeCommit.pendingAppends.length,
-          downloads: beforeCommit.pendingDownloads.length,
-          remote: beforeCommit.pendingRemoteSaves.length
+          appends: beforeRetargetCommit.pendingAppends.length,
+          downloads: beforeRetargetCommit.pendingDownloads.length,
+          remote: beforeRetargetCommit.pendingRemoteSaves.length
         },
         pendingCountsAfterCommit: {
-          appends: afterCommit.pendingAppends.length,
-          downloads: afterCommit.pendingDownloads.length,
-          remote: afterCommit.pendingRemoteSaves.length
+          appends: afterRetargetCommit.pendingAppends.length,
+          downloads: afterRetargetCommit.pendingDownloads.length,
+          remote: afterRetargetCommit.pendingRemoteSaves.length
         },
-        usedTransferRowsAfterCommit: transferAfterCommit.length,
+        usedTransferRowsAfterCommit: transferAfterRetarget.length,
         status: retargetStatus
+      },
+      staleRevisionCas: {
+        previewSha256Shown: stalePreview.text.includes(sha256(exported.text)),
+        failClosed: staleStatus.includes('Журнал изменился после проверки резервной копии'),
+        entryIdsBeforeCommit: beforeStaleCommit.entries.map(row => row.id),
+        entryIdsAfterCommit: afterStaleCommit.entries.map(row => row.id),
+        concurrentEntryPreserved: afterStaleCommit.entries.some(row => row.id === 'concurrent-stale'),
+        pendingCountsBeforeCommit: {
+          appends: beforeStaleCommit.pendingAppends.length,
+          downloads: beforeStaleCommit.pendingDownloads.length,
+          remote: beforeStaleCommit.pendingRemoteSaves.length
+        },
+        pendingCountsAfterCommit: {
+          appends: afterStaleCommit.pendingAppends.length,
+          downloads: afterStaleCommit.pendingDownloads.length,
+          remote: afterStaleCommit.pendingRemoteSaves.length
+        },
+        usedTransferRowsAfterCommit: transferAfterStale.length,
+        status: staleStatus
+      },
+      cleanImport: {
+        previewSha256Shown: successPreview.text.includes(sha256(exported.text)),
+        importedTitle: afterSuccess.entries.find(row => row.title === 'C44_CURRENT_export-A')?.title || '',
+        priorEntryRemoved: !afterSuccess.entries.some(row => row.id === 'current-success-base'),
+        pendingCountsAfterCommit: {
+          appends: afterSuccess.pendingAppends.length,
+          downloads: afterSuccess.pendingDownloads.length,
+          remote: afterSuccess.pendingRemoteSaves.length
+        },
+        usedTransferRowsAfterCommit: transferAfterSuccess.length,
+        status: successStatus
       },
       fullBrowserRestart: {
         extensionIdStable: extensionIdAfter === extensionId,

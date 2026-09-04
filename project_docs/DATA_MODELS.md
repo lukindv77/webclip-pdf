@@ -278,6 +278,27 @@ Temporary normalized records used only by confirmed large Journal import. Store 
 
 Raw import bytes remain in `WebClipOffscreenTransfers` as `journal-import-manifest` + `journal-import-chunk-blob` records (1 MiB chunks, total input cap 50 MiB). New import paths do not persist the whole backup as a JS/text string.
 
+### C44 Journal import preview receipt
+
+The worker-issued value has this exact structured-clone contract:
+
+```json
+{
+  "version": 1,
+  "mode": "replace",
+  "stagingKey": "journal-import-…",
+  "stagingGeneration": "manifest:<createdAt>:<chunkCount>:<totalBytes>",
+  "source": "file | yandex",
+  "operationId": "…",
+  "contentSha256": "<64 lowercase hex>",
+  "entryCount": 0,
+  "exportedAt": "ISO timestamp or empty",
+  "expectedJournalRevision": "…"
+}
+```
+
+Unknown/missing fields, invalid bounds, caller field mismatch, re-read digest/generation/count/export-time mismatch, or Journal revision mismatch all fail closed. The authoritative revision compare runs inside the same `WebClipJournal` readwrite transaction before replacement starts. The receipt is confirmation authority for one attempt, not a lease or browser-restart resume token.
+
 ### P1-004 cross-origin frame locators
 
 Для cross-origin iframe используется тот же `SelectionSnapshot v3`: top-frame добавляет к locator, созданному frame-agent внутри разрешённого frame, внешний `framePath`. Browser `frameId/documentId` — только runtime identity и в Journal не сохраняются. При restore top сначала fail-closed разрешает внешний frame locator, затем передаёт оставшийся locator зарегистрированному agent; stale `documentId` после frame navigation не принимается.

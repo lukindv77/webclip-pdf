@@ -509,3 +509,13 @@ These deterministic tests are a delta against the physically mounted checkpoint 
 4. Staged cleanup/delete: hung transaction abort/reject; повторный импорт не должен ждать бесконечно старый staging.
 5. Normalized import-staging write/delete timeout abort-ит transaction; atomic replace старого Journal не выполняется после staging failure.
 6. Deterministic regression: `node project_tools/test_p1_074_import_staging_deadlines.js`.
+
+## C44 — preview receipt, SHA-256 and revision CAS
+
+1. `node project_tools/test_c44_import_preview_receipt.js`: verify SHA-256 standard vectors and irregular incremental chunk boundaries against Node crypto.
+2. Reject missing/extra receipt fields, unsupported mode/version, invalid digest/generation/bounds and caller staging/source/operation mismatches with `JOURNAL_IMPORT_PREVIEW_MISMATCH`.
+3. Re-read the same staging generation and reject digest/generation/count/export-time mismatch before Journal replacement.
+4. Preserve Journal and all pending stores when the expected Journal revision changes after preview; compare again inside the destructive transaction before `beginReplace()`.
+5. Through the actual unpacked Journal UI, preserve staging key, manifest, generation and byte length while changing only valid backup bytes; confirmation must show A's digest and commit must reject B on `contentSha256`.
+6. Through separate real-UI schedules, prove stale revision rejection, unchanged clean-import success and the truthful full-browser-restart boundary.
+7. Keep native Save As, remote Yandex recovery and any explicit merge behavior outside this local synthetic-data control.
