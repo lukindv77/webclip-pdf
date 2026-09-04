@@ -52,11 +52,9 @@ const cleanup = sourceSlice(
   'async function cleanupTransferPayloads',
   'function pdfCacheKey'
 );
-const handler = sourceSlice(
-  worker,
-  'chrome.runtime.onMessage.addListener',
-  'chrome.runtime.onConnect.addListener'
-);
+const handlerStart = worker.indexOf('chrome.runtime.onMessage.addListener');
+assert(handlerStart >= 0);
+const handler = worker.slice(handlerStart);
 
 assert(worker.includes("const JOURNAL_IMPORT_LEASE_KEY = 'journalImportLease';"));
 assert(worker.includes('const JOURNAL_IMPORT_LEASE_TTL_MS = 2 * 60 * 1000;'));
