@@ -151,7 +151,7 @@ assert.equal(lease.hardExpiresAt, stagedAt + 2 * 60 * 60 * 1000);
 assert.equal(lease.leaseExpiresAt, now + 2 * 60 * 1000);
 assert.throws(
   () => api.normalizeJournalImportLeaseRecord({ ...lease, unexpected: true }),
-  /состав checkpoint/
+  /состав checkpoint/i
 );
 assert.doesNotThrow(() => api.assertJournalImportLeaseAuthority(lease, {
   leaseToken: lease.leaseToken,
