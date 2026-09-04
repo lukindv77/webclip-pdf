@@ -1,15 +1,15 @@
 # WebClip — fresh full-project research — C44 Backup / import / recovery — 2026-09-03
 
-Date: 2026-09-03  
-Canonical source baseline: `4f23eb5b1c063b25f650a24969bafec1cca18c17`  
-Exact `service-worker.js` blob: `c4edd3fe7e2467102edc7b27f79e89513678ce79`  
-Exact `journal.js` blob: `e300afb8ce3b1d03005dc35e6ef40ec31d4543b4`  
+Date: 2026-09-04  
+Canonical source baseline: `e4d7f02eac9f2c2879b6947e8ef06fb86546f432`  
+Exact `service-worker.js` blob: `6d61ac81befdbf2804ae9dbec425aa08d1194eb1`  
+Exact `journal.js` blob: `1138e4fbf177e31008f510bc1addfd539885f10e`  
 Exact `journal-import-digest.js` blob: `7b943119c712cc663ef766bd5a87cc75c70d346d`  
 Scope: fresh-restart coordinate **C44 — Backup / import / recovery**.
 
 ## Result
 
-**C44: `L4-REVALIDATED / PARTIAL/FINDING + POSITIVE/REAL-UNPACKED/PREVIEW-RECEIPT/SHA-256-BINDING/STAGING-GENERATION/REVISION-CAS/FAIL-CLOSED/CLEAN-IMPORT/FULL-BROWSER-RESTART CONTROLS + RECOVERY-CLEAR/RESTART-RESUME-LOSS/ORPHAN-STAGING FINDINGS; LEASE/CHECKPOINT/NATIVE-SAVE-AS/MERGE/REMOTE-L5 OPEN (P0-013, P0-072, P1-207, P1-215; P1-194 supporting; P0-077 positive)`.**
+**C44: `L4-REVALIDATED / PARTIAL/FINDING + POSITIVE/REAL-UNPACKED/PREVIEW-RECEIPT/SHA-256-BINDING/STAGING-GENERATION/REVISION-CAS/RENEWABLE-LEASE/EXPLICIT-RESTART-RESUME-CANCEL/FAIL-CLOSED/CLEAN-IMPORT/FULL-BROWSER-RESTART CONTROLS + RECOVERY-CHECKPOINT-CLEAR FINDING; CHECKPOINT/MERGE/NATIVE-SAVE-AS/REMOTE-L5 OPEN (P0-013, P0-072, P1-207; P1-194 supporting; P1-215/P0-077 DONE)`.**
 
 The post-remediation tranche completes the first bounded local C44 repair without crossing into remote or user-owned native UI:
 
@@ -20,9 +20,9 @@ The post-remediation tranche completes the first bounded local C44 repair withou
 5. a same-key/same-generation/same-size valid-byte retarget is rejected specifically on `contentSha256`, preserving Journal and all pending rows;
 6. a separate concurrent Journal generation is rejected by expected-revision CAS, again preserving Journal and pending rows;
 7. an unchanged backup with a fresh receipt still imports successfully;
-8. the earlier restart result remains truthful: transfer staging survives a full browser restart, but confirmation ownership does not resume and abandoned staging remains.
+8. a durable renewable lease now survives restart as an explicit checkpoint: no destructive auto-resume occurs; expired ownership can be explicitly resumed with token/owner rotation, full byte/revision revalidation and a second confirmation, or explicitly canceled without changing Journal/pending state.
 
-No new P-code is needed. The local digest and revision subcases of **P0-013/P1-207** now have positive production controls; the owners remain ACTIVE for wider selected-object/remote/restart authority. **P0-072** and **P1-215** remain direct open work. The earlier physical TTL/lease control remains direct evidence for **P1-194/P1-215**. **P0-077 DONE** remains positive and is not reopened.
+No new P-code is needed. The local digest/revision subcases of **P0-013/P1-207** remain positive controls while their wider remote authority stays ACTIVE. **P1-215 is DONE**: the renewable lease/restart owner is implemented and physically accepted. **P0-072** remains the next local C44 task; **P1-194** remains supporting. **P0-077 DONE** remains positive and is not reopened.
 
 Runtime and deterministic tests change in this tranche. Registry status and manifest `0.9.8` remain unchanged. Release remains **NOT READY**.
 
@@ -34,7 +34,20 @@ The staging retarget schedule is a causal integrity control: it asks whether the
 
 ## Accepted execution
 
-### Post-remediation preview receipt and revision CAS
+### Post-remediation restart ownership and lease
+
+- Chrome `152.0.7977.54`;
+- workflow run `33825545613`;
+- job `100877305863`;
+- exact accepted workflow head `77cbd3bcc325dd57542993f94b85f7a08c8245da`;
+- conclusion **SUCCESS**;
+- result SHA-256 `59214943fa5d77e8147d527fff53fb88ccb1d4a51b972f03cabf9d9fd7e07e86`;
+- artifact `c44-import-restart-lease-receipt`, id `9919809184`;
+- artifact archive SHA-256 `d0c0018e11b303f924e757e621de7d3c89fc281e28bc4d84f6f3c33c7e847789`;
+- deterministic regression `project_tools/test_c44_import_restart_lease.js`;
+- durable physical harness `project_tools/research_c44_full_ui_browser_restart.mjs`.
+
+### Previous post-remediation preview receipt and revision CAS
 
 - Chrome `152.0.7977.54`;
 - workflow run `33790752301`;
@@ -81,8 +94,12 @@ Fresh source inspection confirms:
 - confirmation discloses filename, entry count, export time and exact SHA-256;
 - confirmed replace echoes the receipt, re-reads/normalizes bytes under the same staging key and compares digest/generation/count/export time;
 - destructive commit prechecks revision and repeats the authoritative revision compare inside the same IndexedDB transaction before invoking replacement;
-- import preview/replace/discard runtime messages are accepted only from the extension's `journal.html` page;
-- destructive commit clears `pendingAppends`, `pendingDownloads` and `pendingRemoteSaves`;
+- import preview/replace/discard plus pending/renew/resume/cancel runtime messages are accepted only from the extension's `journal.html` page;
+- preview persists one exact `journalImportLease` v1 checkpoint with receipt, rotating token/page owner, renewable two-minute expiry and staging-generation-derived two-hour hard expiry;
+- restart never resumes destructively on its own; only an expired short lease can be resumed/canceled, and resume re-hashes bytes, captures a fresh revision and requires a second confirmation;
+- generic TTL cleanup protects hard-live exact staging and fails closed for Journal-import rows on corrupt checkpoint metadata;
+- destructive commit verifies exact lease authority before revision CAS and before replacement in the same IndexedDB transaction; raw staging is removed only after successful commit;
+- destructive commit still clears `pendingAppends`, `pendingDownloads` and `pendingRemoteSaves`;
 - no explicit `WEBCLIP_JOURNAL_IMPORT_MERGE` or equivalent merge path exists;
 - canonical `prepared-save-as.js` still delegates to `chrome.downloads.download(... saveAs: true)`.
 
@@ -96,8 +113,11 @@ Fresh source inspection confirms:
 | Preserve staging key, manifest, generation and byte length; replace only valid synthetic bytes A with B; confirm | Commit rejects on `contentSha256`; neither B nor any destructive Journal/pending-store mutation is admitted. |
 | Preview unchanged A; then add a concurrent Journal entry and rows to every pending store; confirm | Commit rejects on stale expected revision; old and concurrent entries plus every pending row remain. |
 | Fresh preview of unchanged A; confirm without concurrent change | Import succeeds, proving the new fail-closed guards do not block the valid replace path. |
-| Select A, reach confirmation, close full browser process, relaunch same profile | Transfer staging remains 2 rows and Journal/pending state remains, but confirmation/File/operation id are not restored. |
-| Reselect A and confirm after restart | Fresh retry succeeds and its staging is consumed; abandoned pre-restart staging remains 2 rows. |
+| Select A, reach confirmation, close full browser process, relaunch same profile | Transfer staging remains 2 rows and Journal/pending state remains; no destructive confirmation resumes while the former lease is current. |
+| Expire the short lease; choose explicit resume | Token and owner rotate; staged bytes are re-hashed, fresh revision is captured, and a second destructive confirmation is shown. |
+| Attempt commit with the previous token while the new confirmation is open | Fails closed; Journal/pending state and both raw staging rows remain unchanged. |
+| Confirm with the current owner/token | Exactly one replacement succeeds; checkpoint and consumed staging are removed. |
+| Separate restart; expire lease; choose explicit cancel | Journal and all pending rows remain; only checkpoint plus raw staging are removed. |
 | Earlier fixed-TTL versus lease-aware control | Current age-only model deletes old staging; bounded live lease retains it. |
 | Production expected-revision CAS control | Stale commit is rejected inside the destructive transaction and preserves Journal + pending stores. |
 
@@ -105,7 +125,7 @@ Fresh source inspection confirms:
 
 ### P0-013 — selected backup authority
 
-The local production path now authorizes one strict receipt and rejects a same-key/same-generation/same-size byte change on SHA-256 mismatch. P0-013 remains ACTIVE for wider selected-object authority, especially remote object identity and restart ownership; the local file-byte subcase is a positive control.
+The local production path now authorizes one strict receipt and rejects a same-key/same-generation/same-size byte change on SHA-256 mismatch. Restart ownership is separately closed by P1-215. P0-013 remains ACTIVE for wider selected-object authority, especially remote object/account/root identity; the local file-byte subcase is a positive control.
 
 ### P1-207 — source revision truth
 
@@ -115,9 +135,9 @@ The production commit now compares the previewed Journal revision inside the sam
 
 Pending append/download/remote-save rows are reconciliation checkpoints, not cancellable work handles. Production replace erases them. The architecture must reconcile, migrate or explicitly quarantine those receipts under recovery authority; deletion cannot stand in for cancellation of browser/remote effects.
 
-### P1-215 / P1-194 — staging lifetime and restart
+### P1-215 DONE / P1-194 supporting — staging lifetime and restart
 
-The restart result distinguishes durable bytes from durable ownership: staging persists but its UI owner does not. A bounded lease needs a restart policy—resume from a durable confirmation receipt, or explicitly cancel and reclaim—plus truthful storage durability. Indefinite orphan retention and generic age-only deletion are both incomplete.
+The exact owner is closed: durable checkpoint, short renewable owner lease, hard generation lifetime, fail-closed cleanup, explicit expired-lease resume/cancel, token/owner rotation, byte/revision revalidation, second confirmation and same-transaction commit authority all have deterministic and physical Chrome evidence. P1-194 remains supporting because the wider browser-storage durability class is independent.
 
 ### P0-077 — positive versioned envelope
 
@@ -133,9 +153,9 @@ The production-generated schema-v1 backup successfully passes back through the a
 | B4 Static Materialization | Not primary for C44. |
 | B5 Renderer | Real extension page/UI executed; no content-render claim. |
 | B6 Physical Artifact | Production Blob and real file-input roundtrip pass; OS-native Save As remains open. |
-| B7 Persistence / Transfer | Transfer rows survive full browser restart; current ownership/resume/orphan contract is incomplete. |
+| B7 Persistence / Transfer | Exact staging and its checkpoint survive restart; live ownership is renewable, hard-bounded and explicitly resumed/canceled after short-lease expiry. |
 | B8 Journal / Provenance | Stale commit is rejected and preserves newer Journal/pending state; successful replace still clears pending reconciliation stores, so P0-072 remains. |
-| B9 Later Reading / Recovery | Fresh retry works, but confirmation does not resume and abandoned staging remains; remote recovery is untested. |
+| B9 Later Reading / Recovery | Two full restarts prove explicit resume and explicit cancel without automatic destructive action; remote recovery remains untested. |
 
 ## Architecture direction
 
@@ -146,7 +166,7 @@ The completed first repair now issues and atomically checks:
 - expected Journal revision;
 - explicit `replace` mode.
 
-Commit now stops on receipt or revision mismatch without clearing Journal or recovery checkpoints. The next repair must add bounded owner/lease identity and expiry plus confirmation state sufficient for deliberate resume or explicit cancel. Recovery checkpoints for already-admitted local/remote work still need reconciliation separate from Journal replacement.
+Commit now stops on lease, receipt or revision mismatch without clearing Journal or recovery checkpoints, and restart ownership has explicit bounded resume/cancel semantics. The next local repair is P0-072: already-admitted local/remote recovery checkpoints still need reconciliation, migration or explicit quarantine separate from Journal replacement.
 
 Merge must not be inferred. Either the product declares it unsupported and the matrix records that decision, or it gets separate conflict, duplicate and provenance semantics.
 
@@ -154,10 +174,9 @@ Merge must not be inferred. Either the product declares it unsupported and the m
 
 C44 remains **OPEN**:
 
-1. implement bounded lease plus explicit restart resume/cancel/orphan cleanup and physically revalidate it;
-2. preserve/reconcile admitted side-effect checkpoints during replace;
-3. record unsupported merge as a product decision or test an explicit merge implementation;
-4. exercise native Save As success/cancel/unresolved state only in a user-owned interactive context;
-5. exercise remote backup only in an explicitly authorized isolated Yandex test context.
+1. preserve/reconcile, migrate or explicitly quarantine admitted side-effect checkpoints during replace (P0-072);
+2. record unsupported merge as a product decision or test an explicit merge implementation;
+3. exercise native Save As success/cancel/unresolved state only in a user-owned interactive context;
+4. exercise remote backup only in an explicitly authorized isolated Yandex test context.
 
-The digest/staging/revision/mode repair is complete at L4. The remaining local work is lease/restart ownership and checkpoint reconciliation; native and remote boundaries remain explicit L5 work.
+The digest/staging/revision/mode and lease/restart-ownership repairs are complete at L4. The remaining local work is checkpoint reconciliation plus the merge product decision; native and remote boundaries remain explicit L5 work.

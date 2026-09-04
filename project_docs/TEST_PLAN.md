@@ -404,6 +404,18 @@ These deterministic tests are a delta against the physically mounted checkpoint 
 - Verify legacy `WEBCLIP_JOURNAL_IMPORT_REPLACE` full-object runtime command is rejected; current UI uses only staged import.
 - Run `node project_tools/test_p1_030_streaming_import.js`.
 
+### P1-215 — renewable Journal import lease / restart ownership
+
+- preview must create exactly one strict `journalImportLease` meta checkpoint bound to the receipt, staging generation, owner session, two-minute renewable lease and two-hour hard deadline;
+- a second Journal page and generic TTL cleanup must not claim/delete hard-live staging while the current owner lease is valid;
+- after full browser-process restart, current Journal/pending state and raw staging remain unchanged; no destructive action resumes automatically;
+- after short-lease expiry, explicit resume rotates both token and owner, re-reads/re-hashes the same staging generation, captures a fresh Journal revision and shows a second nine-digit destructive confirmation;
+- the previous token must fail closed inside the destructive transaction; Journal/pending rows and raw staging must remain available to the current owner;
+- valid current-owner confirmation commits once, clears pending stores according to the still-open P0-072 policy, and removes both lease checkpoint and consumed staging;
+- explicit cancel after restart must preserve Journal/pending rows and remove only the expired checkpoint plus its raw staging;
+- hard-expired, missing or generation-invalid checkpoint may be reclaimed; corrupt/unknown checkpoint metadata must make generic cleanup protect Journal-import rows rather than guess ownership;
+- run `node project_tools/test_c44_import_restart_lease.js` and the physical `project_tools/research_c44_full_ui_browser_restart.mjs` matrix in real unpacked Chrome.
+
 ### P1-073 — единый deadline полного Journal export
 - fault-injection: задержать `IndexedDB.open` для Journal revision/batch; последующая transaction получает только остаток общего `buildDeadline`, а не новый полный timeout;
 - fault-injection: задержать открытие transfer staging DB; chunk/manifest write transaction получает только post-open remainder;

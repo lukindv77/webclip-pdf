@@ -66,7 +66,7 @@ Durable deep-dive evidence:
 | C41 | Local download physical settlement/native Save As | EXPLICIT-BOUNDARY | L5 | `EXTERNAL-REQUIRED / FINDING` | bounded real native settlement remains L5 | P0-039/P0-048/P1-146/P1-156/P1-169 |
 | C42 | Yandex upload/object/public identity | EXPLICIT-BOUNDARY | L5 | `EXTERNAL-REQUIRED / FINDING` | bounded real Yandex identity remains L5 | P0-022/P0-073/P0-074/P0-078/P0-079; P1-090/P1-164/P1-184/P1-195 etc. |
 | C43 | Journal/provenance/exact artifact linkage | RELEVANT | L2+L3; L5 remote | `DETERMINISTIC/RENDERER-COVERED / FINDING` | terminal local/browser semantics; exact remote-object aspects owned/external separately | P0-050/P0-070/P0-076/P1-182/P1-185/P1-186/P1-190 etc. |
-| C44 | Backup/import/recovery | RELEVANT | L2; L5 real Yandex restore | `DETERMINISTIC-COVERED / FINDING + EXTERNAL-REQUIRED` | in-repo recovery terminal; real Yandex restore remains L5 | P0-013/P0-022/P0-077; P1-035/P1-076/P1-179/P1-183/P1-194 etc. |
+| C44 | Backup/import/recovery | RELEVANT | L2+L4; L5 real Yandex restore/native Save As | `L4-REVALIDATED / PARTIAL/FINDING + EXTERNAL-REQUIRED` | local receipt/revision/renewable-lease/restart resume+cancel proven; checkpoint reconciliation, merge decision, native Save As and remote restore remain open | P0-013/P0-022/P0-072/P1-207; P1-194 support; P1-215/P0-077 DONE |
 | C45 | Later reading / reopened PDF usefulness | RELEVANT | L4 | `ARTIFACT-COVERED / FINDING` | terminal physical later-reading evidence | link/readability/form/frame/layout/resource owners |
 | C46 | Real unpacked Chrome / permission UI / actual chrome.debugger path | EXPLICIT-BOUNDARY | L5 | `EXTERNAL-REQUIRED / UNKNOWN` | bounded real-product/native boundary; no managed PASS is claimed | release-QA boundary + permission/frame/download owners |
 
@@ -88,6 +88,16 @@ At final Cycle-2 reconciliation:
 - PD7 remains `OUT-OF-SCOPE (current stable target) / WATCH` at this campaign checkpoint.
 
 Coverage completeness and finding closure remain independent metrics. This Matrix does not claim that the many ACTIVE findings are fixed.
+
+### Current C44 open tasks (2026-09-04)
+
+1. **P0-072 — next local task:** reconcile, migrate or explicitly quarantine already-admitted `pendingAppends`, `pendingDownloads` and `pendingRemoteSaves` during destructive replace; deleting receipts is not cancellation evidence.
+2. **P0-013 / P1-207 remote remainder:** bind selected Yandex backup object/content/account/root identity and its source revision through preview, download, resume and commit in an explicitly authorized isolated test context.
+3. **Merge product decision:** durably declare merge unsupported, or specify and test conflict, duplicate and provenance semantics; replace success does not imply merge coverage.
+4. **Native Save As L5:** exercise success/cancel/unresolved dialog and terminal DownloadItem settlement only in a user-owned interactive environment.
+5. **Remote Yandex L5:** exercise authorized backup/restore failure, timeout, identity and recovery schedules without using production user data.
+
+P1-215 is no longer open: deterministic regression plus Chrome 152 run `33825545613` prove the bounded lease, exact owner/token rotation, generic-cleanup protection, explicit resume/cancel and second-confirmation contract.
 
 ## 3. Platform-delta matrix
 
