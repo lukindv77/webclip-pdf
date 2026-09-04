@@ -153,7 +153,8 @@ for (const patch of [
   );
 }
 
-assert(worker.startsWith("importScripts('public-suffix.js', 'journal-import-stream.js', 'journal-import-digest.js'"));
+assert(worker.startsWith("importScripts('public-suffix.js', 'journal-import-stream.js', 'journal-text-filter.js', 'local-download-identity.js');"));
+assert(worker.startsWith("importScripts('journal-import-digest.js');", worker.indexOf("\n") + 1));
 const stream = sourceSlice(worker, 'async function* streamStagedJournalImportText', 'async function deleteTransferPayload');
 assert(stream.includes('onManifest'));
 assert(stream.includes('onBytes'));
