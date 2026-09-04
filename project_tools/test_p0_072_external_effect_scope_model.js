@@ -6,6 +6,22 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function workerIssueReadMoveReceipt({ entryId, operationId, sourcePath, targetPath, journalGeneration }) {
+  return {
+    version: 1,
+    effectId: `read-move:${operationId}`,
+    effectKind: 'read-move',
+    provenance: 'worker-issued-live',
+    operationId,
+    journalEntryId: entryId,
+    journalGeneration,
+    sourcePath,
+    targetPath,
+    phase: 'effect-admitted',
+    resolution: 'reconciling'
+  };
+}
+
 function pureThreeStoreReset(db, resetId) {
   const next = clone(db);
   for (const storeName of ['pendingAppends', 'pendingDownloads', 'pendingRemoteSaves']) {
@@ -24,138 +40,112 @@ function pureThreeStoreReset(db, resetId) {
   return next;
 }
 
-function detachReadMoveReceipt(entry, resetId) {
-  if (!entry.readMovePendingAt || !entry.readMoveTargetPath) return null;
-  return {
-    version: 1,
-    effectId: `read-move:${entry.readMoveOperationId}`,
-    effectKind: 'read-move',
-    operationId: entry.readMoveOperationId,
-    journalEntryId: entry.id,
-    sourcePath: entry.readMoveSourcePath,
-    targetPath: entry.readMoveTargetPath,
-    phase: 'effect-admitted',
-    resolution: 'reconciling',
-    resetDisposition: {
+function hybridReset(db, resetId, { abort = false } = {}) {
+  const before = clone(db);
+  const next = pureThreeStoreReset(db, resetId);
+  next.externalEffects = clone(db.externalEffects || []).map((receipt) => ({
+    ...receipt,
+    resetDisposition: receipt.resetDisposition || {
       version: 1,
       resetId,
       state: 'detached'
     }
-  };
-}
-
-function hybridReset(db, resetId, { abort = false } = {}) {
-  const before = clone(db);
-  const next = pureThreeStoreReset(db, resetId);
-  next.detachedExternalEffects = clone(db.detachedExternalEffects || []);
-  for (const entry of db.entries) {
-    const receipt = detachReadMoveReceipt(entry, resetId);
-    if (receipt) next.detachedExternalEffects.push(receipt);
-  }
+  }));
   if (abort) return before;
   return next;
 }
 
 (function negativeControlPureOptionAIsInsufficient() {
+  const receipt = workerIssueReadMoveReceipt({
+    entryId: 'entry-1', operationId: 'move-1',
+    sourcePath: '/WebClips/ReadmeLater/a.pdf', targetPath: '/WebClips/Upload/a.pdf',
+    journalGeneration: 'gen-A'
+  });
   const db = {
-    entries: [{
-      id: 'entry-1',
-      readMovePendingAt: 123,
-      readMoveSourcePath: '/WebClips/ReadmeLater/a.pdf',
-      readMoveTargetPath: '/WebClips/Upload/a.pdf',
-      readMoveOperationId: 'move-1'
-    }],
-    pendingAppends: [],
-    pendingDownloads: [],
-    pendingRemoteSaves: [],
-    detachedExternalEffects: []
+    entries: [{ id: 'entry-1', readMovePendingAt: 123, readMoveOperationId: 'move-1' }],
+    pendingAppends: [], pendingDownloads: [], pendingRemoteSaves: [], externalEffects: [receipt]
   };
 
   const after = pureThreeStoreReset(db, 'reset-1');
   assert.equal(after.entries.length, 0);
-  assert.equal(after.detachedExternalEffects.length, 0);
-  assert.equal(
-    db.entries[0].readMoveOperationId,
-    'move-1',
-    'negative control: the only admitted read-move authority existed in the Journal entry before reset'
-  );
+  assert.equal(after.externalEffects[0].resetDisposition, undefined,
+    'negative control: three-store quarantine alone does not detach independent move authority from old Journal generation');
 })();
 
-(function hybridResetPreservesAdmittedReadMoveAuthority() {
-  const db = {
+(function importedProjectionCannotFabricatePhysicalAuthority() {
+  const importedOnly = {
     entries: [{
-      id: 'entry-1',
+      id: 'imported-entry',
       readMovePendingAt: 123,
-      readMoveSourcePath: '/WebClips/ReadmeLater/a.pdf',
-      readMoveTargetPath: '/WebClips/Upload/a.pdf',
-      readMoveOperationId: 'move-1'
+      readMoveSourcePath: '/from/fake.pdf',
+      readMoveTargetPath: '/to/fake.pdf',
+      readMoveOperationId: 'imported-fake-op'
     }],
+    pendingAppends: [], pendingDownloads: [], pendingRemoteSaves: [], externalEffects: []
+  };
+  const after = hybridReset(importedOnly, 'reset-imported');
+  assert.equal(after.externalEffects.length, 0,
+    'P0-072 provenance: reset must not synthesize a physical receipt from importable Journal readMove* projection fields');
+})();
+
+(function hybridResetPreservesWorkerIssuedAdmittedReadMoveAuthority() {
+  const receipt = workerIssueReadMoveReceipt({
+    entryId: 'entry-1', operationId: 'move-1',
+    sourcePath: '/WebClips/ReadmeLater/a.pdf', targetPath: '/WebClips/Upload/a.pdf',
+    journalGeneration: 'gen-A'
+  });
+  const db = {
+    entries: [{ id: 'entry-1', readMovePendingAt: 123, readMoveOperationId: 'move-1' }],
     pendingAppends: [],
     pendingDownloads: [{ operationId: 'download-1' }],
     pendingRemoteSaves: [{ operationId: 'save-1', phase: 'prepared' }],
-    detachedExternalEffects: []
+    externalEffects: [receipt]
   };
 
   const after = hybridReset(db, 'reset-1');
   assert.equal(after.entries.length, 0);
-  assert.equal(after.detachedExternalEffects.length, 1);
-  assert.deepEqual(after.detachedExternalEffects[0], {
-    version: 1,
-    effectId: 'read-move:move-1',
-    effectKind: 'read-move',
-    operationId: 'move-1',
-    journalEntryId: 'entry-1',
-    sourcePath: '/WebClips/ReadmeLater/a.pdf',
-    targetPath: '/WebClips/Upload/a.pdf',
-    phase: 'effect-admitted',
-    resolution: 'reconciling',
-    resetDisposition: { version: 1, resetId: 'reset-1', state: 'detached' }
-  });
+  assert.equal(after.externalEffects.length, 1);
+  assert.equal(after.externalEffects[0].provenance, 'worker-issued-live');
+  assert.equal(after.externalEffects[0].journalGeneration, 'gen-A');
+  assert.deepEqual(after.externalEffects[0].resetDisposition,
+    { version: 1, resetId: 'reset-1', state: 'detached' });
   assert.equal(after.pendingDownloads[0].journalResetDisposition.resetId, 'reset-1');
   assert.equal(after.pendingRemoteSaves[0].journalResetDisposition.resetId, 'reset-1');
 })();
 
 (function lateSettlementUpdatesReceiptNotReplacementJournal() {
+  const receipt = workerIssueReadMoveReceipt({
+    entryId: 'entry-1', operationId: 'move-1',
+    sourcePath: '/from/a.pdf', targetPath: '/to/a.pdf', journalGeneration: 'gen-A'
+  });
   const db = {
-    entries: [{
-      id: 'entry-1',
-      readMovePendingAt: 123,
-      readMoveSourcePath: '/WebClips/ReadmeLater/a.pdf',
-      readMoveTargetPath: '/WebClips/Upload/a.pdf',
-      readMoveOperationId: 'move-1'
-    }],
-    pendingAppends: [], pendingDownloads: [], pendingRemoteSaves: [], detachedExternalEffects: []
+    entries: [{ id: 'entry-1', readMovePendingAt: 123, readMoveOperationId: 'move-1' }],
+    pendingAppends: [], pendingDownloads: [], pendingRemoteSaves: [], externalEffects: [receipt]
   };
   const afterReset = hybridReset(db, 'reset-1');
-  afterReset.entries.push({ id: 'entry-1', title: 'replacement generation' });
+  afterReset.entries.push({ id: 'entry-1', title: 'replacement generation', generation: 'gen-B' });
 
-  const receipt = afterReset.detachedExternalEffects[0];
-  const settled = {
-    ...receipt,
+  afterReset.externalEffects[0] = {
+    ...afterReset.externalEffects[0],
     phase: 'verified',
     resolution: 'terminal',
-    verifiedTargetPath: receipt.targetPath
+    verifiedTargetPath: afterReset.externalEffects[0].targetPath
   };
-  afterReset.detachedExternalEffects[0] = settled;
 
   assert.equal(afterReset.entries[0].title, 'replacement generation');
   assert.equal(afterReset.entries[0].readMovePendingAt, undefined,
     'P0-072/P0-076 boundary: old move settlement must not patch a replacement Journal row');
-  assert.equal(afterReset.detachedExternalEffects[0].resolution, 'terminal');
-  assert.equal(afterReset.detachedExternalEffects[0].resetDisposition.resetId, 'reset-1');
+  assert.equal(afterReset.externalEffects[0].resolution, 'terminal');
+  assert.equal(afterReset.externalEffects[0].resetDisposition.resetId, 'reset-1');
 })();
 
 (function transactionAbortRollsBackJournalAndReceiptDetachmentTogether() {
+  const receipt = workerIssueReadMoveReceipt({
+    entryId: 'entry-1', operationId: 'move-1', sourcePath: '/from/a.pdf', targetPath: '/to/a.pdf', journalGeneration: 'gen-A'
+  });
   const db = {
-    entries: [{
-      id: 'entry-1',
-      readMovePendingAt: 123,
-      readMoveSourcePath: '/from/a.pdf',
-      readMoveTargetPath: '/to/a.pdf',
-      readMoveOperationId: 'move-1'
-    }],
-    pendingAppends: [{ operationId: 'append-1' }],
-    pendingDownloads: [], pendingRemoteSaves: [], detachedExternalEffects: []
+    entries: [{ id: 'entry-1', readMovePendingAt: 123, readMoveOperationId: 'move-1' }],
+    pendingAppends: [{ operationId: 'append-1' }], pendingDownloads: [], pendingRemoteSaves: [], externalEffects: [receipt]
   };
   const aborted = hybridReset(db, 'reset-abort', { abort: true });
   assert.deepEqual(aborted, db,
@@ -181,4 +171,4 @@ function hybridReset(db, resetId, { abort = false } = {}) {
     'P1-183 prerequisite model: Delete->Trash has no current durable exact pre-move receipt to detach');
 })();
 
-console.log('P0-072 external-effect scope model: PASS');
+console.log('P0-072 external-effect scope/provenance model: PASS');
