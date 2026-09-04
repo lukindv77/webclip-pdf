@@ -21,9 +21,9 @@ Fresh current-source and consolidated-family reconciliation found an admitted re
 - `readMoveOperationId`;
 - `readMoveLastError`.
 
-The source explicitly documents this as the recovery checkpoint written before the destructive remote move so a later worker can reconcile the exact target path after interruption.
+The source explicitly documents this as the recovery checkpoint written before the destructive remote move so a later worker can reconcile the target after interruption.
 
-However, clear/import authority owns the Journal entry itself. A clear of that URL/site/all or replace-import can therefore delete the `readMove*` checkpoint while the Yandex move is already admitted or in flight. Quarantining only the three pending stores cannot preserve this authority.
+However, clear/import authority owns the Journal entry itself. A clear of that URL/site/all or replace-import can therefore delete the `readMove*` projection while the Yandex move is already admitted or in flight. Quarantining only the three pending stores cannot preserve independent physical-operation authority.
 
 This is not a hypothetical extension of P0-072. The consolidated `RESEARCH_FAMILY_YANDEX_REMOTE_IDENTITY_EVIDENCE.md` already records the historical root-cause family: clear/import can overlap external entry mutations, and ReadLater move checkpoint co-location with a replaceable Journal row is an explicit durability problem. Current Registry remains the status authority.
 
@@ -68,20 +68,21 @@ The earlier in-place quarantine remains the lowest-risk mechanism for existing c
 
 For these stores, retain the proposed versioned `journalResetDisposition` and writer fencing. Do not migrate them merely for architectural uniformity.
 
-But entry-co-located or future non-save external effects need **reset-independent durable authority**. The target architecture therefore becomes hybrid:
+But entry-co-located or future non-save external effects need **reset-independent durable authority**. The target architecture therefore becomes hybrid.
 
 ### Layer A — in-place quarantine for existing pending stores
 
 Matching active rows remain in their current object store and transition atomically to a reset-detached disposition. Late factual settlement can update the row, but the old Journal generation can never be recreated.
 
-### Layer B — detached external-effect receipt authority
+### Layer B — worker-issued external-effect receipt authority
 
-External effects whose only current receipt is inside the Journal row, or which need a new pre-effect receipt, use a dedicated durable authority independent of `entries`.
+External effects whose current projection is inside the Journal row, or which need a new pre-effect receipt, use dedicated durable authority independent of `entries`.
 
 The exact store name/schema is implementation detail, but its contract must support at least:
 
 - stable operation/effect generation id;
 - effect kind (`read-move`, future `trash-move`, publication/revocation classes only when their owners require it);
+- live provenance marker/version issued by trusted worker code;
 - Journal entry id plus expected Journal generation/revision reference where available;
 - exact remote source/target/object/account/root identity fields only as authorized by P0-073/P0-074/P1-090/P1-183;
 - phase/outcome (`prepared`, `effect-admitted`, `verified`, `interrupted/failed`, `unknown/manual-resolution`, terminal states as appropriate);
@@ -89,41 +90,65 @@ The exact store name/schema is implementation detail, but its contract must supp
 - timestamps/attempt counters with bounded size;
 - no OAuth token or signed transfer capability.
 
-The Journal entry may keep `readMove*` fields as a UI projection, but physical recovery authority must not depend on that replaceable row after the external effect is admitted.
+The Journal entry may keep `readMove*` fields as a UI/recovery projection, but physical recovery authority must not depend on that replaceable row after the external effect is admitted.
 
-## 5. Atomic reset rule expands beyond the three pending stores
+## 5. Receipt provenance / import boundary
+
+Fresh source/data-model revalidation shows `readMovePendingAt`, `readMoveSourcePath`, `readMoveTargetPath`, `readMoveOperationId` and `readMoveLastError` are portable Journal fields and current import normalization accepts them.
+
+Therefore they are **not** sufficient proof that the current installation ever admitted a physical Yandex move. A backup can legitimately contain a historical pending projection; a crafted or stale import can also contain syntactically valid values. Clear/import must never synthesize a live physical receipt from those fields.
+
+Required invariant:
+
+> A physical external-effect receipt is worker-issued live authority, committed in a non-importable receipt domain before the non-cancellable effect starts. Portable Journal fields may reference/project that authority but cannot create it.
+
+Consequences:
+
+1. `readMove*` fields remain display/recovery hints only unless matched to an existing trusted receipt under its exact identity/generation contract.
+2. Full Journal export/import does not export/import the trusted external-effect receipt store as Journal data.
+3. Import of an entry containing `readMove*` but no trusted local receipt must not schedule physical reconciliation, remote retry or receipt creation by itself.
+4. Reset of such an imported-only projection deletes/replaces the Journal row normally; it must not manufacture a detached physical tombstone.
+5. The new receipt must be written before `POST /resources/move`; writing it after remote admission is too late for MV3 interruption safety.
+6. The same provenance rule applies to future Trash/publication/revocation receipt classes: portable metadata cannot manufacture live remote authority.
+
+This provenance boundary also prevents an imported operation id from becoming a capability merely because it appears in durable metadata.
+
+## 6. Atomic reset rule expands beyond the three pending stores
 
 For clear-all, URL/site clear and import replace, the authoritative IndexedDB transaction must perform all applicable local state transitions atomically:
 
 1. verify reset/import generation/revision preconditions already required by existing owners;
 2. identify matching Journal entries and matching pending rows;
 3. quarantine matching `pendingAppends`/`pendingDownloads`/`pendingRemoteSaves` in place;
-4. detach/retain any matching external-effect receipt independent of the Journal row;
-5. only then clear/delete/replace Journal entries;
-6. update reset/revision metadata;
-7. commit as one transaction.
+4. detach/retain matching **pre-existing trusted** external-effect receipts independent of the Journal row;
+5. never derive a trusted receipt from portable Journal projection fields;
+6. only then clear/delete/replace Journal entries;
+7. update reset/revision metadata;
+8. commit as one transaction.
 
 Any request error, quota/capacity failure or explicit abort must restore the old Journal rows **and** the old receipt/disposition state together. IndexedDB transaction abort is therefore a required proof case, not merely an implementation convenience.
 
-A post-commit copy of `readMove*` fields is invalid because an MV3 worker can terminate after Journal deletion but before the copy.
+A post-commit copy of `readMove*` fields is invalid because an MV3 worker can terminate after Journal deletion but before the copy, and because portable projection fields are not trusted receipt provenance in the first place.
 
-## 6. Admission ordering invariant
+## 7. Admission ordering invariant
 
-Fresh source gives a useful positive control for existing save/download paths:
+Fresh source gives useful positive timing controls for existing save/download paths:
 
 - local download intent is durably written before `chrome.downloads.download()`;
 - remote save checkpoint is durably written before the actual PDF transfer and before later publication/final Journal append;
-- ReadLater move writes `readMove*` before `POST /resources/move`.
+- current ReadLater code writes `readMove*` before `POST /resources/move`.
 
-This ordering allows a strong rule:
+The third item proves only **pre-effect ordering**, not trusted receipt provenance. The corrected ReadLater design must first commit the worker-issued Layer-B receipt and may then update the Journal projection before the remote move.
 
-> if a non-cancellable external effect is allowed to start, its durable operation authority must already exist in reset-independent or reset-detachable storage.
+This yields the stronger rule:
 
-Consequently a reset that commits **before** admission may legitimately leave no old receipt, because the old effect must not be allowed to start without writing a new-generation receipt afterwards. A reset that sees an already admitted receipt must preserve/detach it atomically.
+> if a non-cancellable external effect is allowed to start, trusted durable operation authority must already exist in reset-independent or reset-detachable storage.
 
-This rule should be tested directly. It is stronger and clearer than trying to infer effect timing from worker memory or response timing.
+Consequently a reset that commits **before** admission may legitimately leave no old receipt, because the old effect must not be allowed to start without writing a receipt bound to its newly observed/current generation first. A reset that sees an already admitted trusted receipt must preserve/detach it atomically.
 
-## 7. Capacity and maintenance correction
+This rule is stronger and clearer than trying to infer effect timing from worker memory, imported Journal metadata or response timing.
+
+## 8. Capacity and maintenance correction
 
 Quarantine changes queue classification, not merely record decoration.
 
@@ -141,18 +166,19 @@ Conversely, `cleanupStalePendingRemoteSaves()` must not apply its ordinary 30-da
 
 This matches the existing family-level two-tier finding: expensive active resource ownership and compact detached physical truth are distinct lifecycles.
 
-## 8. Recovery scheduling implications
+## 9. Recovery scheduling implications
 
 Reset-detached rows must also stop participating in the wrong normal queues:
 
 - detached `pendingAppends` must never replay into the replacement Journal;
 - detached local download intents/numeric items may continue exact Chrome settlement while `resolution='reconciling'`, but terminal/manual rows are excluded from ordinary active batches;
 - detached remote saves may perform only factual reconciliation allowed by their exact operation identity; they cannot append into the replacement Journal;
-- detached ReadLater/Trash move receipts reconcile physical remote state but cannot apply stale patches/deletes to a replacement Journal entry without the separate P0-076 CAS/generation authority.
+- detached ReadLater/Trash move receipts reconcile physical remote state but cannot apply stale patches/deletes to a replacement Journal entry without the separate P0-076 CAS/generation authority;
+- imported-only `readMove*` projection without a trusted receipt is not put on any physical-effect recovery queue.
 
 This preserves owner separation: P0-072 preserves external-effect truth across bulk reset; P0-076 prevents stale old-generation writes from corrupting replacement rows.
 
-## 9. Owner/dependency reconciliation
+## 10. Owner/dependency reconciliation
 
 No new P-code is allocated by this correction.
 
@@ -164,7 +190,7 @@ No new P-code is allocated by this correction.
 - **P1-208/P1-064** — recovery fairness remains separate from P0-072 receipt preservation.
 - publication/public-link ownership remains under the existing publication/privacy owners; this correction does not claim their closure.
 
-## 10. External architecture evidence applied
+## 11. External architecture evidence applied
 
 Primary/official inputs checked fresh on 2026-09-04:
 
@@ -181,32 +207,34 @@ Primary/official inputs checked fresh on 2026-09-04:
 
 Community reports about MV3 losing in-memory state after worker sleep are treated only as anecdotal user/developer experience. They reinforce the practical failure mode but are not architecture authority.
 
-## 11. Revised implementation acceptance
+## 12. Revised implementation acceptance
 
 The original 14 acceptance cases remain necessary for the three existing pending stores, with these additions:
 
-15. ReadLater move receipt is durable outside replaceable Journal authority before `resources/move` or is atomically detached before matching Journal deletion.
-16. clear-all, scoped clear and import-replace overlapping `readMove` after admission preserve exact effect identity and never recreate/update a replacement Journal row.
-17. a reset that commits before effect admission forces the later operation to create authority for the new generation before the side effect can start.
-18. P1-183 prerequisite is explicit: Delete→Trash cannot satisfy P0-072 overlap acceptance until its durable pre-move exact receipt exists.
-19. once the Trash receipt exists, clear/import detaches it rather than treating entry removal as remote cancellation.
-20. active / detached-unresolved / terminal-retained capacity classes are separate and deterministic.
-21. generic stale cleanup skips unresolved reset-detached receipts.
-22. terminal/manual receipts do not starve active queue capacity.
-23. second reset does not rewrite the first unresolved detachment identity.
-24. forced IndexedDB abort restores both Journal rows and every in-place/detached receipt transition.
-25. P0-076 negative control: late detached move settlement cannot patch/delete an imported replacement row with the same entry id.
+15. ReadLater move has a **worker-issued live receipt durably committed in reset-independent storage before `resources/move`**; portable `readMove*` fields are projection only.
+16. importing an entry with syntactically valid `readMove*` fields but no trusted local receipt creates no physical-effect receipt and schedules no remote reconciliation.
+17. clear-all, scoped clear and import-replace overlapping a trusted admitted ReadLater receipt preserve exact effect identity and never recreate/update a replacement Journal row.
+18. a reset that commits before effect admission forces the later operation to create trusted authority for the current generation before the side effect can start.
+19. P1-183 prerequisite is explicit: Delete→Trash cannot satisfy P0-072 overlap acceptance until its durable pre-move exact receipt exists.
+20. once the Trash receipt exists, clear/import detaches that trusted receipt rather than treating entry removal as remote cancellation.
+21. active / detached-unresolved / terminal-retained capacity classes are separate and deterministic.
+22. generic stale cleanup skips unresolved reset-detached receipts.
+23. terminal/manual receipts do not starve active queue capacity.
+24. second reset does not rewrite the first unresolved detachment identity.
+25. forced IndexedDB abort restores both Journal rows and every in-place/detached receipt transition.
+26. P0-076 negative control: late detached move settlement cannot patch/delete an imported replacement row with the same entry id.
+27. portable imported operation ids and `readMove*` values cannot become trusted capabilities merely by matching a live entry id/path.
 
 Real Yandex account/object semantics remain external evidence and are not proved by synthetic tests in this P0-072 research tranche.
 
-## 12. Decision/status correction
+## 13. Decision/status correction
 
 The earlier statement “Option A is sufficient to close the current root cause” is **superseded by this addendum**.
 
 Current architecture direction:
 
 - **retain Option A in-place versioned quarantine for existing pending stores**;
-- **add reset-independent/detached durable effect authority for entry-co-located or future external mutations**;
+- **add worker-issued, non-importable, reset-independent durable effect authority for entry-co-located or future external mutations**;
 - do not claim P0-072 DONE until all currently admitted external-effect classes can survive/reset-detach under their existing owners and required dependencies.
 
 `P0-072` remains **ACTIVE**. `manifest.json` remains `0.9.8`. `main` remains unchanged. No build/tag/GitHub Release or release-readiness transition is claimed.
