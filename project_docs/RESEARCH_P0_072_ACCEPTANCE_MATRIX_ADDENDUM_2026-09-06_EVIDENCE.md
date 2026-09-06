@@ -4,7 +4,7 @@ Date: 2026-09-06
 Canonical source baseline at start of this continuation: `main = d4f5b268fa3f7ced5a7bc68da52784863d614138`  
 Owner: **P0-072 ACTIVE**.
 
-This addendum updates `RESEARCH_P0_072_ACCEPTANCE_MATRIX_2026-09-04_EVIDENCE.md` with research corrections discovered while making Commit A implementation-ready. It does not claim runtime implementation.
+This addendum updates `RESEARCH_P0_072_ACCEPTANCE_MATRIX_2026-09-04_EVIDENCE.md` with research corrections discovered while making Commit A implementation-ready and while revalidating the later external-effect receipt tranche. It does not claim runtime implementation.
 
 ## A. Reset disposition parsing / rollback
 
@@ -27,13 +27,18 @@ Required interpretation:
 - field present but malformed/null -> `reset-indeterminate`;
 - unsupported future version -> `reset-indeterminate`.
 
+The barrier test is **own-property presence**, not truthiness and not “non-null only”. Any present `journalResetDisposition` field denies ordinary replay/admission/delete authority.
+
 Only exact `active` may regain ordinary replay/admission/delete authority.
+
+A later clear/import does **not** need to abort merely because an already-present barrier body is unsupported/corrupt. It preserves that field exactly, does not overwrite first-reset history, keeps the row unresolved/manual, and may continue the requested Journal reset because the row is already mutation-barred.
 
 Runtime: **RED**.
 
 Primary evidence:
 
-- `RESEARCH_P0_072_RESET_DISPOSITION_CORRUPTION_ROLLBACK_2026-09-06_EVIDENCE.md`.
+- `RESEARCH_P0_072_RESET_DISPOSITION_CORRUPTION_ROLLBACK_2026-09-06_EVIDENCE.md`;
+- `RESEARCH_P0_072_EXISTING_BARRIER_RESET_PROGRESS_2026-09-06_EVIDENCE.md`.
 
 ## B. External stage parsing / rollback
 
@@ -47,6 +52,8 @@ stage-indeterminate
 
 Only current-version exact `prepared` may participate in fresh one-shot admission.
 
+Reset may still detach a stage-indeterminate row as unknown/manual; stage corruption must not become a reason to leave it active.
+
 Runtime: **RED**.
 
 Primary evidence:
@@ -55,7 +62,7 @@ Primary evidence:
 
 ## C. Pure helper Commit A
 
-Commit A is now specified as one standalone deterministic helper module, conceptually:
+Commit A is specified as one standalone deterministic helper module, conceptually:
 
 ```text
 journal-reset-recovery.js
@@ -74,7 +81,7 @@ Primary evidence:
 
 ## D. Reset v1 structural invariants
 
-New strict v1 validation additions:
+Strict v1 validation additions:
 
 ```text
 clear-all      <-> all
@@ -131,33 +138,83 @@ Primary evidence:
 
 - `RESEARCH_P0_072_LEGACY_FENCE_VERSION_EVOLUTION_2026-09-06_EVIDENCE.md`.
 
-## G. External receipt discovery root correction
+## G. External receipt stable discovery root + forward-compatible envelope
 
-Supersede:
-
-```text
-externalEffect:v1:<effectId>
-```
-
-with stable discovery root:
+The stable discovery key remains:
 
 ```text
 externalEffect:<effectId>
 ```
 
-and `version: 1` inside the receipt body.
+but the earlier flat receipt body is refined into:
 
-Reason: a v1-only prefix must not become blind to future receipt versions after downgrade.
+```text
+{
+  envelopeVersion: 1,
+  ...stable discovery/reset fields...,
+  payloadVersion: 1,
+  payload: { ...effect-specific fields... }
+}
+```
 
-Unknown/malformed body remains visible and blocks destructive reset rather than being skipped.
+A valid envelope-v1 receipt with unknown/future `payloadVersion` is visible and non-replayable, but **full clear/import may detach it** by adding the envelope-level reset barrier while preserving the opaque payload.
+
+Unknown/malformed `envelopeVersion` remains a hard reset boundary.
+
+Envelope-v1 top-level shape is exact except optional `resetDisposition`; new authority-bearing top-level fields require an envelope-version bump.
 
 Runtime: **LATER**.
 
 Primary evidence:
 
-- `RESEARCH_P0_072_EXTERNAL_RECEIPT_NAMESPACE_VERSION_2026-09-06_EVIDENCE.md`.
+- `RESEARCH_P0_072_EXTERNAL_RECEIPT_NAMESPACE_VERSION_2026-09-06_EVIDENCE.md`;
+- `RESEARCH_P0_072_EXTERNAL_RECEIPT_FORWARD_ENVELOPE_2026-09-06_EVIDENCE.md`.
 
-## H. Reserved receipt-root key validation
+## H. External receipt reset barrier ordering
+
+For every envelope-v1 payload implementation, mutation-capable logic must execute in this order:
+
+```text
+validate envelope
+-> resetDisposition present? deny immediately
+-> only then dispatch by payloadVersion
+-> unsupported payload: unresolved/manual, no mutation
+-> supported payload: evaluate its own fresh admission CAS
+```
+
+The presence barrier is stronger and earlier than any payload-specific phase.
+
+A newer runtime that understands payload-v2 must therefore still honor a reset disposition written by an older worker before entering its payload-v2 handler.
+
+Runtime: **LATER**.
+
+Primary evidence:
+
+- `RESEARCH_P0_072_EXTERNAL_RECEIPT_BARRIER_ORDER_2026-09-06_EVIDENCE.md`.
+
+## I. External receipt scope-token version compatibility
+
+Envelope validation treats URL/site scope tokens as bounded opaque strings plus `scopeTokenVersion`.
+
+Strict 64-hex validation belongs only to the supported v1 token algorithm.
+
+Therefore:
+
+```text
+full reset + valid envelope + future token format -> may detach
+scoped reset + unsupported token version         -> fail closed
+scoped reset + supported v1 malformed token      -> fail closed
+```
+
+A full reset must not depend on understanding a scope-token algorithm it does not use.
+
+Runtime: **LATER**.
+
+Primary evidence:
+
+- `RESEARCH_P0_072_EXTERNAL_RECEIPT_FORWARD_ENVELOPE_2026-09-06_EVIDENCE.md`.
+
+## J. Reserved receipt-root key validation
 
 Every key under `externalEffect:` is reserved external-effect authority space.
 
@@ -171,23 +228,46 @@ Primary evidence:
 
 - `RESEARCH_P0_072_EXTERNAL_RECEIPT_KEY_VALIDATION_2026-09-06_EVIDENCE.md`.
 
-## I. Indeterminate receipt capacity correction
+## K. Indeterminate external receipt capacity correction
 
-For a **valid exact one-effect key**, an unsupported/malformed receipt body conservatively consumes one unresolved liability slot; it does not need to globally block unrelated new-effect admission by itself.
+For a **valid exact one-effect key**, an unsupported/malformed payload/body consumes one unresolved liability slot; it does not globally block unrelated new-effect admission by itself.
 
 Invalid reserved-root key or prefix-scan overflow remains namespace-level fail-closed.
 
-Destructive reset is stricter: unknown receipt body still blocks reset because v1 cannot prove detachment.
+A valid envelope with unknown payload may be full-reset detached under section G. Unknown envelope remains reset-blocking.
 
 Runtime: **LATER**.
 
 Primary evidence:
 
-- `RESEARCH_P0_072_EXTERNAL_RECEIPT_INDETERMINATE_CAPACITY_CORRECTION_2026-09-06_EVIDENCE.md`.
+- `RESEARCH_P0_072_EXTERNAL_RECEIPT_INDETERMINATE_CAPACITY_CORRECTION_2026-09-06_EVIDENCE.md`;
+- `RESEARCH_P0_072_EXTERNAL_RECEIPT_FORWARD_ENVELOPE_2026-09-06_EVIDENCE.md`.
 
-## J. Pending-store indeterminate capacity/scheduler
+## L. P0-072 Journal meta namespace ownership
 
-New store-neutral classes:
+Reserve these `WebClipJournal.meta` domains:
+
+```text
+journalLocalTokenSalt:v1
+a legacyPendingFence:v1:<token> namespace
+externalEffect:<effectId>
+```
+
+(`legacyPendingFence:v1:` is the actual prefix; the leading article above is prose, not part of the key.)
+
+Current worker Journal-meta writes use fixed non-overlapping keys (`revision`, `journalImportLease`, `webclipJournalBackupLease`), and current `journal.js` is a schema opener/reader with no Journal-meta `put()` writer.
+
+Future unrelated/generic meta writers must reject P0-072 reserved keys instead of sharing the namespace.
+
+Runtime: **RED/LATER** depending key family.
+
+Primary evidence:
+
+- `RESEARCH_P0_072_META_NAMESPACE_OWNERSHIP_2026-09-06_EVIDENCE.md`.
+
+## M. Pending-store indeterminate capacity/scheduler
+
+Store-neutral classes:
 
 ```text
 active-current
@@ -212,23 +292,23 @@ Primary evidence:
 
 - `RESEARCH_P0_072_PENDING_INDETERMINATE_CAPACITY_2026-09-06_EVIDENCE.md`.
 
-## K. Tooling / production patch status
+## N. Tooling / production patch status
 
-Fresh 2026-09-06 environment check:
+Fresh 2026-09-06 environment checks still show:
 
-- direct container `git clone` still fails DNS resolution for `github.com`;
-- the available raw download path did not provide a usable exact local checkout;
-- GitHub contents/Git-data connector can safely create/update small files but exposes no patch/hunk primitive for the ~570-KB worker.
+- direct container `git clone`/raw exact-head checkout is unavailable because the container cannot resolve GitHub DNS;
+- GitHub connector can safely create/update small files but exposes no hunk/patch primitive for the ~570-KB worker;
+- replacing full `service-worker.js` without an exact local checkout remains unnecessarily risky.
 
 Therefore:
 
-- adding a new small standalone helper file is safe through the connector;
-- replacing full `service-worker.js` without an exact local checkout/patch path remains unnecessarily risky;
-- research did not modify production runtime.
+- a new small standalone helper file remains safe through the connector;
+- full worker Commit B should wait for a reliable exact-head edit path;
+- research has not modified production runtime.
 
 This is an execution-environment limitation, not a product architecture blocker.
 
-## L. Current implementation boundary
+## O. Current implementation boundary
 
 ### Commit A — safe when implementation is explicitly undertaken
 
@@ -253,12 +333,12 @@ Local/remote one-shot stage admission and factual-only detached settlement.
 
 ### Later
 
-ReadLater namespaced external-effect receipt integration.
+ReadLater namespaced external-effect receipt integration using the stable envelope contract above.
 
-## M. Status
+## P. Status
 
 P0-072 remains **ACTIVE**.
 
-The 2026-09-04 acceptance matrix remains useful for the main tranche inventory, but the rows above are the current corrections where they differ.
+The 2026-09-04 acceptance matrix remains useful for the main tranche inventory, but this addendum is the current correction layer wherever wording differs.
 
 Manifest remains `0.9.8`. Release remains `NOT READY`. No build/tag/GitHub Release or Actions run is claimed by this addendum.
