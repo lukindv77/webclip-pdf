@@ -13,6 +13,8 @@ const journal = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
     'P0-076 requires one stable-key local Journal bulk-generation control.');
   assert.match(worker, /journalLocalRevision/,
     'P0-076 requires local per-entry incarnation/revision authority.');
+  assert.match(worker, /journalExternalEffectLock/,
+    'P0-076 requires local entry lifecycle locking for admitted external effects.');
 })();
 
 (function portableBoundaryContract() {
@@ -75,6 +77,8 @@ const journal = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
     'P0-076 CAS must machine-classify stale point revision.');
   assert.match(worker, /stale-legacy-revision/,
     'P0-076 legacy rollout must machine-classify stale exact DB revision.');
+  assert.match(worker, /entry-busy/,
+    'P0-076 incompatible mutation during a live external-effect lock must be machine-classified as entry-busy.');
 })();
 
 console.log('P0-076 committed-source CAS contract: PASS');
