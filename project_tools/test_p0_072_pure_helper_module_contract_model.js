@@ -40,7 +40,7 @@ function validateResetValue(value) {
   if (value.version !== RESET_VERSION || !UUID_V4.test(value.resetId)) return false;
   if (!KINDS.has(value.kind) || !SCOPES.has(value.scope) || KIND_SCOPE.get(value.kind) !== value.scope) return false;
   if (typeof value.sourceOperationId !== 'string' || value.sourceOperationId.length > MAX_SOURCE_OPERATION_ID_CHARS) return false;
-  if (!safeTime(value.quarantinedAt) || !safeTime(value.updatedAt) || value.updatedAt < value.quarantinedAt) return false;
+  if (!safeTime(value.quarantinedAt) || !safeTime(value.updatedAt)) return false;
   if (value.state !== 'quarantined') return false;
   const allowedResolutions = OUTCOME_RESOLUTION.get(value.outcome);
   if (!allowedResolutions || !allowedResolutions.has(value.resolution)) return false;
@@ -119,7 +119,9 @@ assert.equal(classifyCheckpointAuthority({ journalResetDisposition: { ...valid, 
 assert.equal(classifyCheckpointAuthority({}), 'active');
 assert.throws(() => makeResetDisposition({ ...valid, kind: 'clear-site', scope: 'url' }));
 assert.throws(() => makeResetDisposition({ ...valid, outcome: 'unknown', resolution: 'terminal' }));
-assert.throws(() => makeResetDisposition({ ...valid, updatedAt: 9 }));
+const clockRollback = makeResetDisposition({ ...valid, updatedAt: 9 });
+assert.equal(clockRollback.updatedAt, 9,
+  'wall-clock ordering is not durable authority; backward clock adjustment must not invalidate reset state');
 assert.equal(classifyExternalStage({}, 'local', 'downloadStart'), 'legacy-admission-unknown');
 assert.equal(classifyExternalStage({ externalStages: { version: 1, downloadStart: 'prepared' } }, 'local', 'downloadStart'), 'prepared');
 assert.equal(classifyExternalStage({ externalStages: { version: 2, downloadStart: 'prepared' } }, 'local', 'downloadStart'), 'stage-indeterminate');
