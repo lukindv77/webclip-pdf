@@ -249,11 +249,9 @@ Reserve these `WebClipJournal.meta` domains:
 
 ```text
 journalLocalTokenSalt:v1
-a legacyPendingFence:v1:<token> namespace
+legacyPendingFence:v1:<token>
 externalEffect:<effectId>
 ```
-
-(`legacyPendingFence:v1:` is the actual prefix; the leading article above is prose, not part of the key.)
 
 Current worker Journal-meta writes use fixed non-overlapping keys (`revision`, `journalImportLease`, `webclipJournalBackupLease`), and current `journal.js` is a schema opener/reader with no Journal-meta `put()` writer.
 
@@ -292,7 +290,70 @@ Primary evidence:
 
 - `RESEARCH_P0_072_PENDING_INDETERMINATE_CAPACITY_2026-09-06_EVIDENCE.md`.
 
-## N. Tooling / production patch status
+## N. External receipt envelope v1 single-record bound
+
+Freeze the complete JSON-compatible receipt envelope at:
+
+```text
+MAX_EXTERNAL_EFFECT_ENVELOPE_V1_JSON_CHARS = 64 * 1024
+```
+
+The cap covers stable envelope fields, versioned payload and optional reset disposition together.
+
+Every `payloadVersion` carried by `envelopeVersion = 1` shares the same cap. A future receipt that genuinely requires a larger complete record must use a new `envelopeVersion`; payload-version evolution alone cannot silently widen rollback work.
+
+The receipt remains compact metadata only. PDF/blob bodies, selection snapshots, staging chunks, access tokens, signed transfer URLs and unbounded diagnostic history do not belong in it.
+
+This is a per-record work/rollback compatibility bound, not P1-043 global quota reservation.
+
+Runtime: **LATER**.
+
+Primary evidence:
+
+- `RESEARCH_P0_072_EXTERNAL_RECEIPT_ENVELOPE_SIZE_2026-09-06_EVIDENCE.md`.
+
+## O. Opaque future payload cleanup
+
+A worker that does not understand the exact `payloadVersion` must preserve that receipt as unresolved/manual even if the opaque body contains terminal-looking fields.
+
+Envelope-level reset detachment proves only:
+
+```text
+no mutation replay / no Journal finalization authority
+```
+
+It does not prove physical terminality.
+
+Terminal cleanup/compaction requires a runtime that understands and validates the exact payload schema. Generic age, reset presence or guessed future field names cannot authorize deletion.
+
+Runtime: **LATER**.
+
+Primary evidence:
+
+- `RESEARCH_P0_072_EXTERNAL_RECEIPT_OPAQUE_CLEANUP_2026-09-06_EVIDENCE.md`.
+
+## P. Strong reset/effect generation IDs
+
+New P0-072 durable generation identities use strong UUID-v4 generation only:
+
+```text
+resetId  -> crypto.randomUUID()
+effectId -> crypto.randomUUID()
+```
+
+The result is validated against the fixed UUID-v4 shape. Missing/invalid API output fails closed before authority creation or external-effect admission. No `Math.random()` fallback is allowed for these new P0-072 generations.
+
+The installation-local token salt remains a separate 32-byte `crypto.getRandomValues()` primitive.
+
+This does not retroactively claim or modify historical random fallbacks owned elsewhere in the project.
+
+Runtime: **RED/LATER**.
+
+Primary evidence:
+
+- `RESEARCH_P0_072_STRONG_GENERATION_IDS_2026-09-06_EVIDENCE.md`.
+
+## Q. Tooling / production patch status
 
 Fresh 2026-09-06 environment checks still show:
 
@@ -308,7 +369,7 @@ Therefore:
 
 This is an execution-environment limitation, not a product architecture blocker.
 
-## O. Current implementation boundary
+## R. Current implementation boundary
 
 ### Commit A — safe when implementation is explicitly undertaken
 
@@ -335,7 +396,29 @@ Local/remote one-shot stage admission and factual-only detached settlement.
 
 ReadLater namespaced external-effect receipt integration using the stable envelope contract above.
 
-## P. Status
+## S. Pre-PR family consolidation requirement
+
+The working branch intentionally contains many interruption-safe dated research checkpoints. They are durable working evidence, not the desired permanent merge shape.
+
+Canonical project workflow requires a `research-impact: owner` PR to update corresponding family/history evidence. `RESEARCH_DELTA_INDEX.md` maps P0-072 primarily to:
+
+```text
+RESEARCH_FAMILY_YANDEX_REMOTE_IDENTITY_EVIDENCE.md
+```
+
+with operation-receipt and local-download families as important cross-family controls.
+
+Before opening a merge-ready P0-072 PR, perform a lossless consolidation pass:
+
+- move current semantic conclusions/corrections into the canonical family/history evidence;
+- preserve exact Git provenance for detailed dated checkpoints;
+- remove/compact temporary checkpoint proliferation where repository hygiene permits;
+- keep `RESEARCH_REGISTRY.md` as the sole current status authority;
+- do not let the PR body or chat be the only location of any acceptance invariant.
+
+This is a process requirement, not runtime closure.
+
+## T. Status
 
 P0-072 remains **ACTIVE**.
 
