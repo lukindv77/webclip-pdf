@@ -58,6 +58,25 @@ const journal = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
     'P0-076 successful point mutation must return and install the next authority.');
 })();
 
+(function clearConfirmationContract() {
+  const clearSites = [];
+  let cursor = 0;
+  while ((cursor = journal.indexOf("type: 'WEBCLIP_JOURNAL_CLEAR'", cursor)) !== -1) {
+    clearSites.push(cursor);
+    cursor += 10;
+  }
+  assert(clearSites.length >= 2, 'P0-076 expects both scoped and full Journal clear UI call sites.');
+  for (const index of clearSites) {
+    const window = journal.slice(Math.max(0, index - 500), index + 900);
+    assert.match(window, /journalClearAuthority/,
+      'P0-076 every clear confirmation call must carry the exact target-revision authority shown to the user.');
+  }
+  assert.match(worker, /journalClearAuthority/,
+    'P0-076 worker clear path must validate explicit clear target authority, not rely on import expectedJournalRevision by coincidence.');
+  assert.match(worker, /stale-journal-revision/,
+    'P0-076 stale clear confirmation must have a typed stale-journal-revision outcome.');
+})();
+
 (function blindMutationRemovalContract() {
   assert.equal(
     /const\s+updated\s*=\s*\{\s*\.\.\.current\s*,\s*\.\.\.patch\s*,\s*id:\s*current\.id\s*\}/.test(worker),
