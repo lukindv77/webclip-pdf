@@ -47,6 +47,8 @@ const journal = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
     'P0-076 direct rendered Journal entries must carry ephemeral mutation authority.');
   assert.match(worker, /journalMutationAuthority/,
     'P0-076 service-worker fallback entry projections must carry the same mutation authority contract.');
+  assert.match(worker, /entryId/,
+    'P0-076 mutation authority must explicitly bind the exact Journal entry target.');
   assert.match(
     journal,
     /db\.transaction\(\s*\[\s*JOURNAL_STORE\s*,\s*JOURNAL_META_STORE\s*\]\s*,\s*['"]readonly['"]\s*\)/,
@@ -111,6 +113,8 @@ const journal = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
     'P0-076 CAS must machine-classify stale point revision.');
   assert.match(worker, /stale-legacy-revision/,
     'P0-076 legacy rollout must machine-classify stale exact DB revision.');
+  assert.match(worker, /authority-target-mismatch/,
+    'P0-076 mutation authority from one Journal entry must never authorize another entry id.');
   assert.match(worker, /entry-busy/,
     'P0-076 incompatible mutation during a live external-effect lock must be machine-classified as entry-busy.');
 })();
