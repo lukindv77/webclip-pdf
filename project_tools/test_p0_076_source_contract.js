@@ -9,8 +9,8 @@ const worker = fs.readFileSync(path.join(ROOT, 'service-worker.js'), 'utf8');
 const journal = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
 
 (function persistedAuthorityContract() {
-  assert.match(worker, /journalMutationGeneration:v1/,
-    'P0-076 requires one local Journal bulk-generation token.');
+  assert.match(worker, /journalMutationGeneration/,
+    'P0-076 requires one stable-key local Journal bulk-generation control.');
   assert.match(worker, /journalLocalRevision/,
     'P0-076 requires local per-entry incarnation/revision authority.');
 })();
