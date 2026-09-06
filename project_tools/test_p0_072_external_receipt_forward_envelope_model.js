@@ -3,6 +3,12 @@ const assert = require('node:assert/strict');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HEX64 = /^[0-9a-f]{64}$/;
+const ENVELOPE_KEYS = new Set([
+  'key', 'envelopeVersion', 'effectId', 'provenance',
+  'scopeTokenVersion', 'urlScopeToken', 'siteScopeToken',
+  'payloadVersion', 'payload'
+]);
+const ENVELOPE_KEYS_DETACHED = new Set([...ENVELOPE_KEYS, 'resetDisposition']);
 
 function own(value, key) {
   return Object.prototype.hasOwnProperty.call(value, key);
@@ -18,8 +24,16 @@ function parseEnvelope(row) {
   if (!UUID.test(String(row.effectId || ''))) return { status: 'invalid' };
   if (row.key !== `externalEffect:${row.effectId}`) return { status: 'invalid' };
   if (row.provenance !== 'worker-issued-live') return { status: 'invalid' };
+
+  const allowedKeys = own(row, 'resetDisposition') ? ENVELOPE_KEYS_DETACHED : ENVELOPE_KEYS;
+  const actualKeys = Object.keys(row);
+  if (actualKeys.length !== allowedKeys.size || actualKeys.some((key) => !allowedKeys.has(key))) {
+    return { status: 'invalid' };
+  }
+
   if (!Number.isSafeInteger(row.scopeTokenVersion) || row.scopeTokenVersion < 1) return { status: 'invalid' };
-  if (!HEX64.test(String(row.urlScopeToken || '')) || !HEX64.test(String(row.siteScopeToken || ''))) return { status: 'invalid' };
+  if (typeof row.urlScopeToken !== 'string' || row.urlScopeToken.length < 1 || row.urlScopeToken.length > 256) return { status: 'invalid' };
+  if (typeof row.siteScopeToken !== 'string' || row.siteScopeToken.length < 1 || row.siteScopeToken.length > 256) return { status: 'invalid' };
   if (!Number.isSafeInteger(row.payloadVersion) || row.payloadVersion < 1 || !plain(row.payload)) return { status: 'invalid' };
 
   // Presence itself is the cross-version mutation barrier. A worker does not
@@ -55,6 +69,9 @@ function scopedResetDetach(row, supportedScopeTokenVersion, token, kind, resetDi
   }
   if (row.scopeTokenVersion !== supportedScopeTokenVersion) {
     return { ok: false, reason: 'unsupported-scope-token-version' };
+  }
+  if (supportedScopeTokenVersion === 1 && (!HEX64.test(row.urlScopeToken) || !HEX64.test(row.siteScopeToken))) {
+    return { ok: false, reason: 'invalid-supported-scope-token' };
   }
   const actual = kind === 'url' ? row.urlScopeToken : row.siteScopeToken;
   if (actual !== token) {
@@ -118,10 +135,24 @@ assert.equal(nonmatch.ok, true);
 assert.equal(nonmatch.match, false);
 assert.equal(own(nonmatch.row, 'resetDisposition'), false);
 
+const futureScopeEncoding = {
+  ...futurePayloadReceipt,
+  scopeTokenVersion: 2,
+  urlScopeToken: 'future:url:v2',
+  siteScopeToken: 'future:site:v2'
+};
+assert.equal(fullResetDetach(futureScopeEncoding, resetDisposition).ok, true,
+  'full reset must not require understanding a future scope-token encoding');
 assert.deepEqual(
-  scopedResetDetach({ ...futurePayloadReceipt, scopeTokenVersion: 2 }, 1, urlToken, 'url', resetDisposition),
+  scopedResetDetach(futureScopeEncoding, 1, urlToken, 'url', resetDisposition),
   { ok: false, reason: 'unsupported-scope-token-version' },
   'scoped reset cannot classify a future scope-token algorithm'
+);
+
+assert.deepEqual(
+  fullResetDetach({ ...futurePayloadReceipt, unexpectedAuthorityField: true }, resetDisposition),
+  { ok: false, reason: 'invalid' },
+  'new top-level authority fields require an envelope version bump'
 );
 
 assert.deepEqual(
