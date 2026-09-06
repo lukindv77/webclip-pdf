@@ -3,7 +3,7 @@
 Date: 2026-09-06  
 Canonical source baseline: `main = d4f5b268fa3f7ced5a7bc68da52784863d614138`  
 Working branch entering this block: `research/p0-072-recovery-quarantine-2026-09-04 @ 6f99e07a6bf973c111d28d5154d74fa7d8b78a1f`  
-Deterministic model commit: `12df4f9d1711a6d0d0635d3d69ca558a57fa021a`  
+Deterministic model commits: `12df4f9d1711a6d0d0635d3d69ca558a57fa021a`, refined by `aefc3299d12deef05579b32abcce29101517c9ea`  
 Owner: **P0-072 ACTIVE**.
 
 This checkpoint refines the later namespaced external-effect receipt design. Runtime/manifest remain unchanged.
@@ -41,8 +41,8 @@ Conceptual v1 envelope:
   effectId: '<worker-issued UUID-v4>',
   provenance: 'worker-issued-live',
   scopeTokenVersion: 1,
-  urlScopeToken: '<64 hex>',
-  siteScopeToken: '<64 hex>',
+  urlScopeToken: '<bounded token string>',
+  siteScopeToken: '<bounded token string>',
   payloadVersion: 1,
   payload: { ...effect-specific bounded data... }
   // resetDisposition is ABSENT until the receipt is detached
@@ -61,9 +61,9 @@ The v1 envelope freezes only the cross-version reset contract:
 - payload version and opaque payload container;
 - the rule that **presence of `resetDisposition` is a mutation/replay barrier**.
 
-Future effect-specific schema evolution happens under `payloadVersion` and `payload` without changing the envelope.
+The top-level v1 envelope shape is exact, except that `resetDisposition` is an optional field whose presence means detached. New authority-bearing top-level fields require an `envelopeVersion` bump. Future effect-specific evolution belongs under `payloadVersion` + `payload`.
 
-A future incompatible change to any of the frozen meanings must bump `envelopeVersion`; an older worker then fails closed.
+This prevents an older worker from silently ignoring a future top-level field that changed authority semantics.
 
 ## 4. Presence of reset disposition is the inter-version barrier
 
@@ -88,7 +88,7 @@ For a valid `envelopeVersion = 1` receipt with unsupported `payloadVersion`:
 
 1. the old worker validates only the envelope;
 2. it does **not** replay/reconcile the unknown payload automatically;
-3. clear-all/import-replace may clone the full record;
+3. clear-all/import-replace clones the complete record;
 4. it adds the known reset disposition at the envelope level;
 5. it writes the complete record back in the same authoritative `meta + Journal` transaction;
 6. the opaque payload is preserved unchanged;
@@ -96,13 +96,36 @@ For a valid `envelopeVersion = 1` receipt with unsupported `payloadVersion`:
 
 This avoids the downgrade deadlock while preserving the future payload for a newer worker or manual reconciliation.
 
-## 6. Scoped reset requires supported scope-token semantics
+## 6. Scope token format is interpreted only by its supported version
+
+The first draft of the deterministic model required `urlScopeToken` and `siteScopeToken` to be 64 hex characters for every `scopeTokenVersion`.
+
+That was too strict for forward compatibility. A future scope-token algorithm may use a different bounded encoding. A full clear/import does not need to understand that encoding at all.
+
+Correct v1 envelope validation therefore requires only:
+
+- positive integer `scopeTokenVersion`;
+- bounded nonempty token strings in the stable token fields.
+
+Strict format validation occurs only when the running worker supports that exact token version. For the current version-1 token algorithm, the token remains the already selected 64-lowercase-hex SHA-256 representation.
+
+Consequences:
+
+```text
+full reset + future scopeTokenVersion -> may detach known envelope
+scoped reset + future scopeTokenVersion -> fail closed
+scoped reset + supported v1 but malformed v1 token -> fail closed
+```
+
+This keeps full-reset rollback compatibility without weakening URL/site matching.
+
+## 7. Scoped reset requires supported scope-token semantics
 
 URL/site reset is allowed to detach an unknown payload only when the envelope's `scopeTokenVersion` is supported by the running worker.
 
 The worker can then compare the stable envelope-owned URL/site token without understanding the effect-specific payload.
 
-If `scopeTokenVersion` is unsupported or malformed:
+If `scopeTokenVersion` is unsupported or the supported-version token is malformed:
 
 ```text
 scoped reset -> fail closed
@@ -112,7 +135,7 @@ Do not infer nonmatch and do not mass-detach unrelated receipts.
 
 Full clear/import does not need scope-token matching and can still detach a valid envelope-v1 receipt.
 
-## 7. Unknown envelope version remains a hard boundary
+## 8. Unknown envelope version remains a hard boundary
 
 A v1 worker encountering:
 
@@ -131,7 +154,7 @@ The old worker cannot assume that v2 retained:
 
 Therefore this checkpoint narrows the previous abort rule from **unknown payload** to **unknown envelope**.
 
-## 8. Opaque future payload cannot regain mutation authority
+## 9. Opaque future payload cannot regain mutation authority
 
 A worker that does not understand `payloadVersion` may preserve and detach the record, but must not:
 
@@ -143,21 +166,21 @@ A worker that does not understand `payloadVersion` may preserve and detach the r
 
 Unknown payload remains one unresolved/manual liability for capacity purposes under the already selected bounded namespace policy.
 
-## 9. IndexedDB mechanics support opaque preservation
+## 10. IndexedDB mechanics support opaque preservation
 
-IndexedDB stores values via the structured serialization/clone mechanism. A read-modify-put of the complete record can therefore preserve unknown nested object fields without interpreting them.
+IndexedDB stores values through structured serialization/clone. A read-modify-put of the complete record can therefore preserve unknown nested object fields without interpreting them.
 
 Overlapping readwrite transactions on the same object-store scope are serialized, so reset detachment and effect admission retain one database ordering.
 
 Primary external references checked during this checkpoint:
 
 - W3C IndexedDB 3.0 transaction scheduling / atomic transactions;
-- W3C IndexedDB value storage via structured serialization;
+- W3C IndexedDB value storage through structured serialization;
 - MDN `IDBObjectStore.put()` structured-clone behavior.
 
-This does not mean arbitrary future payload sizes are allowed. Existing receipt count/record-size/scan bounds remain mandatory.
+This does not allow arbitrary future payload sizes. Existing receipt count, record-size and prefix-scan bounds remain mandatory.
 
-## 10. Data-model consequence
+## 11. Data-model consequence
 
 The earlier conceptual body:
 
@@ -182,9 +205,10 @@ The previous rule “any unknown receipt body blocks full reset” is superseded
 
 - unknown/malformed **envelope** -> block;
 - valid v1 envelope + unknown payload -> retain as unresolved, but full reset may detach it;
-- scoped reset additionally requires supported scope-token version.
+- valid v1 envelope + future scope token encoding -> full reset may detach, scoped reset blocks;
+- unknown/future resetDisposition body already present -> honor its presence as a barrier and do not overwrite it.
 
-## 11. Owner boundaries
+## 12. Owner boundaries
 
 This envelope does **not** close or redefine:
 
@@ -197,31 +221,33 @@ This envelope does **not** close or redefine:
 
 Those facts live in or constrain the versioned payload and later reconciliation logic.
 
-## 12. Deterministic model
+## 13. Deterministic model
 
-Added:
+Added and refined:
 
 `project_tools/test_p0_072_external_receipt_forward_envelope_model.js`
 
-Local Node result before durable write:
+Local Node result after the refinement:
 
 ```text
 P0-072 external receipt forward-compatible envelope model: PASS
 ```
 
-The model proves:
+The current model proves:
 
 1. a v1 worker recognizes a future `payloadVersion` under a known envelope as opaque rather than malformed;
 2. full reset adds the envelope reset barrier while preserving the opaque future payload;
 3. an existing unknown/future reset disposition is honored and not overwritten;
 4. scoped reset can detach a future payload when scope-token semantics are supported;
 5. scoped nonmatch remains untouched;
-6. unsupported scope-token version fails closed;
-7. unsupported envelope version remains a hard fail-closed boundary.
+6. future scope-token encoding does not block full reset;
+7. future scope-token version blocks scoped matching;
+8. unexpected top-level authority fields invalidate envelope v1 and require a version bump;
+9. unsupported envelope version remains a hard fail-closed boundary.
 
 The model is architecture evidence, not runtime PASS.
 
-## 13. Status
+## 14. Status
 
 P0-072 remains **ACTIVE**. This checkpoint changes only the later external-effect receipt architecture. The first pending/legacy/local/remote runtime tranche remains governed by the current acceptance addendum and stays unimplemented/RED.
 
