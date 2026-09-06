@@ -27,7 +27,9 @@ const journal = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
 
 (function renderedAuthoritySnapshotContract() {
   assert.match(journal, /journalMutationAuthority/,
-    'P0-076 rendered Journal entries must carry ephemeral mutation authority.');
+    'P0-076 direct rendered Journal entries must carry ephemeral mutation authority.');
+  assert.match(worker, /journalMutationAuthority/,
+    'P0-076 service-worker fallback entry projections must carry the same mutation authority contract.');
   assert.match(
     journal,
     /db\.transaction\(\s*\[\s*JOURNAL_STORE\s*,\s*JOURNAL_META_STORE\s*\]\s*,\s*['"]readonly['"]\s*\)/,
