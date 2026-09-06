@@ -42,10 +42,10 @@ const linked = functionSlice(journal, 'buildLinkedOperationLog');
 requireSource(Boolean(linked), 'cannot locate buildLinkedOperationLog()');
 requireSource(/operationLink|WEBCLIP_OPERATION_LOG_GET_LINKED/.test(linked),
   'Journal UI still lacks receipt-based linked-log admission');
-requireSource(!/const\s+exactOperationId\s*=\s*\/\^\[A-Za-z0-9\._:\-\]\{1,160\}\$\/.test(linked),
-  'Journal UI still treats regex-valid entry.operationId as sufficient exact linkage');
-requireSource(!/WEBCLIP_OPERATION_LOG_GET['"],?\s*operationId:\s*exactOperationId/.test(linked),
-  'Journal UI still fetches linked log directly from plain entry.operationId');
+requireSource(!/const\s+operationId\s*=\s*String\(entry\?\.operationId/.test(linked),
+  'Journal UI still starts linked-log admission from plain entry.operationId');
+requireSource(!/type:\s*['"]WEBCLIP_OPERATION_LOG_GET['"][\s\S]{0,240}operationId:\s*exactOperationId/.test(linked),
+  'Journal UI still fetches linked log directly from plain exactOperationId');
 
 if (failures.length) {
   console.error('P1-190 imported operation provenance source gate: RED');
