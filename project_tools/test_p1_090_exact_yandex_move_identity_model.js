@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 
 function prepareMove(source, targetPath) {
+  if (!source?.destructiveProvenance) return { outcome: 'manual-untrusted-source-provenance' };
   if (!source?.resourceId) return { outcome: 'manual-missing-source-identity' };
   return {
     outcome: 'prepared',
@@ -11,7 +12,8 @@ function prepareMove(source, targetPath) {
       sourcePath: source.path,
       targetPath,
       expectedSourceResourceId: source.resourceId,
-      expectedSourcePublicUrl: source.publicUrl || ''
+      expectedSourcePublicUrl: source.publicUrl || '',
+      sourceIdentityProvenanceReceipt: source.destructiveProvenance
     })
   };
 }
@@ -36,31 +38,40 @@ function reconcileUnknown(receipt, source, target) {
   return targetResult;
 }
 
+const trusted = (source) => ({ ...source, destructiveProvenance: 'trusted-native-receipt' });
+
 (function exactSourceToExactTargetSucceeds() {
-  const prepared = prepareMove({ path: '/A/x.pdf', resourceId: 'RID-A' }, '/Trash/x.pdf');
+  const prepared = prepareMove(trusted({ path: '/A/x.pdf', resourceId: 'RID-A' }), '/Trash/x.pdf');
   assert.equal(prepared.outcome, 'prepared');
   assert.equal(reconcileUnknown(prepared.receipt, null, { type: 'file', path: '/Trash/x.pdf', resourceId: 'RID-A' }), 'verified-moved');
 })();
 
 (function samePathTypeSizeDifferentObjectIsConflict() {
-  const prepared = prepareMove({ path: '/A/x.pdf', resourceId: 'RID-A' }, '/Trash/x.pdf').receipt;
+  const prepared = prepareMove(trusted({ path: '/A/x.pdf', resourceId: 'RID-A' }), '/Trash/x.pdf').receipt;
   const target = { type: 'file', path: '/Trash/x.pdf', resourceId: 'RID-B', size: 100 };
   assert.equal(verifyTarget(prepared, target), 'target-identity-conflict');
 })();
 
 (function newlyObservedTargetIdCannotBootstrapMissingSourceIdentity() {
-  const result = prepareMove({ path: '/A/x.pdf', resourceId: '' }, '/Trash/x.pdf');
+  const result = prepareMove(trusted({ path: '/A/x.pdf', resourceId: '' }), '/Trash/x.pdf');
   assert.equal(result.outcome, 'manual-missing-source-identity');
 })();
 
-(function legacySourceCanBeUpgradedBeforeMutation() {
-  const preMoveGet = { type: 'file', path: '/A/x.pdf', resourceId: 'RID-A' };
+(function trustedNativeSourceMayBeEnrichedBeforeMutation() {
+  const preMoveGet = trusted({ type: 'file', path: '/A/x.pdf', resourceId: 'RID-A' });
   const prepared = prepareMove(preMoveGet, '/Trash/x.pdf');
+  assert.equal(prepared.outcome, 'prepared');
   assert.equal(prepared.receipt.expectedSourceResourceId, 'RID-A');
 })();
 
+(function importedPathOnlyCannotManufactureDestructiveProvenance() {
+  const importedPathLookup = { type: 'file', path: '/A/x.pdf', resourceId: 'RID-B', destructiveProvenance: '' };
+  const prepared = prepareMove(importedPathLookup, '/Trash/x.pdf');
+  assert.equal(prepared.outcome, 'manual-untrusted-source-provenance');
+})();
+
 (function targetConflictWithSourceStillPresentDoesNotFinalizeWrongObject() {
-  const receipt = prepareMove({ path: '/A/x.pdf', resourceId: 'RID-A' }, '/Trash/x.pdf').receipt;
+  const receipt = prepareMove(trusted({ path: '/A/x.pdf', resourceId: 'RID-A' }), '/Trash/x.pdf').receipt;
   const outcome = reconcileUnknown(
     receipt,
     { type: 'file', path: '/A/x.pdf', resourceId: 'RID-A' },
@@ -70,12 +81,12 @@ function reconcileUnknown(receipt, source, target) {
 })();
 
 (function bothMissingIsIndeterminateNotSuccess() {
-  const receipt = prepareMove({ path: '/A/x.pdf', resourceId: 'RID-A' }, '/Trash/x.pdf').receipt;
+  const receipt = prepareMove(trusted({ path: '/A/x.pdf', resourceId: 'RID-A' }), '/Trash/x.pdf').receipt;
   assert.equal(reconcileUnknown(receipt, null, null), 'manual-object-location-indeterminate');
 })();
 
 (function targetMissingIdentityDoesNotAdoptPath() {
-  const receipt = prepareMove({ path: '/A/x.pdf', resourceId: 'RID-A' }, '/Trash/x.pdf').receipt;
+  const receipt = prepareMove(trusted({ path: '/A/x.pdf', resourceId: 'RID-A' }), '/Trash/x.pdf').receipt;
   assert.equal(verifyTarget(receipt, { type: 'file', path: '/Trash/x.pdf', resourceId: '' }), 'target-identity-missing');
 })();
 
