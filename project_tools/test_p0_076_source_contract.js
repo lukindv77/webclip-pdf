@@ -115,6 +115,8 @@ const journal = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
     'P0-076 legacy rollout must machine-classify stale exact DB revision.');
   assert.match(worker, /authority-target-mismatch/,
     'P0-076 mutation authority from one Journal entry must never authorize another entry id.');
+  assert.match(worker, /entry-revision-exhausted/,
+    'P0-076 entry revision must fail closed rather than wrap or silently reincarnate.');
   assert.match(worker, /entry-busy/,
     'P0-076 incompatible mutation during a live external-effect lock must be machine-classified as entry-busy.');
 })();
