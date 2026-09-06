@@ -27,7 +27,7 @@ requireSource(/LOCATOR_TEXT_INPUT_MAX_CHARS/.test(content),
 requireSource(/LOCATOR_SELECTOR_INPUT_MAX_CHARS/.test(content),
   'missing page-controlled selector input bound before escaping/parsing');
 requireSource(/LOCATOR_MAX_PATH_DEPTH/.test(content),
-  'missing named structural path depth bound');
+  'missing named locator path depth bound');
 
 requireSource(/boundedSiblingPosition|locatorSiblingReceipt/.test(content),
   'missing bounded sibling-position helper');
@@ -55,6 +55,15 @@ requireSource(/LOCATOR_SELECTOR_INPUT_MAX_CHARS|boundedLocatorSelector|selectorI
   'structural path can still pass unbounded page-controlled id/class input into selector escaping/parsing');
 requireSource(/LOCATOR_MAX_PATH_DEPTH/.test(structural),
   'structural path still relies on an unnamed hard-coded depth only');
+
+const domPath = functionSlice('buildDomPath');
+requireSource(Boolean(domPath), 'cannot locate buildDomPath()');
+requireSource(!/\[\.\.\.parent\.children\]\.indexOf\(current\)/.test(domPath),
+  'buildDomPath() still materializes all siblings at every ancestor');
+requireSource(/boundedSiblingPosition|locatorSiblingReceipt/.test(domPath),
+  'buildDomPath() does not use bounded exact sibling-position semantics');
+requireSource(/LOCATOR_MAX_PATH_DEPTH/.test(domPath),
+  'DOM path still relies on an unnamed hard-coded depth only');
 
 const locatorText = functionSlice('locatorElementText', 5000);
 requireSource(Boolean(locatorText), 'cannot locate locatorElementText()');
