@@ -17,6 +17,21 @@ const journal = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
     'P0-076 requires local entry lifecycle locking for admitted external effects.');
 })();
 
+(function creationAuthorityContract() {
+  const appendIndex = worker.indexOf('async function appendJournalEntry(');
+  assert.notEqual(appendIndex, -1, 'P0-076 source control missing appendJournalEntry().');
+  assert.match(worker.slice(appendIndex, appendIndex + 14000), /journalLocalRevision/,
+    'P0-076 every newly appended Journal entry must receive fresh local incarnation/revision authority.');
+
+  const importIndex = worker.indexOf('async function commitStagedJournalImport(');
+  assert.notEqual(importIndex, -1, 'P0-076 source control missing commitStagedJournalImport().');
+  assert.match(worker.slice(importIndex, importIndex + 22000), /journalLocalRevision/,
+    'P0-076 imported replacement rows must receive fresh local incarnation/revision authority before becoming live.');
+
+  assert.match(worker, /JOURNAL_LOCAL_REVISION_LOGICAL_BYTES\s*=\s*117/,
+    'P0-076 import admission must retain the exact bounded 117-byte logical per-entry authority surcharge contract.');
+})();
+
 (function portableBoundaryContract() {
   assert.match(worker, /function\s+makePortableJournalEntry\s*\(/,
     'P0-076 requires an explicit portable Journal-entry serializer.');
