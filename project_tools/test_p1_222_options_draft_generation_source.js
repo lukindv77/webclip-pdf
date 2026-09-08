@@ -13,6 +13,7 @@ must(/async\s+function\s+runBusy\s*\(/, 'runBusy must remain discoverable.');
 must(/WEBCLIP_YANDEX_FINISH_AUTH/, 'Finish OAuth path must remain explicit.');
 must(/WEBCLIP_YANDEX_SET_MANUAL_TOKEN/, 'Manual-token path must remain explicit.');
 must(/WEBCLIP_YANDEX_SAVE_ROOT/, 'Save-root path must remain explicit.');
+must(/WEBCLIP_YANDEX_CREATE_FOLDER/, 'Create Folder path must remain explicit for draft-clear parity.');
 
 // P1-222 requires a user-edit/draft revision distinct from status-read generation.
 must(/(?:draft|form|edit)[A-Za-z0-9_]*(?:Generation|Revision|Epoch)|(?:Generation|Revision|Epoch)[A-Za-z0-9_]*(?:draft|form|edit)/i,
@@ -39,6 +40,9 @@ assert.doesNotMatch(source,
 assert.doesNotMatch(source,
   /WEBCLIP_YANDEX_SAVE_ROOT[\s\S]{0,1200}requireOk\(response\);\s*rootPath\.value\s*=\s*response\.rootPath/,
   'Save-root completion must not unconditionally replace a newer rootPath draft.');
+assert.doesNotMatch(source,
+  /WEBCLIP_YANDEX_CREATE_FOLDER[\s\S]{0,1200}requireOk\(response\);\s*newFolderName\.value\s*=\s*['"]['"]/,
+  'Create Folder completion must not unconditionally clear a newer newFolderName draft.');
 
 must(/(?:confirmationCode|manualToken|rootPath)[\s\S]{0,250}(?:unchanged|draft|editRevision|formRevision|generation)/i,
   'Mutation completion must reconcile captured editable fields only when their admission authority is still current.');
