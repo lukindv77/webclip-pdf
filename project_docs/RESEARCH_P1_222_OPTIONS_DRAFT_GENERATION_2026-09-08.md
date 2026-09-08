@@ -22,7 +22,7 @@ Historical evidence already established both passive-read and mutation-completio
 - `RESEARCH_DELTA_OPTIONS_STATUS_REFRESH_FORM_EDIT_GENERATION_2026-08-29.md`;
 - `RESEARCH_DELTA_OPTIONS_MUTATION_COMPLETION_DRAFT_GENERATION_2026-08-29.md`.
 
-No new P-code is required.
+Fresh P1-223 review also exposed Create Folder's unconditional `newFolderName.value = ''` as another concrete P1-222 instance. No new P-code is required.
 
 ## 2. Current source proof — latest read is not latest edit
 
@@ -48,7 +48,7 @@ publicLinksEnabled.checked = status.createPublicLinks !== false;
 
 This correctly prevents an older status read from overwriting a newer status read. It does not prove that an editable field has remained untouched by the user since the request started.
 
-Current source has no separate Yandex form/draft revision for `clientId`, `rootPath`, `publicLinksEnabled`, `manualToken`, or `confirmationCode`. The `input` listener found in current `options.js` is for OperationLog search, not Yandex draft ownership.
+Current source has no separate Yandex form/draft revision for `clientId`, `rootPath`, `publicLinksEnabled`, `manualToken`, `confirmationCode`, or `newFolderName`. The `input` listener found in current `options.js` is for OperationLog search, not Yandex draft ownership.
 
 Deterministic schedule:
 
@@ -70,13 +70,7 @@ Concrete current paths:
 
 ### Finish OAuth
 
-Captures:
-
-```js
-code: confirmationCode.value.trim()
-```
-
-then after the async worker result unconditionally executes:
+Captures `confirmationCode.value.trim()` and, after async completion, unconditionally executes:
 
 ```js
 confirmationCode.value = '';
@@ -108,7 +102,23 @@ A root draft typed after save admission can therefore be replaced by the older c
 
 The operation captures `clientId.value.trim()`, awaits the worker, then calls `refreshStatus(response)`. The Start button is disabled, not `clientId`, so a newer Client ID draft may be overwritten by the prefetched completion.
 
-All of these are P1-222: async completion lacks current draft authority.
+### Create Folder — added during P1-223 review
+
+The operation captures:
+
+```js
+const name = newFolderName.value.trim();
+```
+
+and after the remote Create Folder response current code unconditionally does:
+
+```js
+newFolderName.value = '';
+```
+
+If the user has typed Folder-B while Folder-A is pending, completion of Folder-A clears Folder-B. This is P1-222 draft authority; P1-223 separately owns whether the same completion may start a visible folder reload.
+
+All of these are one root cause: async completion lacks current draft ownership.
 
 ## 4. Required state model
 
@@ -164,7 +174,7 @@ for each editable response field:
       preserve current draft
 ```
 
-A dirty field is not an error; it represents an intentional divergence between persisted truth and current unsaved user intent.
+A dirty field is not an error; it represents intentional divergence between persisted truth and current unsaved user intent.
 
 ## 6. Mutation completion rule
 
@@ -176,9 +186,15 @@ AND
 current.value == receipt.capturedValue
 ```
 
-If either condition is false, the worker result can still update separately presented persisted/verified truth, but it has no authority to overwrite the newer draft.
+If either condition is false, worker/persisted truth remains factual but has no authority to overwrite the newer local draft.
 
-This applies to clearing `confirmationCode`, clearing `manualToken`, replacing `rootPath`, and applying prefetched status after Start OAuth or other mutations.
+This applies to:
+
+- clearing `confirmationCode`;
+- clearing `manualToken`;
+- replacing `rootPath`;
+- applying prefetched status after Start OAuth;
+- clearing `newFolderName` after Create Folder.
 
 ## 7. Owner boundaries
 
@@ -207,7 +223,8 @@ D. Manual Token A vs newer token draft B;
 E. Save Root A vs newer root draft B;
 F. Start OAuth/prefetched status vs newer Client ID edit;
 G. no intervening edit -> successful mutation may reconcile its captured field;
-H. per-field revision preserves one edited field while untouched fields still refresh.
+H. per-field revision preserves one edited field while untouched fields still refresh;
+I. Create Folder name A vs newer `newFolderName` draft B.
 
 Expected output:
 
@@ -226,14 +243,15 @@ Added:
 
 It requires:
 
-1. an explicit draft/edit revision distinct from `yandexStatusGeneration`;
+1. explicit draft/edit revision distinct from `yandexStatusGeneration`;
 2. draft authority advanced by `input/change` for mutable fields;
 3. captured edit authority at async admission;
 4. conditional status writes for editable controls;
 5. no unconditional post-await clearing of `confirmationCode`;
 6. no unconditional post-await clearing of `manualToken`;
-7. no unconditional post-await replacement of `rootPath` from an older Save Root result;
-8. explicit current-draft reconciliation for mutation results.
+7. no unconditional post-await replacement of `rootPath` from older Save Root result;
+8. no unconditional post-await clearing of `newFolderName` from older Create Folder result;
+9. explicit current-draft reconciliation for mutation results.
 
 Current source is expected RED against this production contract.
 
@@ -249,13 +267,15 @@ Current source is expected RED against this production contract.
 8. Start Auth with Client ID A; user types B before prefetched status -> B survives.
 9. Edit only `rootPath`; status also changes untouched `clientId` -> root draft survives and untouched field may converge.
 10. Publication checkbox edit during an older status read is not reverted by that response.
-11. Unknown/failed mutation result does not fabricate dirty-state reconciliation.
-12. Import/settings-triggered refresh obeys the same draft-generation rule.
+11. Create Folder submits name A; user types name B while pending -> A completion does not clear B.
+12. Create Folder A with no later name edit -> success may clear exactly A while P1-223 independently decides refresh relevance.
+13. Unknown/failed mutation result does not fabricate dirty-state reconciliation.
+14. Import/settings-triggered refresh obeys the same draft-generation rule.
 
 Physical Options-page evidence should additionally verify real DOM event ordering and typing/focus behavior while an initiating button is disabled.
 
 ## 11. Conclusion
 
-Fresh current-source review confirms the historical P1-222 root cause. Current `options.js` has a useful latest-status-read generation but no orthogonal user-edit/draft authority, and multiple mutation completions directly rewrite editable controls after `await`.
+Fresh current-source review confirms the historical P1-222 root cause and expands concrete coverage to Create Folder's editable name field. Current `options.js` has a useful latest-status-read generation but no orthogonal user-edit/draft authority, and multiple mutation completions directly rewrite editable controls after `await`.
 
 P1-222 remains ACTIVE. Production closure requires field-scoped latest-user-edit-wins semantics, immutable mutation-draft receipts, deterministic source regression and applicable physical Options-page verification.
