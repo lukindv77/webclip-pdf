@@ -179,4 +179,13 @@ class OptionsDraftModel {
   assert.strictEqual(m.read('publicLinksEnabled'), false);
 }
 
+// I. Create Folder submits name A; a newer folder-name draft B must survive old completion.
+{
+  const m = new OptionsDraftModel({ newFolderName: 'Folder-A' });
+  const op = m.startMutation('create-folder', { newFolderName: 'Folder-A' });
+  m.edit('newFolderName', 'Folder-B');
+  assert.strictEqual(m.clearCapturedFieldOnSuccess(op, 'newFolderName'), false);
+  assert.strictEqual(m.read('newFolderName'), 'Folder-B');
+}
+
 console.log('P1-222 Options draft-generation deterministic model: PASS');
