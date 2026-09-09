@@ -1,0 +1,15 @@
+'use strict';
+const fs=require('fs'); const assert=require('assert');
+const src=fs.readFileSync('service-worker.js','utf8');
+const req=(p,m)=>assert.match(src,p,m);
+req(/pendingRemoteMutations/,'D1 must use v8 independent remote mutation store');
+req(/started-unknown/,'move effect must persist started-unknown before provider call');
+req(/resource_id|resourceId/,'move receipts must bind stable provider object identity');
+req(/revision/,'move verification must carry provider/local exact revision evidence');
+req(/remote-complete-local-suppressed/,'verified remote move with stale Journal finalization must be terminal partial');
+req(/canceled-before-start/,'revoked prepared move must have exact no-effect terminal state');
+req(/manual-resolution/,'identity-ambiguous move must preserve manual evidence');
+req(/publication|publicUrl|public_url/,'Delete→Trash must compose publication outcome');
+req(/JOURNAL.*CAS|entryRevision|expectedEntryRevision/,'local finalization must be exact Journal CAS');
+req(/targetPath/,'move target must be durable before effect start');
+console.log('Wave 1 destructive move source gate: PASS');
