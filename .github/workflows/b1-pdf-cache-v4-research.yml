@@ -17,4 +17,4 @@ jobs:
           unzip -q chrome.zip
           ./chrome-linux64/chrome --version
       - name: Run B1 current-Chrome IndexedDB fixture
-        run: CHROME_BIN="$PWD/chrome-linux64/chrome" node project_tools/run_b1_pdf_cache_v4_chrome_idb_fixture.js
+        run: CHROME_BIN="$PWD/chrome-linux64/chrome" node project_tools/run_b1_pdf_cache_v4_chrome_idb_fixture_v2.js
