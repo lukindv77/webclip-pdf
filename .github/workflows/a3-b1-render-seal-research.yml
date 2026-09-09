@@ -11,6 +11,7 @@ jobs:
       - run: node --version
       - run: node project_tools/test_a3_b1_render_seal_model.js
       - run: node project_tools/test_a3_b1_current_source_inventory.js
+      - run: node project_tools/test_a3_b1_incremental_sha.js
       - name: Download exact Chrome for Testing Stable
         run: |
           curl -fL --retry 3 -o chrome.zip https://storage.googleapis.com/chrome-for-testing-public/153.0.8010.36/linux64/chrome-linux64.zip
