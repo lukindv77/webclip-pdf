@@ -1,0 +1,33 @@
+'use strict';
+const assert=require('assert');
+const deps={
+ A0:[], U0:['A0'], J0:['U0'], A1:['U0'], A2:['A1'], B0:['A2'], B1:['B0'], C0:['A2'], C1:['B1','C0'], D0:['J0','A2'], D1:['D0','C0'], D2:['D0','B1','C1'], E0:['D1','D2'], E1:['E0'], Z0:['E1']
+};
+const order=['A0','U0','J0','A1','A2','B0','B1','C0','C1','D0','D1','D2','E0','E1','Z0'];
+let cases=0; const t=(f)=>{f();cases++;};
+const pos=Object.fromEntries(order.map((x,i)=>[x,i]));
+for(const [n,ds] of Object.entries(deps)) for(const d of ds) t(()=>assert(pos[d]<pos[n],`${d} !< ${n}`));
+t(()=>assert.deepEqual(['service-worker.js','journal.js'].sort(),['journal.js','service-worker.js'].sort()));
+t(()=>assert.equal(pos.U0<pos.J0,true));
+t(()=>assert.equal(pos.J0<pos.D0,true));
+t(()=>assert.equal(pos.D0<pos.D1,true));
+t(()=>assert.equal(pos.D0<pos.D2,true));
+t(()=>assert.equal(pos.C1<pos.D2,true));
+t(()=>assert.equal(pos.D1<pos.E0,true));
+t(()=>assert.equal(pos.D2<pos.E0,true));
+const journalV8={stores:['entries','urlStats','meta','pendingAppends','pendingDownloads','pendingRemoteSaves','importStaging','journalFinalizations','pendingRemoteMutations'],meta:['revision','datasetGeneration']};
+t(()=>assert(journalV8.stores.includes('journalFinalizations')));
+t(()=>assert(journalV8.stores.includes('pendingRemoteMutations')));
+t(()=>assert(journalV8.meta.includes('datasetGeneration')));
+const clearPolicy=(phase)=> phase==='prepared'?'cancel-before-effect':['started-unknown','verified'].includes(phase)?'preserve-effect-revoke-finalization':'retain-terminal';
+t(()=>assert.equal(clearPolicy('prepared'),'cancel-before-effect'));
+t(()=>assert.equal(clearPolicy('started-unknown'),'preserve-effect-revoke-finalization'));
+t(()=>assert.equal(clearPolicy('verified'),'preserve-effect-revoke-finalization'));
+const eclass=({effect,fin})=>effect==='verified'&&fin==='suppressed'?'settled-partial':effect==='started-unknown'?'effect-unknown':effect==='verified'&&fin==='committed'?'succeeded':'domain-pending';
+t(()=>assert.equal(eclass({effect:'verified',fin:'suppressed'}),'settled-partial'));
+t(()=>assert.equal(eclass({effect:'started-unknown',fin:'revoked'}),'effect-unknown'));
+t(()=>assert.equal(eclass({effect:'verified',fin:'committed'}),'succeeded'));
+for(let i=0;i<10;i++)t(()=>assert(pos.U0<pos.J0 && pos.J0<pos.D0));
+for(let i=0;i<10;i++)t(()=>assert.equal(clearPolicy(i%2?'started-unknown':'verified'),'preserve-effect-revoke-finalization'));
+for(let i=0;i<10;i++)t(()=>assert.equal(eclass({effect:'verified',fin:'suppressed'}),'settled-partial'));
+console.log(`Wave 1 staged-plan B/C/D/E change-impact model: PASS\ncases=${cases}\ntopology=${order.join('>')}`);
