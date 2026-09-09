@@ -13,7 +13,7 @@ const commits = Object.freeze({
   },
   A1: {
     title: 'additive content protocol and exact injection handshake',
-    deps: ['A0'],
+    deps: ['A0', 'U0'],
     files: ['content.js', 'popup.js', 'service-worker.js'],
     atomicGroup: 'content-protocol',
     activates: [],
@@ -37,7 +37,7 @@ const commits = Object.freeze({
   },
   B1: {
     title: 'pdf cache v4 immutable generations',
-    deps: ['A2', 'B0'],
+    deps: ['A2', 'B0', 'U0'],
     files: ['service-worker.js', 'offscreen.js'],
     atomicGroup: 'pdf-db-v4',
     activates: ['trusted-pdf-generation'],
