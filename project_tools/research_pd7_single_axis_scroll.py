@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import shutil
 import tempfile
 from pypdf import PdfReader
 from playwright.sync_api import sync_playwright
@@ -19,6 +20,17 @@ def pdf_text(path: pathlib.Path) -> str:
     return "\n".join((page.extract_text() or "") for page in PdfReader(str(path)).pages)
 
 
+def retain_pdf(path: pathlib.Path, name: str) -> str | None:
+    evidence_dir = os.environ.get("PD7_EVIDENCE_DIR")
+    if not evidence_dir:
+        return None
+    target_dir = pathlib.Path(evidence_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / name
+    shutil.copy2(path, target)
+    return str(target)
+
+
 def run() -> dict:
     chrome_bin = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
     with sync_playwright() as pw:
@@ -29,16 +41,17 @@ def run() -> dict:
         support = page.evaluate("CSS.supports('named-feature(single-axis-scroll-container)')")
         initial = page.evaluate("""() => { const i=inner,o=outer,s=sticky; const cs=getComputedStyle(i); return {innerOverflowX:cs.overflowX,innerOverflowY:cs.overflowY,outerOverflowX:getComputedStyle(o).overflowX,outerOverflowY:getComputedStyle(o).overflowY,stickyTop:s.getBoundingClientRect().top,stickyLeft:s.getBoundingClientRect().left,innerTop:i.getBoundingClientRect().top}; }""")
         programmatic = page.evaluate("""() => { inner.scrollLeft=180; inner.scrollTop=90; outer.scrollTop=90; return {innerLeft:inner.scrollLeft,innerTop:inner.scrollTop,outerTop:outer.scrollTop,stickyTop:sticky.getBoundingClientRect().top,stickyLeft:sticky.getBoundingClientRect().left}; }""")
-        # Raw current-like physical PDF with screen media.
         page.emulate_media(media="screen")
         with tempfile.TemporaryDirectory() as td:
             raw_pdf = pathlib.Path(td) / "raw.pdf"
             normalized_pdf = pathlib.Path(td) / "normalized.pdf"
             page.pdf(path=str(raw_pdf), format="A4", print_background=True)
             raw_text = pdf_text(raw_pdf)
+            raw_retained = retain_pdf(raw_pdf, "pd7-raw.pdf")
             page.evaluate("document.documentElement.classList.add('print-normalized')")
             page.pdf(path=str(normalized_pdf), format="A4", print_background=True)
             normalized_text = pdf_text(normalized_pdf)
+            normalized_retained = retain_pdf(normalized_pdf, "pd7-normalized.pdf")
         raw_rows = sum(f"PD7-ROW-{i:03d}" in raw_text for i in range(1,41))
         normalized_rows = sum(f"PD7-ROW-{i:03d}" in normalized_text for i in range(1,41))
         browser.close()
@@ -51,11 +64,31 @@ def run() -> dict:
         "rawPdfRows": raw_rows,
     }
     current_stable_pass = bool(support and expected["clipAxisRejectsProgrammaticScroll"] and expected["horizontalScrollWorks"] and expected["verticalOuterScrollWorks"] and normalized_rows == 40)
-    return {"browser": browser_version, "chromeBin": chrome_bin, "initial": initial, "afterProgrammaticScroll": programmatic, "pdf": {"rawRows":raw_rows,"normalizedRows":normalized_rows}, "feature": expected, "currentStableRevalidationPass": current_stable_pass}
+    return {
+        "browser": browser_version,
+        "chromeBin": chrome_bin,
+        "initial": initial,
+        "afterProgrammaticScroll": programmatic,
+        "pdf": {
+            "rawRows": raw_rows,
+            "normalizedRows": normalized_rows,
+            "rawRetained": raw_retained,
+            "normalizedRetained": normalized_retained,
+        },
+        "feature": expected,
+        "currentStableRevalidationPass": current_stable_pass,
+    }
+
 
 if __name__ == '__main__':
     result = run()
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    receipt = json.dumps(result, ensure_ascii=False, indent=2)
+    print(receipt)
+    receipt_path = os.environ.get("PD7_RECEIPT_JSON")
+    if receipt_path:
+        target = pathlib.Path(receipt_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(receipt + "\n", encoding="utf-8")
     if result["feature"]["featureSupported"]:
         raise SystemExit(0 if result["currentStableRevalidationPass"] else 1)
-    print("PD7 physical harness: BOUNDED NEGATIVE CONTROL — browser lacks single-axis-scroll-container feature; Chrome 153+ still required")
+    print("PD7 physical harness: BOUNDED NEGATIVE CONTROL — browser lacks single-axis-scroll-container feature; exact current Stable receipt recorded")
