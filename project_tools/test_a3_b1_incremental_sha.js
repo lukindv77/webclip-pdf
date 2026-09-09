@@ -1,14 +1,13 @@
 'use strict';
 
-const fs = require('node:fs');
-const vm = require('node:vm');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 
-const source = fs.readFileSync('journal-import-digest.js', 'utf8');
-const context = vm.createContext({ globalThis: {} });
-vm.runInContext(source, context, { filename: 'journal-import-digest.js' });
-const api = context.globalThis.WebClipSha256;
+// service-worker.js loads this helper into the same global realm. Exercise the
+// same contract here rather than manufacturing a cross-realm Uint8Array case.
+delete globalThis.WebClipSha256;
+require('../journal-import-digest.js');
+const api = globalThis.WebClipSha256;
 assert(api && typeof api.create === 'function', 'WebClipSha256.create() must exist');
 
 function nodeHex(bytes) {
@@ -53,7 +52,6 @@ for (const bytes of fixtures) {
   }
 }
 
-// A digest instance is one-shot: after digestHex(), update must fail.
 const oneShot = api.create();
 oneShot.update(new Uint8Array([1, 2, 3]));
 const first = oneShot.digestHex();
