@@ -1,0 +1,46 @@
+'use strict';
+const fs = require('node:fs');
+const assert = require('node:assert/strict');
+
+const sw = fs.readFileSync('service-worker.js', 'utf8');
+const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+const options = fs.readFileSync('options.js', 'utf8');
+let facts = 0;
+const fact = (condition, message) => { assert.ok(condition, message); facts += 1; };
+
+fact(!manifest.permissions.includes('identity'), 'current main should still lack chrome.identity permission');
+fact(sw.includes("const YANDEX_FIXED_REDIRECT_URI = 'https://oauth.yandex.ru/verification_code';"), 'current main uses fixed screen-code redirect');
+fact(!sw.includes('chrome.identity.launchWebAuthFlow'), 'current main does not use launchWebAuthFlow');
+fact(!sw.includes('chrome.identity.getRedirectURL'), 'current main does not derive extension redirect URL');
+fact(options.includes("const confirmationCode = el('confirmationCode');"), 'current Options still accepts pasted confirmation code');
+fact(options.includes("type: 'WEBCLIP_YANDEX_FINISH_AUTH'"), 'current Options has separate manual finish-auth message');
+fact(options.includes('скопируйте показанный код'), 'current UX tells user to copy screen code');
+fact(sw.includes('yandexOAuthPending: {'), 'current source has one pending OAuth slot');
+fact(sw.includes('codeVerifier,'), 'current pending OAuth stores PKCE verifier');
+fact(sw.includes('state,'), 'current start generates/stores OAuth state');
+fact(!sw.includes('OAUTH_STATE_MISMATCH'), 'current source has no effective returned-state comparison error');
+fact(sw.includes("runYandexAuthStorageOperation(() => chrome.storage.session.remove('yandexOAuthPending')"), 'current cleanup removes unversioned pending key');
+fact(!sw.includes('authAttemptId'), 'current source has no worker-issued auth attempt identity');
+fact(!sw.includes('authControlGeneration'), 'current source has no shared auth-control generation');
+fact(!sw.includes('authRecordId'), 'current source has no exact auth-record identity');
+fact(!sw.includes('capabilityState'), 'current source has no explicit capability state');
+fact(sw.includes("connected: Boolean(yandexAuth?.accessToken)"), 'current status equates token presence with connected');
+fact(sw.includes('scopes: YANDEX_SCOPES'), 'current status exposes requested static scopes');
+fact(sw.includes("source: 'manual'"), 'current manual-token flow exists');
+fact(sw.includes('accessToken: token,'), 'manual candidate is represented as an auth record');
+fact(sw.includes('await writeYandexAuth(yandexAuth);'), 'current flow writes auth globally');
+fact(sw.includes('await writeYandexAuth(null);'), 'current source can clear current auth after candidate/provider failure');
+fact(sw.includes("'Authorization': `OAuth ${token}`") && sw.includes('...(options.headers || {})'), 'current yandexApi permits caller headers after Authorization');
+fact(!sw.includes('YANDEX_AUTH_HEADER_RESERVED'), 'current source has no reserved Authorization-header guard');
+fact(!sw.includes('expiryKnowledge'), 'current source does not distinguish unknown lifetime from no expiry');
+fact(sw.includes('if (yandexAuth.expiresAt && yandexAuth.expiresAt <= Date.now() + 60_000)'), 'current local expiry check exists as positive control');
+fact(!sw.includes('authValidity'), 'current source has no exact auth validity state');
+fact(!sw.includes('demote') || !sw.includes('authGeneration'), 'current source has no exact-generation 401 demotion contract');
+fact(sw.includes('async function ensureYandexServiceFolders'), 'current source has provisioning helper');
+fact(sw.includes('await ensureYandexFolderTree(config.rootPath, operationId);'), 'ensure helper may mutate folder structure');
+fact(sw.includes("source: 'oauth-pkce-code'"), 'current PKCE token flow is retained as positive control');
+fact(sw.includes('code_challenge_method') && sw.includes("url.searchParams.set('code_challenge_method', 'S256')"), 'current PKCE S256 is a positive control');
+fact(sw.includes('YANDEX_AUTH_STORAGE_SESSION'), 'current secret storage is session-only positive control');
+fact(sw.includes('sanitizeOperationLogValue'), 'current OperationLog sanitizer positive control exists');
+
+console.log(`W5 AUTH-CORE current-source inventory: PASS; RED facts=${facts}`);
