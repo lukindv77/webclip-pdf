@@ -1,0 +1,11 @@
+'use strict';
+const fs=require('fs'); const assert=require('assert'); const src=fs.readFileSync('service-worker.js','utf8');
+const req=(p,m)=>assert.match(src,p,m);
+req(/resources\/unpublish/,'worker must implement exact Yandex unpublish effect');
+req(/publication.*started-unknown|started-unknown.*publication/is,'unpublish must have durable unknown effect phase');
+req(/publication.*verified-private|verified-private.*publication/is,'private provider state must be verified before delete');
+req(/resource_id|resourceId/,'publication control must bind exact resource identity');
+req(/pendingRemoteMutations/,'publication mutation must use durable domain effect authority');
+req(/RETAIN_PUBLIC|public.*retain/is,'retain-public deletion must be explicit/blocked without durable control authority');
+req(/entryRevision|expectedEntryRevision/,'local journal delete remains CAS fenced');
+console.log('Wave 1 publication control source gate: PASS');
