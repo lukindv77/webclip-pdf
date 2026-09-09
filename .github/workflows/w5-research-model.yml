@@ -1,0 +1,14 @@
+name: W5 security auth governance research model
+on:
+  push:
+    branches:
+      - research/wave5-security-auth-governance-readiness-2026-09-09
+jobs:
+  model:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Runtime
+        run: node --version
+      - name: Wave 5 model
+        run: node project_tools/test_wave5_security_auth_governance_model.js
