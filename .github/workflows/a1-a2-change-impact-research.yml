@@ -1,0 +1,20 @@
+name: A1 A2 change-impact research
+on:
+  push:
+    branches:
+      - research/a1-a2-change-impact-source-spec-2026-09-09
+jobs:
+  model:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: node --version
+      - run: node project_tools/test_a1_a2_change_impact_model.js
+      - run: node project_tools/test_a1_a2_current_source_inventory.js
+      - name: Download exact Chrome for Testing Stable
+        run: |
+          curl -fL --retry 3 -o chrome.zip https://storage.googleapis.com/chrome-for-testing-public/153.0.8010.36/linux64/chrome-linux64.zip
+          unzip -q chrome.zip
+          ./chrome-linux64/chrome --version
+      - name: Run current-Chrome documentId fixture
+        run: CHROME_BIN="$PWD/chrome-linux64/chrome" node project_tools/run_a1_a2_chrome_document_id_fixture.js
