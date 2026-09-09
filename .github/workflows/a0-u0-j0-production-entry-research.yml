@@ -1,0 +1,13 @@
+name: A0 U0 J0 production entry research
+on:
+  push:
+    branches:
+      - research/a0-u0-j0-production-entry-source-spec-2026-09-09
+jobs:
+  model:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: node --version
+      - run: node project_tools/test_a0_u0_j0_production_entry_model.js
+      - run: node project_tools/test_a0_u0_j0_current_source_inventory.js
