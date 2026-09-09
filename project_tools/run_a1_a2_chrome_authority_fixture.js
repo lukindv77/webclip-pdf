@@ -50,6 +50,22 @@ async function waitForFile(file, timeoutMs = 15000) {
   throw new Error(`Timed out waiting for ${file}`);
 }
 
+async function stopChild(child) {
+  if (!child || child.exitCode != null) return;
+  try { child.kill('SIGTERM'); } catch (_) {}
+  await Promise.race([
+    new Promise((resolve) => child.once('exit', resolve)),
+    sleep(2000)
+  ]);
+  if (child.exitCode == null) {
+    try { child.kill('SIGKILL'); } catch (_) {}
+    await Promise.race([
+      new Promise((resolve) => child.once('exit', resolve)),
+      sleep(1000)
+    ]);
+  }
+}
+
 class Cdp {
   constructor(wsUrl) {
     this.ws = new WebSocket(wsUrl);
@@ -368,9 +384,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log(`new-document-id=${payload.newDocumentId}`);
   } finally {
     cdp?.close();
-    try { chrome.kill('SIGTERM'); } catch (_) {}
+    await stopChild(chrome);
     await new Promise((resolve) => server.close(resolve));
-    fs.rmSync(root, { recursive: true, force: true });
+    try { fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }); } catch (_) {}
   }
 }
 
