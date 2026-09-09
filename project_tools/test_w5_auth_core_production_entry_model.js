@@ -13,21 +13,25 @@ function makeControl({ auth = null, pendingAttempt = null, schedulerMode = 'acti
   return {
     version: 2,
     sessionEpoch: newId('epoch'),
-    authControlGeneration: newId('acg'),
+    authAttemptGeneration: newId('AG'),
+    authGeneration: newId('ARG'),
     auth,
     pendingAttempt,
     scheduler: { generation: newId('sched'), mode: schedulerMode }
   };
 }
-function advance(control, patch = {}) {
-  return { ...control, ...patch, authControlGeneration: newId('acg') };
+function advanceAttempt(control, patch = {}) {
+  return { ...control, ...patch, authAttemptGeneration: newId('AG') };
 }
-function beginAttempt(control, clientId, redirectUri) {
-  const next = advance(control);
+function advanceAuth(control, patch = {}) {
+  return { ...control, ...patch, authGeneration: newId('ARG') };
+}
+function beginOAuthAttempt(control, clientId, redirectUri) {
+  const next = advanceAttempt(control);
   const attempt = {
     version: 1,
     authAttemptId: newId('attempt'),
-    expectedAuthControlGeneration: next.authControlGeneration,
+    authAttemptGeneration: next.authAttemptGeneration,
     clientId,
     redirectUri,
     state: newId('state'),
@@ -38,10 +42,13 @@ function beginAttempt(control, clientId, redirectUri) {
   };
   return { ...next, pendingAttempt: attempt };
 }
-function cleanupAttempt(control, receipt) {
+function beginManualAttempt(control) {
+  return advanceAttempt(control, { pendingAttempt: null });
+}
+function cleanupOAuthAttempt(control, receipt) {
   if (!control.pendingAttempt) return control;
   if (control.pendingAttempt.authAttemptId !== receipt.authAttemptId) return control;
-  if (control.authControlGeneration !== receipt.expectedAuthControlGeneration) return control;
+  if (control.authAttemptGeneration !== receipt.authAttemptGeneration) return control;
   return { ...control, pendingAttempt: null };
 }
 function parseRedirect(attempt, responseUrl) {
@@ -78,22 +85,30 @@ function makeCandidate({ source = 'oauth', accountUid = 'uid-1', expiresAt = 500
     capability
   };
 }
-function commitCandidate(control, expectedGeneration, candidate) {
-  if (control.authControlGeneration !== expectedGeneration) return { control, committed: false, stale: true };
-  const next = advance(control, { auth: candidate, pendingAttempt: null });
+function commitOAuthCandidate(control, attemptReceipt, candidate) {
+  if (!control.pendingAttempt) return { control, committed: false, stale: true };
+  if (control.authAttemptGeneration !== attemptReceipt.authAttemptGeneration) return { control, committed: false, stale: true };
+  if (control.pendingAttempt.authAttemptId !== attemptReceipt.authAttemptId) return { control, committed: false, stale: true };
+  const next = advanceAuth(control, { auth: candidate, pendingAttempt: null });
+  return { control: next, committed: true, stale: false };
+}
+function commitManualCandidate(control, expectedAttemptGeneration, candidate) {
+  if (control.authAttemptGeneration !== expectedAttemptGeneration) return { control, committed: false, stale: true };
+  const next = advanceAuth(control, { auth: candidate, pendingAttempt: null });
   return { control: next, committed: true, stale: false };
 }
 function demote401(control, requestReceipt) {
   if (!control.auth) return { control, demoted: false, stale: true };
-  if (control.authControlGeneration !== requestReceipt.authControlGeneration) return { control, demoted: false, stale: true };
+  if (control.authGeneration !== requestReceipt.authGeneration) return { control, demoted: false, stale: true };
   if (control.auth.authRecordId !== requestReceipt.authRecordId) return { control, demoted: false, stale: true };
-  const next = advance(control, { auth: { ...control.auth, validity: 'invalid', tokenUnavailable: true } });
+  const next = advanceAuth(control, { auth: { ...control.auth, validity: 'invalid', tokenUnavailable: true } });
   return { control: next, demoted: true, stale: false };
 }
 function disconnect(control) {
-  const next = advance(control, { auth: null, pendingAttempt: null });
+  const intentInvalidated = advanceAttempt(control, { pendingAttempt: null });
+  const credentialInvalidated = advanceAuth(intentInvalidated, { auth: null });
   return {
-    ...next,
+    ...credentialInvalidated,
     scheduler: { generation: newId('sched'), mode: 'paused-no-auth' }
   };
 }
@@ -102,15 +117,18 @@ function canMutateWithCapability(cap, required = REQUIRED) {
   return required.every((s) => cap.granted.includes(s));
 }
 
-// Attempt identity / cleanup.
+// Attempt generation is distinct from credential generation.
 let c = makeControl();
-const a = beginAttempt(c, 'client-A', 'https://abc.chromiumapp.org/yandex-oauth');
+const initialArg = c.authGeneration;
+const a = beginOAuthAttempt(c, 'client-A', 'https://abc.chromiumapp.org/yandex-oauth');
+eq(a.authGeneration, initialArg, 'starting OAuth does not replace current credential generation');
+ok(a.authAttemptGeneration !== c.authAttemptGeneration, 'starting OAuth advances attempt generation');
 const receiptA = a.pendingAttempt;
-const b = beginAttempt(a, 'client-B', 'https://abc.chromiumapp.org/yandex-oauth');
-const afterStaleCleanup = cleanupAttempt(b, receiptA);
+const b = beginOAuthAttempt(a, 'client-B', 'https://abc.chromiumapp.org/yandex-oauth');
+const afterStaleCleanup = cleanupOAuthAttempt(b, receiptA);
 eq(afterStaleCleanup.pendingAttempt.authAttemptId, b.pendingAttempt.authAttemptId, 'stale A cleanup must preserve B');
-ok(afterStaleCleanup.authControlGeneration === b.authControlGeneration, 'stale cleanup does not roll generation');
-const currentCleanup = cleanupAttempt(b, b.pendingAttempt);
+eq(afterStaleCleanup.authAttemptGeneration, b.authAttemptGeneration, 'stale cleanup does not roll attempt generation');
+const currentCleanup = cleanupOAuthAttempt(b, b.pendingAttempt);
 eq(currentCleanup.pendingAttempt, null, 'exact current attempt cleanup consumes itself');
 
 // Redirect/state binding.
@@ -134,40 +152,65 @@ eq(manual.state, 'unknown', 'manual token remains capability unknown');
 eq(manual.observed, ['cloud_api:disk.info'], 'manual validation records only observed capability');
 ok(!canMutateWithCapability(manual), 'manual info observation is not full mutation proof');
 
-// Candidate commit and stale races.
+// OAuth candidate can commit only against exact AG/attempt.
+c = makeControl({ auth: makeCandidate({ capability: fullOmitted }) });
+const oauthA = beginOAuthAttempt(c, 'client-A', 'https://abc.chromiumapp.org/yandex-oauth');
+const oauthCandidate = makeCandidate({ capability: fullOmitted });
+const oauthCommitted = commitOAuthCandidate(oauthA, oauthA.pendingAttempt, oauthCandidate);
+ok(oauthCommitted.committed, 'exact OAuth candidate commits under exact AG');
+ok(oauthCommitted.control.auth.authRecordId === oauthCandidate.authRecordId, 'OAuth candidate becomes current credential');
+ok(oauthCommitted.control.authGeneration !== oauthA.authGeneration, 'OAuth commit mints a new credential generation');
+const oauthB = beginOAuthAttempt(oauthA, 'client-B', 'https://abc.chromiumapp.org/yandex-oauth');
+const staleOAuthCommit = commitOAuthCandidate(oauthB, oauthA.pendingAttempt, oauthCandidate);
+ok(staleOAuthCommit.stale && !staleOAuthCommit.committed, 'old OAuth result cannot overwrite newer attempt');
+
+// Manual candidate validates privately, then exact AG commit; invalid/unknown preserve A.
 c = makeControl({ auth: makeCandidate({ capability: fullOmitted }) });
 const oldAuthId = c.auth.authRecordId;
-const expected = c.authControlGeneration;
-const validB = makeCandidate({ source: 'manual', accountUid: 'uid-2', expiresAt: 0, expiryKnowledge: 'unknown', capability: manual });
+const manualAttempt = beginManualAttempt(c);
+const validManual = makeCandidate({ source: 'manual', accountUid: 'uid-2', expiresAt: 0, expiryKnowledge: 'unknown', capability: manual });
 const invalidCandidateResult = { status: 'invalid' };
 eq(invalidCandidateResult.status, 'invalid', 'candidate invalid is represented independently');
-eq(c.auth.authRecordId, oldAuthId, 'invalid candidate leaves proven A unchanged');
+eq(manualAttempt.auth.authRecordId, oldAuthId, 'invalid candidate leaves proven A unchanged');
 const unknownCandidateResult = { status: 'unknown' };
 eq(unknownCandidateResult.status, 'unknown', 'candidate transport unknown distinct from invalid');
-eq(c.auth.authRecordId, oldAuthId, 'unknown candidate leaves proven A unchanged');
-const committed = commitCandidate(c, expected, validB);
-ok(committed.committed, 'valid candidate commits at exact expected generation');
-ok(committed.control.auth.authRecordId === validB.authRecordId, 'committed candidate becomes current');
-ok(committed.control.authControlGeneration !== expected, 'successful auth mutation advances shared generation');
-const newer = beginAttempt(c, 'client-newer', 'https://abc.chromiumapp.org/yandex-oauth');
-const staleCommit = commitCandidate(newer, expected, validB);
-ok(staleCommit.stale && !staleCommit.committed, 'candidate cannot overwrite newer attempt/generation');
+eq(manualAttempt.auth.authRecordId, oldAuthId, 'unknown candidate leaves proven A unchanged');
+const manualCommitted = commitManualCandidate(manualAttempt, manualAttempt.authAttemptGeneration, validManual);
+ok(manualCommitted.committed, 'valid manual candidate commits at exact current AG');
+ok(manualCommitted.control.authGeneration !== manualAttempt.authGeneration, 'manual credential replacement advances ARG');
 
-// Same-auth enrichment is not a new credential generation.
-const beforeEnrichGeneration = committed.control.authControlGeneration;
-const enriched = { ...committed.control, auth: { ...committed.control.auth, displayName: 'Account' } };
-eq(enriched.authControlGeneration, beforeEnrichGeneration, 'same-credential metadata enrichment preserves auth generation');
+// A newer auth intent invalidates an older manual candidate even before credential changes.
+c = makeControl({ auth: makeCandidate({ capability: fullOmitted }) });
+const oldManual = beginManualAttempt(c);
+const newerOAuth = beginOAuthAttempt(oldManual, 'client-newer', 'https://abc.chromiumapp.org/yandex-oauth');
+const staleManual = commitManualCandidate(newerOAuth, oldManual.authAttemptGeneration, validManual);
+ok(staleManual.stale && !staleManual.committed, 'newer OAuth intent invalidates older manual candidate commit');
 
-// Exact 401 demotion.
-c = committed.control;
-const reqA = { authControlGeneration: c.authControlGeneration, authRecordId: c.auth.authRecordId, authorizationBound: true };
-const d1 = demote401(c, reqA);
-ok(d1.demoted, 'exact current OAuth-bound 401 demotes current auth');
-eq(d1.control.auth.validity, 'invalid', 'demotion makes auth unusable');
-const replacement = advance(c, { auth: makeCandidate({ capability: fullOmitted }) });
+// Manual commit invalidates old OAuth pending callback by consuming/replacing auth intent state.
+c = makeControl({ auth: makeCandidate({ capability: fullOmitted }) });
+const oldOAuth = beginOAuthAttempt(c, 'client-old', 'https://abc.chromiumapp.org/yandex-oauth');
+const newerManual = beginManualAttempt(oldOAuth);
+const newerManualCommit = commitManualCandidate(newerManual, newerManual.authAttemptGeneration, validManual);
+const oldOAuthLate = commitOAuthCandidate(newerManualCommit.control, oldOAuth.pendingAttempt, oauthCandidate);
+ok(oldOAuthLate.stale, 'old PKCE cannot overwrite newer manual replacement');
+
+// Same-credential metadata enrichment does not mint ARG.
+const beforeEnrichArg = oauthCommitted.control.authGeneration;
+const enriched = { ...oauthCommitted.control, auth: { ...oauthCommitted.control.auth, displayName: 'Account' } };
+eq(enriched.authGeneration, beforeEnrichArg, 'same-credential metadata enrichment preserves ARG');
+
+// Exact 401 demotion is ARG-bound, not AG-bound.
+c = oauthCommitted.control;
+const reqA = { authGeneration: c.authGeneration, authRecordId: c.auth.authRecordId, authorizationBound: true };
+const reauthInProgress = beginOAuthAttempt(c, 'client-reauth', 'https://abc.chromiumapp.org/yandex-oauth');
+eq(reauthInProgress.authGeneration, reqA.authGeneration, 'starting reauth leaves exact current ARG in place');
+const d1 = demote401(reauthInProgress, reqA);
+ok(d1.demoted, 'exact current OAuth-bound 401 can demote current ARG even while newer auth UI attempt is pending');
+eq(d1.control.auth.validity, 'invalid', 'demotion makes exact credential unusable');
+const replacement = advanceAuth(c, { auth: makeCandidate({ capability: fullOmitted }) });
 const stale401 = demote401(replacement, reqA);
-ok(stale401.stale && !stale401.demoted, 'late A/401 cannot demote newer B');
-eq(stale401.control.auth.authRecordId, replacement.auth.authRecordId, 'newer B preserved after stale 401');
+ok(stale401.stale && !stale401.demoted, 'late A/401 cannot demote newer ARG-B');
+eq(stale401.control.auth.authRecordId, replacement.auth.authRecordId, 'newer credential preserved after stale 401');
 const forbidden = { status: 403, classification: 'capability-or-resource-denial' };
 eq(forbidden.classification, 'capability-or-resource-denial', '403 not blanket invalid-auth');
 const signedTransfer401 = { transport: 'signed-url', status: 401, oauthBound: false };
@@ -191,17 +234,21 @@ eq(manualUnknownLifetime.expiryKnowledge, 'unknown', 'zero/absent expiry is repr
 const expired = { ...manualUnknownLifetime, validity: 'expired', expiryKnowledge: 'known', expiresAt: 50 };
 ok(expired.validity === 'expired' && expired.expiryKnowledge === 'known', 'known local expiry is explicit state');
 
-// Disconnect / scheduler semantics.
+// Disconnect invalidates both current auth intent and credential, and pauses scheduler.
 c = makeControl({ auth: makeCandidate({ capability: fullOmitted }) });
-const oldGeneration = c.authControlGeneration;
-const disc = disconnect(c);
+const pendingBeforeDisconnect = beginOAuthAttempt(c, 'client-A', 'https://abc.chromiumapp.org/yandex-oauth');
+const oldAG = pendingBeforeDisconnect.authAttemptGeneration;
+const oldARG = pendingBeforeDisconnect.authGeneration;
+const disc = disconnect(pendingBeforeDisconnect);
 eq(disc.auth, null, 'disconnect removes current secret capability');
+eq(disc.pendingAttempt, null, 'disconnect consumes pending auth attempt');
 eq(disc.scheduler.mode, 'paused-no-auth', 'disconnect pauses new backup admission');
-ok(disc.authControlGeneration !== oldGeneration, 'disconnect advances shared auth generation');
-const staleOldCommit = commitCandidate(disc, oldGeneration, makeCandidate({ capability: fullOmitted }));
-ok(staleOldCommit.stale, 'old in-flight candidate cannot resurrect auth after disconnect');
+ok(disc.authAttemptGeneration !== oldAG, 'disconnect advances AG');
+ok(disc.authGeneration !== oldARG, 'disconnect advances ARG tombstone');
+const staleOldOAuth = commitOAuthCandidate(disc, pendingBeforeDisconnect.pendingAttempt, oauthCandidate);
+ok(staleOldOAuth.stale, 'old OAuth result cannot resurrect auth after disconnect');
 
-// Reauth does not imply replay of an old side effect.
+// Reauth never implies blind mutation replay.
 const reauthReturn = { destination: 'yandex', sealedPdfGeneration: 'G-old', autoReplay: false, requiresExplicitResume: true };
 ok(!reauthReturn.autoReplay && reauthReturn.requiresExplicitResume, 'reauth return context never auto-replays mutation');
 
@@ -216,7 +263,7 @@ const migratedLegacy = {
 eq(migratedLegacy.capability.state, 'unknown', 'legacy static scope is not upgraded to exact grant receipt');
 eq(migratedLegacy.validity, 'unknown', 'legacy token presence is not fabricated current validity proof');
 
-// Status truth separates independent axes.
+// Status truth separates independent axes and never exposes secrets.
 const status = {
   authPresent: true,
   authValidity: 'valid',
@@ -225,9 +272,11 @@ const status = {
   capabilityState: 'full',
   requestedScopes: REQUIRED,
   provenScopes: REQUIRED,
-  authGeneration: 'ARG-1'
+  authGeneration: 'ARG-1',
+  authAttemptGeneration: 'AG-7'
 };
 ok(status.authPresent && status.authUsable, 'status may report usable current auth');
 eq(status.capabilityState, 'full', 'status exposes capability state separately');
+ok(!('accessToken' in status) && !('codeVerifier' in status), 'status never exposes token or PKCE verifier');
 
 console.log(`W5 AUTH-CORE production-entry model: PASS; cases=${cases}`);
