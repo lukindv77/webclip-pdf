@@ -1,0 +1,12 @@
+name: W6 scale fairness research model
+on:
+  push:
+    branches:
+      - research/wave6-scale-fairness-readiness-2026-09-09
+jobs:
+  model:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: node --version
+      - run: node project_tools/test_wave6_scale_fairness_model.js
