@@ -1,0 +1,47 @@
+name: P1-231 S0-H passive builder research
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  s0h-passive-builder:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.14'
+          check-latest: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.23.2'
+          check-latest: false
+
+      - name: Run S0-H predecessor and passive-builder models
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > s0h-passive-builder-output.txt
+          node project_tools/test_p1_231_s0d_builder_contract_authority_source_spec_model.js | tee -a s0h-passive-builder-output.txt
+          node project_tools/test_p1_231_s0e_identity_engine_source_spec_model.js | tee -a s0h-passive-builder-output.txt
+          node project_tools/test_p1_231_s0f_candidate_generation_verifier_source_spec_model.js | tee -a s0h-passive-builder-output.txt
+          node project_tools/test_p1_231_s0h_passive_builder_verifier_source_spec_model.js | tee -a s0h-passive-builder-output.txt
+
+      - name: Upload bounded diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: s0h-passive-builder-${{ github.sha }}
+          path: s0h-passive-builder-output.txt
+          if-no-files-found: warn
+          retention-days: 7
