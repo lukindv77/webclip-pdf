@@ -84,7 +84,7 @@ check('O12 manifest unchanged', () => assert.equal(MANIFEST.version, '0.9.8'));
 check('S01 pending key exists', () => has(SOURCE, 'yandexOAuthPending'));
 check('S02 auth storage serialization exists', () => has(SOURCE, 'runYandexAuthStorageOperation'));
 check('S03 config serializer exists', () => has(SOURCE, 'updateYandexConfig'));
-const start = asyncSection('async function startYandexOAuth(clientId, sourceTabId)');
+const start = asyncSection('async function startYandexOAuth(clientId, sourceTabId = 0)');
 check('S04 start creates pending state', () => has(start, 'yandexOAuthPending'));
 check('S05 start has PKCE verifier', () => has(start, 'codeVerifier'));
 check('S06 start has oauth state', () => has(start, 'state'));
@@ -109,7 +109,7 @@ check('S20 manual has no auth generation guard', () => lacks(manual, 'authGenera
 
 check('S21 disconnect case exists', () => has(SOURCE, 'WEBCLIP_YANDEX_DISCONNECT'));
 check('S22 disconnect clears auth', () => has(SOURCE, 'await writeYandexAuth(null)'));
-check('S23 status observes pending', () => has(SOURCE, "yandexOAuthPending"));
+check('S23 status observes pending', () => has(SOURCE, 'yandexOAuthPending'));
 check('S24 source lacks shared authGeneration symbol', () => lacks(SOURCE, 'authGeneration'));
 
 // Generation schedules.
