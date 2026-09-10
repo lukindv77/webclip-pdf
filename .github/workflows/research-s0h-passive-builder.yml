@@ -1,6 +1,11 @@
 name: P1-231 S0-H passive builder research
 
 on:
+  push:
+    branches:
+      - research/p1-231-s0h-passive-builder-verifier-2026-09-10
+    paths:
+      - .github/workflows/research-s0h-passive-builder.yml
   workflow_dispatch:
 
 permissions:
