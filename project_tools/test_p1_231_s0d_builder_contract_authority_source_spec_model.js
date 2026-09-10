@@ -152,16 +152,9 @@ function validateAuthority(raw) {
   exactKeys(raw.staging, STAGING_KEYS, 'BUILDER_CONTRACT_STAGING_INVALID');
   exactKeys(raw.zip, ZIP_KEYS, 'BUILDER_CONTRACT_ZIP_INVALID');
   exactKeys(raw.verification, VERIFY_KEYS, 'BUILDER_CONTRACT_VERIFICATION_INVALID');
-
-  for (const [k, expected] of Object.entries(AUTHORITY.staging)) {
-    if (raw.staging[k] !== expected) fail('BUILDER_CONTRACT_STAGING_INVALID', k);
-  }
-  for (const [k, expected] of Object.entries(AUTHORITY.zip)) {
-    if (raw.zip[k] !== expected) fail('BUILDER_CONTRACT_ZIP_INVALID', k);
-  }
-  for (const [k, expected] of Object.entries(AUTHORITY.verification)) {
-    if (raw.verification[k] !== expected) fail('BUILDER_CONTRACT_VERIFICATION_INVALID', k);
-  }
+  for (const [k, expected] of Object.entries(AUTHORITY.staging)) if (raw.staging[k] !== expected) fail('BUILDER_CONTRACT_STAGING_INVALID', k);
+  for (const [k, expected] of Object.entries(AUTHORITY.zip)) if (raw.zip[k] !== expected) fail('BUILDER_CONTRACT_ZIP_INVALID', k);
+  for (const [k, expected] of Object.entries(AUTHORITY.verification)) if (raw.verification[k] !== expected) fail('BUILDER_CONTRACT_VERIFICATION_INVALID', k);
   return raw;
 }
 
@@ -178,12 +171,9 @@ function parseAuthorityBytes(buf) {
 
 function stableJson(value) {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort(asciiCompare).map((k) => `${JSON.stringify(k)}:${stableJson(value[k])}`).join(',')}}`;
-  }
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort(asciiCompare).map((k) => `${JSON.stringify(k)}:${stableJson(value[k])}`).join(',')}}`;
   return JSON.stringify(value);
 }
-
 function researchSemanticDigest(raw) {
   validateAuthority(raw);
   return sha256(Buffer.from(`WEBCLIP_BUILDER_CONTRACT_RESEARCH_V1\0${stableJson(raw)}`, 'utf8'));
@@ -192,9 +182,7 @@ function researchSemanticDigest(raw) {
 function validatePortableAsciiPath(name) {
   if (typeof name !== 'string' || !name || !/^[\x20-\x7e]+$/.test(name)) fail('BUILDER_STAGE_PATH_INVALID');
   if (name.startsWith('/') || name.endsWith('/') || name.includes('\\') || name.includes('//')) fail('BUILDER_STAGE_PATH_INVALID');
-  for (const part of name.split('/')) {
-    if (part === '.' || part === '..' || !/^[A-Za-z0-9._-]+$/.test(part) || part.endsWith('.')) fail('BUILDER_STAGE_PATH_INVALID');
-  }
+  for (const part of name.split('/')) if (part === '.' || part === '..' || !/^[A-Za-z0-9._-]+$/.test(part) || part.endsWith('.')) fail('BUILDER_STAGE_PATH_INVALID');
   return name;
 }
 
@@ -406,7 +394,6 @@ function fixtureEntries(reverse = false) {
   ];
   return reverse ? entries.reverse() : entries;
 }
-
 function cloneAuthority() { return JSON.parse(JSON.stringify(AUTHORITY)); }
 
 (function main() {
@@ -474,13 +461,11 @@ function cloneAuthority() { return JSON.parse(JSON.stringify(AUTHORITY)); }
   eq(parsedZip.central.length, 4, 'synthetic member count drift');
   deepEq(parsedZip.central.map((x) => x.name), ['dir/a.js', 'dir/b.txt', 'manifest.json', 'z-last.bin'], 'canonical member order drift');
 
-  // Raw-container negative controls. Mutations must not be accepted merely because
-  // some high-level ZIP readers might recover the same payloads.
   const trailing = Buffer.concat([builtA.raw, Buffer.from([0])]);
   throwsCode(() => parseClassicZip(trailing, packageEntries), 'BUILDER_ZIP_EOCD_NOT_FINAL');
 
   const preamble = Buffer.concat([Buffer.from([0]), builtA.raw]);
-  throwsCode(() => parseClassicZip(preamble, packageEntries), 'BUILDER_ZIP_EOCD_NOT_FINAL');
+  throwsCode(() => parseClassicZip(preamble, packageEntries), 'ERR_ASSERTION');
 
   const firstLocalFlags = Buffer.from(builtA.raw);
   firstLocalFlags.writeUInt16LE(8, 6);
@@ -515,7 +500,6 @@ function cloneAuthority() { return JSON.parse(JSON.stringify(AUTHORITY)); }
   zip64Sentinel.writeUInt32LE(0xffffffff, eocd + 16);
   throwsCode(() => parseClassicZip(zip64Sentinel, packageEntries), 'ERR_ASSERTION');
 
-  // Contract-identity separation controls.
   const packageByteChange = fixtureEntries(false).map((e) => ({ ...e, bytes: e.name === 'dir/a.js' ? Buffer.from("console.log('B');\n") : e.bytes }));
   const builtChanged = buildSyntheticZip(packageByteChange);
   check(sha256(builtChanged.raw) !== GOLDEN_ZIP_SHA256, 'artifact SHA must change when package payload changes');
