@@ -1,0 +1,79 @@
+name: P1-231 S0-B PSL portability research
+
+on:
+  push:
+    branches:
+      - research/p1-231-s0b-source-generation-authority-2026-09-10
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - windows-2025
+    runs-on: ${{ matrix.os }}
+    name: probe-${{ matrix.os }}
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.10'
+
+      - name: Probe generator bytes in isolated temp tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python - <<'PY' | tee artifacts/p1-231-s0b-psl-portability.txt
+          from pathlib import Path
+          import hashlib, os, shutil, subprocess, tempfile
+
+          root = Path.cwd()
+          committed = (root / 'public-suffix.js').read_bytes()
+          with tempfile.TemporaryDirectory(prefix='webclip-s0b-') as td:
+              t = Path(td)
+              (t / 'project_tools').mkdir()
+              shutil.copyfile(root / 'public_suffix_list.dat', t / 'public_suffix_list.dat')
+              shutil.copyfile(root / 'project_tools' / 'build_public_suffix_js.py', t / 'project_tools' / 'build_public_suffix_js.py')
+              proc = subprocess.run(
+                  ['python', str(t / 'project_tools' / 'build_public_suffix_js.py')],
+                  cwd=t,
+                  check=True,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.STDOUT,
+                  text=True,
+              )
+              generated = (t / 'public-suffix.js').read_bytes()
+
+          def sha(b): return hashlib.sha256(b).hexdigest()
+          print(f'platform={os.name}')
+          print(f'generator_stdout={proc.stdout.strip()}')
+          print(f'committed_bytes={len(committed)}')
+          print(f'generated_bytes={len(generated)}')
+          print(f'committed_sha256={sha(committed)}')
+          print(f'generated_sha256={sha(generated)}')
+          print(f'byte_match={str(committed == generated).lower()}')
+          print(f'committed_crlf={committed.count(bytes([13,10]))}')
+          print(f'generated_crlf={generated.count(bytes([13,10]))}')
+          print(f'committed_lf={committed.count(bytes([10]))}')
+          print(f'generated_lf={generated.count(bytes([10]))}')
+          PY
+
+      - name: Upload bounded diagnostics
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: p1-231-s0b-psl-portability-${{ runner.os }}-${{ github.sha }}
+          path: artifacts/p1-231-s0b-psl-portability.txt
+          retention-days: 7
+          if-no-files-found: warn
