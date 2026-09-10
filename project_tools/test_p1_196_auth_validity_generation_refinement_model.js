@@ -183,7 +183,7 @@ check('N29 no runtime/L5/S2/release action', () => {
   'P1-196 does **not** create a second auth-generation counter.',
   'Stale for demotion',
   'Naive `401 -> writeYandexAuth(null)` is forbidden.',
-  'generic `403 => invalid auth` rule is unsafe',
+  'a blanket `403 => invalid auth` rule is unsafe',
   'signed-transfer 401/403',
   'expiryKnowledge = unknown',
   'A new auth generation is not replay authority for an old physical mutation.'
