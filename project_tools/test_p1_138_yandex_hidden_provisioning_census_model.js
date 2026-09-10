@@ -77,7 +77,7 @@ check('O08 manifest unchanged', () => assert.equal(MANIFEST.version, '0.9.8'));
 check('O09 baseline pinned', () => has(EVIDENCE, '039f90ed21e44c1939684ee3bf5444651fb20770'));
 check('O10 P1-179 active', () => has(REGISTRY, '| P1-179 | ACTIVE |'));
 check('O11 P1-179 namespace owner', () => has(REGISTRY, 'Backup scheduler state and pending backup checkpoint are immutable account/root namespaces'));
-check('O12 evidence binds recovery to P1-179', () => has(EVIDENCE, 'P1-179  pending backup checkpoint immutable account/root namespace'));
+check('O12 evidence binds recovery to P1-179', () => has(EVIDENCE, 'P1-179  backup scheduler/pending checkpoint immutable account/root namespace'));
 
 // Exact source census: one definition + eight semantic callers.
 check('S01 ensure service helper definition exists', () => has(SOURCE, 'async function ensureYandexServiceFolders('));
