@@ -8,9 +8,9 @@ Real unpacked Chrome/Yandex L5: **NOT RUN**
 Release-policy activation: **NONE**  
 New P-code: **NO**
 
-This tranche continues existing ACTIVE **P1-198** after canonical P1-197 administrative OperationLog clear-generation refinement. It selectively revalidates the historical worker-issued physical-operation identity contract against current `main`, current local-download reconciliation, fresh Chrome messaging/security guidance, RFC 9562 UUID guidance, and W3C Trace Context comparison material. Historical research is provenance; no historical branch is imported wholesale.
+This tranche continues existing ACTIVE **P1-198** after canonical P1-197 administrative OperationLog clear-generation refinement. It revalidates the historical worker-issued physical-operation identity contract against exact current `main`, current local-download reconciliation, fresh Chrome messaging/security guidance, RFC 9562 UUID guidance, and W3C Trace Context comparison material. Historical research is provenance; no historical branch is imported wholesale.
 
-## 1. Canonical owner
+## 1. Canonical owner and composition
 
 Current Registry authority remains:
 
@@ -24,17 +24,17 @@ Current composition boundaries are:
 P1-197 = global administrative OperationLog history epoch
 P1-198 = physical live execution identity issued inside worker admission
 P1-205 = selective TTL/size OperationLog retirement linearization
-P1-190 = imported historical operationId is unverified provenance, not live-operation authority
-P1-210 = lost outer operation response is reconciled through worker-issued durable receipt, not blind fresh execution
-P0-039/P0-048/P1-146 = local-download pending/effect/reconciliation identity and actual Chrome download settlement
-P0-074 and other domain owners = immutable operation/effect context and domain-specific continuation authority
+P1-190 = imported historical operationId is unverified provenance
+P1-210 = lost outer response reconciles through worker-issued durable receipt
+P0-039/P0-048/P1-146 = local-download effect/reconciliation identity and settlement
+other domain owners = immutable context, leases, checkpoints, CAS and effect authority
 ```
 
-P1-198 does not replace any domain receipt, lease, checkpoint, generation, idempotency key, external-effect identity, or authorization policy with one universal operation ID.
+P1-198 does not replace domain receipts, generations, leases, checkpoints, idempotency rules or authorization policy with one universal operation identifier.
 
-## 2. Historical P1-198 material remains selectively valid
+## 2. Historical material retained selectively
 
-The 2026-09-07 P1-198 research correctly established the durable distinction:
+The 2026-09-07 P1-198 work correctly separated three concepts:
 
 ```text
 client operationId = optional correlation metadata
@@ -42,85 +42,41 @@ worker physicalOperationId = physical execution identity
 domain receipt/lease/checkpoint = continuation/effect authority
 ```
 
-It also correctly identified caller-controlled OperationLog keying and caller-derived local-download intent identity as concrete current risks.
+Its old source statements are not assumed current. They are retained only where exact `aa89e5a8…` source still proves them.
 
-This refinement does not import its old source gate wholesale. Current source has accumulated stronger download reconciliation and canonical P1-197 ownership, so every historical source statement is rechecked against exact current `main`.
+## 3. Current source census: normalization is not issuance
 
-## 3. Current source: input normalization is hygiene, not issuance
+`normalizeOperationIdInput(value)` trims caller text, checks length/allowed characters and returns that caller-selected text. This is a valuable input-hygiene positive control, but it proves only syntactic acceptability.
 
-Current `normalizeOperationIdInput(value)`:
+It does not prove worker issuance, liveness, ownership, physical sameness, continuation authority or idempotency.
 
-- coerces/trims caller text;
-- rejects empty/oversized/disallowed-character values;
-- returns the same caller-selected textual identifier when valid.
-
-That is a useful input-boundary positive control.
-
-It proves only:
+Therefore:
 
 ```text
-caller string is syntactically acceptable
+validated client string != worker-issued physical identity
 ```
 
-It does not prove:
+## 4. Current source census: OperationLog keying
 
-```text
-worker issued this physical identity
-operation is current/live
-sender owns an existing operation
-same text means same physical execution
-same text authorizes continuation
-same text is a transport duplicate rather than a second user action
-```
-
-Therefore syntax validation must be preserved but cannot remain the physical-identity admission mechanism.
-
-## 4. Current source: `startOperationLog()` still uses caller text as durable key
-
-Current source has:
+Current `startOperationLog(operationId, ...)` computes:
 
 ```js
-function startOperationLog(operationId, type, title, meta = {}) {
-  const id = String(operationId || '').trim();
-  if (!id) return Promise.resolve();
-  return queueOperationLogWrite(id, () => mutateOperationLog(id, ...));
-}
+const id = String(operationId || '').trim();
 ```
 
-So a non-empty input `operationId` directly selects:
+and uses `id` in `queueOperationLogWrite(id, ...)` and `mutateOperationLog(id, ...)`.
 
-- the in-memory per-id write queue;
-- the durable OperationLog record key consumed by `mutateOperationLog`.
+A non-empty caller correlation therefore still selects both the per-id queue namespace and durable OperationLog key. This is a current P1-198 gap.
 
-This is a current P1-198 gap. A valid caller correlation string is accepted as the physical diagnostic lifecycle identity.
+## 5. Current source census: message forwarding
 
-## 5. Current source: representative message handlers forward caller identity into new work
+Representative current new-work paths forward `message.operationId` after normalization into PDF generation/download, PDF-to-Yandex, cached-PDF retry and cached-PDF download. Several extension-page Journal/Yandex paths likewise pass `String(message.operationId || '')` into domain code.
 
-Current dispatcher includes representative paths such as:
+Sender checks and sanitation are positive controls and remain required. They do not create a separate physical execution identity.
 
-```text
-WEBCLIP_GENERATE_PDF
-  -> normalizeOperationIdInput(message.operationId)
-  -> generatePdfAndDownload(..., operationId)
+## 6. Current source census: pending local download
 
-WEBCLIP_SEND_PDF_TO_YANDEX
-  -> normalizeOperationIdInput(message.operationId)
-  -> generatePdfAndUploadToYandex(..., operationId)
-
-WEBCLIP_RETRY_PDF_TO_YANDEX
-  -> retryCachedPdfUploadToYandex(..., normalizeOperationIdInput(message.operationId))
-
-WEBCLIP_DOWNLOAD_CACHED_PDF
-  -> downloadCachedPdf(..., normalizeOperationIdInput(message.operationId))
-```
-
-Other extension-page flows pass `String(message.operationId || '')` into Journal delete/mark-read/clear/export/import and Yandex backup/import operations.
-
-Sender restrictions and input sanitation differ by command and must be preserved. But no representative new-operation boundary shown here inserts a separate worker-issued physical identity before the caller correlation reaches OperationLog/domain code.
-
-## 6. Current source: pending local-download key prefers caller operationId
-
-Current code is explicit:
+Current code prefers caller text when creating the pending intent key:
 
 ```js
 function makePendingLocalDownloadIntentKey(operationId = '') {
@@ -130,237 +86,94 @@ function makePendingLocalDownloadIntentKey(operationId = '') {
 }
 ```
 
-and:
+`checkpointPendingLocalDownloadIntent(...)` then persists that key and the textual `operationId`.
 
-```js
-async function checkpointPendingLocalDownloadIntent(data, operationId = '', blobUrl = '', expectedBytes = 0) {
-  const key = makePendingLocalDownloadIntentKey(operationId);
-  ...
-  const item = {
-    downloadId: key,
-    kind: 'intent',
-    blobUrl,
-    operationId,
-    expectedBytes,
-    ...
-  };
-}
-```
+Two independent physical starts with the same client correlation can therefore select the same durable intent namespace.
 
-Therefore a non-empty caller-supplied correlation string selects the durable pending-intent key. Randomness is only the fallback when caller text is absent.
-
-Two physically independent new download attempts that intentionally or accidentally reuse the same caller correlation can collide in the same durable intent namespace.
-
-## 7. Current source: reconciliation still treats correlation equality as physical sameness
+## 7. Current source census: correlation equality participates in sameness
 
 Current pending-download reconciliation contains:
 
 ```js
 const sameOperation = String(existing.operationId || '')
   && String(existing.operationId || '') === String(intent.operationId || '');
-
-if (sameOperation) {
-  pending.delete(key);
-  setResult(existing);
-  return;
-}
 ```
 
-This is stronger evidence than simple diagnostic grouping. The equality of caller-visible `operationId` participates in a durable physical-sameness/adoption decision.
+and uses that result to adopt/delete pending state. This is physical-sameness behavior, not merely log grouping, and is the strongest current P1-198 source witness.
 
-That is exactly the boundary P1-198 owns.
+## 8. Existing local-download evidence must remain stronger than the new identity
 
-## 8. Positive control: local-download reconciliation already has stronger object evidence
+Current local-download matching also has exact Blob URL comparison, exact expected-byte fallback and ambiguity rejection. Those are important domain evidence.
 
-Current local-download identity logic also contains materially stronger checks that P1-198 must preserve:
+Physical operation identity is useful for namespacing and lifecycle distinction. It must not become proof that a particular browser DownloadItem belongs to the operation.
 
-- exact Blob URL match where available;
-- bounded filename + exact byte-length fallback;
-- ambiguity rejection when more than one download or more than one intent could match;
-- extension ownership check elsewhere in the download flow.
-
-P1-198 must not replace those domain facts with:
+Target relation:
 
 ```text
-same physicalOperationId -> therefore this browser DownloadItem is ours
+physical identity = which WebClip execution instance
+browser/domain evidence = whether this actual download effect belongs to that instance
 ```
 
-Physical operation identity is useful for namespacing and lifecycle distinction. Actual Chrome-download settlement remains owned by the local-download evidence/receipt logic.
+## 9. Existing worker/domain-issued IDs are positive controls
 
-## 9. Positive control: WebClip already issues opaque domain identifiers inside worker code
+Current worker code already creates opaque purpose-specific IDs with `crypto.randomUUID()` for flows such as prepared Save As and Journal import staging.
 
-Current source already demonstrates the desired issuance pattern in narrower domains.
-
-Examples include:
-
-```js
-function makePreparedSaveAsSessionId() {
-  const suffix = crypto.randomUUID ? crypto.randomUUID() : ...;
-  return normalizePreparedSaveAsSessionId(`save-as-${suffix}`);
-}
-```
-
-and:
-
-```js
-function makeJournalImportStageId() {
-  return `normalized-import-${crypto.randomUUID ? crypto.randomUUID() : ...}`;
-}
-```
-
-These values are issued inside trusted extension/worker logic and are purpose-specific.
-
-The project therefore does not need an unfamiliar primitive to satisfy P1-198. It needs to apply the existing issuance pattern at **new physical operation admission** while preserving narrower purpose-specific handles.
+This proves WebClip already has an appropriate implementation pattern. P1-198 needs the same trust-boundary property at new physical-operation admission, not a new universal token system.
 
 ## 10. Fresh Chrome messaging/security recheck
 
-Official Chrome documentation rechecked 2026-09-11:
+Official Chrome material rechecked 2026-09-11:
 
 - `https://developer.chrome.com/docs/extensions/develop/concepts/messaging`
 - `https://developer.chrome.com/docs/extensions/develop/security-privacy/stay-secure`
 - `https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle`
 
-Relevant observations:
+Relevant provider/platform observations:
 
-1. extension components communicate by passing serializable messages across contexts;
-2. Chrome explicitly describes content scripts as less trustworthy than the extension service worker;
-3. Chrome advises treating content-script messages as potentially attacker-crafted, validating/sanitizing input, and limiting privileged actions triggered by them;
-4. privileged browser work belongs in trusted extension contexts/service worker rather than page-controlled contexts;
-5. Manifest V3 service workers can terminate, so worker-global identity maps are not restart authority.
+1. extension contexts communicate with serializable messages;
+2. Chrome explicitly treats content scripts as less trustworthy than the service worker;
+3. Chrome recommends validating/sanitizing message input and limiting privileged actions triggered by messages;
+4. privileged work should remain in trusted extension contexts;
+5. MV3 workers can terminate, so volatile maps are not restart authority.
 
-These facts support the WebClip trust boundary:
+WebClip inference:
 
 ```text
-message.operationId crossing into worker = untrusted/bounded correlation input
+message.operationId entering the worker = bounded correlation input
 ```
 
-They do **not** prescribe the field name `physicalOperationId` or a specific UUID version. Those are WebClip design choices.
+Chrome does not prescribe the WebClip field name or UUID version.
 
-Extension pages are more trusted than arbitrary page content, but the same architecture should not give an extension-page-supplied free-form correlation string implicit continuation/physical ownership semantics unless a command-specific protocol explicitly defines such authority.
-
-## 11. Fresh RFC 9562 UUID recheck
+## 11. RFC 9562 UUID recheck
 
 RFC 9562 was rechecked 2026-09-11:
 
 - `https://www.rfc-editor.org/rfc/rfc9562.html`
 
-Relevant observations:
+It supports random UUID-style identifiers as a practical collision-resistant identity mechanism and recommends treating UUIDs opaquely where possible. It also explicitly warns that UUIDs are not guaranteed hard to guess and must not be treated as security capabilities merely by possession.
 
-- UUIDv4 is based on random/pseudorandom bits;
-- implementations must consider collision resistance appropriate to the consequence of collision;
-- UUID values should generally be treated opaquely instead of parsed unnecessarily;
-- critically, RFC 9562 says implementations **must not assume UUIDs are hard to guess** and must not use mere UUID possession as a security capability.
-
-For WebClip this supports:
+For WebClip:
 
 ```text
-worker-generated UUID-like opaque value = suitable physical-identity implementation option
+opaque worker-generated UUID-like value = suitable physical identity option
+opaque identifier possession != permission to continue/mutate/settle
 ```
 
-but simultaneously forbids this inference:
+This research does not prescribe a UUID version. Existing `crypto.randomUUID()` use is a positive control.
 
-```text
-knowing physicalOperationId = authorization to continue/mutate/settle operation
-```
-
-Exact UUID version is not prescribed by this research. `crypto.randomUUID()` is an existing practical positive control, not a mandatory external protocol dependency.
+The required security rule is: **must not use mere UUID possession as a security capability**.
 
 ## 12. W3C Trace Context comparison
 
-W3C Trace Context was reviewed as comparison evidence:
+Comparison source:
 
 - `https://www.w3.org/TR/trace-context/`
 
-It defines trace identifiers for correlation across distributed requests and explicitly discusses privacy/security implications of correlating requests and of parsing externally supplied trace headers.
+Trace Context demonstrates a distinct correlation identifier role and discusses privacy/security risks of correlation and externally supplied trace metadata. WebClip uses this only as comparison evidence: observability/correlation identity should remain distinct from ownership/authorization authority.
 
-The WebClip inference is architectural rather than normative:
+## 13. Target OperationContext
 
-```text
-correlation identity is useful observability/provenance metadata
-correlation identity should not silently become ownership/authorization authority
-```
-
-W3C Trace Context is not cited as defining WebClip's authorization model.
-
-## 13. Required three-axis model
-
-P1-198 requires these concepts to remain distinct.
-
-### 13.1 Client correlation
-
-Conceptual field:
-
-```text
-clientOperationId / correlationId
-```
-
-Properties:
-
-- optional;
-- bounded and syntactically validated;
-- may be generated by content script/extension page/UI;
-- may repeat across independent actions;
-- safe for diagnostic grouping when sanitized;
-- not proof of liveness;
-- not proof of physical identity;
-- not proof of ownership;
-- not a continuation capability;
-- not an idempotency contract.
-
-Existing protocol field `operationId` may remain for compatibility if its semantics are narrowed explicitly to this role.
-
-### 13.2 Worker-issued physical identity
-
-Conceptual field:
-
-```text
-physicalOperationId / operationInstanceId
-```
-
-Properties:
-
-- minted inside worker-side **new-operation admission**;
-- opaque and collision-resistant for the application's consequence model;
-- distinct for every independent physical execution;
-- cannot be selected by ordinary caller input;
-- used as physical OperationLog lifecycle identity;
-- used to namespace physical pending intent where a unique operation namespace is needed;
-- persisted in domain checkpoints only where those checkpoints must refer to the same physical execution after restart;
-- not sufficient authorization by itself.
-
-### 13.3 Domain continuation/effect authority
-
-Examples:
-
-```text
-saveAsSessionId + checkpoint
-Journal import staging/lease token
-local-download intent/effect receipt + actual DownloadItem evidence
-Yandex effect/checkpoint identity
-Journal revision/generation CAS
-backup lease/checkpoint
-auth generation/context
-```
-
-These protocols decide whether continuation, mutation, reconciliation, or settlement is authorized.
-
-`physicalOperationId` is an identity join key. It is not a replacement for them.
-
-## 14. New-operation admission
-
-Target conceptual flow:
-
-```text
-incoming message
-  -> classify sender/command
-  -> sanitize optional clientOperationId
-  -> worker issues fresh physicalOperationId
-  -> capture current composing generations such as P1-197 history epoch
-  -> construct immutable internal OperationContext
-  -> pass context into domain operation + OperationLog
-```
-
-Conceptual shape:
+A conceptual internal shape is:
 
 ```text
 OperationContext {
@@ -371,317 +184,224 @@ OperationContext {
 }
 ```
 
-Exact field names are not prescribed.
+Required semantics:
 
-## 15. P1-197 composition
+- `clientOperationId` is optional, bounded correlation and may repeat;
+- `physicalOperationId` is minted by the worker for each independent new physical action;
+- `operationLogHistoryEpoch` comes from P1-197 current history authority;
+- domain receipts/generations remain the authority to continue or settle specific work.
 
-Canonical P1-197 now requires the current global administrative OperationLog history epoch to be captured at physical-operation admission.
+## 14. New-operation admission
 
-P1-198 supplies the natural identity boundary for that capture:
-
-```text
-A admitted:
-  physicalOperationId = worker-issued A
-  clientOperationId = "same"
-  historyEpoch = H
-
-clear commits H -> H+1
-late diagnostics A/H -> stale
-
-new action:
-  physicalOperationId = worker-issued B
-  clientOperationId = "same"
-  historyEpoch = H+1
-B may log
-```
-
-A repeated correlation string neither resurrects A nor poisons B.
-
-## 16. P1-205 composition
-
-Selective TTL/size retention should identify the exact retired physical diagnostic lifecycle rather than a reusable client correlation string.
-
-Conceptually:
+Target flow:
 
 ```text
-retire physical A/generation Da
-late writer A/Da -> stale
-physical B with same client correlation -> unaffected
+incoming command
+-> classify sender and command
+-> sanitize optional client correlation
+-> issue fresh physicalOperationId inside worker
+-> capture composing generations/receipts
+-> create immutable OperationContext
+-> begin domain work and OperationLog
 ```
 
-P1-205 owns the actual per-operation retirement generation/tombstone and cleanup ordering. P1-198 only supplies the physical instance identity needed to avoid conflating A and B.
+If physical-ID issuance fails before admission, fail closed. Do not fall back to the caller correlation as physical identity.
 
-## 17. P1-190 imported provenance boundary
-
-P1-190 already owns imported `operationId` as historical/unverified provenance.
-
-Therefore a value restored from Journal backup/export/import may be displayed or retained as historical correlation, but must never become:
-
-```text
-current physicalOperationId
-current live OperationLog ownership
-current continuation receipt
-```
-
-A fresh live operation triggered from an imported record receives a fresh worker-issued physical identity.
-
-## 18. P1-210 outer-response boundary
-
-A lost/rejected outer transport response does not authorize a caller to submit the same client correlation and have the worker infer "same physical operation".
-
-P1-210 owns read-only reconciliation against the worker-issued durable operation receipt.
-
-Required relation:
-
-```text
-same clientOperationId after lost response
-!= proof same operation
-
-valid exact durable receipt for physical operation
--> read/reconcile according to P1-210/domain owner
-```
-
-P1-198 must not create blind retry/dedup semantics from correlation equality.
-
-## 19. Local-download target
-
-For a newly admitted physical download operation:
-
-```text
-pending intent namespace = worker/domain-issued physical identity or a fresh pendingIntentId
-clientOperationId = stored only as correlation metadata
-```
-
-A durable record may conceptually contain:
-
-```text
-{
-  pendingIntentId,
-  physicalOperationId,
-  clientOperationId,
-  blobUrl / content identity evidence,
-  expectedBytes,
-  downloadId / settlement fields
-}
-```
-
-The exact durable key may be `physicalOperationId` or another worker-issued pending-intent ID. P1-198 requires only that ordinary caller correlation cannot select/collide the physical namespace.
-
-## 20. Local-download reconciliation target
-
-Current:
-
-```text
-existing.operationId == intent.operationId
--> sameOperation
-```
-
-Target:
-
-```text
-same physical/domain intent receipt
-+ exact/allowed browser-download evidence
--> same physical operation/effect
-```
-
-Client correlation equality may be shown in diagnostics but cannot authorize adoption/deletion of one intent in favor of another.
-
-Existing exact Blob URL and bounded exact-byte fallback evidence should remain and continue to fail closed on ambiguity.
-
-## 21. OperationLog target
-
-A future OperationLog row should conceptually distinguish:
-
-```text
-id / physicalOperationId = worker-issued physical identity
-clientOperationId = optional correlation
-historyEpoch = P1-197 generation captured at admission
-```
-
-`startOperationLog()` or its successor must not let an ordinary caller choose the durable physical key for **new** work.
-
-Read-only UI queries may still accept a physical OperationLog id returned by the worker. Possession of that id is still not authority for privileged continuation.
-
-## 22. Follow-up/continuation commands
-
-Not every message is a new operation. A follow-up message may legitimately refer to an existing physical workflow.
-
-Required rule:
-
-```text
-continuation authority comes from the command's existing domain-issued receipt/checkpoint/lease
-```
-
-not:
-
-```text
-same clientOperationId -> continue whatever currently has that string
-```
-
-Examples:
-
-- Save As uses `saveAsSessionId` + persisted checkpoint;
-- staged Journal import uses staging/checkpoint/lease material;
-- local download uses its pending intent/effect receipt;
-- Yandex unknown effects use durable effect/reconciliation receipts;
-- backup uses lease/checkpoint authority.
-
-P1-198 therefore does not require every follow-up API to mint a new physical ID. It requires explicit protocol distinction between **new-operation admission** and **continuation of an already-issued physical/domain receipt**.
-
-## 23. Replay and deliberate repetition
-
-Two messages with the same client correlation are ambiguous by construction:
-
-```text
-transport replay
-stale UI replay
-second deliberate click
-duplicate caller bug
-new request after worker restart
-```
-
-P1-198 cannot infer which one applies from the text alone.
-
-Where a workflow needs idempotent request semantics, the owning domain must define an explicit request/idempotency receipt with scope and lifetime. P1-198 does not invent one universal dedup key.
-
-## 24. Worker restart
-
-Manifest V3 restart must not change the trust meaning of caller correlation.
+## 15. Same correlation, different physical actions
 
 Required:
 
 ```text
-known clientOperationId only after restart
--> insufficient to reclaim physical operation
-
-valid durable domain receipt containing/pointing to physical identity
--> reconcile/continue only under that domain protocol
-
-new action with same clientOperationId
--> fresh physicalOperationId
+clientOperationId = same
+physical A = worker-issued A
+physical B = worker-issued B
+A != B
 ```
 
-Physical identities that need post-restart continuity are persisted by the owning checkpoint. Ephemeral operations that do not need recovery need not gain durable state merely because P1-198 exists.
+Correlation equality may join UI diagnostics, but cannot collapse independent execution, pending-intent, lifecycle or settlement identity.
+
+## 16. P1-197 composition
+
+Canonical P1-197 requires administrative history epoch capture at physical-operation admission.
+
+```text
+A admitted under H
+clear commits H -> H+1
+late A/H diagnostic -> stale
+
+new B with same client correlation
+B receives fresh physical id + H+1
+B may log
+```
+
+A reused client string neither resurrects A nor prevents B.
+
+## 17. P1-205 composition
+
+P1-205 owns selective retention/size retirement. It should retire an exact physical diagnostic lifecycle rather than a reusable correlation string.
+
+```text
+retire physical A
+late A -> stale
+physical B with same correlation -> unaffected
+```
+
+P1-198 supplies physical distinction; P1-205 owns its retirement generation/tombstone and cleanup ordering.
+
+## 18. P1-190 imported provenance boundary
+
+Imported historical `operationId` remains P1-190 unverified provenance. It may be retained/displayed as historical correlation but cannot become a current live physical identity or continuation receipt.
+
+A new live action triggered from imported history receives a fresh worker-issued physical ID.
+
+## 19. P1-210 lost-response boundary
+
+A lost/rejected outer response does not turn repeated client correlation into proof of same physical operation.
+
+```text
+same correlation after lost response != reconciliation authority
+exact worker/domain durable receipt -> reconcile under P1-210/domain rules
+```
+
+P1-198 must not invent blind retry/dedup semantics from caller text equality.
+
+## 20. Local-download target
+
+For new physical download work, the durable pending namespace must be based on worker/domain-issued identity, for example:
+
+```text
+pendingIntentId or physicalOperationId = worker-issued
+clientOperationId = correlation metadata only
+```
+
+The record still carries exact download evidence such as Blob URL/content bytes and settlement identifiers required by the local-download owners.
+
+Current `existing.operationId === intent.operationId` must not remain sufficient physical-sameness authority.
+
+## 21. OperationLog target
+
+Conceptually:
+
+```text
+OperationLog physical key = worker-issued physicalOperationId
+clientOperationId = optional diagnostic correlation
+historyEpoch = P1-197 epoch captured at admission
+```
+
+Read-only UI may use a worker-returned log identifier to fetch diagnostics. Possession of that identifier still does not authorize privileged continuation.
+
+## 22. Continuation commands
+
+Not every follow-up message is a new operation. Existing workflows already have purpose-specific authorities such as:
+
+- `saveAsSessionId` plus checkpoint;
+- Journal import staging/checkpoint/lease material;
+- local-download pending intent/effect receipt;
+- Yandex effect/reconciliation receipt;
+- backup lease/checkpoint;
+- Journal revision/generation CAS.
+
+A continuation command must use the owning domain receipt. Same correlation alone is insufficient.
+
+## 23. Replay and idempotency
+
+Repeated caller text may mean retry, stale replay, accidental reuse or a deliberate second action. P1-198 cannot decide that from `operationId` equality.
+
+Where idempotency is required, the owning domain must define an explicit request/receipt with scope and lifetime. No global caller-controlled idempotency capability is introduced here.
+
+## 24. Worker restart
+
+After MV3 restart:
+
+```text
+known clientOperationId only -> insufficient to reclaim physical operation
+valid durable domain receipt -> may reconcile according to owner policy
+new request with same clientOperationId -> fresh physicalOperationId
+```
+
+Physical identity is persisted only where the owning recovery checkpoint actually needs continuity.
 
 ## 25. Secret/privacy boundary
 
-A physical operation identifier must contain no access token, signed URL, page secret, user selection text, account secret, or secret-derived authority material.
+Physical operation identifier must contain no access token, signed URL, account secret, raw selection text or secret-derived authority material.
 
-Opaque random identity is preferable to embedding semantic/private information.
+Opaque random identity avoids embedding unnecessary semantics. Existing OperationLog redaction/privacy rules remain in force.
 
-RFC 9562 also warns against treating UUID possession as a security capability. Therefore the design should remain safe even if a physical ID appears in sanitized diagnostics.
+## 26. Legacy compatibility
 
-Whether a particular physical ID is exposed in UI/export is a separate privacy/product decision and must preserve existing OperationLog redaction rules.
+Existing durable records may contain only old textual `operationId`. They must not be bulk-promoted to proven worker-issued physical identities.
 
-## 26. Failure semantics
+A compatible migration can preserve them as legacy/unverified correlation unless an owning receipt proves exact linkage.
 
-If worker physical-ID issuance fails before a new physical operation is admitted:
+## 27. Deterministic model requirements
 
-```text
-zero new physical side effect admission
-zero new OperationLog physical lifecycle
-return bounded failure
-```
-
-Do not fall back to caller correlation as physical identity merely to keep the operation moving.
-
-If a physical identity has already been admitted and a later domain checkpoint fails, the owning domain determines whether the operation is failed, unknown, quarantined, or recoverable. P1-198 does not invent settlement truth.
-
-## 27. Migration compatibility
-
-A future runtime implementation must be incremental.
-
-Existing durable rows may contain only historical `operationId`.
-
-Do not bulk-promote legacy textual values to proven worker-issued physical identity.
-
-Possible compatibility semantics include:
+The companion model covers:
 
 ```text
-legacy row operationId -> legacy/unverified correlation identity
-new row physicalOperationId -> worker-issued physical identity
-```
-
-Any migration that needs exact old/new linkage must be proven by its owning source/effect evidence rather than by textual equality alone.
-
-## 28. Deterministic negative matrix
-
-The companion model covers at least:
-
-```text
-N01 P1-198 remains ACTIVE
-N02 current normalizeOperationIdInput validates syntax but returns caller text
-N03 current startOperationLog uses caller operationId as physical log key
-N04 current pending local-download key prefers non-empty caller operationId
+N01 P1-198 ACTIVE
+N02 normalization = syntax hygiene, not issuance
+N03 current OperationLog key = caller operationId
+N04 current pending intent key prefers caller operationId
 N05 current pending record stores operationId
-N06 current reconciliation has sameOperation by operationId equality
-N07 current exact Blob URL local-download match remains a positive control
-N08 current exact byte fallback remains a positive control
-N09 current ambiguity rejection remains a positive control
-N10 worker/domain-issued saveAsSessionId exists
-N11 worker/domain-issued Journal import staging id exists
-N12 two new actions with same client correlation get distinct physical IDs
-N13 same client correlation is preserved for observability
-N14 forged/replayed correlation cannot select another physical ID
+N06 current sameOperation uses operationId equality
+N07-N09 exact Blob/byte/ambiguity controls preserved
+N10-N11 existing worker/domain-issued IDs preserved
+N12 same correlation -> distinct worker physical IDs
+N13 correlation retained for observability
+N14 replay/forgery cannot select another physical ID
 N15 physical ID itself is not continuation authority
-N16 explicit domain receipt can continue its own physical operation
-N17 wrong/stale domain receipt cannot continue
-N18 P1-197 history epoch is captured in worker operation context
-N19 clear H->H+1 makes old physical A/H diagnostics stale
-N20 new physical B with same correlation under H+1 remains admissible
-N21 P1-205 selective retirement of A does not retire B with same correlation
-N22 imported P1-190 historical operationId cannot become live physical identity
-N23 lost outer response does not make repeated correlation an idempotency key
-N24 P1-210 exact durable receipt remains reconciliation authority
-N25 local-download physical namespace does not collide on repeated client correlation
-N26 exact browser-download evidence is still required beyond physical ID
-N27 modeled worker restart does not restore trust in correlation alone
-N28 persisted exact domain receipt can retain physical identity where recovery requires it
-N29 physical ID contains no secret
-N30 RFC-style UUID opacity does not turn ID into security capability
-N31 caller correlation may be empty
-N32 physical ID must still be issued for new work when correlation empty
-N33 issuance failure does not fall back to client id as physical identity
+N16 exact domain receipt may continue
+N17 stale/wrong receipt cannot continue
+N18-N20 P1-197 history epoch composition
+N21 P1-205 selective retirement composition
+N22 imported P1-190 operationId remains non-live
+N23-N24 lost-response correlation vs P1-210 receipt
+N25 local-download physical namespace distinct on repeated correlation
+N26 exact browser/domain evidence remains required
+N27-N28 restart semantics
+N29-N30 secret/UUID anti-capability boundary
+N31 empty correlation allowed
+N32 physical ID still issued without correlation
+N33 issuance failure is fail-closed
 N34 manifest remains 0.9.8
 N35 no runtime/L5/S2/release action
 ```
 
-## 29. Acceptance contract
+## 28. Acceptance contract
 
 P1-198 refinement research is complete when deterministic evidence proves:
 
-1. current caller-operationId physical-identity surfaces are source-bound to exact current `main`;
-2. syntax validation and physical identity issuance remain distinct;
-3. every independent new physical action receives worker-issued opaque identity regardless of client correlation reuse;
-4. client correlation is optional metadata and may repeat without physical conflation;
-5. OperationLog physical keying does not conceptually depend on caller-selected correlation;
-6. local-download pending intent namespace cannot collide solely because caller correlation repeats;
-7. local-download adoption still requires domain/browser evidence and does not rely on physical ID alone;
-8. P1-197 history epoch is captured in the internal physical-operation context;
-9. P1-205 selective retirement composes with physical identity without globally poisoning a reused correlation;
-10. P1-190 imported operationId remains historical/unverified provenance;
-11. P1-210 lost-response reconciliation consumes exact durable receipt rather than repeated correlation;
-12. follow-up/continuation commands use purpose-specific domain authority;
-13. UUID-like worker identity is not a universal security capability;
-14. restart does not restore trust in client correlation alone;
-15. no new P-code is allocated;
-16. runtime/manifest remain unchanged;
-17. no real Chrome/Yandex L5, release-policy activation, readiness mutation, official ZIP, tag, GitHub Release or deployment occurs.
+1. current conflation surfaces are source-bound to exact current main;
+2. validation and worker issuance remain separate concepts;
+3. independent new actions always get distinct worker-issued physical identities;
+4. caller correlation may repeat without physical collision;
+5. local-download intent namespace cannot be selected solely by caller text;
+6. exact browser/download evidence remains required;
+7. P1-197 epoch is captured in physical context;
+8. P1-205 selective retirement does not poison reused correlation;
+9. P1-190 imported IDs remain historical provenance;
+10. P1-210/domain receipt remains lost-response reconciliation authority;
+11. purpose-specific continuation receipts remain authoritative;
+12. physical ID is not a security capability;
+13. restart does not restore trust in correlation alone;
+14. no new P-code is allocated;
+15. runtime/manifest remain unchanged;
+16. no real Chrome/Yandex L5, release-policy activation, readiness mutation, official ZIP, tag, GitHub Release or deployment occurs.
 
-## 30. Future implementation direction, not performed here
+## 29. Future implementation direction, not performed here
 
-A bounded implementation sequence is likely:
+A bounded future sequence is:
 
 ```text
-1. introduce an immutable internal OperationContext for newly admitted work
+1. introduce immutable internal OperationContext for new work
 2. issue physicalOperationId inside worker admission
-3. rename/narrow incoming operationId semantics to client correlation internally
-4. capture canonical P1-197 history epoch in the context
-5. migrate OperationLog keying to physical identity while retaining correlation metadata
-6. migrate local-download intent namespace away from caller operationId
+3. narrow incoming operationId internally to client correlation
+4. capture P1-197 history epoch in context
+5. migrate OperationLog keying to physical identity
+6. migrate local-download pending namespace away from caller operationId
 7. remove operationId-equality physical-sameness decisions
 8. preserve exact Blob URL / bytes / DownloadItem settlement evidence
-9. audit continuation commands so existing domain receipts remain authority
+9. review continuation commands so existing domain receipts remain authority
 10. compose P1-205 selective retirement with physical instance identity
 11. run deterministic/source gates
 12. run real unpacked-Chrome same-correlation/restart/replay evidence before owner closure
@@ -689,7 +409,7 @@ A bounded implementation sequence is likely:
 
 This is design guidance only; this tranche changes no production source.
 
-## 31. Boundary
+## 30. Boundary
 
 ```text
 P1-198 research refinement != runtime implementation
