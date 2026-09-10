@@ -62,8 +62,15 @@ function enrichAccount(state, receipt, account) {
   return { committed: true, state: { ...state, auth: { ...state.auth, account } } };
 }
 function receiptSecretFree(receipt) {
-  const s = JSON.stringify(receipt).toLowerCase();
-  return !['accesstoken', 'access_token', 'refreshtoken', 'refresh_token', 'authorization', 'oauth '].some((x) => s.includes(x));
+  const forbiddenKeys = new Set([
+    'accesstoken', 'access_token', 'refreshtoken', 'refresh_token',
+    'token', 'authorization', 'authorizationheader'
+  ]);
+  for (const [key, value] of Object.entries(receipt || {})) {
+    if (forbiddenKeys.has(String(key).toLowerCase())) return false;
+    if (typeof value === 'string' && /^oauth\s+/i.test(value)) return false;
+  }
+  return true;
 }
 
 // Owner and scope.
@@ -162,7 +169,11 @@ check('N23 historical namespace survives invalidation', () => has(EVIDENCE, 'del
 check('N24 no automatic mutation replay under B', () => has(EVIDENCE, 'M(A) does not silently become M(B)'));
 check('N25 later recovery child must recheck auth', () => has(EVIDENCE, 'before each auth-required child'));
 check('N26 pre-loop authAvailable snapshot is insufficient', () => has(EVIDENCE, 'If item 2 consumes the old `authAvailable=true` snapshot'));
-check('N27 receipt is secret-free', () => assert.equal(receiptSecretFree(rA), true));
+check('N27 receipt is secret-free', () => {
+  assert.equal(receiptSecretFree(rA), true);
+  assert.equal(receiptSecretFree({ ...rA, accessToken: 'secret' }), false);
+  assert.equal(receiptSecretFree({ ...rA, authorization: 'OAuth secret' }), false);
+});
 check('N28 manifest stays 0.9.8', () => assert.equal(MANIFEST.version, '0.9.8'));
 check('N29 no runtime/L5/S2/release action', () => {
   has(EVIDENCE, 'runtime remains unchanged'); has(EVIDENCE, 'no real L5'); has(EVIDENCE, 'V1 readiness and release authority are untouched.');
