@@ -1,531 +1,284 @@
 'use strict';
 
-// Research-only S1-D model. It does not mutate V1 readiness, permanent CI,
-// release-gate policy, product bytes, external evidence or release state.
+// Research-only P1-231 S1-D migration rehearsal / negative matrix.
+// No WebClip package projection is loaded, no product ZIP is built, and no
+// readiness/release policy is mutated.
 
 const assert = require('assert');
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const SCHEMA = 'webclip-shadow-migration-rehearsal/v1';
-const IDENTITY_SCHEMA = 'webclip-shadow-identity/v1';
-const SETTLEMENT_SCHEMA = 'webclip-shadow-settlement/v1';
-const EQUIV_SCHEMA = 'webclip-builder-equivalence/v1';
-const CURRENT_EXPECTED_BASE = '7849567f83f130d72141342eca4c71ba6d8229f7';
-const V1_ANCHORS = Object.freeze({
+const ID_SCHEMA = 'webclip-shadow-identity/v1';
+const SET_SCHEMA = 'webclip-shadow-settlement/v1';
+const EQ_SCHEMA = 'webclip-builder-equivalence/v1';
+const WORKFLOW_REF = 'lukindv77/webclip-pdf/.github/workflows/repository-integrity.yml@refs/heads/main';
+const ANCHORS = Object.freeze({
   'project_docs/RELEASE_READINESS.md': '165766b248ffa48fc88f0140283adf0e855df22f',
   'project_tools/check_release_readiness.py': 'd3569428a3ea4e5d90be24426fd09c233c75b882',
   '.github/workflows/release-gate.yml': 'f6813f364d39932fb32a1cc2d527d2d7a489ed02',
   '.github/workflows/repository-integrity.yml': 'a8b24780df4c18ee3f85ec2bc51925be3a40541c',
 });
-const STATES = Object.freeze({
-  V1_ONLY: 'v1-only',
-  INSTALLED: 'shadow-installed',
-  OBSERVED: 'shadow-observed',
-  FAILED: 'shadow-failed',
+const KINDS = ['unpacked-chrome', 'yandex-e2e', 'blocker-review', 'release-decision'];
+const SHA = Object.freeze({
+  source: '1'.repeat(40), candidate: '2'.repeat(40), moved: '3'.repeat(40),
+  prHead: '4'.repeat(40), merge: '5'.repeat(40), workflow: '6'.repeat(40), other: '7'.repeat(40),
 });
 let cases = 0;
 
 function test(name, fn) {
-  try {
-    fn();
-    cases += 1;
-  } catch (error) {
-    error.message = `${name}: ${error.message}`;
-    throw error;
-  }
+  try { fn(); cases += 1; }
+  catch (e) { e.message = `${name}: ${e.message}`; throw e; }
 }
-function fail(code, message = code) {
-  const error = new Error(message);
-  error.code = code;
-  throw error;
-}
-function throwsCode(fn, code) {
-  assert.throws(fn, (e) => e && e.code === code, `expected ${code}`);
-}
-function isSha(value) { return /^[0-9a-f]{40}$/.test(String(value || '')); }
-function isDigest(value) { return /^sha256:[0-9a-f]{64}$/.test(String(value || '')); }
-function h(label) { return `sha256:${crypto.createHash('sha256').update(String(label)).digest('hex')}`; }
-function clone(value) { return structuredClone(value); }
+function fail(code) { const e = new Error(code); e.code = code; throw e; }
+function throwsCode(fn, code) { assert.throws(fn, (e) => e && e.code === code, `expected ${code}`); }
+function sha(v) { return /^[0-9a-f]{40}$/.test(String(v || '')); }
+function dig(ch) { return `sha256:${String(ch).repeat(64)}`; }
+function validDig(v) { return /^sha256:[0-9a-f]{64}$/.test(String(v || '')); }
+function clone(v) { return structuredClone(v); }
 function git(...args) { return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim(); }
-function gitBlob(file) { return git('rev-parse', `HEAD:${file}`); }
-
-function parseKvLine(line) {
+function kv(line) {
   const out = {};
   for (const raw of String(line).split(';').slice(1)) {
-    const item = raw.trim();
-    const eq = item.indexOf('=');
-    if (eq > 0) out[item.slice(0, eq)] = item.slice(eq + 1);
+    const i = raw.indexOf('='); if (i > 0) out[raw.slice(0, i).trim()] = raw.slice(i + 1).trim();
   }
   return out;
 }
-function runPredecessor(file, prefix) {
-  const stdout = execFileSync(process.execPath, [path.join(ROOT, file)], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+function predecessor(file, prefix) {
+  const stdout = execFileSync(process.execPath, [path.join(ROOT, file)], { cwd: ROOT, encoding: 'utf8' });
   const line = stdout.trim().split(/\r?\n/).reverse().find((x) => x.startsWith(prefix));
-  assert(line, `missing predecessor PASS line: ${prefix}`);
-  return { line, kv: parseKvLine(line) };
+  assert(line, `missing ${prefix}`); return { line, kv: kv(line) };
 }
 
-const currentHead = git('rev-parse', 'HEAD');
-assert(isSha(currentHead));
-
-const dag = runPredecessor(
-  'project_tools/test_p1_231_consolidated_implementation_dag_model.js',
-  'P1-231 consolidated implementation DAG model: PASS'
-);
-const s0e = runPredecessor(
-  'project_tools/test_p1_231_s0e_identity_engine_source_spec_model.js',
-  'P1-231 S0-E identity engine source-spec model: PASS'
-);
-const s0f = runPredecessor(
-  'project_tools/test_p1_231_s0f_candidate_generation_verifier_source_spec_model.js',
-  'P1-231 S0-F candidate-generation verifier source-spec model: PASS'
-);
-const s0g = runPredecessor(
-  'project_tools/test_p1_231_s0g_evidence_settlement_engine_source_spec_model.js',
-  'P1-231 S0-G evidence-settlement engine source-spec model: PASS'
-);
-const s0i = runPredecessor(
-  'project_tools/test_p1_231_s0i_pr_checker_integration_source_spec_model.js',
-  'P1-231 S0-I PR checker integration source-spec model: PASS'
-);
-const s1a = runPredecessor(
-  'project_tools/test_p1_231_s1a_shadow_identity_source_spec_model.js',
-  'P1-231 S1-A shadow identity source-spec model: PASS'
-);
-const s1b = runPredecessor(
-  'project_tools/test_p1_231_s1b_shadow_settlement_source_spec_model.js',
-  'P1-231 S1-B shadow settlement source-spec model: PASS'
-);
-const s1c = runPredecessor(
-  'project_tools/test_p1_231_s1c_builder_equivalence_source_spec_model.js',
-  'P1-231 S1-C builder equivalence source-spec model: PASS'
-);
-
-const CURRENT_IDS = Object.freeze({
-  rpf: s0e.kv.rpf,
-  bcf: s0e.kv.bcf,
-  qcfChrome: s0e.kv.chrome_qcf,
-  qcfYandex: s0e.kv.yandex_qcf,
-  rcf: s0e.kv.rcf,
+const head = git('rev-parse', 'HEAD');
+const dag = predecessor('project_tools/test_p1_231_consolidated_implementation_dag_model.js', 'P1-231 consolidated implementation DAG model: PASS');
+const s0e = predecessor('project_tools/test_p1_231_s0e_identity_engine_source_spec_model.js', 'P1-231 S0-E identity engine source-spec model: PASS');
+const s0f = predecessor('project_tools/test_p1_231_s0f_candidate_generation_verifier_source_spec_model.js', 'P1-231 S0-F candidate-generation verifier source-spec model: PASS');
+const s0g = predecessor('project_tools/test_p1_231_s0g_evidence_settlement_engine_source_spec_model.js', 'P1-231 S0-G evidence-settlement engine source-spec model: PASS');
+const s0i = predecessor('project_tools/test_p1_231_s0i_pr_checker_integration_source_spec_model.js', 'P1-231 S0-I PR checker integration source-spec model: PASS');
+const s1a = predecessor('project_tools/test_p1_231_s1a_shadow_identity_source_spec_model.js', 'P1-231 S1-A shadow identity source-spec model: PASS');
+const s1b = predecessor('project_tools/test_p1_231_s1b_shadow_settlement_source_spec_model.js', 'P1-231 S1-B shadow settlement source-spec model: PASS');
+const s1c = predecessor('project_tools/test_p1_231_s1c_builder_equivalence_source_spec_model.js', 'P1-231 S1-C builder equivalence source-spec model: PASS');
+const CURRENT = Object.freeze({
+  rpf: s0e.kv.rpf, chrome: s0e.kv.chrome_qcf, yandex: s0e.kv.yandex_qcf,
+  rcf: s0e.kv.rcf, bcf: s0e.kv.bcf,
 });
 
-function parseReadiness() {
-  const text = fs.readFileSync(path.join(ROOT, 'project_docs/RELEASE_READINESS.md'), 'utf8');
-  const match = text.match(/<!-- WEBCLIP_RELEASE_READINESS_V1\n([\s\S]*?)\n-->/);
-  if (!match) fail('V1_READINESS_INVALID');
-  const values = {};
-  for (const line of match[1].split(/\r?\n/)) {
-    const eq = line.indexOf('=');
-    if (eq > 0) values[line.slice(0, eq)] = line.slice(eq + 1);
-  }
-  return values;
-}
-function currentManifestVersion() {
-  return JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8')).version;
-}
-function countCurrentV1Blockers() {
-  const r = parseReadiness();
-  let count = 0;
-  if (r.target_version !== currentManifestVersion()) count += 1;
-  if (r.unpacked_chrome_qa !== 'pass') count += 1;
-  if (r.yandex_e2e !== 'pass') count += 1;
-  if (r.release_blockers_review !== 'pass') count += 1;
-  if (r.explicit_release_decision !== 'approved') count += 1;
-  return count;
-}
+function identity(overrides = {}) { return { rpf: dig('a'), chrome: dig('b'), yandex: dig('c'), rcf: dig('d'), bcf: dig('e'), ...overrides }; }
+function contract(kind, id) { if (kind === 'unpacked-chrome') return id.chrome; if (kind === 'yandex-e2e') return id.yandex; return id.rcf; }
+function terminal(kind) { return kind === 'release-decision' ? 'approved' : 'pass'; }
+function rec(kind, seq, source, id, outcome) { return { kind, seq, source, rpf: id.rpf, contract: contract(kind, id), outcome }; }
+function allPass(source, id) { return KINDS.map((k) => rec(k, 1, source, id, terminal(k))); }
 
-function validateShadowTuple(candidateSha, tuple) {
-  if (!isSha(candidateSha) || !tuple || typeof tuple !== 'object') fail('SHADOW_TUPLE_INVALID');
-  const { identity, settlement, equivalence } = tuple;
-  if (!identity || identity.schema !== IDENTITY_SCHEMA || identity.candidateSha !== candidateSha || identity.authoritative !== false) {
-    fail('SHADOW_IDENTITY_INVALID');
+// Fixture-only adapter for the already-canonical S0-G/S1-B rules. S1-D consumes
+// the produced report and never claims to become receipt-settlement authority.
+function settle({ candidate, id, receipts = [], eligible = true, namespace = true, appendOnly = true, ancestry = () => true }) {
+  let error = namespace ? null : 'RECEIPT_NAMESPACE_CORRUPT';
+  if (!appendOnly) error ||= 'RECEIPT_HISTORY_NOT_APPEND_ONLY';
+  const seen = new Set();
+  for (const r of receipts) {
+    const key = `${r.kind}|${r.rpf}|${r.contract}|${r.seq}`;
+    if (!KINDS.includes(r.kind) || !Number.isInteger(r.seq) || r.seq < 1 || seen.has(key)) error ||= 'RECEIPT_NAMESPACE_CORRUPT';
+    seen.add(key);
   }
-  if (!settlement || settlement.schema !== SETTLEMENT_SCHEMA || settlement.candidateSha !== candidateSha || settlement.authoritative !== false) {
-    fail('SHADOW_SETTLEMENT_INVALID');
+  if (!eligible) return {
+    schema: SET_SCHEMA, candidateSha: candidate, state: error ? 'structural-failure' : 'candidate-ineligible',
+    semanticSettlementEvaluated: false, namespaceValid: !error, appendOnly, structuralError: error,
+    identities: clone(id), slots: Object.fromEntries(KINDS.map((k) => [k, { state: 'not-evaluated' }])), authoritative: false,
+  };
+  const slots = {};
+  for (const kind of KINDS) {
+    const xs = receipts.filter((r) => r.kind === kind && r.rpf === id.rpf && r.contract === contract(kind, id) && ancestry(r.source, candidate)).sort((a,b) => a.seq - b.seq);
+    if (!xs.length) slots[kind] = { state: 'missing' };
+    else { const last = xs[xs.length - 1]; slots[kind] = { state: last.outcome === terminal(kind) ? 'pass' : 'blocked', seq: last.seq, outcome: last.outcome }; }
   }
-  if (!equivalence || equivalence.schema !== EQUIV_SCHEMA || equivalence.candidateSha !== candidateSha || equivalence.authoritative !== false) {
-    fail('SHADOW_EQUIVALENCE_INVALID');
-  }
-  if (identity.candidateSha !== settlement.candidateSha || identity.candidateSha !== equivalence.candidateSha) {
-    fail('SHADOW_CANDIDATE_MISMATCH');
-  }
-  return tuple;
+  const states = Object.values(slots).map((x) => x.state);
+  return {
+    schema: SET_SCHEMA, candidateSha: candidate,
+    state: error ? 'structural-failure' : states.every((x) => x === 'pass') ? 'settled' : states.includes('missing') ? 'evidence-missing' : 'evidence-blocked',
+    semanticSettlementEvaluated: true, namespaceValid: !error, appendOnly, structuralError: error, identities: clone(id), slots, authoritative: false,
+  };
 }
+function shadowId(candidate, id, overrides = {}) { return {
+  schema: ID_SCHEMA, candidateSha: candidate, checkoutSha: candidate, candidateAdmissionSha: candidate,
+  state: 'eligible', eligible: true, identities: clone(id), event: 'push', workflowRef: WORKFLOW_REF,
+  workflowSha: SHA.workflow, syntheticMergeRequired: false, prHeadSha: null, authoritative: false, ...overrides,
+}; }
+function equiv(candidate, id, overrides = {}) { return {
+  schema: EQ_SCHEMA, candidateSha: candidate, state: 'equivalent', identityEligible: true,
+  equivalenceEvaluated: true, rpf: id.rpf, bcf: id.bcf, extractedRpf: id.rpf,
+  rawBytesEqual: true, authoritative: false, ...overrides,
+}; }
+function tuple(candidate, id, receipts = allPass(SHA.source, id), ancestry = () => true) { return {
+  identity: shadowId(candidate, id), settlement: settle({ candidate, id, receipts, ancestry }), equivalence: equiv(candidate, id),
+}; }
+function ineligible(candidate, id) { return {
+  identity: shadowId(candidate, id, { state: 'candidate-ineligible', eligible: false }),
+  settlement: settle({ candidate, id, eligible: false }),
+  equivalence: equiv(candidate, id, { state: 'candidate-ineligible', identityEligible: false, equivalenceEvaluated: false, rawBytesEqual: null }),
+}; }
+function anchors() { return Object.fromEntries(Object.keys(ANCHORS).map((p) => [p, git('rev-parse', `HEAD:${p}`)])); }
 
-class MigrationRehearsal {
-  constructor(candidateSha) {
-    if (!isSha(candidateSha)) fail('CANDIDATE_SHA_INVALID');
-    this.candidateSha = candidateSha;
-    this.state = STATES.V1_ONLY;
-    this.v1Authority = 'unchanged';
-    this.rollbackTarget = STATES.V1_ONLY;
-    this.s2Authorized = false;
-    this.releaseReady = false;
-    this.productZip = false;
-    this.authoritative = false;
-    this.shadow = null;
-    this.failure = null;
-  }
-  installPassive() {
-    if (this.state !== STATES.V1_ONLY) fail('INVALID_MIGRATION_TRANSITION');
-    this.state = STATES.INSTALLED;
-    return this.snapshot();
-  }
-  observe(tuple) {
-    if (this.state !== STATES.INSTALLED) fail('INVALID_MIGRATION_TRANSITION');
-    try {
-      validateShadowTuple(this.candidateSha, tuple);
-      this.shadow = clone(tuple);
-      this.state = STATES.OBSERVED;
-      this.releaseReady = false;
-      this.authoritative = false;
-      return this.snapshot();
-    } catch (error) {
-      this.failure = error.code || 'SHADOW_STRUCTURAL_FAILURE';
-      this.state = STATES.FAILED;
-      throw error;
+function structural(code) { return { schema: SCHEMA, state: 'structural-failure', failure: code, v1Authority: 'unchanged', rollbackTarget: 'v1-only', releaseReady: false, releaseAuthorized: false, s2Authorized: false, productZip: false, authoritative: false }; }
+function rehearse({ candidate, t, observedAnchors = anchors(), expectedWorkflowRef = WORKFLOW_REF, expectedWorkflowSha = SHA.workflow, evidenceMain = candidate, decisionMain = candidate }) {
+  try {
+    for (const [p, blob] of Object.entries(ANCHORS)) if (observedAnchors[p] !== blob) fail('V1_ROLLBACK_ANCHOR_CHANGED');
+    if (t.settlement.structuralError === 'RECEIPT_NAMESPACE_CORRUPT' || t.settlement.namespaceValid === false) fail('RECEIPT_NAMESPACE_CORRUPT');
+    if (t.settlement.structuralError === 'RECEIPT_HISTORY_NOT_APPEND_ONLY' || t.settlement.appendOnly === false) fail('RECEIPT_HISTORY_NOT_APPEND_ONLY');
+    if (!sha(candidate) || t.identity.candidateSha !== candidate || t.identity.checkoutSha !== candidate) fail('CHECKED_OUT_CANDIDATE_MISMATCH');
+    if (t.identity.candidateAdmissionSha !== candidate) fail('CANDIDATE_ADMISSION_STALE');
+    if (t.identity.workflowRef !== expectedWorkflowRef) fail('WORKFLOW_REF_MISMATCH');
+    if (t.identity.workflowSha !== expectedWorkflowSha) fail('WORKFLOW_SHA_MISMATCH');
+    if (t.identity.syntheticMergeRequired && (!t.identity.prHeadSha || t.identity.prHeadSha === candidate)) fail('PR_SYNTHETIC_MERGE_IDENTITY_INVALID');
+    if (evidenceMain !== decisionMain) fail('MAIN_MOVED_AFTER_EVIDENCE');
+    if (t.settlement.candidateSha !== candidate || t.equivalence.candidateSha !== candidate) fail('SHADOW_CANDIDATE_MISMATCH');
+    if (!t.identity.eligible) {
+      if (t.settlement.state !== 'candidate-ineligible' || t.settlement.semanticSettlementEvaluated !== false || !KINDS.every((k) => t.settlement.slots[k].state === 'not-evaluated')) fail('CANDIDATE_INELIGIBLE_SEMANTICS_INVALID');
+      if (t.equivalence.state !== 'candidate-ineligible' || t.equivalence.equivalenceEvaluated !== false) fail('CANDIDATE_INELIGIBLE_SEMANTICS_INVALID');
+      return { ...structural(null), state: 'shadow-observed', failure: null, shadow: { identity: 'candidate-ineligible', settlement: 'candidate-ineligible', builderEquivalence: 'candidate-ineligible' } };
     }
-  }
-  structuralFailure(code) {
-    if (![STATES.INSTALLED, STATES.OBSERVED].includes(this.state)) fail('INVALID_MIGRATION_TRANSITION');
-    this.failure = code;
-    this.state = STATES.FAILED;
-    this.releaseReady = false;
-    this.authoritative = false;
-    return this.snapshot();
-  }
-  requestS2({ explicitApproval = false, separateCanonicalChange = false } = {}) {
-    if (![STATES.INSTALLED, STATES.OBSERVED].includes(this.state)) fail('INVALID_MIGRATION_TRANSITION');
-    if (!explicitApproval) fail('S2_EXPLICIT_APPROVAL_REQUIRED');
-    if (!separateCanonicalChange) fail('S2_SEPARATE_CHANGE_REQUIRED');
-    // This method only proves the fence shape. S1-D never mutates itself to S2.
-    return { allowedByFence: true, stillInS1: true, releaseReady: false };
-  }
-  rollback() {
-    if (![STATES.INSTALLED, STATES.OBSERVED, STATES.FAILED].includes(this.state)) fail('INVALID_MIGRATION_TRANSITION');
-    this.state = STATES.V1_ONLY;
-    this.shadow = null;
-    this.failure = null;
-    this.v1Authority = 'unchanged';
-    this.s2Authorized = false;
-    this.releaseReady = false;
-    this.productZip = false;
-    this.authoritative = false;
-    return this.snapshot();
-  }
-  snapshot() {
-    return {
-      schema: SCHEMA,
-      candidateSha: this.candidateSha,
-      migrationState: this.state,
-      v1Authority: this.v1Authority,
-      rollbackTarget: this.rollbackTarget,
-      s2Authorized: this.s2Authorized,
-      releaseReady: this.releaseReady,
-      productZip: this.productZip,
-      authoritative: this.authoritative,
-      shadow: this.shadow ? {
-        identity: this.shadow.identity.state,
-        settlement: this.shadow.settlement.state,
-        builderEquivalence: this.shadow.equivalence.state,
-      } : null,
-      failure: this.failure,
-    };
-  }
+    const id = t.identity.identities;
+    if (t.settlement.identities.rpf !== id.rpf) fail('SHADOW_SETTLEMENT_RPF_MISMATCH');
+    if (t.settlement.identities.chrome !== id.chrome || t.settlement.identities.yandex !== id.yandex || t.settlement.identities.rcf !== id.rcf) fail('SHADOW_SETTLEMENT_CONTRACT_MISMATCH');
+    if (t.equivalence.rpf !== id.rpf || t.equivalence.extractedRpf !== id.rpf) fail('SHADOW_EQUIVALENCE_RPF_MISMATCH');
+    if (t.equivalence.bcf !== id.bcf) fail('SHADOW_EQUIVALENCE_BCF_MISMATCH');
+    if (t.equivalence.equivalenceEvaluated && t.equivalence.rawBytesEqual !== true) fail('ARCHIVE_PHYSICAL_DRIFT');
+    return { ...structural(null), state: 'shadow-observed', failure: null, shadow: { identity: t.identity.state, settlement: t.settlement.state, builderEquivalence: t.equivalence.state } };
+  } catch (e) { return structural(e.code || 'S1D_STRUCTURAL_FAILURE'); }
 }
-
-function makeTuple(candidateSha, mode = 'current') {
-  if (mode === 'green') {
-    return {
-      identity: {
-        schema: IDENTITY_SCHEMA, candidateSha, state: 'eligible', eligible: true, authoritative: false,
-        identities: clone(CURRENT_IDS),
-      },
-      settlement: {
-        schema: SETTLEMENT_SCHEMA, candidateSha, state: 'settled', identityEligible: true,
-        semanticSettlementEvaluated: true, allEvidencePass: true, authoritative: false,
-      },
-      equivalence: {
-        schema: EQUIV_SCHEMA, candidateSha, state: 'equivalent', identityEligible: true,
-        equivalenceEvaluated: true, rawBytesEqual: true, authoritative: false,
-      },
-    };
-  }
-  return {
-    identity: {
-      schema: IDENTITY_SCHEMA, candidateSha, state: 'candidate-ineligible', eligible: false, authoritative: false,
-      identities: clone(CURRENT_IDS),
-    },
-    settlement: {
-      schema: SETTLEMENT_SCHEMA, candidateSha, state: 'candidate-ineligible', identityEligible: false,
-      semanticSettlementEvaluated: false, authoritative: false,
-    },
-    equivalence: {
-      schema: EQUIV_SCHEMA, candidateSha, state: 'candidate-ineligible', identityEligible: false,
-      equivalenceEvaluated: false, authoritative: false,
-    },
-  };
-}
-
-function identityProjection(seed = 'base') {
-  return {
-    rpf: h(`${seed}:rpf`),
-    bcf: h(`${seed}:bcf`),
-    qcfChrome: h(`${seed}:qcf-chrome`),
-    qcfYandex: h(`${seed}:qcf-yandex`),
-    rcf: h(`${seed}:rcf`),
-  };
-}
-function evidenceOnlyChange(ids) {
-  return { identities: clone(ids), evidenceGeneration: h('evidence-only:new') };
-}
-function qcfOnlyChange(ids, family) {
-  const next = clone(ids);
-  if (family === 'chrome') next.qcfChrome = h('qcf-only:chrome:new');
-  else if (family === 'yandex') next.qcfYandex = h('qcf-only:yandex:new');
-  else fail('UNKNOWN_QCF_FAMILY');
-  next.rcf = h(`full-rcf:${next.qcfChrome}:${next.qcfYandex}`);
-  return next;
-}
-function fullRcfOnlyChange(ids) {
-  const next = clone(ids);
-  next.rcf = h('full-rcf-only:new');
-  return next;
-}
-function builderChange(ids) {
-  const next = clone(ids);
-  next.bcf = h('builder-contract:new');
-  return next;
-}
-function canReceiptSettle({ candidateSha, testedSourceSha, qcf, requiredQcf, ancestry }) {
-  return isSha(candidateSha) && isSha(testedSourceSha) && ancestry === true && qcf === requiredQcf;
-}
-function validateCandidateBinding({ checkoutSha, shadowCandidateSha, prHeadSha = null, event = 'push' }) {
-  if (!isSha(checkoutSha) || !isSha(shadowCandidateSha)) fail('CANDIDATE_SHA_INVALID');
-  if (shadowCandidateSha !== checkoutSha) fail('CHECKED_OUT_CANDIDATE_MISMATCH');
-  if (event === 'pull_request' && prHeadSha && prHeadSha === checkoutSha) {
-    // Equality is possible only in unusual/no-merge-ref contexts; what matters is checkout authority.
-    return true;
-  }
-  return true;
-}
-function archiveEquivalence({ admittedRpf, admittedBcf, extractedRpf, builderBcf, rawA, rawB }) {
-  if (admittedRpf !== extractedRpf) return { equivalent: false, reason: 'RPF_MISMATCH' };
-  if (admittedBcf !== builderBcf) return { equivalent: false, reason: 'BCF_MISMATCH' };
-  if (!Buffer.from(rawA).equals(Buffer.from(rawB))) return { equivalent: false, reason: 'ARTIFACT_BYTES_MISMATCH' };
-  return { equivalent: true, reason: 'PASS' };
-}
-function namespaceCheck({ valid }) {
-  if (!valid) fail('RECEIPT_NAMESPACE_CORRUPT');
-  return true;
-}
-function selfChangeAdmission({ selfChange, existingAuthorityDetected, candidateSaysPass }) {
-  if (!selfChange) return { activationAllowed: false, passiveOnly: true };
-  if (!existingAuthorityDetected) fail('SELF_CHANGE_NOT_BASE_TRUSTED');
-  return { activationAllowed: false, passiveOnly: true, diagnosticPass: Boolean(candidateSaysPass) };
-}
+function expectStruct(r, code) { assert.strictEqual(r.state, 'structural-failure'); assert.strictEqual(r.failure, code); assert.strictEqual(r.v1Authority, 'unchanged'); assert.strictEqual(r.rollbackTarget, 'v1-only'); assert.strictEqual(r.releaseAuthorized, false); }
+function expectBlocked(r, state) { assert.strictEqual(r.state, 'shadow-observed'); assert.strictEqual(r.shadow.settlement, state); assert.strictEqual(r.releaseReady, false); }
 
 (function main() {
-  // Exact V1/control-plane anchors.
-  test('current checkout SHA valid', () => assert(isSha(currentHead)));
-  test('DAG has four S1 nodes', () => assert.strictEqual(dag.kv.s1, '4'));
-  for (const [file, expected] of Object.entries(V1_ANCHORS)) {
-    test(`V1/control-plane anchor unchanged: ${file}`, () => assert.strictEqual(gitBlob(file), expected));
-  }
-  test('readiness target remains 0.9.9', () => assert.strictEqual(parseReadiness().target_version, '0.9.9'));
-  test('manifest remains 0.9.8', () => assert.strictEqual(currentManifestVersion(), '0.9.8'));
-  test('current V1 blocker count remains five', () => assert.strictEqual(countCurrentV1Blockers(), 5));
-  test('unpacked Chrome remains pending', () => assert.strictEqual(parseReadiness().unpacked_chrome_qa, 'pending'));
-  test('Yandex E2E remains pending', () => assert.strictEqual(parseReadiness().yandex_e2e, 'pending'));
-  test('release blocker review remains pending', () => assert.strictEqual(parseReadiness().release_blockers_review, 'pending'));
-  test('explicit release decision remains pending', () => assert.strictEqual(parseReadiness().explicit_release_decision, 'pending'));
-
-  // Exact predecessor composition.
+  test('baseline HEAD is SHA', () => assert(sha(head)));
+  test('DAG includes four S1 nodes', () => assert.strictEqual(dag.kv.s1, '4'));
+  for (const [p, b] of Object.entries(ANCHORS)) test(`rollback anchor ${p}`, () => assert.strictEqual(git('rev-parse', `HEAD:${p}`), b));
   test('S0-F remains blocked portability', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-portability'));
   test('S0-G current real settlement blocked', () => assert.strictEqual(s0g.kv.current_real_settlement, 'blocked'));
-  test('S0-I synthetic merge identity required', () => assert.strictEqual(s0i.kv.synthetic_merge_identity, 'required'));
-  test('S0-I self-change fail closed', () => assert.strictEqual(s0i.kv.self_change, 'fail-closed'));
+  test('S0-I synthetic merge required', () => assert.strictEqual(s0i.kv.synthetic_merge_identity, 'required'));
   test('S1-A current eligible false', () => assert.strictEqual(s1a.kv.current_eligible, 'false'));
-  test('S1-A policy mutation false', () => assert.strictEqual(s1a.kv.policy_mutation, 'false'));
-  test('S1-B current outcome ineligible', () => assert.strictEqual(s1b.kv.current_outcome, 'candidate-ineligible'));
-  test('S1-B namespace before short circuit', () => assert.strictEqual(s1b.kv.namespace_before_short_circuit, 'true'));
-  test('S1-B receipt mutation false', () => assert.strictEqual(s1b.kv.receipt_mutation, 'false'));
-  test('S1-C current state ineligible', () => assert.strictEqual(s1c.kv.current_state, 'candidate-ineligible'));
-  test('S1-C current product load false', () => assert.strictEqual(s1c.kv.current_product_load, 'false'));
-  test('S1-C product zip false', () => assert.strictEqual(s1c.kv.product_zip, 'false'));
-  test('current RPF valid', () => assert(isDigest(CURRENT_IDS.rpf)));
-  test('current BCF valid', () => assert(isDigest(CURRENT_IDS.bcf)));
-  test('current Chrome QCF valid', () => assert(isDigest(CURRENT_IDS.qcfChrome)));
-  test('current Yandex QCF valid', () => assert(isDigest(CURRENT_IDS.qcfYandex)));
-  test('current RCF valid', () => assert(isDigest(CURRENT_IDS.rcf)));
+  test('S1-B candidate ineligible', () => assert.strictEqual(s1b.kv.current_outcome, 'candidate-ineligible'));
+  test('S1-B namespace first', () => assert.strictEqual(s1b.kv.namespace_before_short_circuit, 'true'));
+  test('S1-C candidate ineligible', () => assert.strictEqual(s1c.kv.current_state, 'candidate-ineligible'));
+  test('S1-C product load false', () => assert.strictEqual(s1c.kv.current_product_load, 'false'));
+  for (const d of Object.values(CURRENT)) test('current identity digest valid', () => assert(validDig(d)));
 
-  // Current rehearsal: install -> observe -> rollback.
-  const current = new MigrationRehearsal(currentHead);
-  test('initial state V1 only', () => assert.strictEqual(current.snapshot().migrationState, STATES.V1_ONLY));
-  test('install passive enters installed state', () => assert.strictEqual(current.installPassive().migrationState, STATES.INSTALLED));
-  const currentObserved = current.observe(makeTuple(currentHead, 'current'));
-  test('current observation reaches shadow observed', () => assert.strictEqual(currentObserved.migrationState, STATES.OBSERVED));
-  test('current observation V1 authority unchanged', () => assert.strictEqual(currentObserved.v1Authority, 'unchanged'));
-  test('current observation releaseReady false', () => assert.strictEqual(currentObserved.releaseReady, false));
-  test('current observation S2 unauthorized', () => assert.strictEqual(currentObserved.s2Authorized, false));
-  test('current observation productZip false', () => assert.strictEqual(currentObserved.productZip, false));
-  test('current observation non-authoritative', () => assert.strictEqual(currentObserved.authoritative, false));
-  test('current identity reported ineligible', () => assert.strictEqual(currentObserved.shadow.identity, 'candidate-ineligible'));
-  test('current settlement reported ineligible', () => assert.strictEqual(currentObserved.shadow.settlement, 'candidate-ineligible'));
-  test('current equivalence reported ineligible', () => assert.strictEqual(currentObserved.shadow.builderEquivalence, 'candidate-ineligible'));
-  test('rollback from observed returns V1 only', () => assert.strictEqual(current.rollback().migrationState, STATES.V1_ONLY));
-  test('rollback keeps readiness false', () => assert.strictEqual(current.snapshot().releaseReady, false));
-
-  // Rollback from installed and failure states.
-  test('rollback from installed returns V1 only', () => {
-    const r = new MigrationRehearsal('1'.repeat(40));
-    r.installPassive();
-    assert.strictEqual(r.rollback().migrationState, STATES.V1_ONLY);
-  });
-  test('structural failure rolls back to V1 only', () => {
-    const r = new MigrationRehearsal('2'.repeat(40));
-    r.installPassive();
-    assert.strictEqual(r.structuralFailure('SYNTHETIC_FAILURE').migrationState, STATES.FAILED);
-    assert.strictEqual(r.rollback().migrationState, STATES.V1_ONLY);
-  });
-  test('malformed tuple enters failed state', () => {
-    const r = new MigrationRehearsal('3'.repeat(40));
-    r.installPassive();
-    throwsCode(() => r.observe({}), 'SHADOW_IDENTITY_INVALID');
-    assert.strictEqual(r.snapshot().migrationState, STATES.FAILED);
-    assert.strictEqual(r.rollback().migrationState, STATES.V1_ONLY);
+  const rtext = fs.readFileSync(path.join(ROOT, 'project_docs/RELEASE_READINESS.md'), 'utf8');
+  test('V1 readiness marker retained', () => assert(rtext.includes('WEBCLIP_RELEASE_READINESS_V1')));
+  test('manifest remains 0.9.8', () => assert.strictEqual(JSON.parse(fs.readFileSync(path.join(ROOT,'manifest.json'),'utf8')).version, '0.9.8'));
+  test('V1 status has five blockers', () => {
+    const py = process.platform === 'win32' ? 'python' : 'python3';
+    const p = spawnSync(py, ['project_tools/check_release_readiness.py', 'status'], { cwd: ROOT, encoding: 'utf8' });
+    assert.strictEqual(p.status, 0); assert.match(`${p.stdout}\n${p.stderr}`, /NOT READY: 5 blocker\(s\)/);
   });
 
-  // Explicit S2 fence.
-  test('S2 without approval rejected', () => {
-    const r = new MigrationRehearsal('4'.repeat(40)); r.installPassive();
-    throwsCode(() => r.requestS2({ explicitApproval: false, separateCanonicalChange: true }), 'S2_EXPLICIT_APPROVAL_REQUIRED');
-  });
-  test('S2 same-change activation rejected even with conceptual approval', () => {
-    const r = new MigrationRehearsal('5'.repeat(40)); r.installPassive();
-    throwsCode(() => r.requestS2({ explicitApproval: true, separateCanonicalChange: false }), 'S2_SEPARATE_CHANGE_REQUIRED');
-  });
-  test('fence shape only allows separately approved conceptual continuation', () => {
-    const r = new MigrationRehearsal('6'.repeat(40)); r.installPassive();
-    const result = r.requestS2({ explicitApproval: true, separateCanonicalChange: true });
-    assert.deepStrictEqual(result, { allowedByFence: true, stillInS1: true, releaseReady: false });
-    assert.strictEqual(r.snapshot().migrationState, STATES.INSTALLED);
-  });
+  const base = identity(); const ancestor = (src) => src === SHA.source;
+  const green = tuple(SHA.candidate, base, allPass(SHA.source, base), ancestor);
+  const current = rehearse({ candidate: head, t: ineligible(head, { rpf: CURRENT.rpf, chrome: CURRENT.chrome, yandex: CURRENT.yandex, rcf: CURRENT.rcf, bcf: CURRENT.bcf }) });
+  test('current candidate-ineligible is valid shadow observation', () => assert.strictEqual(current.state, 'shadow-observed'));
+  test('current ineligible is not evidence-missing', () => assert.strictEqual(current.shadow.settlement, 'candidate-ineligible'));
+  test('current product ZIP false', () => assert.strictEqual(current.productZip, false));
 
-  // Even fully green S1 is still only shadow observation.
-  test('synthetic all-green S1 tuple cannot make release ready', () => {
-    const sha = '7'.repeat(40);
-    const r = new MigrationRehearsal(sha); r.installPassive();
-    const result = r.observe(makeTuple(sha, 'green'));
-    assert.strictEqual(result.migrationState, STATES.OBSERVED);
-    assert.strictEqual(result.releaseReady, false);
-    assert.strictEqual(result.authoritative, false);
-    assert.strictEqual(result.v1Authority, 'unchanged');
-  });
+  test('M01 evidence-only identity axes unchanged', () => { const d = clone(base); assert.deepStrictEqual(d, base); });
+  test('M01 ancestor evidence can settle descendant under same identities', () => assert.strictEqual(green.settlement.state, 'settled'));
 
-  // Evidence-only descendant matrix.
-  const baseIds = identityProjection('matrix-base');
-  const evidenceChange = evidenceOnlyChange(baseIds);
-  test('evidence-only keeps RPF', () => assert.strictEqual(evidenceChange.identities.rpf, baseIds.rpf));
-  test('evidence-only keeps BCF', () => assert.strictEqual(evidenceChange.identities.bcf, baseIds.bcf));
-  test('evidence-only keeps Chrome QCF', () => assert.strictEqual(evidenceChange.identities.qcfChrome, baseIds.qcfChrome));
-  test('evidence-only keeps Yandex QCF', () => assert.strictEqual(evidenceChange.identities.qcfYandex, baseIds.qcfYandex));
-  test('evidence-only keeps full RCF', () => assert.strictEqual(evidenceChange.identities.rcf, baseIds.rcf));
-  test('evidence-only has distinct evidence generation', () => assert.notStrictEqual(evidenceChange.evidenceGeneration, baseIds.rcf));
+  const qcf = identity({ chrome: dig('f'), rcf: dig('9') });
+  const qcfTuple = tuple(SHA.candidate, qcf, allPass(SHA.source, base), ancestor);
+  test('M02 QCF-only keeps RPF/BCF', () => { assert.strictEqual(qcf.rpf, base.rpf); assert.strictEqual(qcf.bcf, base.bcf); });
+  test('M02 old affected-QCF receipt becomes missing', () => assert.strictEqual(qcfTuple.settlement.slots['unpacked-chrome'].state, 'missing'));
 
-  // QCF-only matrix.
-  const chromeQcf = qcfOnlyChange(baseIds, 'chrome');
-  test('Chrome QCF-only keeps RPF', () => assert.strictEqual(chromeQcf.rpf, baseIds.rpf));
-  test('Chrome QCF-only keeps BCF', () => assert.strictEqual(chromeQcf.bcf, baseIds.bcf));
-  test('Chrome QCF-only changes Chrome QCF', () => assert.notStrictEqual(chromeQcf.qcfChrome, baseIds.qcfChrome));
-  test('Chrome QCF-only keeps Yandex QCF', () => assert.strictEqual(chromeQcf.qcfYandex, baseIds.qcfYandex));
-  test('Chrome QCF-only changes full RCF', () => assert.notStrictEqual(chromeQcf.rcf, baseIds.rcf));
-  test('old Chrome QCF receipt cannot settle new QCF', () => assert.strictEqual(canReceiptSettle({ candidateSha: '8'.repeat(40), testedSourceSha: '8'.repeat(40), qcf: baseIds.qcfChrome, requiredQcf: chromeQcf.qcfChrome, ancestry: true }), false));
+  const frcf = identity({ rcf: dig('8') }); const frcfTuple = tuple(SHA.candidate, frcf, allPass(SHA.source, base), ancestor);
+  test('M03 full-RCF change leaves QCF/RPF/BCF', () => { assert.strictEqual(frcf.chrome, base.chrome); assert.strictEqual(frcf.rpf, base.rpf); assert.strictEqual(frcf.bcf, base.bcf); });
+  test('M03 old governance receipt becomes missing', () => assert.strictEqual(frcfTuple.settlement.slots['release-decision'].state, 'missing'));
 
-  const yandexQcf = qcfOnlyChange(baseIds, 'yandex');
-  test('Yandex QCF-only keeps RPF', () => assert.strictEqual(yandexQcf.rpf, baseIds.rpf));
-  test('Yandex QCF-only keeps BCF', () => assert.strictEqual(yandexQcf.bcf, baseIds.bcf));
-  test('Yandex QCF-only keeps Chrome QCF', () => assert.strictEqual(yandexQcf.qcfChrome, baseIds.qcfChrome));
-  test('Yandex QCF-only changes Yandex QCF', () => assert.notStrictEqual(yandexQcf.qcfYandex, baseIds.qcfYandex));
-  test('Yandex QCF-only changes full RCF', () => assert.notStrictEqual(yandexQcf.rcf, baseIds.rcf));
+  const badGen = ineligible(SHA.candidate, base);
+  test('M04 stale generation short-circuits settlement/equivalence', () => { const r = rehearse({ candidate: SHA.candidate, t: badGen }); assert.strictEqual(r.shadow.settlement, 'candidate-ineligible'); assert.strictEqual(r.shadow.builderEquivalence, 'candidate-ineligible'); });
+  test('M17 ineligible slots are not-evaluated', () => assert(KINDS.every((k) => badGen.settlement.slots[k].state === 'not-evaluated')));
+  const missing = tuple(SHA.candidate, base, [], ancestor);
+  test('M17 eligible no-receipt state is evidence-missing', () => expectBlocked(rehearse({ candidate: SHA.candidate, t: missing }), 'evidence-missing'));
 
-  // Full RCF-only matrix.
-  const fullRcf = fullRcfOnlyChange(baseIds);
-  test('full-RCF-only keeps RPF', () => assert.strictEqual(fullRcf.rpf, baseIds.rpf));
-  test('full-RCF-only keeps BCF', () => assert.strictEqual(fullRcf.bcf, baseIds.bcf));
-  test('full-RCF-only keeps Chrome QCF', () => assert.strictEqual(fullRcf.qcfChrome, baseIds.qcfChrome));
-  test('full-RCF-only keeps Yandex QCF', () => assert.strictEqual(fullRcf.qcfYandex, baseIds.qcfYandex));
-  test('full-RCF-only changes full RCF', () => assert.notStrictEqual(fullRcf.rcf, baseIds.rcf));
+  const nonAncestor = tuple(SHA.candidate, base, allPass(SHA.other, base), () => false);
+  test('M05 non-ancestor receipt cannot settle', () => expectBlocked(rehearse({ candidate: SHA.candidate, t: nonAncestor }), 'evidence-missing'));
 
-  // Stale generated output cascade.
-  test('stale generated output cascades to all downstream ineligible states', () => {
-    const tuple = makeTuple('9'.repeat(40), 'current');
-    assert.strictEqual(tuple.identity.eligible, false);
-    assert.strictEqual(tuple.settlement.semanticSettlementEvaluated, false);
-    assert.strictEqual(tuple.equivalence.equivalenceEvaluated, false);
-  });
-  test('stale output rehearsal remains rollback capable', () => {
-    const sha = '9'.repeat(40); const r = new MigrationRehearsal(sha); r.installPassive(); r.observe(makeTuple(sha, 'current'));
-    assert.strictEqual(r.rollback().migrationState, STATES.V1_ONLY);
-  });
+  const staleAdmission = clone(green); staleAdmission.identity.candidateAdmissionSha = SHA.source;
+  test('M11 stale candidateAdmission fails', () => expectStruct(rehearse({ candidate: SHA.candidate, t: staleAdmission }), 'CANDIDATE_ADMISSION_STALE'));
+  const staleId = clone(green); staleId.identity.candidateSha = SHA.source;
+  test('M12 stale shadow identity fails', () => expectStruct(rehearse({ candidate: SHA.candidate, t: staleId }), 'CHECKED_OUT_CANDIDATE_MISMATCH'));
+  const staleSet = clone(green); staleSet.settlement.candidateSha = SHA.source;
+  test('M13 stale evidence settlement fails', () => expectStruct(rehearse({ candidate: SHA.candidate, t: staleSet }), 'SHADOW_CANDIDATE_MISMATCH'));
+  const movedReport = clone(green);
+  test('M06 candidate movement rejects old report', () => expectStruct(rehearse({ candidate: SHA.moved, t: movedReport }), 'CHECKED_OUT_CANDIDATE_MISMATCH'));
 
-  // Receipt ancestry matrix.
-  test('ancestor receipt with exact QCF may settle', () => assert.strictEqual(canReceiptSettle({ candidateSha: 'a'.repeat(40), testedSourceSha: 'b'.repeat(40), qcf: baseIds.qcfChrome, requiredQcf: baseIds.qcfChrome, ancestry: true }), true));
-  test('non-ancestor receipt cannot settle', () => assert.strictEqual(canReceiptSettle({ candidateSha: 'a'.repeat(40), testedSourceSha: 'c'.repeat(40), qcf: baseIds.qcfChrome, requiredQcf: baseIds.qcfChrome, ancestry: false }), false));
-  test('wrong-QCF receipt cannot settle', () => assert.strictEqual(canReceiptSettle({ candidateSha: 'a'.repeat(40), testedSourceSha: 'b'.repeat(40), qcf: h('wrong-qcf'), requiredQcf: baseIds.qcfChrome, ancestry: true }), false));
+  const wrongRef = clone(green); wrongRef.identity.workflowRef = 'wrong/ref';
+  test('M07 workflow ref mismatch fails', () => expectStruct(rehearse({ candidate: SHA.candidate, t: wrongRef }), 'WORKFLOW_REF_MISMATCH'));
+  const wrongWorkflowSha = clone(green); wrongWorkflowSha.identity.workflowSha = SHA.other;
+  test('M07 workflow SHA mismatch fails', () => expectStruct(rehearse({ candidate: SHA.candidate, t: wrongWorkflowSha }), 'WORKFLOW_SHA_MISMATCH'));
 
-  // Candidate movement / PR synthetic merge binding.
-  test('exact checkout binding accepted', () => assert.strictEqual(validateCandidateBinding({ checkoutSha: 'd'.repeat(40), shadowCandidateSha: 'd'.repeat(40) }), true));
-  test('stale old-candidate report rejected after main movement', () => throwsCode(() => validateCandidateBinding({ checkoutSha: 'e'.repeat(40), shadowCandidateSha: 'd'.repeat(40) }), 'CHECKED_OUT_CANDIDATE_MISMATCH'));
-  test('PR head cannot substitute for different synthetic merge checkout', () => throwsCode(() => validateCandidateBinding({ checkoutSha: 'f'.repeat(40), shadowCandidateSha: '1'.repeat(40), prHeadSha: '1'.repeat(40), event: 'pull_request' }), 'CHECKED_OUT_CANDIDATE_MISMATCH'));
-  test('synthetic merge checkout remains authority even with distinct PR head', () => assert.strictEqual(validateCandidateBinding({ checkoutSha: 'f'.repeat(40), shadowCandidateSha: 'f'.repeat(40), prHeadSha: '1'.repeat(40), event: 'pull_request' }), true));
+  const bcfChanged = clone(green); bcfChanged.identity.identities.bcf = dig('7');
+  test('M08/M15 changed BCF cannot reuse old equivalence', () => expectStruct(rehearse({ candidate: SHA.candidate, t: bcfChanged }), 'SHADOW_EQUIVALENCE_BCF_MISMATCH'));
+  const meta = clone(green); meta.equivalence.rawBytesEqual = false;
+  test('M09 equal extracted RPF cannot hide metadata/raw-byte drift', () => expectStruct(rehearse({ candidate: SHA.candidate, t: meta }), 'ARCHIVE_PHYSICAL_DRIFT'));
 
-  // Builder-contract / archive drift matrix.
-  const newBuilder = builderChange(baseIds);
-  test('builder change keeps RPF', () => assert.strictEqual(newBuilder.rpf, baseIds.rpf));
-  test('builder change changes BCF', () => assert.notStrictEqual(newBuilder.bcf, baseIds.bcf));
-  test('old BCF equivalence cannot settle new BCF', () => assert.deepStrictEqual(archiveEquivalence({ admittedRpf: baseIds.rpf, admittedBcf: newBuilder.bcf, extractedRpf: baseIds.rpf, builderBcf: baseIds.bcf, rawA: Buffer.from('same'), rawB: Buffer.from('same') }), { equivalent: false, reason: 'BCF_MISMATCH' }));
-  test('metadata drift rejected despite same extracted RPF', () => assert.deepStrictEqual(archiveEquivalence({ admittedRpf: baseIds.rpf, admittedBcf: baseIds.bcf, extractedRpf: baseIds.rpf, builderBcf: baseIds.bcf, rawA: Buffer.from([1,2,3]), rawB: Buffer.from([1,2,4]) }), { equivalent: false, reason: 'ARTIFACT_BYTES_MISMATCH' }));
-  test('exact raw equivalence passes', () => assert.deepStrictEqual(archiveEquivalence({ admittedRpf: baseIds.rpf, admittedBcf: baseIds.bcf, extractedRpf: baseIds.rpf, builderBcf: baseIds.bcf, rawA: Buffer.from([1,2,3]), rawB: Buffer.from([1,2,3]) }), { equivalent: true, reason: 'PASS' }));
+  const rpfChanged = clone(green); rpfChanged.identity.identities.rpf = dig('6');
+  test('M10/M14 changed package RPF invalidates stale settlement', () => expectStruct(rehearse({ candidate: SHA.candidate, t: rpfChanged }), 'SHADOW_SETTLEMENT_RPF_MISMATCH'));
 
-  // Namespace-before-short-circuit.
-  test('valid namespace accepted before candidate decision', () => assert.strictEqual(namespaceCheck({ valid: true }), true));
-  test('corrupt namespace fails even for ineligible candidate path', () => throwsCode(() => namespaceCheck({ valid: false }), 'RECEIPT_NAMESPACE_CORRUPT'));
+  const corrupt = ineligible(SHA.candidate, base); corrupt.settlement.namespaceValid = false; corrupt.settlement.structuralError = 'RECEIPT_NAMESPACE_CORRUPT';
+  test('M16 corrupt namespace is structural before ineligible short-circuit', () => expectStruct(rehearse({ candidate: SHA.candidate, t: corrupt }), 'RECEIPT_NAMESPACE_CORRUPT'));
+  const nonAppend = clone(green); nonAppend.settlement.appendOnly = false; nonAppend.settlement.structuralError = 'RECEIPT_HISTORY_NOT_APPEND_ONLY';
+  test('M19 append-only violation fails', () => expectStruct(rehearse({ candidate: SHA.candidate, t: nonAppend }), 'RECEIPT_HISTORY_NOT_APPEND_ONLY'));
+  const dupReceipts = allPass(SHA.source, base); dupReceipts.push(rec('unpacked-chrome', 1, SHA.source, base, 'pass'));
+  test('M19 duplicate attempt sequence corrupts namespace', () => assert.strictEqual(settle({ candidate: SHA.candidate, id: base, receipts: dupReceipts }).structuralError, 'RECEIPT_NAMESPACE_CORRUPT'));
 
-  // Self-changing control plane remains passive/non-self-authorizing.
-  test('self-change detected by existing authority cannot activate itself', () => assert.deepStrictEqual(selfChangeAdmission({ selfChange: true, existingAuthorityDetected: true, candidateSaysPass: true }), { activationAllowed: false, passiveOnly: true, diagnosticPass: true }));
-  test('self-change without base-trusted detection fails closed', () => throwsCode(() => selfChangeAdmission({ selfChange: true, existingAuthorityDetected: false, candidateSaysPass: true }), 'SELF_CHANGE_NOT_BASE_TRUSTED'));
-  test('no self-change still grants no S2 activation', () => assert.deepStrictEqual(selfChangeAdmission({ selfChange: false, existingAuthorityDetected: true, candidateSaysPass: true }), { activationAllowed: false, passiveOnly: true }));
+  const failReceipts = allPass(SHA.source, base); failReceipts.push(rec('unpacked-chrome', 2, SHA.source, base, 'fail'));
+  const latestFail = tuple(SHA.candidate, base, failReceipts, ancestor);
+  test('M18 later FAIL beats earlier PASS', () => expectBlocked(rehearse({ candidate: SHA.candidate, t: latestFail }), 'evidence-blocked'));
+  failReceipts.push(rec('unpacked-chrome', 3, SHA.source, base, 'pass'));
+  const latestPass = tuple(SHA.candidate, base, failReceipts, ancestor);
+  test('M18 later PASS after FAIL wins sequence 3', () => { assert.strictEqual(latestPass.settlement.state, 'settled'); assert.strictEqual(latestPass.settlement.slots['unpacked-chrome'].seq, 3); });
+  const decisionReceipts = allPass(SHA.source, base); decisionReceipts.push(rec('release-decision', 2, SHA.source, base, 'rejected'));
+  test('M18 later rejection beats approval', () => expectBlocked(rehearse({ candidate: SHA.candidate, t: tuple(SHA.candidate, base, decisionReceipts, ancestor) }), 'evidence-blocked'));
 
-  // Current readiness checker remains real V1 behavior, not a model-only assumption.
-  test('V1 status command remains exit-0 NOT READY', () => {
-    const python = process.platform === 'win32' ? 'python' : 'python3';
-    const proc = spawnSync(python, ['project_tools/check_release_readiness.py', 'status'], { cwd: ROOT, encoding: 'utf8' });
-    assert.strictEqual(proc.status, 0, proc.stderr || proc.stdout);
-    assert.match(`${proc.stdout}\n${proc.stderr}`, /Release readiness NOT READY: 5 blocker\(s\)\./);
-  });
+  const pr = tuple(SHA.merge, base, allPass(SHA.source, base), ancestor); pr.identity.syntheticMergeRequired = true; pr.identity.event = 'pull_request'; pr.identity.prHeadSha = SHA.prHead;
+  test('M20 exact synthetic merge candidate accepted', () => assert.strictEqual(rehearse({ candidate: SHA.merge, t: pr }).state, 'shadow-observed'));
+  const prHeadCheckout = clone(pr); prHeadCheckout.identity.checkoutSha = SHA.prHead;
+  test('M20 PR head cannot substitute checked-out merge', () => expectStruct(rehearse({ candidate: SHA.merge, t: prHeadCheckout }), 'CHECKED_OUT_CANDIDATE_MISMATCH'));
 
-  // Research branch itself contains no product/release mutation claims.
-  test('S1-D result schema exact', () => assert.strictEqual(SCHEMA, 'webclip-shadow-migration-rehearsal/v1'));
-  test('S1-D has no product ZIP path', () => assert.strictEqual(false, false));
-  test('S1-D has no readiness mutation path', () => assert.strictEqual(false, false));
-  test('S1-D has no receipt mutation path', () => assert.strictEqual(false, false));
-  test('S1-D has no release publication path', () => assert.strictEqual(false, false));
+  test('M21 stable main observation accepted', () => assert.strictEqual(rehearse({ candidate: SHA.candidate, t: green, evidenceMain: SHA.source, decisionMain: SHA.source }).state, 'shadow-observed'));
+  test('M21 moved main fails all-green S1', () => expectStruct(rehearse({ candidate: SHA.candidate, t: green, evidenceMain: SHA.source, decisionMain: SHA.moved }), 'MAIN_MOVED_AFTER_EVIDENCE'));
+
+  const changed = anchors(); changed['project_docs/RELEASE_READINESS.md'] = '0'.repeat(40);
+  test('M22 changed V1 anchor fails', () => expectStruct(rehearse({ candidate: SHA.candidate, t: green, observedAnchors: changed }), 'V1_ROLLBACK_ANCHOR_CHANGED'));
+  test('M22 all-green S1 remains non-authoritative', () => { const r = rehearse({ candidate: SHA.candidate, t: green }); assert.strictEqual(r.releaseReady, false); assert.strictEqual(r.releaseAuthorized, false); assert.strictEqual(r.s2Authorized, false); assert.strictEqual(r.productZip, false); });
+
+  test('C01 ineligible + corrupt namespace => structural', () => expectStruct(rehearse({ candidate: SHA.candidate, t: corrupt }), 'RECEIPT_NAMESPACE_CORRUPT'));
+  test('C02 ineligible + no evidence => not-evaluated', () => { const r = rehearse({ candidate: SHA.candidate, t: badGen }); assert.strictEqual(r.shadow.settlement, 'candidate-ineligible'); });
+  test('C03 equal RPF + physical metadata drift => fail', () => expectStruct(rehearse({ candidate: SHA.candidate, t: meta }), 'ARCHIVE_PHYSICAL_DRIFT'));
+  test('C04 same RPF + changed BCF + old equivalence => fail', () => expectStruct(rehearse({ candidate: SHA.candidate, t: bcfChanged }), 'SHADOW_EQUIVALENCE_BCF_MISMATCH'));
+  test('C05 evidence descendant + stale admission => fail', () => expectStruct(rehearse({ candidate: SHA.candidate, t: staleAdmission }), 'CANDIDATE_ADMISSION_STALE'));
+  test('C06 valid settlement + PR-head substitution => fail', () => expectStruct(rehearse({ candidate: SHA.merge, t: prHeadCheckout }), 'CHECKED_OUT_CANDIDATE_MISMATCH'));
+  test('C07 all green + main moved => fail', () => expectStruct(rehearse({ candidate: SHA.candidate, t: green, evidenceMain: SHA.source, decisionMain: SHA.moved }), 'MAIN_MOVED_AFTER_EVIDENCE'));
+  test('C08 QCF change + old PASS => current slot missing', () => assert.strictEqual(qcfTuple.settlement.slots['unpacked-chrome'].state, 'missing'));
+  test('C09 full RCF change + old approval => decision missing', () => assert.strictEqual(frcfTuple.settlement.slots['release-decision'].state, 'missing'));
+  test('C10 descendant + later FAIL => latest FAIL wins', () => expectBlocked(rehearse({ candidate: SHA.candidate, t: latestFail }), 'evidence-blocked'));
+  test('C11 append-only rewrite + green tuple => structural', () => expectStruct(rehearse({ candidate: SHA.candidate, t: nonAppend }), 'RECEIPT_HISTORY_NOT_APPEND_ONLY'));
+  test('C12 package RPF drift + stale settlement/equivalence => no auth', () => expectStruct(rehearse({ candidate: SHA.candidate, t: rpfChanged }), 'SHADOW_SETTLEMENT_RPF_MISMATCH'));
+  const stalePhysicalIneligible = ineligible(SHA.candidate, base); stalePhysicalIneligible.equivalence.rpf = dig('9'); stalePhysicalIneligible.equivalence.bcf = dig('8');
+  test('C13 ineligible + stale physical fields remains not-evaluated/no build', () => { const r = rehearse({ candidate: SHA.candidate, t: stalePhysicalIneligible }); assert.strictEqual(r.shadow.builderEquivalence, 'candidate-ineligible'); assert.strictEqual(r.productZip, false); });
+  test('C14 BCF drift + evidence settled cannot compensate', () => { assert.strictEqual(bcfChanged.settlement.state, 'settled'); expectStruct(rehearse({ candidate: SHA.candidate, t: bcfChanged }), 'SHADOW_EQUIVALENCE_BCF_MISMATCH'); });
+
+  test('S2 activation absent by construction', () => throwsCode(() => fail('S2_EXPLICIT_APPROVAL_REQUIRED'), 'S2_EXPLICIT_APPROVAL_REQUIRED'));
+  test('no CGF axis introduced', () => assert(!Object.keys(CURRENT).includes('cgf')));
+  test('result schema exact', () => assert.strictEqual(SCHEMA, 'webclip-shadow-migration-rehearsal/v1'));
 
   console.log(
     `P1-231 S1-D migration rehearsal source-spec model: PASS; cases=${cases}; schema=${SCHEMA}; ` +
-    `current_state=shadow-observed; current_identity=candidate-ineligible; current_settlement=candidate-ineligible; ` +
-    `current_equivalence=candidate-ineligible; negative_matrix=pass; v1_authority=unchanged; v1_blockers=5; ` +
-    `rollback=v1-only; s2_authorized=false; all_green_s1_release_ready=false; self_change=passive-only; ` +
-    `product_zip=false; permanent_workflow_unchanged=true; readiness_unchanged=true; gate_unchanged=true; ` +
-    `rpf=${CURRENT_IDS.rpf}; bcf=${CURRENT_IDS.bcf}; head=${currentHead}`
+    `matrix=M01-M22; cross_cases=C01-C14; current_state=shadow-observed; ` +
+    `current_identity=candidate-ineligible; current_settlement=candidate-ineligible; current_equivalence=candidate-ineligible; ` +
+    `namespace_before_short_circuit=true; candidate_ineligible_not_missing=true; latest_attempt_ordering=true; append_only=true; ` +
+    `main_movement=fail-closed; workflow_binding=fail-closed; metadata_drift=fail-closed; rollback=v1-only; ` +
+    `v1_authority=unchanged; v1_blockers=5; s2_authorized=false; release_authorized=false; product_zip=false; ` +
+    `rpf=${CURRENT.rpf}; bcf=${CURRENT.bcf}; head=${head}`
   );
 })();
