@@ -199,7 +199,8 @@ function admitCandidate({ candidateSha, portabilityReady, regeneratedOutputs, id
 
   for (const rel of PACKAGE_FILES) exactBlob(candidateSha, rel);
   const relationResult = verifyRelation({ candidateSha, regeneratedOutputs, portabilityReady });
-  if (!identities || Object.values(identities).some((x) => !/^sha256:[0-9a-f]{64}$/.test(x))) {
+  const requiredIdentityFields = ['rpf', 'chromeQcf', 'yandexQcf', 'rcf', 'bcf'];
+  if (!identities || requiredIdentityFields.some((key) => !/^sha256:[0-9a-f]{64}$/.test(identities[key] || ''))) {
     fail('IDENTITY_COMPUTATION_FAILED');
   }
   return Object.freeze({
