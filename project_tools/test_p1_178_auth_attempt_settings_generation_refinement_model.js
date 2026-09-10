@@ -24,7 +24,6 @@ function asyncSection(signature) {
   return SOURCE.slice(start, next >= 0 ? next : SOURCE.length);
 }
 
-// Small generation model. Secrets are deliberately absent from control rows.
 function begin(state, kind, clientId = '') {
   const generation = state.generation + 1;
   const attempt = { attemptId: `${kind}-${generation}`, generation, kind, clientId };
@@ -66,7 +65,6 @@ function controlSecretFree(control) {
   return !['accesstoken', 'access_token', 'refreshtoken', 'refresh_token', 'codeverifier', 'oauthstate', 'authorization'].some((x) => s.includes(x));
 }
 
-// Canonical authority and scope.
 check('O01 P1-178 active', () => has(REGISTRY, '| P1-178 | ACTIVE |'));
 check('O02 P1-178 owner wording', () => has(REGISTRY, 'OAuth pending/token exchange/config commit is one auth-attempt + settings-generation state machine'));
 check('O03 P1-165 remains separate', () => has(REGISTRY, '| P1-165 | ACTIVE |'));
@@ -80,7 +78,6 @@ check('O10 L5 not run', () => has(EVIDENCE, 'Real Chrome/Yandex L5: **NOT RUN**'
 check('O11 S2 none', () => has(EVIDENCE, 'Release-policy activation: **NONE**'));
 check('O12 manifest unchanged', () => assert.equal(MANIFEST.version, '0.9.8'));
 
-// Current-source positive controls and current gaps.
 check('S01 pending key exists', () => has(SOURCE, 'yandexOAuthPending'));
 check('S02 auth storage serialization exists', () => has(SOURCE, 'runYandexAuthStorageOperation'));
 check('S03 config serializer exists', () => has(SOURCE, 'updateYandexConfig'));
@@ -90,14 +87,14 @@ check('S05 start has PKCE verifier', () => has(start, 'codeVerifier'));
 check('S06 start has oauth state', () => has(start, 'state'));
 check('S07 start pending lacks attemptId', () => lacks(start, 'attemptId'));
 check('S08 start pending lacks auth generation', () => lacks(start, 'authGeneration'));
-check('S09 start cleanup removes shared pending key', () => has(start, "chrome.storage.session.remove(['yandexOAuthPending'])"));
+check('S09 start cleanup removes shared pending key', () => has(start, "chrome.storage.session.remove('yandexOAuthPending')"));
 
 const finish = asyncSection('async function finishYandexOAuth(code)');
 check('S10 finish reads pending', () => has(finish, 'yandexOAuthPending'));
 check('S11 finish exchanges code', () => has(finish, 'exchangeAuthorizationCode'));
 check('S12 finish updates config after capture', () => has(finish, 'updateYandexConfig'));
 check('S13 finish writes auth', () => has(finish, 'writeYandexAuth'));
-check('S14 finish removes pending', () => has(finish, "chrome.storage.session.remove(['yandexOAuthPending'])"));
+check('S14 finish removes pending', () => has(finish, "chrome.storage.session.remove('yandexOAuthPending')"));
 check('S15 finish has no attemptId check', () => lacks(finish, 'attemptId'));
 check('S16 finish has no auth generation check', () => lacks(finish, 'authGeneration'));
 
@@ -112,7 +109,6 @@ check('S22 disconnect clears auth', () => has(SOURCE, 'await writeYandexAuth(nul
 check('S23 status observes pending', () => has(SOURCE, 'yandexOAuthPending'));
 check('S24 source lacks shared authGeneration symbol', () => lacks(SOURCE, 'authGeneration'));
 
-// Generation schedules.
 const s0 = { generation: 0, pending: null, auth: { tokenTag: 'old', generation: 0 }, clientId: 'old' };
 const sA = begin(s0, 'oauth', 'client-A');
 const a = sA.pending;
