@@ -8,15 +8,7 @@ Mode: **RESEARCH-ONLY / S0-I SOURCE SPECIFICATION**
 Production/runtime change: **NONE**  
 Release-policy activation: **NONE**
 
-This tranche refines the last S0 node of the canonical P1-231 implementation DAG: **S0-I PR checker integration**. It specifies how an exact PR base/head diff will consume S0-A package authority and S0-B source-generation authority to produce a deterministic, fail-closed release-impact projection without acquiring S0-F candidate-admission, readiness, release-gate or publication authority.
-
-No new P-code is allocated. `RESEARCH_REGISTRY.md` remains unchanged.
-
----
-
-## 1. Canonical dependency and ownership
-
-Canonical DAG:
+This tranche specifies the final S0 node of the canonical P1-231 release-governance DAG:
 
 ```text
 S0-I-pr-checker-integration
@@ -25,631 +17,735 @@ S0-I-pr-checker-integration
   mutatesCanonicalPolicy = false
 ```
 
-The existing `project_tools/check_pr_change_contract.py` already owns a different governance question:
+It does not modify the current `project_tools/check_pr_change_contract.py`, `.github/workflows/repository-integrity.yml`, future package/source-generation authority files, release readiness, release gate or product runtime.
 
-> Given an exact PR base/head diff plus PR body, are runtime/research/test declarations coupled correctly?
-
-S0-I adds a second, orthogonal question:
-
-> Which release package/source-generation authority domains are touched by the exact PR diff, under both the base and head authority generations?
-
-These questions must not be collapsed.
-
-### 1.1 Existing governance contract remains distinct
-
-Current checker behavior includes:
-
-- root extension-like runtime path classification;
-- `assets/**` / `icons/**` runtime classification;
-- research-impact declarations;
-- P-owner evidence coupling;
-- deterministic-test coupling;
-- manifest/readiness/test-status synchronization.
-
-S0-I MUST NOT reinterpret those rules as package membership. A path may be a product/runtime governance change while not being an S0-A package member.
-
-### 1.2 S0-I must not become another authority owner
-
-S0-I MUST NOT define:
-
-- package membership or path syntax — S0-A owns it;
-- source-generation relation membership — S0-B owns it;
-- generated-output freshness — S0-B/S0-F own it;
-- RPF/BCF/QCF/RCF — S0-E owns identity calculation;
-- candidate generation admission — S0-F owns it;
-- evidence settlement — S0-G owns it;
-- ZIP construction — S0-H owns it;
-- readiness or release decision — S2 owns activation/policy.
-
-The checker consumes authority facts; it does not recreate their semantics with suffix/glob heuristics.
+No new P-code is allocated. `RESEARCH_REGISTRY.md` remains unchanged.
 
 ---
 
-## 2. Why both base and head authorities are mandatory
+## 1. Authority question
 
-A head-only classifier is unsound for changes that remove or rename authority-controlled paths.
+S0-I owns one narrow question:
 
-Example:
+> For one exact PR merge candidate, what release-relevant package/source-generation surfaces are touched by the integration delta, when package membership and generation topology are consumed from S0-A/S0-B rather than rediscovered by path heuristics?
 
-```text
-base package manifest contains old-runtime.js
-head package manifest removes old-runtime.js
-PR deletes old-runtime.js
-```
+S0-I is a **classifier**, not a package, generation, identity, QA or release authority.
 
-If the checker only loads head membership, the deleted path is no longer present and can be misclassified as package-unrelated.
-
-The same problem exists for source-generation relations:
+It MUST consume:
 
 ```text
-base relation:
-  generator = build_old.py
-  input     = source.dat
-  output    = generated.js
-
-head removes/replaces that relation
+S0-A PackageTopology facts for exact base candidate
+S0-A PackageTopology facts for exact PR merge candidate
+S0-B SourceGenerationTopology facts for exact base candidate
+S0-B SourceGenerationTopology facts for exact PR merge candidate
+exact base SHA
+exact PR head SHA
+exact synthetic merge candidate SHA
+exact base -> candidate changed paths
 ```
 
-A delete/rename of those old paths remains generation-relevant even though the head relation no longer names them.
-
-Therefore S0-I MUST resolve and validate:
+It MUST NOT compute or redefine:
 
 ```text
-BaseAuthority = S0-A(baseSha) + S0-B(baseSha)
-HeadAuthority = S0-A(headSha) + S0-B(headSha)
+package membership
+source-generation relations
+RPF
+QCF
+RCF
+BCF
+S0-F admission
+S0-G evidence settlement
+ZIP bytes
+release readiness
+release approval
 ```
-
-and classify the diff against the **union of the two validated authority generations**.
-
-If either applicable authority cannot be resolved/parsed/validated, S0-I fails closed rather than falling back to path guesses.
 
 ---
 
-## 3. Exact input boundary
+## 2. Confirmed canonical gap
 
-S0-I low-level evaluation accepts only exact immutable commit identities:
+### 2.1 S0-A already requires semantic separation
 
-```text
-base_sha = full 40-hex Git commit oid
-head_sha = full 40-hex Git commit oid
-```
+Canonical S0-A explicitly states that package membership is distinct from PR runtime-impact policy and that later S0-I may consume package facts from S0-A plus source-generation facts from S0-B and checker-owned additional release-impact policy.
 
-It MUST reject moving refs such as:
+It also explicitly requires that the checker **must not become package authority** and that S0-A must not inherit the current suffix heuristic.
 
-```text
-HEAD
-main
-feature/name
-tag name
-```
+### 2.2 S0-B already requires explicit relation consumption
 
-at the low-level boundary.
-
-The caller/workflow resolves GitHub PR base/head refs to exact SHAs first.
-
-The checker then obtains an exact Git diff from those commits. Recommended source:
+Canonical S0-B defines exactly one bootstrap relation:
 
 ```text
-git diff --name-status -z --find-renames <base>...<head>
+id = public-suffix-js
+input = public_suffix_list.dat
+generator = project_tools/build_public_suffix_js.py
+output = public-suffix.js
+runtime_profile = cpython-3.12.10-v1
 ```
 
-or an equivalent API preserving status and old/new path for renames.
+Its refinement forbids implicit discovery and v1 generation chaining.
 
-Plain `--name-only` is insufficient for the final S0-I contract because delete/rename semantics need both sides explicitly.
+### 2.3 Current checker is still heuristic
+
+Current canonical `project_tools/check_pr_change_contract.py` owns useful governance checks, but its runtime classifier is currently:
+
+```text
+manifest.json
+root *.js/*.html/*.css/*.png/*.svg/*.ico/*.webp
+assets/**
+icons/**
+```
+
+It does not consume S0-A package topology or S0-B relation topology.
+
+Therefore, for example:
+
+```text
+public_suffix_list.dat changed only
+```
+
+or:
+
+```text
+project_tools/build_public_suffix_js.py changed only
+```
+
+is generation-relevant but is not a current runtime-path change.
+
+Conversely a future root `diagnostic.js` that is not admitted by S0-A would be treated by the old suffix heuristic as runtime merely because of its extension.
+
+S0-I closes this classification gap without deleting the existing research/P-owner/test coupling rules.
 
 ---
 
-## 4. Proposed typed projection
+## 3. Exact PR identity: base, head and merge candidate are different
 
-S0-I should return a deterministic internal value conceptually shaped as:
+S0-I must preserve three distinct Git identities:
 
 ```text
-PrReleaseImpactV1 {
-  schema: "webclip-pr-release-impact/v1",
-  base_sha,
-  head_sha,
-  changes[],
-  package: {
-    authority_changed,
-    touched_base_members[],
-    touched_head_members[],
-    added_members[],
-    removed_members[],
-    candidate_package_relevant
-  },
-  source_generation: {
-    authority_changed,
-    affected_relations[]
-  },
-  candidate_generation_relevant,
-  requires_s0f_recheck
+baseSha       = exact PR base commit
+prHeadSha     = exact branch head commit
+candidateSha  = exact synthetic merge commit checked by PR CI
+```
+
+For GitHub `pull_request` Repository Integrity, `candidateSha` is the synthetic merge commit actually checked out as `GITHUB_SHA`.
+
+The classifier MUST NOT silently substitute `prHeadSha` for `candidateSha`.
+
+Reason: the actual tree evaluated by PR CI contains the current base plus PR changes. If the base moved after the PR branch was created, the head tree alone is not the integration candidate.
+
+Recommended provenance validation for GitHub synthetic-merge mode:
+
+```text
+all three values are full 40-hex commit ids
+candidate checkout SHA == candidateSha
+candidate commit parents bind exact baseSha and exact prHeadSha
+```
+
+The implementation may require exact parent order if GitHub's checked-out merge-ref contract is used and that order is covered by tests; at minimum both exact parent identities must be proven.
+
+If the event/provider cannot prove the candidate relation, fail closed rather than reporting an authoritative PR impact result.
+
+---
+
+## 4. Diff must be base -> exact candidate, with rename heuristics disabled
+
+S0-I should classify the exact integration delta:
+
+```text
+git diff --name-status -z --no-renames <baseSha> <candidateSha>
+```
+
+Using `--no-renames` is deliberate.
+
+A move becomes:
+
+```text
+D old/path
+A new/path
+```
+
+so both path identities are evaluated. Classification does not depend on Git similarity thresholds, repository rename configuration or a percentage score.
+
+Accepted v1 statuses should be bounded to exact path effects:
+
+```text
+A  added
+M  modified
+D  deleted
+T  Git object type/mode class changed
+```
+
+Unknown statuses fail closed.
+
+The same normalized path cannot appear twice in classifier input. Paths are repository-relative POSIX paths and are validated before authority lookup.
+
+This also makes copy behavior simple: without copy/rename discovery, a copied path is an `A` unless another independent deletion/modification exists.
+
+---
+
+## 5. Base + candidate authority union is mandatory
+
+A PR can change the authority declarations themselves. Therefore S0-I MUST validate and consume **both** authority views:
+
+```text
+basePackage          = S0-A(baseSha)
+candidatePackage     = S0-A(candidateSha)
+baseGeneration       = S0-B topology(baseSha)
+candidateGeneration  = S0-B topology(candidateSha)
+```
+
+For changed-path classification:
+
+```text
+package membership surface
+  = basePackage.files UNION candidatePackage.files
+
+generation input surface
+  = base generation inputs UNION candidate generation inputs
+
+generation generator surface
+  = base generators UNION candidate generators
+
+generated output surface
+  = base outputs UNION candidate outputs
+```
+
+This union rule is a security/correctness invariant, not an optimization.
+
+### 5.1 Package-removal evasion prevented
+
+Unsafe candidate-only logic:
+
+```text
+PR removes old.js from package manifest
+PR deletes/changes old.js
+candidate manifest no longer contains old.js
+=> classifier could say package untouched
+```
+
+Required union logic:
+
+```text
+old.js is in base package
+=> packageMemberTouched = true
+```
+
+### 5.2 Package-addition impact detected
+
+```text
+PR adds new.js to candidate package
+PR adds new.js
+=> candidate membership catches it
+```
+
+### 5.3 Generation-relation removal evasion prevented
+
+```text
+PR removes relation R
+PR changes/deletes R's old generator/input/output
+```
+
+Base generation topology still classifies those paths as generation impact.
+
+### 5.4 Generation-relation addition detected
+
+New relation paths are classified from candidate topology.
+
+---
+
+## 6. Authority views must be independently valid
+
+S0-I does not parse or repair malformed package/source-generation authority itself.
+
+Required precondition:
+
+```text
+S0-A(baseSha) PASS
+S0-A(candidateSha) PASS
+S0-B topology parse/validation(baseSha) PASS
+S0-B topology parse/validation(candidateSha) PASS
+```
+
+If either view is invalid/missing/unsupported:
+
+```text
+PR_IMPACT_AUTHORITY_VIEW_INVALID
+```
+
+and no partial impact result may be treated as PASS.
+
+S0-I must not say “the candidate removed the relation, so the relation no longer matters” if candidate authority parsing itself failed.
+
+The S0-I implementation should consume typed predecessor outputs/adapters. It must not copy S0-A's strict manifest parser or S0-B's relation parser into the PR checker.
+
+---
+
+## 7. Proposed result schema
+
+Future passive implementation should expose a typed immutable result conceptually named:
+
+```text
+webclip-pr-impact/v1
+```
+
+Recommended shape:
+
+```text
+PrImpactV1 {
+  schema
+
+  provenance:
+    baseSha
+    prHeadSha
+    candidateSha
+
+  authority:
+    basePackageTopologyDigest
+    candidatePackageTopologyDigest
+    packageTopologyChanged
+    baseSourceGenerationTopologyDigest
+    candidateSourceGenerationTopologyDigest
+    sourceGenerationTopologyChanged
+
+  changedPaths[]:
+    status
+    path
+
+  touched:
+    packageMember
+    generationInput
+    generationGenerator
+    generatedOutput
+    generationClosure
+    packageAuthoritySource
+    sourceGenerationAuthoritySource
+    authorityImplementation
+    prCheckerControlPlane
+
+  affectedGenerationRelations[]
+
+  requires:
+    candidateGenerationVerification
+    shadowIdentityRecompute
+    trustedControlPlaneReview
+
+  trust:
+    automaticClassificationTrusted
 }
 ```
 
-This is an impact projection, not an admission receipt.
+All arrays are canonical sorted unique values. Booleans are derived facts, not caller-supplied claims.
 
-### 4.1 `changes[]`
-
-Each normalized diff change should preserve:
-
-```text
-status: A | M | D | R
-old_path: nullable canonical repository path
-new_path: nullable canonical repository path
-```
-
-For non-renames:
-
-```text
-A -> old_path=null, new_path=path
-M -> old_path=path, new_path=path
-D -> old_path=path, new_path=null
-```
-
-For rename:
-
-```text
-R -> old_path=old, new_path=new
-```
-
-Copy status should either be normalized under an explicitly chosen policy or rejected in v1. Recommended v1: reject unsupported change statuses rather than silently treating a copy as rename/add.
+A stable semantic digest of this result may be used for research/debugging, but it is **not a new release fingerprint** and MUST NOT be used as RPF/QCF/RCF/BCF or a QA reuse key.
 
 ---
 
-## 5. Package-impact semantics
+## 8. Touched flags
 
-Let:
+### 8.1 `packageMember`
 
-```text
-BasePackage = validated S0-A base topology
-HeadPackage = validated S0-A head topology
-```
-
-S0-I MUST compare semantic topologies, not raw manifest formatting.
-
-### 5.1 Package authority change
+True when any changed path is in:
 
 ```text
-package.authority_changed =
-  BasePackage.schema/path_profile/member-set
-  !=
-  HeadPackage.schema/path_profile/member-set
+basePackage.files UNION candidatePackage.files
 ```
 
-Raw JSON indentation, key order or `files` array order that canonicalizes to the same topology is not a semantic authority change.
+This replaces suffix-based package inference for release-package impact.
 
-### 5.2 Touched package members
+### 8.2 Generation role flags
 
-For every diff side:
+For every valid relation from both views build role indexes:
 
 ```text
-old_path in BasePackage.files -> touched_base_members
-new_path in HeadPackage.files -> touched_head_members
+input path -> relation ids
+generator path -> relation ids
+output path -> relation ids
 ```
 
-This makes deletes and renames visible.
-
-### 5.3 Added/removed members
-
-Compute semantic membership delta directly from the two validated topologies:
+Then:
 
 ```text
-added_members   = HeadPackage.files - BasePackage.files
-removed_members = BasePackage.files - HeadPackage.files
+generationInput     = changed path hits union input index
+generationGenerator = changed path hits union generator index
+generatedOutput     = changed path hits union output index
+generationClosure   = OR of the three
 ```
 
-This is independent of how Git represents the corresponding file operation.
+`affectedGenerationRelations` is the canonical union of every relation id hit in either authority view **plus** every relation id whose declaration is added/removed/semantically changed.
 
-### 5.4 Candidate package relevance
+S0-I never scans for filenames such as `build_*` to infer a relation.
 
-```text
-candidate_package_relevant =
-  authority_changed
-  OR touched_base_members not empty
-  OR touched_head_members not empty
-```
+### 8.3 Authority-source touches
 
-This field says only that release package identity/generation must be reconsidered. It does not say RPF changed and does not calculate RPF itself.
-
-### 5.5 Nonmember runtime path
-
-If a root `.js` file changes but is in neither S0-A topology, S0-I package impact is false unless package authority also changes.
-
-The existing PR governance checker may still classify that path as `runtime=true`. This is intentional:
-
-```text
-runtime governance != package membership
-```
-
-If such a file should actually ship, the required action is to change S0-A authority explicitly, not to teach S0-I a suffix heuristic.
-
----
-
-## 6. Source-generation impact semantics
-
-Let:
-
-```text
-BaseRelations = validated S0-B relations at base
-HeadRelations = validated S0-B relations at head
-```
-
-A canonical relation declaration includes:
-
-```text
-id
-runtime_profile
-generator
-inputs[]
-outputs[]
-```
-
-### 6.1 Source-generation authority change
-
-```text
-source_generation.authority_changed =
-  semantic BaseRelations != semantic HeadRelations
-```
-
-Again, raw JSON formatting/order is not semantic change.
-
-### 6.2 Union-of-generations matching
-
-For each relation id appearing in base or head, evaluate both declarations independently.
-
-A relation is affected when any changed old/new path intersects:
-
-```text
-base generator/input/output paths
-OR
-head generator/input/output paths
-```
-
-or when the relation declaration itself is added/removed/semantically changed.
-
-This catches:
-
-- input-only change;
-- generator-only change;
-- output-only change;
-- input+output coordinated change;
-- relation add/remove;
-- relation rename by id;
-- generator/input/output path rename;
-- output removed from package topology.
-
-### 6.3 Affected relation record
-
-Recommended deterministic record:
-
-```text
-{
-  relation_id,
-  base_present,
-  head_present,
-  declaration_changed,
-  reasons: sorted unique subset of
-    relation-added
-    relation-removed
-    relation-declaration-changed
-    base-generator-touched
-    base-input-touched
-    base-output-touched
-    head-generator-touched
-    head-input-touched
-    head-output-touched
-}
-```
-
-A relation-id replacement naturally yields one removed relation and one added relation; S0-I must not guess that two different ids are semantically a rename.
-
----
-
-## 7. Candidate-generation relevance and S0-F handoff
-
-S0-I may derive only this orchestration fact:
-
-```text
-candidate_generation_relevant =
-  package.candidate_package_relevant
-  OR source_generation.authority_changed
-  OR affected_relations not empty
-```
-
-and:
-
-```text
-requires_s0f_recheck = candidate_generation_relevant
-```
-
-The wording is deliberately **recheck**, not **PASS/FAIL**.
-
-S0-I MUST NOT infer:
-
-```text
-generationPass=true
-admitted=true
-RPF unchanged
-safeToReuseQA=true
-releaseReady=true
-```
-
-from changed paths.
-
-Even if only documentation changed, current candidate admission remains an S0-F fact, not an S0-I fact.
-
----
-
-## 8. Control-source path handling
-
-Future passive files conceptually introduced by predecessors:
+Future source files are conceptually:
 
 ```text
 release_package_manifest_v1.json
 release_source_generation_v1.json
 ```
 
-are authority source files, not extension package members merely because they exist.
+A raw authority-source file change is recorded even when the semantic topology digest is unchanged because representation/provenance changed.
 
-S0-I needs to know their exact source paths through predecessor integration configuration, not filename pattern discovery.
-
-Changing either control source requires the corresponding base/head semantic authority to be re-parsed and compared.
-
-If raw control bytes change but semantics canonicalize identically:
+However:
 
 ```text
-package/source authority_changed = false
+raw source formatting change + equal validated topology digest
 ```
 
-The existing governance checker can still require normal research/test coupling for the source-code/tooling PR itself.
+must not by itself pretend package/generation semantics changed.
+
+### 8.4 Authority implementation / checker control plane
+
+S0-I owns additional release-control-plane policy separate from package membership.
+
+At implementation time the controlled surface should include at minimum the actual installed equivalents of:
+
+```text
+project_tools/release_package_authority.py
+project_tools/release_source_generation.py
+project_tools/release_pr_impact.py
+project_tools/check_pr_change_contract.py
+.github/workflows/repository-integrity.yml
+```
+
+Exact production filenames are finalized only when those passive implementations exist. The classifier must use an explicit reviewed list, never `project_tools/**` as a blanket generation authority.
+
+Changes to S0-A/S0-B implementation logic can change what an authority view means even when manifest bytes are unchanged, so they are `authorityImplementation=true`.
+
+Changes to the PR classifier or workflow that invokes it are `prCheckerControlPlane=true`.
 
 ---
 
-## 9. Fail-closed conditions
+## 9. Derived requirement flags
 
-S0-I MUST fail closed before emitting an authoritative impact projection when any of these occurs:
+### 9.1 `candidateGenerationVerification`
+
+True when any of the following is true:
 
 ```text
-PR_IMPACT_BASE_SHA_INVALID
-PR_IMPACT_HEAD_SHA_INVALID
-PR_IMPACT_BASE_NOT_COMMIT
-PR_IMPACT_HEAD_NOT_COMMIT
+packageMember
+packageTopologyChanged
+sourceGenerationTopologyChanged
+generationClosure
+authorityImplementation
+```
+
+This flag means a later orchestrator must not reuse a prior candidate-generation decision merely from path similarity.
+
+It does **not** mean S0-I itself ran or passed S0-F.
+
+A raw authority JSON formatting change with identical semantic topology and unchanged implementation need not set this flag by itself.
+
+### 9.2 `shadowIdentityRecompute`
+
+True when release candidate identity/contract truth may differ because of this PR:
+
+```text
+packageMember
+packageTopologyChanged
+generationClosure
+sourceGenerationTopologyChanged
+authorityImplementation
+prCheckerControlPlane
+```
+
+S1-A owns the actual shadow identity work. S0-I only emits the impact fact.
+
+S0-I intentionally does not classify S0-C/S0-E-only full-RCF inputs; S1-A composes those authorities separately.
+
+### 9.3 `trustedControlPlaneReview`
+
+True when:
+
+```text
+authorityImplementation OR prCheckerControlPlane
+```
+
+Such a PR is changing code that determines its own classification or upstream authority interpretation.
+
+---
+
+## 10. Self-modifying checker problem
+
+A PR workflow normally checks out candidate code. Therefore a PR that edits:
+
+```text
+check_pr_change_contract.py
+release_pr_impact implementation
+repository-integrity workflow
+S0-A/S0-B authority implementation
+```
+
+could otherwise weaken the exact code evaluating that PR.
+
+S0-I MUST NOT solve this by trusting a field emitted by the modified candidate checker.
+
+Required fail-closed trust rule:
+
+```text
+if authorityImplementation OR prCheckerControlPlane:
+  automaticClassificationTrusted = false
+  trustedControlPlaneReview = true
+```
+
+Future enforcement must use a base-trusted/externally pinned validation path or a staged migration protocol before such a control-plane change can become authoritative.
+
+This research tranche does not activate that enforcement. S1 shadow integration/rehearsal is the correct place to prove it before S2 policy activation.
+
+For an ordinary PR where the trusted checker/control-plane implementation is unchanged:
+
+```text
+automaticClassificationTrusted = true
+```
+
+provided candidate provenance and both authority views are valid.
+
+The first production introduction of S0-I itself is therefore a bootstrap migration problem, not something the new candidate checker may self-authorize merely because its own tests pass.
+
+---
+
+## 11. Why S0-I does not own RCF/QCF impact
+
+S0-I has canonical dependencies only on S0-A and S0-B.
+
+Therefore it intentionally does not maintain a second copy of S0-C/S0-E full-RCF inputs or QA contract inputs.
+
+A change such as:
+
+```text
+project_docs/TEST_PLAN.md
+```
+
+may be release-contract relevant to S0-E/S1-A but is not package/source-generation impact owned by S0-I.
+
+S1-A composes S0-I with S0-E and S0-F:
+
+```text
+S1-A-shadow-identity
+  deps = S0-E + S0-F + S0-I
+```
+
+This avoids making S0-I a second release-identity engine.
+
+---
+
+## 12. Relationship to current `check_pr_change_contract.py`
+
+Existing checker rules remain useful and remain logically separate:
+
+```text
+research-impact declaration
+P-owner coupling
+runtime-change rationale
+changed deterministic test coupling
+manifest/readiness/test-status synchronization
+durable research evidence rules
+```
+
+Future integration should add/consume one S0-I classifier result rather than replace these rules wholesale.
+
+Recommended architecture:
+
+```text
+release_package_authority     (S0-A)
+release_source_generation     (S0-B)
+            \                 /
+             release_pr_impact (S0-I)
+                      |
+            check_pr_change_contract
+                      |
+            Repository Integrity
+```
+
+The checker may still own product/governance policy not represented by package membership, but package/generation facts must come only from S0-A/S0-B.
+
+No package member list or generation relation list should be duplicated inside `check_pr_change_contract.py`.
+
+---
+
+## 13. Current legacy heuristic migration
+
+When S0-I is eventually implemented in production tooling, migration should be shadow-first.
+
+For every PR during the shadow interval record both:
+
+```text
+legacy runtime heuristic result
+S0-I package/generation impact result
+```
+
+Expected bootstrap differences include:
+
+```text
+public_suffix_list.dat
+  legacy runtime = false
+  S0-I generation impact = true
+
+project_tools/build_public_suffix_js.py
+  legacy runtime = false
+  S0-I generation impact = true
+
+future non-package root diagnostic.js
+  legacy runtime = true
+  S0-I package impact = false
+```
+
+These differences are not automatically errors; they are exactly why authority-driven classification is being introduced.
+
+Canonical behavior must not switch during S0-I research. S1-A/S1-D must prove shadow and migration behavior before any S2 activation.
+
+---
+
+## 14. Stable machine error taxonomy
+
+Recommended S0-I errors:
+
+```text
+PR_IMPACT_SHA_INVALID
+PR_IMPACT_CANDIDATE_RELATION_INVALID
 PR_IMPACT_DIFF_FAILED
 PR_IMPACT_DIFF_STATUS_UNSUPPORTED
 PR_IMPACT_PATH_INVALID
-PR_IMPACT_BASE_PACKAGE_AUTHORITY_INVALID
-PR_IMPACT_HEAD_PACKAGE_AUTHORITY_INVALID
-PR_IMPACT_BASE_SOURCE_GENERATION_INVALID
-PR_IMPACT_HEAD_SOURCE_GENERATION_INVALID
-PR_IMPACT_AUTHORITY_INCONSISTENT
+PR_IMPACT_DUPLICATE_PATH
+PR_IMPACT_AUTHORITY_VIEW_INVALID
+PR_IMPACT_PACKAGE_TOPOLOGY_INVALID
+PR_IMPACT_SOURCE_GENERATION_TOPOLOGY_INVALID
+PR_IMPACT_CONTROL_PLANE_UNTRUSTED
+PR_IMPACT_INTERNAL_FAILURE
 ```
 
-It must not downgrade to the old suffix/runtime classifier when release authority is invalid.
+Human detail must remain bounded and must not expose credentials, environment dumps or signed capability URLs.
 
-Human diagnostics must be bounded and safe. No secret, token, full environment dump, signed provider URL or arbitrary GitHub context dump belongs in the output.
+`PR_IMPACT_CONTROL_PLANE_UNTRUSTED` is not a claim that the code is malicious. It means candidate code touched its own trust boundary and cannot self-certify automatically.
 
 ---
 
-## 10. Deterministic ordering
+## 15. Required negative matrix
 
-To make Node/Python/future implementations comparable, v1 output ordering should be fixed:
+The executable model/future implementation must cover at minimum:
 
-```text
-changes: Git diff order normalized to ASCII old/new path tuple, or explicitly ASCII-sorted
-package path arrays: unsigned UTF-8 byte lexicographic
-relations: ASCII relation id
-reasons: ASCII lexical
-```
+### Exact identities
 
-Recommended: canonicalize all output arrays by unsigned UTF-8 byte lexicographic order rather than preserve Git implementation ordering.
+- invalid base/head/candidate SHA;
+- candidate does not bind the supplied base/head identities;
+- moving ref is rejected at low-level interface.
 
-Boolean fields are semantic, not presentation order.
+### Diff representation
 
----
+- add/modify/delete/type-change;
+- rename represented as delete + add under `--no-renames`;
+- rename status is rejected at the normalized S0-I boundary;
+- unknown status fails closed;
+- duplicate changed path fails closed;
+- invalid path fails closed.
 
-## 11. Base/head topology matrix
+### Package union
 
-Required deterministic scenarios include at minimum:
+- base package member modified;
+- package member removed from candidate authority and deleted in same PR;
+- package member added to candidate authority and added in same PR;
+- unrelated root `.js` not in either package is not package impact;
+- package manifest formatting-only change records source touch but equal topology semantics.
 
-| Case | Base | Head | Expected release impact |
-|---|---|---|---|
-| docs-only | same package/relations | same | none |
-| package member M | member in both | member in both | package relevant |
-| package member D | member only in base | removed | package relevant |
-| package member A | absent in base | member in head | package relevant |
-| package member R | old base member | new head member | package relevant both sides |
-| manifest formatting only | semantic same | semantic same | no package semantic change |
-| package topology change | member set differs | differs | authority changed |
-| source input M | relation names input | same relation | affected relation |
-| generator M | relation names generator | same relation | affected relation |
-| output-only M | relation names output | same relation | affected relation |
-| relation removed | present | absent | affected/removed relation |
-| relation added | absent | present | affected/added relation |
-| relation declaration changed | same id | paths/profile differ | affected relation |
-| nonmember root JS M | not in package/relation | same | no S0-I release impact; old runtime policy may still apply |
-| invalid base authority | invalid | valid | fail closed |
-| invalid head authority | valid | invalid | fail closed |
+### Generation union
 
-Delete/rename cases are mandatory positive controls for the base+head union rule.
+- input-only change;
+- generator-only change;
+- output-only change;
+- relation removed plus old input/generator/output touched;
+- relation added plus new input/generator/output touched;
+- source/generator/output role changes across base/candidate;
+- unrelated `build_*.py` is not inferred as generation impact;
+- affected relation ids are deduplicated/canonical.
 
----
+### Authority/control plane
 
-## 12. Integration with current `check_pr_change_contract.py`
+- package topology semantic change;
+- source-generation topology semantic change;
+- authority implementation change;
+- PR checker change;
+- repository-integrity workflow change;
+- candidate cannot self-assert trusted after control-plane change.
 
-Future implementation should preserve existing public behavior first, then add a composable release-impact layer.
+### Scope separation
 
-Recommended decomposition:
-
-```text
-parse exact diff with status/old/new
-  ↓
-existing governance evaluate(...)
-  ↓
-load S0-A/S0-B base+head authorities through predecessor modules
-  ↓
-compute PrReleaseImpactV1
-  ↓
-apply only explicitly approved S0-I coupling rules
-```
-
-At S0/S1 passive stages, the release-impact projection may be emitted to CI/logs for comparison without changing merge acceptance policy beyond structural parser self-consistency.
-
-Do not immediately make every `candidate_generation_relevant` PR fail. The active merge policy cutover belongs to the later staged integration/activation plan.
-
-### 12.1 No duplicated package classifier
-
-The current helper:
-
-```text
-is_runtime_path(path)
-```
-
-remains useful for governance, but MUST NOT be renamed/reused as `is_package_path`.
-
-S0-A explicit membership is the only package authority.
-
-### 12.2 No duplicated generation classifier
-
-S0-I MUST NOT scan for:
-
-```text
-build_*.py
-generated*.js
-*.dat
-```
-
-or similar heuristics. Only S0-B declarations define a generation relation.
+- S0-I emits no RPF/QCF/RCF/BCF;
+- S0-I emits no S0-F PASS/admitted claim;
+- S0-I emits no readiness/release decision;
+- legacy P-owner/research checker remains separately testable.
 
 ---
 
-## 13. Relationship to PR research-impact metadata
+## 16. Bounds and deterministic ordering
 
-Machine-readable PR metadata:
-
-```text
-research-impact: none | structural | owner
-P-owner(s)
-research-rationale
-```
-
-answers research-governance ownership questions. It is not release-identity authority.
-
-Therefore examples are valid where:
-
-```text
-research-impact: owner
-candidate_generation_relevant: false
-```
-
-for a research-only P1-231 document/model PR, and:
-
-```text
-research-impact: none or structural policy as otherwise allowed
-candidate_generation_relevant: true
-```
-
-for a product package change that does not change current research ownership.
-
-The two classifications should be reported separately and tested separately.
-
----
-
-## 14. No circular dependency with future S0-I source itself
-
-Future PR checker integration code may itself be changed in a PR. Such a change is governance/tooling impact, but it must not cause package/source-generation authority to depend on S0-I's own implementation bytes.
-
-Canonical dependency remains one-way:
-
-```text
-S0-A + S0-B -> S0-I
-```
-
-not:
-
-```text
-S0-I -> defines S0-A/S0-B
-```
-
-The full release contract (RCF) may later include checker bytes through S0-C/S0-E, but that is a different identity dimension and does not alter package/source-generation ownership.
-
----
-
-## 15. Security/trust boundary
-
-S0-I is local, deterministic and network-free.
-
-It should:
-
-- use exact Git object/tree data;
-- never execute arbitrary manifest-provided commands;
-- never follow working-tree symlinks;
-- never call Chrome or Yandex;
-- never read credentials;
-- never fetch untrusted remote refs as part of classification;
-- bound diff/path/count/diagnostic work;
-- fail closed on unexpected authority schema/status.
-
-Source generation execution itself remains S0-B/S0-F responsibility. S0-I only classifies relation impact.
-
----
-
-## 16. Bounds
-
-Recommended v1 bounds for the PR projection layer:
+Recommended v1 bounds:
 
 ```text
 changed records <= 10000
 path bytes <= S0-A path bound (1024)
-base package members <= 4096
-head package members <= 4096
-base/head source-generation relations <= 256
-paths per relation <= predecessor S0-B bounds
-reasons per relation <= fixed enum size
-human diagnostic detail <= bounded line/string limit
+package members <= 4096 per authority view
+source-generation relations <= 256 per authority view
+human diagnostic detail bounded
 ```
 
-Exceeding a bound fails closed; it does not silently truncate authority.
-
----
-
-## 17. Return/exit semantics
-
-Recommended separation:
+Canonical ordering:
 
 ```text
-compute_release_impact(...)
-  -> typed success projection or stable machine failure
-
-check_pr_change_contract policy
-  -> existing governance PASS/FAIL
+changedPaths -> path ASCII-byte order, then status
+package arrays -> unsigned UTF-8 byte lexicographic
+relation ids -> ASCII-byte order
+reason enums -> ASCII-byte order
 ```
 
-At passive S0-I stage, a valid impact projection can say `candidate_generation_relevant=true` and the PR can still be evaluated under the existing policy; no S0-F activation is implied.
-
-Future active policy can consume `requires_s0f_recheck` only under the separately approved migration plan.
+No locale, filesystem enumeration order or Git rename-similarity score is an identity input.
 
 ---
 
-## 18. Required executable research proof
+## 17. Proposed production handoff
 
-This tranche's model must prove:
+After S0-A and S0-B passive production authorities exist, recommended S0-I implementation surface is conceptually:
 
-1. S0-A/S0-B remain predecessor authorities;
-2. base+head union catches deleted package members;
-3. base+head union catches removed generation relations;
-4. rename checks both old and new authority sides;
-5. semantic manifest reordering/formatting is not authority change;
-6. package member changes are release relevant without suffix heuristics;
-7. nonmember root JS can remain runtime-governance relevant while S0-I package impact is false;
-8. generator/input/output-only changes all affect declared relation;
-9. relation add/remove/declaration changes are detected;
-10. invalid base/head authority fails closed;
-11. S0-I never reports S0-F PASS/admission;
-12. output is deterministic under diff input reorder;
-13. current real repository bootstrap facts remain one package topology / one `public-suffix-js` relation;
-14. current S0-B portability defect remains a separate S0-F blocker, not reclassified by S0-I.
+```text
+project_tools/release_pr_impact.py
+project_tools/test_release_pr_impact.py
+small integration call from check_pr_change_contract.py
+Repository Integrity passes baseSha + prHeadSha + exact candidateSha
+```
 
-The committed-source proof should run the existing S0-A and S0-B models plus the new S0-I model on one exact checkout.
+The implementation should reuse exported S0-A/S0-B parsers/resolvers rather than copying schemas or lists.
+
+For PR CI the workflow must make the actual synthetic merge SHA explicit to the classifier. It must not infer the candidate from `HEAD` inside a generic shell environment without checking exact provenance.
+
+The workflow-side call should therefore carry explicit identities conceptually:
+
+```text
+PR_BASE_SHA  = github.event.pull_request.base.sha
+PR_HEAD_SHA  = github.event.pull_request.head.sha
+PR_CANDIDATE_SHA = github.sha
+```
+
+and the classifier validates the relation before producing an authoritative result.
+
+---
+
+## 18. S0-I acceptance contract
+
+A future passive implementation is acceptable only when all are true:
+
+1. exact base/head/candidate identities are distinct and validated;
+2. exact synthetic merge candidate is the classified PR tree;
+3. diff is base -> exact candidate with rename heuristics disabled;
+4. both base and candidate S0-A authority views are validated;
+5. both base and candidate S0-B topology views are validated;
+6. package classification uses base ∪ candidate membership;
+7. generation role classification uses base ∪ candidate relation topology;
+8. authority manifest/source touches are distinguished from semantic topology changes;
+9. S0-A/S0-B implementation and PR-checker/workflow self-changes are explicit control-plane impact;
+10. self-modifying control-plane PRs cannot self-assert trusted PASS;
+11. result is typed/bounded/deterministic;
+12. no RPF/QCF/RCF/BCF or S0-F decision is reimplemented;
+13. current checker governance/P-owner rules remain independently valid;
+14. implementation remains passive/shadow until later S1/S2 migration proof.
 
 ---
 
@@ -664,7 +760,9 @@ S0-B relations = 1 (public-suffix-js)
 current S0-F gate = blocked-portability
 ```
 
-S0-I research does not repair the PSL generator and does not change current admission. It only makes the future PR impact path exact enough that package/source-generation changes cannot be hidden by head-only membership or filename heuristics.
+S0-I research does not repair the PSL generator and does not change current admission. It only makes the future PR impact path exact enough that package/source-generation changes cannot be hidden by candidate-only membership or filename heuristics.
+
+The current production checker remains unchanged and still uses its legacy runtime heuristic during this research tranche.
 
 ---
 
@@ -704,6 +802,7 @@ S2 remains behind explicit user approval.
 This research tranche does **not**:
 
 - modify `check_pr_change_contract.py` production behavior;
+- modify `.github/workflows/repository-integrity.yml` canonical behavior;
 - create production S0-A/S0-B authority files;
 - fix `build_public_suffix_js.py` portability;
 - calculate or change current S0-F admission;
