@@ -23,7 +23,7 @@ Important preserved reservations:
 
 - late `P0-079` and `P0-080` are occupied;
 - historical recovery explicitly reserved `P1-072…P1-131` even where an old physical snapshot omitted rows;
-- every `P1-195…P1-230` is occupied;
+- every `P1-195…P1-231` is occupied;
 - `P2-009` and `P2-010` are explicitly history-reserved;
 - all other codes ever present in the legacy priority registry/history remain permanently reserved.
 
@@ -186,8 +186,11 @@ P1-195's historical reconstruction source is Git commit `b2d9ec47833f00fc4b0b429
 | Code | Status | Single current owner / root cause |
 |---|---|---|
 | P1-230 | ACTIVE | Current PDF capture must preserve bounded, generation-bound logical content actually materialized/seen through the user's own dynamic/virtualized scrolling up to the maximum user-reached boundary, including after scroll-back and DOM recycling, or truthfully report partial/degraded/unknown; current mounted DOM/window alone cannot silently substitute for that admitted history, and WebClip must not auto-scroll beyond the user's boundary. |
+| P1-231 | ACTIVE | Release readiness/external QA authority must be bound to the exact tested package/runtime generation and the applicable current release-contract generation; a non-empty evidence string or an older tested SHA cannot authorize a later release candidate unless byte-identical package/runtime state and the required current contract are proven. |
 
 P1-230 is admitted from the 2026-08-30 C22/C23 contract tranche in `RESEARCH_USER_REACHED_DYNAMIC_SCROLL_2026-08-30_EVIDENCE.md`. Historical deferred/virtualized evidence intentionally left this code unallocated while current-view-vs-complete-logical semantics were still a P2-007 product question; `WEBCLIP_PDF_FIDELITY_CONTRACT.md` later explicitly resolved the current PDF contract in favor of bounded user-reached content preservation.
+
+P1-231 is admitted from `RESEARCH_P1_231_RELEASE_EVIDENCE_GENERATION_2026-09-10_EVIDENCE.md`. Earlier history statements that left P1-231 unallocated applied to hover/disclosure/restore hypotheses already owned elsewhere; they do not reserve the number against this independent release-evidence authority root cause.
 
 ## DONE items explicitly retained
 
