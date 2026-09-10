@@ -23,10 +23,11 @@ function around(text, anchor, radius = 1400) {
   assert.ok(i >= 0, `anchor missing: ${anchor}`);
   return text.slice(Math.max(0, i - radius), Math.min(text.length, i + anchor.length + radius));
 }
-function functionBody(text, signature, nextLimit = 9000) {
+function functionBody(text, signature) {
   const i = text.indexOf(signature);
   assert.ok(i >= 0, `function missing: ${signature}`);
-  return text.slice(i, Math.min(text.length, i + nextLimit));
+  const next = text.indexOf('\nasync function ', i + signature.length);
+  return text.slice(i, next >= 0 ? next : text.length);
 }
 
 const sites = [
@@ -74,6 +75,9 @@ check('O06 real L5 not run', () => has(EVIDENCE, 'Real Yandex L5: **NOT RUN**'))
 check('O07 S2 none', () => has(EVIDENCE, 'Release-policy activation: **NONE**'));
 check('O08 manifest unchanged', () => assert.equal(MANIFEST.version, '0.9.8'));
 check('O09 baseline pinned', () => has(EVIDENCE, '039f90ed21e44c1939684ee3bf5444651fb20770'));
+check('O10 P1-179 active', () => has(REGISTRY, '| P1-179 | ACTIVE |'));
+check('O11 P1-179 namespace owner', () => has(REGISTRY, 'Backup scheduler state and pending backup checkpoint are immutable account/root namespaces'));
+check('O12 evidence binds recovery to P1-179', () => has(EVIDENCE, 'P1-179  pending backup checkpoint immutable account/root namespace'));
 
 // Exact source census: one definition + eight semantic callers.
 check('S01 ensure service helper definition exists', () => has(SOURCE, 'async function ensureYandexServiceFolders('));
@@ -202,4 +206,4 @@ check('Z06 release boundary', () => has(EVIDENCE, 'P1-231 S2 activation != relea
 check('Z07 no official zip', () => has(EVIDENCE, 'no official ZIP'));
 check('Z08 readiness untouched', () => has(EVIDENCE, 'V1 readiness and release authority are untouched.'));
 
-console.log(`P1-138 hidden Yandex provisioning census model: PASS; cases=${cases}; schema=webclip-p1-138-hidden-provisioning-census/v1; baseline=039f90ed21e44c1939684ee3bf5444651fb20770; ensure_occurrences=9; semantic_call_sites=8; M1=3; M2=1; H1=3; H2=1; direct_hidden=test-connection,list-backups,selected-backup-import; recovery_preemption=pending-backup-recovery; namespace_derivation=pure; historical_root=checkpoint-authority; runtime_modified=false; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-138 hidden Yandex provisioning census model: PASS; cases=${cases}; schema=webclip-p1-138-hidden-provisioning-census/v1; baseline=039f90ed21e44c1939684ee3bf5444651fb20770; ensure_occurrences=9; semantic_call_sites=8; M1=3; M2=1; H1=3; H2=1; direct_hidden=test-connection,list-backups,selected-backup-import; recovery_preemption=pending-backup-recovery; p1_179_namespace_owner=true; namespace_derivation=pure; historical_root=checkpoint-authority; runtime_modified=false; new_p_code=false; s2_authorized=false; release_authorized=false`);
