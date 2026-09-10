@@ -273,7 +273,7 @@ Therefore regeneration uses a minimal workspace instead of a complete candidate 
 
 If a generator silently depends on another project file, ambient environment state or unrelated filesystem content, the isolated invocation should fail. The correct repair is to declare/architect the dependency, not to widen the verifier to the whole repository.
 
-This makes the S0-B relation set auditable and prevents accidental hidden generation authority.
+This keeps the S0-B relation set inspectable and prevents accidental hidden generation authority.
 
 ## 8. TOCTOU and same-SHA reuse
 
