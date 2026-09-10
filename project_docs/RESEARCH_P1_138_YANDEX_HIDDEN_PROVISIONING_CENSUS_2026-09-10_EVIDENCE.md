@@ -8,13 +8,11 @@ Real Yandex L5: **NOT RUN**
 Release-policy activation: **NONE**  
 New P-code: **NO**
 
-This tranche is a source census under the existing ACTIVE **P1-138** owner. It follows canonical PR #208, which established the general observation → explicit mutation-admission contract. The purpose here is narrower: enumerate every current `ensureYandexServiceFolders()` consumer and classify whether provisioning is expected mutation work, hidden mutation inside a read-like surface, or mutation that is unsafe to perform before recovery/read reconciliation.
+This tranche is a current-source census under existing ACTIVE owner **P1-138**. Canonical PR #208 already establishes the general observation → explicit mutation-admission contract. This follow-up enumerates every current `ensureYandexServiceFolders()` consumer and classifies whether provisioning is legitimate mutation work, hidden mutation inside an observational surface, or a mutation that preempts recovery evidence.
 
 No production source is changed.
 
----
-
-## 1. Canonical inputs
+## 1. Canonical owners
 
 Current baseline:
 
@@ -30,7 +28,7 @@ Canonical dependency chain:
 #208 P1-138 observation -> explicit mutation admission
 ```
 
-Relevant owners remain:
+Relevant owners:
 
 ```text
 P1-138  hidden provisioning/mutation in read-like Yandex flows
@@ -41,30 +39,27 @@ P1-090  exact Yandex object identity/reconciliation
 P1-158  bounded Yandex reads
 P1-177  backup status/scheduler truth vs ancillary remote setup
 P1-178  auth-generation-fenced ancillary account writes
+P1-179  backup scheduler/pending checkpoint immutable account/root namespace
 P1-210  partial/unknown side-effect result semantics
 P1-223  Create Folder mutation target vs browse-refresh generation
 ```
 
-No new owner is required.
-
----
+P1-179 is especially important for recovery: a pending backup checkpoint belongs to the historical account/root namespace in which that physical effect was issued. Current configuration cannot migrate it into a newer root. No new owner is required.
 
 ## 2. Exact source census
 
 Current `service-worker.js` contains one definition plus eight semantic call sites of `ensureYandexServiceFolders(...)`.
 
-The eight consumers are:
-
-| ID | Current surface | Current purpose | Read-like at entry? | Can `ensure` mutate provider? | Census class |
-|---|---|---|---:|---:|---|
-| C01 | page PDF upload flow | prepare Upload/ReadmeLater service branch before save | no | yes | expected mutation pipeline |
-| C02 | Journal read-state/move flow | prepare Upload target before remote move | no | yes | expected destructive mutation pipeline |
-| C03 | `uploadJournalExportStagedToYandex` | prepare Journal backup branch before upload | no | yes | expected backup mutation pipeline |
-| C04 | `recoverPendingJournalBackup` | inspect/reconcile pending backup checkpoint | yes/recovery | yes | **unsafe pre-reconciliation provisioning** |
-| C05 | `listJournalBackupsOnYandex` | list remote Journal backups | yes | yes | **direct hidden provisioning** |
-| C06 | selected Journal backup import/restore preflight | validate/read selected backup | yes/read-before-local-import | yes | **hidden pre-read provisioning** |
-| C07 | root-path settings mutation | persist root then verify/create service structure | no; explicit settings mutation | yes | ancillary mutation requiring separate result truth |
-| C08 | `testYandexConnection` | account/access diagnostic | yes | yes | **direct hidden provisioning** |
+| ID | Current surface | Read-like at entry? | `ensure` can mutate? | Class |
+|---|---:|---:|---:|---|
+| C01 page PDF upload | no | yes | M1 expected-mutation |
+| C02 Journal read-state / remote move | no | yes | M1 expected-mutation |
+| C03 `uploadJournalExportStagedToYandex` | no | yes | M1 expected-mutation |
+| C04 `recoverPendingJournalBackup` | recovery | yes | H2 recovery-preemption |
+| C05 `listJournalBackupsOnYandex` | yes | yes | H1 hidden-read-mutation |
+| C06 selected Journal backup import/read preflight | yes | yes | H1 hidden-read-mutation |
+| C07 root-path settings mutation | no | yes | M2 ancillary-mutation |
+| C08 `testYandexConnection` | yes | yes | H1 hidden-read-mutation |
 
 The definition itself is not a consumer:
 
@@ -72,155 +67,77 @@ The definition itself is not a consumer:
 async function ensureYandexServiceFolders(...)
 ```
 
-It is a provisioning helper because it delegates to `ensureYandexFolderTree()`, whose current implementation performs `PUT /resources` and thus can create provider state.
+The helper delegates to `ensureYandexFolderTree()`, and that helper issues `PUT /resources`. Therefore `ensure` is physically capable of provider mutation.
 
----
-
-## 3. Why a call-site census matters
-
-A blanket rule such as “remove all ensure calls” would be wrong.
-
-Some flows are already semantically mutations:
+The severity vocabulary is:
 
 ```text
-page upload
-remote move/read-state change
-journal backup upload
-root settings change with explicit provisioning intent
+M1 expected-mutation
+M2 ancillary-mutation
+H1 hidden-read-mutation
+H2 recovery-preemption
 ```
 
-Those flows may need service-folder creation. Their defect is not that provisioning exists; the target refinement is that provisioning must be an explicit admitted child effect under the operation's exact auth/account/root context.
+Current totals are M1=3, M2=1, H1=3, H2=1.
 
-Other flows are observational or recovery-oriented:
+## 3. Why the split matters
 
-```text
-connection test
-backup listing
-backup import/read preflight
-pending-backup reconciliation
-```
+A blanket removal of `ensure` is wrong. C01/C02/C03 are already remote-mutation workflows; they need provisioning, but as explicit admitted child effects bound to the exact operation auth/account/root context.
 
-In those flows, automatic creation changes the meaning of the command and can destroy evidence about what existed before the read/recovery attempt.
+C05/C06/C08 are different: a list, selected-backup read/import preflight, or connection test should not create provider state merely to obtain observation data.
 
----
+C04 is different again: recovery must first learn what happened to the historical physical effect. Creating current infrastructure before that reconciliation can alter the environment and blur historical evidence.
 
-## 4. C01 — page upload flow
+C07 is an explicit settings mutation, so ancillary provisioning may be a legitimate product choice, but config truth and remote settlement truth must remain separate.
 
-Current page upload uses `ensureYandexServiceFolders(...)` before choosing the Upload or ReadmeLater branch.
+## 4. C01/C02/C03 — expected mutation pipelines
 
-Classification:
-
-```text
-mutation pipeline / provisioning expected
-```
-
-Target cutover:
-
-1. operation captures exact effect authority;
-2. service-folder child effects are admitted explicitly;
-3. each missing folder create gets its own started-unknown/reconcile boundary;
-4. returned structure is an effect result, not current-global config authority;
-5. upload-link acquisition and signed payload upload remain later child effects.
-
-This call site should not be converted to a pure read. It should be converted to an explicit data-plane mutation dependency.
-
----
-
-## 5. C02 — Journal read-state / remote move flow
-
-Current remote move/read-state flow locates the existing Journal object, reads current config/root, ensures the Upload branch, creates the target folder and then moves the object.
-
-Classification:
-
-```text
-destructive mutation pipeline / provisioning expected
-```
-
-But the sequencing matters. Once the existing object has been located as historical/current operation evidence, service-folder creation is a distinct new mutation effect. A root/config change cannot silently retarget the move between locate and create/move phases.
+For page upload, Journal remote move, and Journal backup upload, provisioning remains valid only after explicit mutation admission.
 
 Target sequence:
 
 ```text
-locate exact source
--> admit target-folder provisioning under captured operation root
--> settle/reconcile provisioning
--> fresh-admit move child effect
--> move/reconcile
+capture exact operation authority
+-> derive pure service namespace
+-> admit required folder child effect
+-> persist started-unknown before PUT
+-> settle/reconcile folder child
+-> fresh-admit later upload/move/signed child effect
 ```
 
----
+A successful earlier folder creation does not authorize a later child after auth/root/config authority changes. Already-issued child factual identity remains immutable.
 
-## 6. C03 — Journal backup upload
+## 5. C04 — pending backup recovery and P1-179
 
-`uploadJournalExportStagedToYandex(...)` calls `ensureYandexServiceFolders({ includeBackup: true, ... })` before creating month folders and uploading the staged backup.
+Current recovery can load a pending backup and then call `ensureYandexServiceFolders({ includeBackup: true, ... })` before completing historical settlement work.
 
-Classification:
-
-```text
-backup mutation pipeline / provisioning expected
-```
-
-This is legitimate mutation work, but it must use the same exact operation authority as the later backup effect. A service-folder result obtained under a stale root/auth generation cannot authorize the later signed upload.
-
-The backup lease/pending checkpoint remains separate local authority.
-
----
-
-## 7. C04 — `recoverPendingJournalBackup`
-
-Current recovery loads a pending backup checkpoint and then calls `ensureYandexServiceFolders({ includeBackup: true, ... })` before checking whether the pending `remotePath` lies under the expected Journal backup root.
-
-This is a distinct risk:
+The target must instead respect P1-179:
 
 ```text
-recovery of old/unknown effect
--> hidden creation of current service folders
--> only then inspect/reconcile old checkpoint
-```
-
-Classification:
-
-```text
-unsafe pre-reconciliation provisioning
-```
-
-Recovery must first preserve and inspect the historical checkpoint namespace. It must not mutate the current provider tree merely to learn whether the old effect settled.
-
-Required target:
-
-```text
-load checkpoint
--> reconstruct/validate historical non-secret root/target identity
+load pending checkpoint
+-> preserve checkpoint account/root namespace
+-> validate historical non-secret target identity
 -> acquire proven same-account read context
--> read-only reconcile exact old backup target
--> only after settlement/absence proof, if a new repair/write is desired:
-     create a new MutationIntent and fresh physical effect
+-> reconcile exact historical target read-only
+-> only after settlement/absence proof, create a NEW repair/write MutationIntent if needed
 ```
 
-If historical identity is insufficient, recovery defers/fails closed. `ensure` is not a safe substitute for missing checkpoint identity.
+If historical identity is insufficient, recovery defers/fails closed.
 
----
-
-## 8. C05 — `listJournalBackupsOnYandex`
-
-This is the strongest direct P1-138 call site.
-
-Current shape is effectively:
+If root changed R1 → R2:
 
 ```text
-get backup status
-require root configured
-ensureYandexServiceFolders({ includeBackup: true })
-list selected month
+old R1 pending backup -> reconcile R1 read-only
+new R2 provisioning/write -> new physical intent/effect
 ```
 
-A user requests a list/read, yet listing can first create Backup/Journal service folders.
+Never call current-R2 `ensure` as a prerequisite for deciding what happened to old R1.
 
-Classification:
+Current root may be a mismatch diagnostic. It is not authority to rewrite the checkpoint namespace.
 
-```text
-direct hidden provisioning in a read-only surface
-```
+## 6. C05 — backup listing
+
+`listJournalBackupsOnYandex()` is a direct P1-138 hidden mutation surface because it can ensure/create Backup/Journal folders before listing.
 
 Target contract:
 
@@ -228,49 +145,36 @@ Target contract:
 LIST BACKUPS = observation only
 ```
 
-If the Journal backup root does not exist, listing should return an empty/not-configured/missing observation according to product semantics. It must not create the missing folder as a side effect of listing.
+If the service root is missing, return the appropriate empty/missing/not-configured observation. A 404/missing root is read evidence. It is not provisioning consent.
 
-A 404/missing root is read evidence. It is not provisioning consent.
+Read retry or timeout must never escalate into `ensure`.
 
----
+## 7. C06 — selected backup import/read preflight
 
-## 9. C06 — selected backup import/restore preflight
+The remote phase of selected-backup import should validate the selected path/identity and read it. Remote service-folder creation is not required to consume an existing selected object.
 
-Current import/restore path begins by validating status/root and then calls `ensureYandexServiceFolders({ includeBackup: true, operationId })` before validating the selected `remotePath` and reading the selected backup.
-
-Classification:
+Target:
 
 ```text
-hidden pre-read provisioning
+validate configured/historical namespace without mutation
+-> validate exact selected remotePath
+-> GET metadata/content
+-> verify selected backup identity
+-> only then continue into separate local Journal import authority
 ```
 
-The import command may later perform substantial local Journal mutations after preview/confirmation, but remote service-folder creation is not required to read an already-selected remote backup.
+If the backup namespace is missing, do not create it during import preflight.
 
-Target remote phase:
+## 8. C07 — root settings
 
-```text
-validate selected historical/current backup path against non-mutating configured namespace
--> read metadata/content
--> verify exact selected backup identity
--> only local import authority follows
-```
-
-If the backup service folder is missing, that is evidence that the selected remote object cannot exist under that namespace; do not create it during import preflight.
-
----
-
-## 10. C07 — root-path settings mutation
-
-Current root-setting flow may save the selected root and then, when auth exists, call `ensureYandexServiceFolders(...)` for Upload, ReadmeLater and Backup.
-
-Unlike C05/C08, the entry command is already a settings mutation. Automatic provisioning may be a legitimate product choice, but two truths must remain separate:
+A root settings command can legitimately commit local config and optionally provision remote service folders, but the truths are independent:
 
 ```text
 root config commit
 remote service provisioning
 ```
 
-Possible outcomes include:
+Valid outcomes include:
 
 ```text
 root saved + provisioning success
@@ -279,102 +183,25 @@ root saved + provisioning failed-before-effect
 root save failed + provisioning not-started
 ```
 
-A provisioning failure must not falsely imply that root config was not saved. Conversely, a saved root does not prove remote service structure exists.
+A provisioning failure must not falsify a completed root config commit. A successful config commit must not imply that remote service folders exist. This composes with P1-177/P1-210.
 
-This composes primarily with P1-177/P1-210 rather than creating a new P1-138 sub-owner.
+## 9. C08 — connection test
 
----
+The current connection test reads account/status and can then provision Upload, ReadmeLater and Backup service branches.
 
-## 11. C08 — `testYandexConnection`
-
-Canonical #208 already establishes the general split. The census confirms this is one of the direct current-source sites:
-
-```text
-GET account/status
--> cache account metadata
--> ensure Upload + ReadmeLater + Backup service folders
-```
-
-Classification:
-
-```text
-direct hidden provisioning in a diagnostic surface
-```
-
-Preferred cutover:
+Preferred target:
 
 ```text
 WEBCLIP_YANDEX_TEST = observation only
 ```
 
-If provisioning is retained as product behavior, expose it as a separately admitted child mutation/result, not an invisible continuation of the test.
+If product policy retains automatic provisioning, it must be a separately admitted child mutation with separate result truth. Repeating a diagnostic must not silently become a provisioning retry button.
 
----
+## 10. Pure namespace descriptor
 
-## 12. Hidden mutation severity classes
+Several callers currently use `ensureYandexServiceFolders()` partly to obtain deterministic paths. Path calculation must be separated from provider mutation.
 
-The census uses four classes:
-
-```text
-M1 expected-mutation
-   caller is already a remote mutation workflow;
-   provision explicitly under operation effect authority.
-
-M2 ancillary-mutation
-   caller is an explicit local/settings mutation;
-   remote provisioning is separate result truth.
-
-H1 hidden-read-mutation
-   caller is read/list/test;
-   provisioning must be removed from the observation path or explicitly separated.
-
-H2 recovery-preemption
-   caller is reconciling/reading old effect state;
-   current provisioning must not precede exact historical reconciliation.
-```
-
-Current mapping:
-
-```text
-C01 M1
-C02 M1
-C03 M1
-C04 H2
-C05 H1
-C06 H1
-C07 M2
-C08 H1
-```
-
----
-
-## 13. Required source cutover order
-
-A safe future runtime implementation should not refactor all sites in one undifferentiated helper replacement.
-
-Recommended dependency order:
-
-```text
-1. introduce non-mutating service-path derivation / namespace descriptor
-2. make pure list/test/read consumers use descriptor + GET only
-3. make historical recovery consume checkpoint namespace rather than current ensure
-4. introduce admitted service-folder provisioning effect API
-5. migrate explicit mutation pipelines C01/C02/C03 to that effect API
-6. split root-save config truth from ancillary provisioning result
-7. remove/lock generic ensure access from observation adapters
-```
-
-This ordering reduces the risk that a helper cleanup accidentally removes required provisioning from real write flows or keeps hidden writes in read flows.
-
----
-
-## 14. Non-mutating namespace descriptor
-
-Several current consumers use `ensureYandexServiceFolders()` partly because it conveniently returns paths.
-
-That creates an architectural trap: path derivation is coupled to provider mutation.
-
-Target pure object:
+Target local object:
 
 ```text
 YandexServiceNamespace {
@@ -386,106 +213,71 @@ YandexServiceNamespace {
 }
 ```
 
-It is derived locally from an already captured/configured root and performs no network I/O.
-
-Then:
+It is pure, contains no token/secret, and performs no network I/O.
 
 ```text
 derive namespace != ensure namespace exists
 ```
 
-Read/list/import/recovery code may use a namespace descriptor without receiving mutation capability.
+H1/H2 consumers may receive a namespace descriptor without receiving mutation capability. M1/M2 consumers may later submit it to explicit provisioning admission.
 
-Mutation workflows may pass the same descriptor into explicit provisioning admission.
+## 11. Required source cutover order
 
----
-
-## 15. Recovery namespace authority
-
-For C04, the preferred namespace is not necessarily today's configured namespace.
-
-A durable pending-backup checkpoint should bind sufficient non-secret historical identity such as:
+A safe future runtime cutover is intentionally staged:
 
 ```text
-accountUid
-rootIdentity/rootPath
-journalRootPath
-target remotePath
-physical effect id
-expected object/content identity
+1. introduce non-mutating service-path derivation / namespace descriptor
+2. make pure list/test/read consumers use descriptor + GET only
+3. make historical recovery consume checkpoint namespace rather than current ensure
+4. introduce admitted service-folder provisioning effect API
+5. migrate explicit mutation pipelines C01/C02/C03 to that effect API
+6. split root-save config truth from ancillary provisioning result
+7. remove/lock generic ensure access from observation adapters
 ```
 
-Current config can be displayed as a mismatch diagnostic, but historical reconciliation uses the checkpoint namespace.
+This avoids two symmetric mistakes: retaining hidden writes in observation paths or accidentally deleting required provisioning from legitimate mutation workflows.
 
-If the user changed root R1 → R2:
+## 12. Deterministic schedules
 
-```text
-old R1 pending backup -> reconcile R1 read-only
-new R2 backup/provisioning -> new intent/effect
-```
-
-Never call current-R2 `ensure` as a prerequisite for deciding what happened to old R1.
-
----
-
-## 16. Negative schedules
-
-The companion deterministic model covers at minimum:
+The companion model covers:
 
 ```text
-N01 test connection read succeeds; no provisioning in pure target
-N02 list backups on missing Journal root returns observation, does not create root
-N03 selected import on missing root does not create folders
-N04 pending backup recovery under old R1 with current R2 reconciles R1 read-only
-N05 missing historical identity does not trigger current-root ensure
-N06 page upload is allowed to provision only after exact mutation admission
-N07 remote move provisioning is a child effect before move
-N08 backup upload provisioning is a child effect before signed upload
-N09 root save success + provisioning failure keeps root-save truth
-N10 root save success + provisioning unknown keeps root-save truth
-N11 service namespace can be derived without provider I/O
-N12 derived namespace is not proof folders exist
-N13 read/list consumer cannot receive provisioning capability
-N14 H1 caller cannot call admitted create implicitly
-N15 H2 caller cannot repair current infrastructure before historical reconciliation
-N16 404/missing service root is observation evidence only
+N01 exact source has 1 definition + 8 semantic consumers
+N02 C01/C02/C03 classify M1
+N03 C04 classifies H2 and binds P1-179 checkpoint namespace
+N04 C05/C06/C08 classify H1
+N05 C07 classifies M2
+N06 test/list/import read paths cannot inherit provisioning capability
+N07 recovery cannot provision current root before historical reconciliation
+N08 missing historical identity cannot be repaired from current config
+N09 same-account newer credential may read old namespace only
+N10 different-account credential cannot reconcile as same namespace
+N11 root config truth and provisioning truth remain independent
+N12 namespace derivation has zero network effects
+N13 namespace derivation grants no mutation authority
+N14 409 readback verifies exact folder only
+N15 one folder child does not authorize the next child
+N16 started-unknown mutation reconciles before a second PUT
 N17 read timeout cannot trigger ensure
-N18 exact existing directory read does not authorize sibling creation
-N19 one successful folder child does not authorize next missing child
-N20 started-unknown folder create reconciles before second PUT
-N21 auth/root change before next child requires re-admission
-N22 current root cannot rewrite historical checkpoint root
-N23 same-account newer read credential may reconcile old root
-N24 different-account credential cannot reconcile old namespace
-N25 explicit mutation pipeline retains exact operation authority
-N26 generic path helper has no secret/token material
-N27 service namespace descriptor has no network side effect
-N28 root provisioning is separate settlement from config commit
-N29 test/list/import surfaces remain bounded reads
-N30 S2/release state remains untouched
+N18 no runtime/release/S2 authority changes
 ```
 
----
+## 13. Acceptance contract
 
-## 17. Acceptance contract
+Research completion requires deterministic evidence that:
 
-This call-site census is research-complete when deterministic evidence proves:
+1. all eight semantic consumers are represented and the definition is excluded from the consumer count;
+2. the M1/M2/H1/H2 classification is stable against current source;
+3. H1 surfaces cannot hide provider provisioning;
+4. H2 recovery honors P1-179 historical account/root namespace before any new repair effect;
+5. C01/C02/C03 retain provisioning only as admitted mutation child effects;
+6. C07 separates local config settlement from remote provisioning settlement;
+7. namespace derivation is pure and distinct from creation;
+8. no new P-code is allocated;
+9. current runtime remains unchanged;
+10. no official ZIP is built, no real Chrome/Yandex L5 is run, and no release-policy/readiness/tag/Release/deployment action occurs.
 
-1. all eight semantic consumers are represented;
-2. the source definition is not counted as a consumer;
-3. C01/C02/C03 are retained as expected mutation pipelines, not mislabeled as pure reads;
-4. C04 is identified as recovery-preemption risk;
-5. C05/C06/C08 are identified as hidden read/pre-read mutation risks;
-6. C07 preserves separate root-config and remote-provisioning truths;
-7. namespace derivation is separated from namespace creation;
-8. historical recovery uses checkpoint root/target, not current-root repair;
-9. the cutover does not allocate a new P-code;
-10. current runtime remains unchanged;
-11. no official ZIP, real Yandex/Chrome L5, release-policy activation, readiness mutation, tag, Release or deployment occurs.
-
----
-
-## 18. Boundary statement
+## 14. Boundary statement
 
 ```text
 P1-138 call-site census != production implementation
