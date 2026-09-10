@@ -8,7 +8,7 @@ Production runtime change: **NONE**
 Canonical release-policy activation: **NONE**  
 Extension ZIP/release build: **NONE**
 
-This tranche continues the P1-231 package-topology work after PR #183. It does not implement the production package builder. It defines the portable path model and deterministic archive contract that a future passive S0 implementation must satisfy before any release-policy activation.
+This tranche continues P1-231 after the exact package-topology census. It does not implement or run a production WebClip package builder. It specifies a portable package-path profile, exact Git-object source boundary, deterministic staged-directory contract, and deterministic ZIP-container contract that future passive S0 tooling should satisfy before any release-policy activation.
 
 No new P-code is allocated.
 
@@ -18,24 +18,18 @@ No new P-code is allocated.
 
 PR #183 was squash-merged before this tranche began.
 
-Current canonical `main`:
+Canonical baseline:
 
 ```text
-57e4ff8a3cc31a6a803cf8ef718be25f5bee53e9
-```
-
-Post-merge Repository Integrity:
-
-```text
-run = 34429932267
-job = 102723089233
-checkout = 57e4ff8a3cc31a6a803cf8ef718be25f5bee53e9
+main = 57e4ff8a3cc31a6a803cf8ef718be25f5bee53e9
+post-merge run = 34429932267
+post-merge job = 102723089233
 89 deterministic test files
 failures = 0
 Recovery archive self-test PASS
 ```
 
-The canonical package-topology research model also passed again:
+The canonical package-topology model also passed on that SHA:
 
 ```text
 P1-231 package topology census model: PASS
@@ -45,138 +39,139 @@ package_bytes = 1384280
 psl_regen = match
 ```
 
-Release readiness remained intentionally `NOT READY` with the existing five blockers. No external QA or release state is promoted by this tranche.
+Release readiness remained intentionally `NOT READY` with the existing five blockers. No real Chrome/Yandex QA or release authority is promoted here.
 
 ---
 
-## 2. Research question
+## 2. Problem being closed
 
-The previous tranche established **which current paths should become extension package members**.
+Knowing the exact package-member set is necessary but not sufficient for exact release identity.
 
-That is not yet sufficient for a reproducible release pipeline.
-
-A future builder must also answer, identically on all supported execution environments:
+A future builder must produce the same logical package and the same canonical transport bytes independent of:
 
 ```text
-How is a package path represented?
-Which syntactically different paths are treated as collisions?
-Which Git object types are admissible?
-How are bytes read from the exact candidate?
-How is an unpacked QA directory staged?
-How are ZIP members ordered?
-Which timestamps/modes/comments/extra fields are emitted?
-Is compression allowed to affect exact artifact bytes?
-How is the generated ZIP verified against the logical RPF?
+working-tree mtime
+filesystem enumeration order
+host pathname conventions
+case-insensitive filesystem behavior
+ZIP default timestamps
+ZIP duplicate-name behavior
+compressor implementation/version
+owner/group/ACL/xattr metadata
+current wall clock
+later evidence-only Git commit time
 ```
 
-Without one answer to these questions, the same package manifest may still produce different physical QA trees or different ZIP bytes.
+The research question is therefore:
+
+> Given one exact immutable candidate SHA and one exact semantic package manifest, what portable path rules and serialization rules make the staged unpacked package and final ZIP unambiguous and reproducible?
 
 ---
 
-## 3. External comparison evidence
+## 3. External evidence and applicability
 
-External sources are evidence-input only; they do not silently become WebClip policy.
+External sources are comparison/evidence-input only.
 
-### 3.1 Chrome package boundary
+### Chrome
 
-Chrome Web Store guidance requires the uploaded ZIP to contain the extension files with `manifest.json` at the ZIP root. Current documentation also states a maximum extension-package size of 2 GB.
+Chrome Web Store accepts a ZIP containing extension files with `manifest.json` at the ZIP root. Chrome defines the consumer package boundary but does not define WebClip's Git-repository-to-package projection, member ordering, timestamps, path portability, or exact serializer metadata.
 
-Chrome defines the consumer package format, but it does not define WebClip's Git-repository path canonicalization, archive ordering, timestamps or repository-to-package projection.
+### Python `zipfile`
 
-### 3.2 Python `zipfile`
+Current documentation establishes relevant mechanics:
 
-Current Python documentation establishes several relevant facts:
+- archive names should be relative;
+- leading separators are problematic;
+- a NUL in an archive name can truncate it;
+- duplicate archive names are possible;
+- `ZipInfo` owns member timestamp/metadata;
+- defaults can inherit current-time behavior;
+- `ZIP_STORED` does not depend on zlib compression;
+- `ZIP_DEFLATED` adds zlib/compressor implementation as another generation input.
 
-- archive names should be relative to the archive root;
-- leading path separators can produce interoperability problems;
-- a NUL inside an archive name truncates the name;
-- ZIP archives may contain duplicate member names;
-- `ZipInfo` owns member timestamp and other metadata;
-- creating a member from only a string name can use current-time metadata;
-- `ZIP_STORED` is the uncompressed ZIP method and does not depend on zlib compression;
-- `ZIP_DEFLATED` requires zlib and therefore introduces another implementation/toolchain input.
+### Reproducible-build practice
 
-The future WebClip builder should not rely on unsafe/default metadata behavior.
+Archive timestamps and filesystem enumeration order are common nondeterminism sources. WebClip has a stronger requirement than ordinary source-date reproducibility because evidence-only commits may legitimately advance `main` while logical package generation remains equal.
 
-### 3.3 Reproducible-build practice
+### Windows/Git portability
 
-Reproducible-build guidance identifies archive timestamps and filesystem enumeration order as common nondeterminism sources. It recommends source-derived/fixed timestamps and deterministic ordering.
+Ordinary Windows filesystems are case-insensitive by default and reserve punctuation/device names such as `CON`, `PRN`, `AUX`, `NUL`, `COM1..9`, `LPT1..9`. Git also has platform-specific pathname protections. Therefore a path legal/distinct on Linux is not automatically a safe portable package path.
 
-For WebClip there is an additional requirement: evidence-only commits may legitimately advance `main` while RPF stays equal. Therefore a timestamp derived from the later evidence commit would still alter the ZIP container even though the extension package generation did not change.
+### Python patch availability correction discovered by execution
 
-### 3.4 Windows and Git portability
+The first cross-platform matrix attempted Python `3.12.14`. Linux accepted it, but Windows 2025 `actions/setup-python` failed before the model ran:
 
-Microsoft documents that ordinary Windows file access is case-insensitive by default, reserves characters such as `< > : " / \\ | ? *`, reserves device names such as `CON`, `PRN`, `AUX`, `NUL`, `COM1..9`, `LPT1..9` even with extensions, and treats trailing spaces/dots specially.
+```text
+The version '3.12.14' with architecture 'x64' was not found for Windows 2025.
+```
 
-Git also has platform-dependent protections such as `core.protectNTFS`, `core.protectHFS` and macOS `core.precomposeUnicode`.
+Official Python release information explains the boundary: Python `3.12.10` is the last full maintenance release of Python 3.12 and has official Windows installers; later 3.12 releases are security-fix releases and need not provide Windows binaries consumed by `setup-python`.
 
-Therefore a path that is distinct and checkout-able on Linux is not automatically a safe portable extension-package path on Windows/macOS.
+Therefore the earlier research suggestion to pin a cross-platform builder to Python `3.12.14` is **withdrawn**.
+
+Corrected cross-platform research pin for this tranche:
+
+```text
+Python = 3.12.10
+Node = 22.23.2
+```
+
+The failed `3.12.14` attempt remains durable negative evidence in the execution receipt; it is not hidden or reclassified as a builder-model failure.
 
 ---
 
-## 4. Architecture principle: logical package vs physical container
+## 4. Logical package identity vs transport identity
 
 P1-231 must keep two identities separate:
 
 ```text
 RPF
   = logical extension package generation
-  = canonical package member paths + exact member bytes + semantic topology generation
+  = semantic package topology + canonical package paths + exact package bytes
 
 artifact SHA-256
   = exact generated ZIP container bytes
 ```
 
-The physical ZIP is required for distribution; the RPF is required for stable QA/release authority.
+The physical ZIP is required for distribution. The RPF is required for stable QA/release authority across evidence/docs-only Git commits.
 
-A docs/evidence-only commit may preserve RPF. It must not be allowed to change the logical extension package merely because the commit date, checkout mtime or archive enumeration order changed.
-
-The final release path must prove:
+Required release invariant:
 
 ```text
-staged QA tree projects to RPF X
-ZIP member projection also projects to RPF X
-artifact SHA-256 identifies the exact ZIP that is published
+staged QA tree -> RPF X
+ZIP member projection -> RPF X
+published ZIP bytes -> artifact SHA-256 Y
 ```
+
+Neither RPF nor artifact SHA substitutes for the other.
 
 ---
 
 ## 5. Portable package path profile v1
 
-### 5.1 Why v1 is deliberately stricter than Git/ZIP
+All current 33 package paths are ASCII and use simple portable filename characters. There is no current requirement for Unicode filenames inside the extension package.
 
-All 33 current package paths are ASCII and use only simple portable filename characters. There is no current requirement for localized/Unicode file names inside the extension package.
-
-Instead of implementing cross-platform Unicode normalization rules before they are needed, v1 should adopt a conservative portable profile.
-
-A future requirement for Unicode package paths must use an explicit schema/profile generation change and its own collision/normalization evidence.
-
-### 5.2 Canonical path representation
-
-Every v1 package path MUST:
+The proposed v1 path profile is deliberately strict:
 
 ```text
-be a non-empty relative path
+profile = portable-ascii-v1
+```
+
+Every package path MUST:
+
+```text
+be a non-empty relative file path
 use `/` as the only separator
-contain no leading `/`
-contain no trailing `/`
-contain no `//`
-contain no `.` or `..` path component
-contain no NUL/control characters
-contain only ASCII path-segment characters `[A-Za-z0-9._-]`
+have no leading or trailing `/`
+have no `//`
+have no `.` or `..` component
+contain no control/NUL characters
+contain only ASCII segment characters `[A-Za-z0-9._-]`
+have no segment ending in `.`
+have no Windows reserved device basename
 ```
 
-Every segment MUST additionally:
-
-```text
-not end with `.`
-not be `.` or `..`
-not have a Windows reserved device basename
-```
-
-Because spaces and Windows-reserved punctuation are outside the v1 character grammar, trailing-space and invalid-character ambiguity is removed by construction.
-
-Examples rejected by v1:
+Rejected examples:
 
 ```text
 /manifest.json
@@ -194,7 +189,9 @@ dir/COM1.js
 foo.
 ```
 
-### 5.3 Case-insensitive uniqueness
+Future Unicode package paths require an explicit schema/profile generation change with separate normalization/collision evidence.
+
+### Case-insensitive uniqueness
 
 Within one package generation:
 
@@ -202,40 +199,19 @@ Within one package generation:
 ASCII-lower(path)
 ```
 
-must be unique.
+must be unique. Therefore `Foo.js` and `foo.js` are a collision and fail closed even if a Linux checkout can distinguish them.
 
-Therefore these are a collision and MUST fail closed:
+### File/directory prefix collision
 
-```text
-Foo.js
-foo.js
-```
-
-This rule is intentionally stricter than a Linux checkout and matches the portability requirement for ordinary Windows filesystems.
-
-### 5.4 File/directory prefix collision
-
-The manifest is a file-member manifest. It must reject a set containing both:
-
-```text
-a
-and
-a/b.js
-```
-
-because one path requires `a` to be a file while the other requires it to be a directory.
+A file-only manifest must reject both `a` and `a/b.js` because one requires `a` to be a file while the other requires it to be a directory.
 
 ---
 
-## 6. Important refinement: enumerate files, not recursive package directories
+## 6. File-only explicit package manifest
 
-The previous topology evidence used a conceptual example containing `recursive_directories`.
+The prior topology research used `recursive_directories` only as a conceptual example. This tranche supersedes that part.
 
-This tranche refines that proposal.
-
-For the fail-closed v1 package contract, the package manifest should enumerate **every package file explicitly**.
-
-Recommended conceptual schema:
+For fail-closed v1, the package manifest should enumerate **every admitted package file explicitly**:
 
 ```json
 {
@@ -244,35 +220,33 @@ Recommended conceptual schema:
   "files": [
     "content-injection-guard.js",
     "content.js",
-    "... every admitted package file ...",
+    "... every admitted file ...",
     "manifest.json"
   ]
 }
 ```
 
-There should be no recursive include rule in v1.
+No recursive include/glob rule should exist in v1.
 
 Reason:
 
 ```text
 recursive assets/**
 + new assets/unreviewed.bin
--> silently enters release package
+-> silently enters package
 ```
 
-would violate the exact-topology/fail-closed goal established by P1-231.
+would violate the exact-topology/fail-closed goal.
 
-A new package file should require a package-manifest diff.
-
-Empty directories have no runtime meaning for the extension and should not be package members.
+Empty directories have no extension-runtime meaning and are not package members.
 
 ---
 
-## 7. Manifest semantic identity, not raw JSON-byte identity
+## 7. Semantic topology identity
 
-The prior census said the package-manifest generation must participate in RPF. This remains correct, but the identity should be **semantic**.
+The package-manifest **semantics** participate in RPF; raw JSON formatting does not.
 
-RPF/topology generation should consume a canonical projection such as:
+Canonical topology fingerprint input should include:
 
 ```text
 schema id
@@ -280,29 +254,23 @@ path-profile id
 sorted validated member paths
 ```
 
-It should not hash raw JSON formatting/order as package semantics.
-
 Therefore:
 
 ```text
-same file set + same schema/profile + different JSON indentation/order
--> same topology semantic fingerprint
+same schema/profile/member set + different JSON formatting/order
+-> same semantic topology fingerprint
 
-changed member set/profile/schema
--> different topology semantic fingerprint
+member-set/profile/schema change
+-> different semantic topology fingerprint
 ```
 
-This avoids invalidating physical QA because someone merely reformatted the manifest while still making every actual package-topology change release-significant.
-
-The canonical manifest file itself remains code-reviewed source; this rule is only about release-generation identity.
+This preserves code review of the manifest source while preventing whitespace/reordering from invalidating physical QA when package semantics are unchanged.
 
 ---
 
-## 8. Exact candidate bytes should come from Git objects, not checkout metadata
+## 8. Exact candidate bytes from immutable Git objects
 
-A future official package projection should accept an exact immutable Git commit SHA and read package member identity from that commit tree.
-
-Preferred source boundary:
+Future official package tooling should accept an exact immutable candidate SHA and read member bytes/types from that commit tree, for example via:
 
 ```text
 git ls-tree <candidate_sha> <path>
@@ -311,7 +279,7 @@ git cat-file blob <candidate_sha>:<path>
 
 or an equivalent exact-object API.
 
-For every package member v1 should require:
+Every v1 package member must resolve as:
 
 ```text
 object type = blob
@@ -325,169 +293,148 @@ Reject:
 160000 gitlink/submodule
 100755 executable package blob
 missing path
-duplicate/colliding canonical path
+path collision
 ```
 
-Current census already proves all present 33 members are `100644` regular files.
+The current census already proves all 33 current members are `100644` regular files.
 
-Why Git-object reads are preferable:
-
-- do not inherit checkout mtime;
-- do not depend on filesystem enumeration order;
-- do not follow a working-tree symlink;
-- do not accidentally package an uncommitted local edit;
-- identify bytes from exactly the candidate SHA supplied to P1-231.
-
-The release workflow should still require a clean/exact checkout for its own authority checks, but builder input bytes need not trust mutable working-tree metadata.
+This boundary avoids trusting working-tree mtimes, enumeration order, uncommitted edits or symlink traversal for package identity.
 
 ---
 
-## 9. Deterministic staged unpacked directory
+## 9. Deterministic staged unpacked QA directory
 
-Real release Chrome QA should eventually load a staged package directory built from the exact `package_paths(candidate_sha)` projection, not the repository root.
+Future release Chrome QA should eventually load a staging directory projected from the exact package manifest/candidate SHA instead of the entire repository checkout.
 
-Staging algorithm contract:
+Proposed staging algorithm:
 
 ```text
-1. validate full manifest/path set before writes;
-2. resolve exact Git blobs/modes before writes;
+1. validate complete file manifest before writes;
+2. resolve all exact Git blobs/modes before writes;
 3. create a new empty staging root;
 4. create only required parent directories;
-5. write exact blob bytes to their canonical relative paths;
-6. do not copy source mtimes/owners/ACLs/xattrs;
+5. write exact blob bytes;
+6. do not copy source mtime/owner/ACL/xattr metadata;
 7. never follow symlinks;
-8. after staging, enumerate files and require exact equality to package_paths;
-9. read back staged bytes and require exact digest/length equality;
-10. derive/check the same logical RPF from staged bytes.
+8. enumerate staged files and require exact package-path equality;
+9. read back bytes and require digest/length equality;
+10. recompute and require the expected RPF.
 ```
 
-Directory metadata is not RPF input.
+A non-empty destination fails closed rather than merging with prior output.
 
-On POSIX, staged regular files should use ordinary non-executable permissions such as `0644`; directories may use `0755`. Windows permission emulation is not package identity.
+Directory permissions/metadata are not logical package identity. POSIX staging may use ordinary `0755` directories and `0644` files; Windows permission emulation is not RPF input.
 
-A staging destination that already contains files should fail closed rather than merge with prior output.
+Current README development loading instructions remain unchanged until staged QA tooling is actually implemented/approved.
 
 ---
 
-## 10. Deterministic ZIP container contract
+## 10. Deterministic ZIP container v1
 
-### 10.1 Build from the same path/blob projection
+The future ZIP builder must consume the same validated exact Git projection as RPF/staging.
 
-The future ZIP builder MUST use exactly the same validated `package_paths(candidate_sha)` and exact blob bytes as staging/RPF.
-
-It must not independently rescan a staging directory as package authority.
-
-Required equality:
+Required member-set invariant:
 
 ```text
 ZIP file-member set == package_paths(candidate_sha)
 ```
 
-### 10.2 Member ordering
+It must not independently rescan the working tree or a staging directory as package authority.
 
-Because v1 paths are ASCII, canonical order can be defined simply as unsigned ASCII/UTF-8 byte lexicographic order.
+### Ordering
 
-Filesystem enumeration order must never be used.
+Because v1 member names are ASCII:
 
-### 10.3 No explicit directory entries
+```text
+unsigned ASCII/UTF-8 byte lexical order
+```
 
-The official ZIP should contain file entries only.
+is the canonical member order.
 
-Parent directories are implied by member paths. This removes directory timestamp/mode records and avoids a second class of package members.
+### Directory entries
 
-### 10.4 Compression method
+No explicit directory entries. Parent directories are implied by file member names.
 
-For v1 the preferred deterministic method is:
+### Compression
+
+Research recommendation for v1:
 
 ```text
 ZIP_STORED
 ```
 
-Rationale:
+The current payload is ~1.38 MB, so compression is unnecessary for feasibility and would add a compressor/zlib generation dependency. A future switch to compression should be a builder-contract generation change with its own golden-vector evidence.
 
-- current payload is only about 1.38 MB;
-- Chrome accepts a normal ZIP and its current package-size ceiling is vastly larger than the current payload;
-- stored members avoid making zlib/compressor implementation/version another source of artifact-byte variation;
-- decompression compatibility is maximal.
+### Timestamp
 
-This is a research recommendation, not an activated release setting.
-
-If future package size justifies compression, that should be a versioned builder-contract change with an exact golden artifact vector/toolchain policy.
-
-### 10.5 Fixed member timestamp
-
-The ZIP member timestamp should be a constant representable by the classic ZIP DOS timestamp, proposed:
+Every ZIP file entry should use a fixed classic ZIP timestamp:
 
 ```text
 1980-01-01 00:00:00
 ```
 
-It should **not** be:
+Do not use:
 
 ```text
-current wall clock
-evidence-commit timestamp
-checkout filesystem mtime
-candidate commit timestamp when RPF-equivalent evidence commits are allowed
+wall clock
+checkout mtime
+candidate commit timestamp
+evidence-only later commit timestamp
 ```
 
-The purpose of a release ZIP is exact package transport, not source-age display.
+because an evidence-only commit may intentionally preserve RPF.
 
-### 10.6 Fixed file metadata
+### Canonical member metadata
 
-For every v1 member, proposed canonical ZIP metadata:
+Proposed v1 metadata:
 
 ```text
 compression = ZIP_STORED
 create_system = Unix (3)
 create_version = 20
 extract_version = 20
-external file mode = regular file 100644
+external mode = regular file 100644
 internal_attr = 0
 extra = empty
 member comment = empty
 archive comment = empty
+no encryption
 ```
 
-No encryption.
+No host owner/group/ACL/xattr metadata enters the archive.
 
-No platform-derived owner/group/ACL/xattr metadata.
+### ZIP64 and bounds
 
-### 10.7 ZIP64
+Future v1 should use a project bound below Chrome's package maximum and fail closed rather than silently changing archive generation. Existing research bounds are conservative `<512 MiB` and `<4096 files`; the exact production bound belongs in the versioned implementation contract.
 
-The official builder should fail closed before the Chrome package limit and should not silently change archive format generation.
-
-Given Chrome's current 2 GB maximum extension-package size, v1 can use a stricter project size bound and build with ZIP64 disabled.
-
-The exact project size bound belongs in the future versioned package contract; current research already uses conservative `<512 MiB` and `<4096 files` model bounds.
-
-### 10.8 Final artifact verification
-
-After closing the ZIP, before it can become release evidence:
-
-```text
-re-open archive
-archive comment == empty
-member count == package file count
-no duplicate archive names
-no directory entries
-all member names pass portable-ascii-v1
-all member metadata matches canonical settings
-CRC/testzip passes
-read every member and compare exact bytes/digest to candidate blob
-recompute logical RPF from ZIP projection and require expected RPF
-compute SHA-256 of final ZIP bytes
-```
-
-The final SHA-256 is the artifact identity used for publication/audit.
+ZIP64 should therefore be disabled for v1 unless/until a deliberate schema/builder revision admits it.
 
 ---
 
-## 11. Why `SOURCE_DATE_EPOCH` alone is not the WebClip answer
+## 11. Final artifact verification
 
-`SOURCE_DATE_EPOCH` is an important reproducible-build convention and is useful when a build wants metadata to reflect a deterministic source timestamp.
+After writing and closing the ZIP, before an artifact receipt can exist, tooling should reopen and verify:
 
-WebClip has a stronger cross-generation requirement:
+```text
+archive comment empty
+member count exactly expected
+no duplicate member names
+no directory entries
+all names pass portable-ascii-v1
+all canonical metadata exact
+CRC/testzip passes
+all member bytes/digests equal source Git blobs
+logical RPF recomputed from ZIP projection == expected RPF
+final ZIP SHA-256 computed
+```
+
+The final SHA identifies exact transport bytes and is the value bound to publication/release evidence.
+
+---
+
+## 12. Why SOURCE_DATE_EPOCH alone is insufficient here
+
+`SOURCE_DATE_EPOCH` is a useful reproducible-build convention, but WebClip permits:
 
 ```text
 package-frozen main X
@@ -496,40 +443,44 @@ package-frozen main X
 -> RPF(X) == RPF(Y)
 ```
 
-If ZIP timestamps derive from commit Y, the ZIP bytes can change even though the extension package generation is intentionally equal.
+If ZIP metadata is derived from commit Y, the archive can change despite equal logical package generation.
 
-Therefore v1 should use constant container metadata rather than encode the candidate/evidence commit time into the transport artifact.
-
-Commit/source timestamps remain available in Git/evidence receipts; they do not need to live inside ZIP metadata.
+Therefore v1 should use constant transport metadata. Git commit timestamps remain available in Git/evidence receipts instead of being encoded into ZIP members.
 
 ---
 
-## 12. Toolchain and golden-vector policy
+## 13. Cross-platform toolchain and golden vector
 
-Even with explicit metadata, the project should not assume a standard library can never change byte-emission details across versions.
+A standard library must not be assumed byte-stable forever. The builder runtime and serializer contract need an executable golden vector.
 
-Recommended future policy:
+Corrected recommended research/initial implementation pin:
 
 ```text
-production builder runtime pinned (currently natural fit: Python 3.12.14, matching CI)
-synthetic canonical ZIP golden vector committed as deterministic test
-cross-platform research/CI proof for supported builder environments
-runtime upgrade -> rerun golden vector and treat unexpected byte drift as builder-contract change
+Python = 3.12.10
 ```
 
-The logical RPF remains independent of the ZIP serializer implementation.
+Reason:
 
-If a serializer upgrade changes container bytes but leaves logical package bytes/path semantics equal:
+- it is the final full-maintenance 3.12 release with official Windows installers;
+- it is available to `setup-python` on both Linux and Windows hosted runners;
+- the first attempted `3.12.14` matrix proved that later source/security releases are not a safe cross-platform binary pin.
 
-- RPF may remain equal;
-- artifact SHA-256 changes;
-- full release-contract/builder evidence must be current before publishing the newly serialized artifact.
+Node `22.23.2` is used only to drive the current research model; production builder language/runtime remains an implementation decision, but any chosen serializer runtime must be pinned and golden-tested.
+
+Runtime upgrade rule:
+
+```text
+run canonical golden vector
+unexpected container-byte drift -> builder-contract review/change
+```
+
+Logical RPF remains serializer-independent. Artifact SHA may change on an admitted serializer generation change, and current RCF/builder evidence must authorize that new artifact before publication.
 
 ---
 
-## 13. Proposed synthetic golden vector
+## 14. Synthetic canonical ZIP golden vector
 
-A research-only fixture is useful because it tests the ZIP binary contract without building the actual WebClip extension.
+The research model builds **only a tiny synthetic archive**, never the WebClip extension.
 
 Fixture members:
 
@@ -540,32 +491,30 @@ manifest.json
 z-last.bin
 ```
 
-Fixture properties:
+Properties:
 
-- deliberately supplied in non-canonical order;
-- one file contains UTF-8 content while member names remain ASCII;
-- one file contains arbitrary binary bytes;
-- all member paths are portable-ascii-v1;
-- builder sorts member names itself.
+- input intentionally supplied out of canonical order;
+- member names are ASCII;
+- one payload is UTF-8 text;
+- one payload contains arbitrary binary bytes;
+- builder sorts entries and sets all metadata explicitly.
 
-Using the proposed Python `zipfile` settings, the expected synthetic ZIP is:
+Proposed golden output:
 
 ```text
-size = 510 bytes
+ZIP size = 510 bytes
 SHA-256 = 1db2cd15c7decdd0e380aab31363f12d75268d90573eb6ef46723b5287f740d7
 ```
 
-This value is a **research golden vector**, not a WebClip extension artifact digest.
+This digest is a research serializer vector, **not** a WebClip distribution artifact digest.
 
-A dedicated committed-source matrix should verify the same vector on at least Linux and Windows with the exact pinned Python runtime.
+The dedicated matrix must prove this exact vector on Linux and Windows using the corrected common Python `3.12.10` pin.
 
 ---
 
-## 14. Path rejection/collision acceptance matrix
+## 15. Path acceptance matrix
 
-Future deterministic path tests should include at least:
-
-### Valid
+Valid examples:
 
 ```text
 manifest.json
@@ -576,7 +525,7 @@ a_b-c.d
 .hidden
 ```
 
-### Invalid syntax/traversal
+Invalid syntax/portability examples:
 
 ```text
 <empty>
@@ -595,7 +544,7 @@ café.js
 foo.
 ```
 
-### Windows reserved
+Windows-reserved examples:
 
 ```text
 CON
@@ -608,7 +557,7 @@ LPT9.bin
 dir/aux.css
 ```
 
-### Collision sets
+Collision sets:
 
 ```text
 Foo.js + foo.js
@@ -617,109 +566,91 @@ file + file/sub.js
 exact duplicate path
 ```
 
-Every invalid/collision case fails before staging or ZIP output starts.
+All invalid/collision cases fail before staging/ZIP output starts.
 
 ---
 
-## 15. Failure atomicity
+## 16. Failure atomicity
 
-Future staging/ZIP tooling should avoid leaving a plausible partial artifact after failure.
-
-Preferred ZIP sequence:
+Future local ZIP generation should follow:
 
 ```text
-validate everything
--> write unique temporary file
+validate all inputs
+-> write unique temporary output
 -> close
--> reopen/verify all invariants
--> compute final artifact SHA-256
--> atomically publish/rename to requested local output path
+-> reopen and verify all invariants
+-> compute artifact SHA-256
+-> atomically rename/publish to requested local output path
 ```
 
-A failed verification deletes/quarantines the temporary output and never returns an artifact receipt.
+Failed verification deletes/quarantines the temporary output and produces no valid artifact receipt.
 
-This is local build-tool atomicity only. It does not authorize GitHub Release publication.
+This is local build-tool atomicity only; it does not authorize GitHub Release or provider publication.
 
 ---
 
-## 16. Security boundary
+## 17. Defensive security boundary
 
-This tranche is defensive package construction analysis.
+This tranche is defensive package construction analysis only.
 
-The path profile and exact file-list authority prevent accidental archive traversal/collision and source-tree leakage. It does not perform vulnerability scanning or exploit development.
+Exact package membership/path validation prevents accidental traversal, collisions and source-tree leakage. The builder must never package `.git/**`, `.github/**`, `project_docs/**`, `project_tools/**`, credentials/tokens/private keys, browser profiles, signed provider URLs or untracked working-tree files.
 
-The builder must not package:
-
-```text
-.git/**
-.github/**
-project_docs/**
-project_tools/**
-credentials/tokens/private keys
-browser profiles
-signed provider URLs
-untracked working-tree files
-```
-
-Package membership comes only from the exact explicit package manifest at the candidate commit.
+Package bytes come only from explicit manifest members in the exact immutable candidate commit.
 
 ---
 
-## 17. Corrected S0 implementation map after this tranche
-
-The passive S0 sequence is now more precise:
+## 18. Refined passive S0 sequence
 
 ```text
 S0a — package topology source
-  explicit file-only package manifest
-  portable-ascii-v1 path profile
-  exhaustive package/non-package/unknown repository classification
+  explicit file-only manifest
+  portable-ascii-v1
+  exhaustive package/non-package/unknown classification
 
 S0b — exact Git projection
-  validate member paths
-  validate tree object type/mode
-  read exact blobs from immutable candidate SHA
-  canonical semantic topology fingerprint
+  path validation
+  object type/mode validation
+  exact immutable blob reads
+  semantic topology fingerprint
 
 S0c — RPF
-  schema/profile/topology semantic fingerprint
+  schema/profile/topology semantics
   sorted canonical paths
   exact blob lengths/bytes
 
 S0d — staged QA tree
-  write exact projected blobs to new empty directory
-  verify exact member set and bytes
-  prove staged RPF
+  exact projected blobs
+  empty destination
+  member-set/readback verification
+  staged RPF proof
 
 S0e — deterministic ZIP serializer
   same projection
+  sorted file-only entries
   ZIP_STORED
-  sorted file entries only
-  fixed 1980 timestamp / 100644 metadata
+  fixed timestamp/mode/metadata
   no ZIP64/extras/comments
-  reopen and verify
+  reopen/verify
   artifact SHA-256
-  prove ZIP projection RPF
+  ZIP projection RPF proof
 
 S0f — source-generation consistency
-  declared generation inputs -> committed generated package outputs
+  declared generation inputs -> committed generated outputs
 
 S0g — PR coupling
   runtime-impact policy consumes topology facts but remains semantically separate
 ```
 
-S1 remains the immutable evidence-attempt ledger.
-
-S2 remains active release-policy integration and still requires separate explicit approval.
+S1 remains the immutable evidence-attempt ledger. S2 remains active release-policy integration and requires separate explicit approval.
 
 ---
 
-## 18. What this tranche does not authorize
+## 19. Explicit non-authorization
 
 This research does not authorize or perform:
 
 ```text
-creation of a real WebClip distribution ZIP
+real WebClip distribution ZIP
 version bump
 manifest mutation
 real unpacked Chrome release QA
@@ -733,9 +664,9 @@ provider mutation
 
 ---
 
-## 19. Conclusion
+## 20. Conclusion
 
-P1-231 package identity now has three distinct canonicalization layers:
+P1-231 package identity now has three separate canonicalization layers:
 
 ```text
 1. package membership
@@ -745,15 +676,20 @@ P1-231 package identity now has three distinct canonicalization layers:
    portable path profile + semantic topology + exact Git blob bytes -> RPF
 
 3. physical transport identity
-   deterministic canonical ZIP serialization -> artifact SHA-256
+   deterministic canonical ZIP serializer -> artifact SHA-256
 ```
 
-The key invariants are:
+Desired properties:
 
 ```text
-same RPF => same logical extension package generation
-same canonical builder contract + same RPF => reproducible exact ZIP bytes
-same artifact SHA-256 => exact published transport bytes
+same RPF
+=> same logical extension package generation
+
+same admitted builder contract + same RPF
+=> reproducible exact ZIP bytes
+
+same artifact SHA-256
+=> exact same published transport bytes
 ```
 
-This allows QA evidence to survive evidence/docs-only Git commits when the logical extension package truly did not change, while keeping the final distributed ZIP independently and exactly identifiable.
+The first cross-platform execution also established a toolchain rule: a version usable on Linux is not automatically a valid cross-platform pin. The corrected matrix uses Python `3.12.10`, and the failed `3.12.14` Windows setup remains part of durable evidence rather than being discarded.
