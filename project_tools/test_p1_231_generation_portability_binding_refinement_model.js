@@ -157,7 +157,7 @@ test('binary UTF-8 does not introduce CRLF', () => assert(!binaryUtf8(canonicalL
 test('real committed package output is LF-based', () => assert(outputBytes.includes(Buffer.from('\n'))));
 test('real committed package output has no CRLF', () => assert(!outputBytes.includes(Buffer.from('\r\n'))));
 test('real output Windows-style translation changes exact bytes', () => assert(!translateLfToWindowsText(outputBytes).equals(outputBytes)));
-test('real output Windows-style translation changes digest', () => assert.notStrictEqual(sha256(translateLfToWindowsText(outputBytes)), sha256(outputBytes))));
+test('real output Windows-style translation changes digest', () => assert.notStrictEqual(sha256(translateLfToWindowsText(outputBytes)), sha256(outputBytes)));
 
 // Minimal repair simulation: generator implementation changes while package output remains exact.
 const repairedGeneratorSource = Buffer.from(generatorSource.replace("OUT.write_text(code, encoding='utf-8')", "OUT.write_bytes(code.encode('utf-8'))"), 'utf8');
