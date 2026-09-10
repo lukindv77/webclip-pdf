@@ -1,22 +1,35 @@
 'use strict';
 
 // Research-only deterministic model for P1-231 S0-I PR checker integration.
-// It proves base+head package/source-generation impact classification and ownership fences.
-// It does not modify check_pr_change_contract.py, execute generators, admit candidates or activate release policy.
+// It consumes synthetic typed S0-A/S0-B authority views, proves exact merge-candidate
+// impact classification and self-modifying-control-plane fences, and does not modify
+// production checker/workflow behavior or activate release policy.
 
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const crypto = require('crypto');
+const { execFileSync, spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const SCHEMA = 'webclip-pr-release-impact/v1';
+const SCHEMA = 'webclip-pr-impact/v1';
 const PACKAGE_SCHEMA = 'webclip-extension-package/v1';
-const PATH_PROFILE = 'portable-ascii-v1';
 const SOURCE_SCHEMA = 'webclip-source-generation/v1';
 const MAX_CHANGES = 10000;
 const MAX_PATH_BYTES = 1024;
-const HEX40 = /^[0-9a-fA-F]{40}$/;
+const HEX40 = /^[0-9a-f]{40}$/;
+
+const PACKAGE_AUTHORITY_SOURCE = 'release_package_manifest_v1.json';
+const SOURCE_AUTHORITY_SOURCE = 'release_source_generation_v1.json';
+const AUTHORITY_IMPLEMENTATION = Object.freeze([
+  'project_tools/release_package_authority.py',
+  'project_tools/release_source_generation.py',
+]);
+const CHECKER_CONTROL_PLANE = Object.freeze([
+  'project_tools/release_pr_impact.py',
+  'project_tools/check_pr_change_contract.py',
+  '.github/workflows/repository-integrity.yml',
+]);
 
 const CURRENT_PACKAGE_FILES = Object.freeze([
   'content-injection-guard.js','content.js','frame-agent.js','frame-proxy-budget-guard.js',
@@ -27,7 +40,6 @@ const CURRENT_PACKAGE_FILES = Object.freeze([
   'options.html','options.js','pdf-print-guard.js','popup.css','popup.html','popup.js','prepared-save-as.js',
   'public-suffix.js','service-worker.js','yandex-auth-help.css','yandex-auth-help.html','yandex-auth-help.js',
 ]);
-
 const CURRENT_RELATIONS = Object.freeze([
   Object.freeze({
     id: 'public-suffix-js',
@@ -48,369 +60,395 @@ function throwsCode(fn, code, m) {
 }
 function fail(code, detail) { const e = new Error(detail || code); e.code = code; throw e; }
 function asciiCompare(a, b) { return Buffer.from(a, 'utf8').compare(Buffer.from(b, 'utf8')); }
-function sortedUnique(values) { return [...new Set(values)].sort(asciiCompare); }
+function sortedUnique(xs) { return [...new Set(xs)].sort(asciiCompare); }
 function clone(v) { return structuredClone(v); }
 function git(...args) { return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim(); }
+function sha256(text) { return crypto.createHash('sha256').update(text).digest('hex'); }
 
-function validateSha(value, which) {
-  if (typeof value !== 'string' || !HEX40.test(value)) fail(`PR_IMPACT_${which}_SHA_INVALID`);
-  return value.toLowerCase();
+function validateSha(v) {
+  if (typeof v !== 'string' || !HEX40.test(v)) fail('PR_IMPACT_SHA_INVALID');
+  return v;
 }
 
-function validateRepoPath(value) {
-  if (typeof value !== 'string' || !value || Buffer.byteLength(value, 'utf8') > MAX_PATH_BYTES) fail('PR_IMPACT_PATH_INVALID');
-  if (!/^[\x20-\x7e]+$/.test(value) || value.startsWith('/') || value.endsWith('/') || value.includes('\\') || value.includes('//')) fail('PR_IMPACT_PATH_INVALID');
-  const parts = value.split('/');
-  for (const part of parts) if (!part || part === '.' || part === '..') fail('PR_IMPACT_PATH_INVALID');
-  return value;
+function validatePath(v) {
+  if (typeof v !== 'string' || !v || Buffer.byteLength(v, 'utf8') > MAX_PATH_BYTES) fail('PR_IMPACT_PATH_INVALID');
+  if (!/^[\x20-\x7e]+$/.test(v) || v.startsWith('/') || v.endsWith('/') || v.includes('\\') || v.includes('//')) fail('PR_IMPACT_PATH_INVALID');
+  for (const part of v.split('/')) if (!part || part === '.' || part === '..') fail('PR_IMPACT_PATH_INVALID');
+  return v;
 }
 
-function normalizeChange(raw) {
-  if (!raw || typeof raw !== 'object') fail('PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
-  const status = raw.status;
-  if (!['A','M','D','R'].includes(status)) fail('PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
-  if (status === 'A') {
-    if (raw.old_path != null || raw.new_path == null) fail('PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
-    return { status, old_path: null, new_path: validateRepoPath(raw.new_path) };
+function stable(value) {
+  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort(asciiCompare).map((k)=>`${JSON.stringify(k)}:${stable(value[k])}`).join(',')}}`;
   }
-  if (status === 'D') {
-    if (raw.old_path == null || raw.new_path != null) fail('PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
-    return { status, old_path: validateRepoPath(raw.old_path), new_path: null };
-  }
-  if (status === 'M') {
-    const p = validateRepoPath(raw.old_path);
-    if (raw.new_path !== p) fail('PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
-    return { status, old_path: p, new_path: p };
-  }
-  if (raw.old_path == null || raw.new_path == null || raw.old_path === raw.new_path) fail('PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
-  return { status, old_path: validateRepoPath(raw.old_path), new_path: validateRepoPath(raw.new_path) };
+  return JSON.stringify(value);
 }
 
-function changeSortKey(c) { return `${c.old_path || ''}\0${c.new_path || ''}\0${c.status}`; }
-function normalizeChanges(changes) {
-  if (!Array.isArray(changes) || changes.length > MAX_CHANGES) fail('PR_IMPACT_DIFF_FAILED');
-  return changes.map(normalizeChange).sort((a,b)=>asciiCompare(changeSortKey(a), changeSortKey(b)));
+function packageView(files = CURRENT_PACKAGE_FILES, digestOverride = null) {
+  const canonical = sortedUnique(files.map(validatePath));
+  return Object.freeze({
+    schema: PACKAGE_SCHEMA,
+    files: Object.freeze(canonical),
+    topologyDigest: digestOverride || `sha256:${sha256(`pkg\0${canonical.join('\0')}`)}`,
+  });
 }
 
-function validatePackageAuthority(raw, which) {
-  if (!raw || raw.schema !== PACKAGE_SCHEMA || raw.path_profile !== PATH_PROFILE || !Array.isArray(raw.files)) {
-    fail(`PR_IMPACT_${which}_PACKAGE_AUTHORITY_INVALID`);
-  }
-  const files = [];
+function canonicalRelation(raw) {
+  if (!raw || typeof raw !== 'object' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(raw.id || '')) fail('PR_IMPACT_SOURCE_GENERATION_TOPOLOGY_INVALID');
+  const generator = validatePath(raw.generator);
+  const inputs = sortedUnique((raw.inputs || []).map(validatePath));
+  const outputs = sortedUnique((raw.outputs || []).map(validatePath));
+  if (!outputs.length || typeof raw.runtime_profile !== 'string' || !raw.runtime_profile) fail('PR_IMPACT_SOURCE_GENERATION_TOPOLOGY_INVALID');
+  return { id: raw.id, runtime_profile: raw.runtime_profile, generator, inputs, outputs };
+}
+
+function sourceView(relations = CURRENT_RELATIONS, digestOverride = null) {
+  const canonical = relations.map(canonicalRelation).sort((a,b)=>asciiCompare(a.id,b.id));
+  if (new Set(canonical.map((r)=>r.id)).size !== canonical.length) fail('PR_IMPACT_SOURCE_GENERATION_TOPOLOGY_INVALID');
+  return Object.freeze({
+    schema: SOURCE_SCHEMA,
+    relations: Object.freeze(canonical.map(Object.freeze)),
+    topologyDigest: digestOverride || `sha256:${sha256(`src\0${stable(canonical)}`)}`,
+  });
+}
+
+function validatePackageView(v) {
+  if (!v || v.schema !== PACKAGE_SCHEMA || !Array.isArray(v.files) || !/^sha256:[0-9a-f]{64}$/.test(v.topologyDigest || '')) fail('PR_IMPACT_PACKAGE_TOPOLOGY_INVALID');
+  const sorted = sortedUnique(v.files.map(validatePath));
+  if (sorted.length !== v.files.length || !sorted.includes('manifest.json')) fail('PR_IMPACT_PACKAGE_TOPOLOGY_INVALID');
+  return { schema:v.schema, files:sorted, topologyDigest:v.topologyDigest };
+}
+
+function validateSourceView(v) {
+  if (!v || v.schema !== SOURCE_SCHEMA || !Array.isArray(v.relations) || !/^sha256:[0-9a-f]{64}$/.test(v.topologyDigest || '')) fail('PR_IMPACT_SOURCE_GENERATION_TOPOLOGY_INVALID');
+  const relations = v.relations.map(canonicalRelation).sort((a,b)=>asciiCompare(a.id,b.id));
+  if (new Set(relations.map((r)=>r.id)).size !== relations.length) fail('PR_IMPACT_SOURCE_GENERATION_TOPOLOGY_INVALID');
+  return { schema:v.schema, relations, topologyDigest:v.topologyDigest };
+}
+
+function normalizeChanges(raw) {
+  if (!Array.isArray(raw) || raw.length > MAX_CHANGES) fail('PR_IMPACT_DIFF_FAILED');
   const seen = new Set();
-  for (const p of raw.files) {
-    try { validateRepoPath(p); } catch { fail(`PR_IMPACT_${which}_PACKAGE_AUTHORITY_INVALID`); }
-    const folded = p.toLowerCase();
-    if (seen.has(folded)) fail(`PR_IMPACT_${which}_PACKAGE_AUTHORITY_INVALID`);
-    seen.add(folded); files.push(p);
-  }
-  if (!seen.has('manifest.json')) fail(`PR_IMPACT_${which}_PACKAGE_AUTHORITY_INVALID`);
-  return { schema: raw.schema, path_profile: raw.path_profile, files: files.sort(asciiCompare) };
+  const out = raw.map((c) => {
+    if (!c || !['A','M','D','T'].includes(c.status)) fail('PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
+    const p = validatePath(c.path);
+    if (seen.has(p)) fail('PR_IMPACT_DUPLICATE_PATH');
+    seen.add(p);
+    return { status:c.status, path:p };
+  });
+  return out.sort((a,b)=>asciiCompare(a.path,b.path) || asciiCompare(a.status,b.status));
 }
 
-function validateRelation(rel, which) {
-  if (!rel || typeof rel !== 'object' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(rel.id || '') ||
-      typeof rel.runtime_profile !== 'string' || typeof rel.generator !== 'string' ||
-      !Array.isArray(rel.inputs) || !Array.isArray(rel.outputs) || rel.outputs.length === 0) {
-    fail(`PR_IMPACT_${which}_SOURCE_GENERATION_INVALID`);
+function relationSemanticKey(r) { return stable([r.id,r.runtime_profile,r.generator,r.inputs,r.outputs]); }
+
+function indexRelations(baseRelations, candidateRelations) {
+  const roles = { input:new Map(), generator:new Map(), output:new Map() };
+  const byBase = new Map(baseRelations.map((r)=>[r.id,r]));
+  const byCandidate = new Map(candidateRelations.map((r)=>[r.id,r]));
+  function add(role, p, id) {
+    if (!roles[role].has(p)) roles[role].set(p,new Set());
+    roles[role].get(p).add(id);
   }
-  try { validateRepoPath(rel.generator); } catch { fail(`PR_IMPACT_${which}_SOURCE_GENERATION_INVALID`); }
-  const inputs = rel.inputs.map((p)=>{ try { return validateRepoPath(p); } catch { fail(`PR_IMPACT_${which}_SOURCE_GENERATION_INVALID`); } });
-  const outputs = rel.outputs.map((p)=>{ try { return validateRepoPath(p); } catch { fail(`PR_IMPACT_${which}_SOURCE_GENERATION_INVALID`); } });
-  if (new Set(inputs.map(x=>x.toLowerCase())).size !== inputs.length || new Set(outputs.map(x=>x.toLowerCase())).size !== outputs.length) {
-    fail(`PR_IMPACT_${which}_SOURCE_GENERATION_INVALID`);
+  for (const rel of [...baseRelations,...candidateRelations]) {
+    add('generator',rel.generator,rel.id);
+    for (const p of rel.inputs) add('input',p,rel.id);
+    for (const p of rel.outputs) add('output',p,rel.id);
   }
-  return { id: rel.id, runtime_profile: rel.runtime_profile, generator: rel.generator, inputs: sortedUnique(inputs), outputs: sortedUnique(outputs) };
+  return { roles, byBase, byCandidate };
 }
 
-function validateSourceAuthority(raw, which, packageAuthority) {
-  if (!raw || raw.schema !== SOURCE_SCHEMA || !Array.isArray(raw.relations)) fail(`PR_IMPACT_${which}_SOURCE_GENERATION_INVALID`);
+function affectedRelations(changedSet, baseRelations, candidateRelations) {
+  const { roles, byBase, byCandidate } = indexRelations(baseRelations,candidateRelations);
   const ids = new Set();
-  const outputOwners = new Map();
-  const packageSet = new Set(packageAuthority.files);
-  const relations = [];
-  for (const input of raw.relations) {
-    const rel = validateRelation(input, which);
-    if (ids.has(rel.id)) fail(`PR_IMPACT_${which}_SOURCE_GENERATION_INVALID`);
-    ids.add(rel.id);
-    for (const out of rel.outputs) {
-      if (!packageSet.has(out) || outputOwners.has(out)) fail(`PR_IMPACT_${which}_AUTHORITY_INCONSISTENT`);
-      outputOwners.set(out, rel.id);
+  const reasons = new Map();
+  function reason(id, text) { ids.add(id); if (!reasons.has(id)) reasons.set(id,new Set()); reasons.get(id).add(text); }
+  for (const p of changedSet) {
+    for (const [role,map] of Object.entries(roles)) {
+      for (const id of map.get(p) || []) reason(id,`${role}-path-touched`);
     }
-    relations.push(rel);
   }
-  relations.sort((a,b)=>asciiCompare(a.id,b.id));
-  return { schema: raw.schema, relations };
+  for (const id of sortedUnique([...byBase.keys(),...byCandidate.keys()])) {
+    const b=byBase.get(id), c=byCandidate.get(id);
+    if (!b && c) reason(id,'relation-added');
+    else if (b && !c) reason(id,'relation-removed');
+    else if (relationSemanticKey(b)!==relationSemanticKey(c)) reason(id,'relation-declaration-changed');
+  }
+  return sortedUnique([...ids]).map((id)=>({ relationId:id, reasons:sortedUnique([...reasons.get(id)]) }));
 }
 
-function packageSemanticKey(p) { return JSON.stringify([p.schema,p.path_profile,p.files]); }
-function relationSemanticKey(r) { return JSON.stringify([r.id,r.runtime_profile,r.generator,r.inputs,r.outputs]); }
-function sourceSemanticKey(s) { return JSON.stringify([s.schema,s.relations.map(relationSemanticKey)]); }
+function computeImpact(input) {
+  const baseSha = validateSha(input.baseSha);
+  const prHeadSha = validateSha(input.prHeadSha);
+  const candidateSha = validateSha(input.candidateSha);
+  const parents = sortedUnique((input.candidateParents || []).map(validateSha));
+  if (parents.length !== 2 || !parents.includes(baseSha) || !parents.includes(prHeadSha)) fail('PR_IMPACT_CANDIDATE_RELATION_INVALID');
 
-function touchesPath(changes, side, p) {
-  const key = side === 'base' ? 'old_path' : 'new_path';
-  return changes.some((c)=>c[key] === p);
-}
+  const changes = normalizeChanges(input.changes);
+  const bp = validatePackageView(input.basePackage);
+  const cp = validatePackageView(input.candidatePackage);
+  const bg = validateSourceView(input.baseGeneration);
+  const cg = validateSourceView(input.candidateGeneration);
+  const changedSet = new Set(changes.map((c)=>c.path));
 
-function reasonSetForRelation(changes, baseRel, headRel) {
-  const reasons = [];
-  if (!baseRel && headRel) reasons.push('relation-added');
-  if (baseRel && !headRel) reasons.push('relation-removed');
-  if (baseRel && headRel && relationSemanticKey(baseRel) !== relationSemanticKey(headRel)) reasons.push('relation-declaration-changed');
-  if (baseRel) {
-    if (touchesPath(changes,'base',baseRel.generator)) reasons.push('base-generator-touched');
-    if (baseRel.inputs.some((p)=>touchesPath(changes,'base',p))) reasons.push('base-input-touched');
-    if (baseRel.outputs.some((p)=>touchesPath(changes,'base',p))) reasons.push('base-output-touched');
-  }
-  if (headRel) {
-    if (touchesPath(changes,'head',headRel.generator)) reasons.push('head-generator-touched');
-    if (headRel.inputs.some((p)=>touchesPath(changes,'head',p))) reasons.push('head-input-touched');
-    if (headRel.outputs.some((p)=>touchesPath(changes,'head',p))) reasons.push('head-output-touched');
-  }
-  return sortedUnique(reasons);
-}
+  const packageUnion = new Set([...bp.files,...cp.files]);
+  const packageMemberTouched = [...changedSet].some((p)=>packageUnion.has(p));
+  const packageTopologyChanged = bp.topologyDigest !== cp.topologyDigest;
+  const sourceGenerationTopologyChanged = bg.topologyDigest !== cg.topologyDigest;
 
-function computeImpact({ baseSha, headSha, changes, basePackage, headPackage, baseSource, headSource }) {
-  const base_sha = validateSha(baseSha,'BASE');
-  const head_sha = validateSha(headSha,'HEAD');
-  const normalized = normalizeChanges(changes);
-  const bp = validatePackageAuthority(basePackage,'BASE');
-  const hp = validatePackageAuthority(headPackage,'HEAD');
-  const bs = validateSourceAuthority(baseSource,'BASE',bp);
-  const hs = validateSourceAuthority(headSource,'HEAD',hp);
+  const rels = affectedRelations(changedSet,bg.relations,cg.relations);
+  const { roles } = indexRelations(bg.relations,cg.relations);
+  const generationInput = [...changedSet].some((p)=>roles.input.has(p));
+  const generationGenerator = [...changedSet].some((p)=>roles.generator.has(p));
+  const generatedOutput = [...changedSet].some((p)=>roles.output.has(p));
+  const generationClosure = generationInput || generationGenerator || generatedOutput;
 
-  const baseSet = new Set(bp.files), headSet = new Set(hp.files);
-  const touchedBase = sortedUnique(normalized.flatMap((c)=>c.old_path && baseSet.has(c.old_path) ? [c.old_path] : []));
-  const touchedHead = sortedUnique(normalized.flatMap((c)=>c.new_path && headSet.has(c.new_path) ? [c.new_path] : []));
-  const addedMembers = sortedUnique(hp.files.filter((p)=>!baseSet.has(p)));
-  const removedMembers = sortedUnique(bp.files.filter((p)=>!headSet.has(p)));
-  const packageAuthorityChanged = packageSemanticKey(bp) !== packageSemanticKey(hp);
+  const packageAuthoritySource = changedSet.has(PACKAGE_AUTHORITY_SOURCE);
+  const sourceGenerationAuthoritySource = changedSet.has(SOURCE_AUTHORITY_SOURCE);
+  const authorityImplementation = AUTHORITY_IMPLEMENTATION.some((p)=>changedSet.has(p));
+  const prCheckerControlPlane = CHECKER_CONTROL_PLANE.some((p)=>changedSet.has(p));
 
-  const baseById = new Map(bs.relations.map((r)=>[r.id,r]));
-  const headById = new Map(hs.relations.map((r)=>[r.id,r]));
-  const ids = sortedUnique([...baseById.keys(),...headById.keys()]);
-  const affected = [];
-  for (const id of ids) {
-    const br = baseById.get(id) || null, hr = headById.get(id) || null;
-    const reasons = reasonSetForRelation(normalized,br,hr);
-    if (reasons.length) affected.push({
-      relation_id:id,
-      base_present:Boolean(br),
-      head_present:Boolean(hr),
-      declaration_changed:Boolean(br && hr && relationSemanticKey(br)!==relationSemanticKey(hr)),
-      reasons,
-    });
-  }
-  affected.sort((a,b)=>asciiCompare(a.relation_id,b.relation_id));
-  const sourceAuthorityChanged = sourceSemanticKey(bs) !== sourceSemanticKey(hs);
-  const packageRelevant = packageAuthorityChanged || touchedBase.length>0 || touchedHead.length>0;
-  const generationRelevant = packageRelevant || sourceAuthorityChanged || affected.length>0;
+  const candidateGenerationVerification = packageMemberTouched || packageTopologyChanged || sourceGenerationTopologyChanged || generationClosure || authorityImplementation;
+  const shadowIdentityRecompute = candidateGenerationVerification || prCheckerControlPlane;
+  const trustedControlPlaneReview = authorityImplementation || prCheckerControlPlane;
+  const automaticClassificationTrusted = !trustedControlPlaneReview;
 
   return {
-    schema:SCHEMA,
-    base_sha,
-    head_sha,
-    changes:normalized,
-    package:{
-      authority_changed:packageAuthorityChanged,
-      touched_base_members:touchedBase,
-      touched_head_members:touchedHead,
-      added_members:addedMembers,
-      removed_members:removedMembers,
-      candidate_package_relevant:packageRelevant,
+    schema: SCHEMA,
+    provenance:{baseSha,prHeadSha,candidateSha},
+    authority:{
+      basePackageTopologyDigest:bp.topologyDigest,
+      candidatePackageTopologyDigest:cp.topologyDigest,
+      packageTopologyChanged,
+      baseSourceGenerationTopologyDigest:bg.topologyDigest,
+      candidateSourceGenerationTopologyDigest:cg.topologyDigest,
+      sourceGenerationTopologyChanged,
     },
-    source_generation:{ authority_changed:sourceAuthorityChanged, affected_relations:affected },
-    candidate_generation_relevant:generationRelevant,
-    requires_s0f_recheck:generationRelevant,
+    changedPaths:changes,
+    touched:{
+      packageMember:packageMemberTouched,
+      generationInput,
+      generationGenerator,
+      generatedOutput,
+      generationClosure,
+      packageAuthoritySource,
+      sourceGenerationAuthoritySource,
+      authorityImplementation,
+      prCheckerControlPlane,
+    },
+    affectedGenerationRelations:rels,
+    requires:{candidateGenerationVerification,shadowIdentityRecompute,trustedControlPlaneReview},
+    trust:{automaticClassificationTrusted},
   };
 }
 
-function pkg(files=CURRENT_PACKAGE_FILES) { return {schema:PACKAGE_SCHEMA,path_profile:PATH_PROFILE,files:[...files]}; }
-function src(relations=CURRENT_RELATIONS) { return {schema:SOURCE_SCHEMA,relations:clone(relations)}; }
-function C(status, oldPath, newPath) { return {status,old_path:oldPath,new_path:newPath}; }
-const BASE='a'.repeat(40), HEAD='b'.repeat(40);
-function impact(changes, bp=pkg(), hp=pkg(), bs=src(), hs=src()) {
-  return computeImpact({baseSha:BASE,headSha:HEAD,changes,basePackage:bp,headPackage:hp,baseSource:bs,headSource:hs});
+const BASE='a'.repeat(40), HEAD='b'.repeat(40), CAND='c'.repeat(40);
+function run(changes, opts={}) {
+  return computeImpact({
+    baseSha:BASE,prHeadSha:HEAD,candidateSha:CAND,candidateParents:[BASE,HEAD],changes,
+    basePackage:opts.basePackage || packageView(),
+    candidatePackage:opts.candidatePackage || packageView(),
+    baseGeneration:opts.baseGeneration || sourceView(),
+    candidateGeneration:opts.candidateGeneration || sourceView(),
+  });
 }
+function C(status,path) { return {status,path}; }
 
 (function main(){
-  // Canonical bootstrap facts from S0-A/S0-B.
-  eq(CURRENT_PACKAGE_FILES.length,33,'bootstrap package census drift');
-  eq(new Set(CURRENT_PACKAGE_FILES).size,33,'bootstrap package duplicate');
-  eq(CURRENT_RELATIONS.length,1,'bootstrap relation census drift');
+  // Predecessor bootstrap facts are current and exact.
+  eq(CURRENT_PACKAGE_FILES.length,33,'S0-A bootstrap package census');
+  eq(new Set(CURRENT_PACKAGE_FILES).size,33,'S0-A package members unique');
+  eq(CURRENT_RELATIONS.length,1,'S0-B relation census');
   eq(CURRENT_RELATIONS[0].id,'public-suffix-js');
-  check(CURRENT_PACKAGE_FILES.includes('public-suffix.js'),'generated package output must be S0-A member');
-  check(!CURRENT_PACKAGE_FILES.includes('public_suffix_list.dat'),'generation source is not package member');
+  check(CURRENT_PACKAGE_FILES.includes('public-suffix.js'),'generated target is package member');
+  check(!CURRENT_PACKAGE_FILES.includes('public_suffix_list.dat'),'generation input is not package member');
   check(!CURRENT_PACKAGE_FILES.includes('project_tools/build_public_suffix_js.py'),'generator is not package member');
 
   const exactHead=git('rev-parse','HEAD');
-  check(HEX40.test(exactHead),'research checkout must resolve exact commit');
+  check(HEX40.test(exactHead),'research checkout exact SHA');
   for (const rel of CURRENT_PACKAGE_FILES) {
     const out=git('ls-tree',exactHead,'--',rel);
-    check(/^100644 blob [0-9a-f]{40}\t/.test(out),`current package member must be exact 100644 blob: ${rel}`);
+    check(/^100644 blob [0-9a-f]{40}\t/.test(out),`package member exact blob: ${rel}`);
   }
   for (const rel of [CURRENT_RELATIONS[0].generator,...CURRENT_RELATIONS[0].inputs,...CURRENT_RELATIONS[0].outputs]) {
     const out=git('ls-tree',exactHead,'--',rel);
-    check(/^100644 blob [0-9a-f]{40}\t/.test(out),`current generation member must be exact 100644 blob: ${rel}`);
+    check(/^100644 blob [0-9a-f]{40}\t/.test(out),`generation path exact blob: ${rel}`);
   }
 
+  // Current production checker remains legacy and S0-I is not activated.
   const checker=fs.readFileSync(path.join(ROOT,'project_tools/check_pr_change_contract.py'),'utf8');
-  check(checker.includes('def is_runtime_path('),'existing runtime governance classifier must remain visible');
-  check(!checker.includes(SCHEMA),'S0-I production projection must not already be active in current checker');
-  check(!checker.includes('release_package_manifest_v1.json'),'current checker must not pretend to consume future S0-A production source');
+  const workflow=fs.readFileSync(path.join(ROOT,'.github/workflows/repository-integrity.yml'),'utf8');
+  check(checker.includes('def is_runtime_path('),'legacy runtime classifier present');
+  check(checker.includes('RUNTIME_SUFFIXES'),'legacy suffix policy present');
+  check(!checker.includes(SCHEMA),'S0-I not active in current checker');
+  check(!workflow.includes('PR_CANDIDATE_SHA'),'candidate-aware S0-I not active in canonical workflow');
 
-  // Exact input and diff-shape fail-closed behavior.
-  throwsCode(()=>computeImpact({baseSha:'main',headSha:HEAD,changes:[],basePackage:pkg(),headPackage:pkg(),baseSource:src(),headSource:src()}),'PR_IMPACT_BASE_SHA_INVALID');
-  throwsCode(()=>computeImpact({baseSha:BASE,headSha:'HEAD',changes:[],basePackage:pkg(),headPackage:pkg(),baseSource:src(),headSource:src()}),'PR_IMPACT_HEAD_SHA_INVALID');
-  throwsCode(()=>impact([{status:'C',old_path:null,new_path:'x.js'}]),'PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
-  throwsCode(()=>impact([C('M','x.js','y.js')]),'PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
-  throwsCode(()=>impact([C('R','x.js','x.js')]),'PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
-  throwsCode(()=>impact([C('A',null,'../x.js')]),'PR_IMPACT_PATH_INVALID');
-  throwsCode(()=>impact(new Array(MAX_CHANGES+1).fill(C('A',null,'x.js'))),'PR_IMPACT_DIFF_FAILED');
+  // Exact identity and candidate relation fail closed.
+  throwsCode(()=>computeImpact({baseSha:'main',prHeadSha:HEAD,candidateSha:CAND,candidateParents:[BASE,HEAD],changes:[],basePackage:packageView(),candidatePackage:packageView(),baseGeneration:sourceView(),candidateGeneration:sourceView()}),'PR_IMPACT_SHA_INVALID');
+  throwsCode(()=>computeImpact({baseSha:BASE,prHeadSha:'HEAD',candidateSha:CAND,candidateParents:[BASE,HEAD],changes:[],basePackage:packageView(),candidatePackage:packageView(),baseGeneration:sourceView(),candidateGeneration:sourceView()}),'PR_IMPACT_SHA_INVALID');
+  throwsCode(()=>computeImpact({baseSha:BASE,prHeadSha:HEAD,candidateSha:'merge',candidateParents:[BASE,HEAD],changes:[],basePackage:packageView(),candidatePackage:packageView(),baseGeneration:sourceView(),candidateGeneration:sourceView()}),'PR_IMPACT_SHA_INVALID');
+  throwsCode(()=>computeImpact({baseSha:BASE,prHeadSha:HEAD,candidateSha:CAND,candidateParents:[BASE,'d'.repeat(40)],changes:[],basePackage:packageView(),candidatePackage:packageView(),baseGeneration:sourceView(),candidateGeneration:sourceView()}),'PR_IMPACT_CANDIDATE_RELATION_INVALID');
+  throwsCode(()=>computeImpact({baseSha:BASE,prHeadSha:HEAD,candidateSha:CAND,candidateParents:[BASE,HEAD,'d'.repeat(40)],changes:[],basePackage:packageView(),candidatePackage:packageView(),baseGeneration:sourceView(),candidateGeneration:sourceView()}),'PR_IMPACT_CANDIDATE_RELATION_INVALID');
 
-  // Docs-only and deterministic output.
-  const docs=impact([C('M','project_docs/README.md','project_docs/README.md')]);
-  eq(docs.schema,SCHEMA);
-  eq(docs.package.candidate_package_relevant,false);
-  eq(docs.source_generation.affected_relations.length,0);
-  eq(docs.candidate_generation_relevant,false);
-  eq(docs.requires_s0f_recheck,false);
-  const docsRev=impact([C('M','project_docs/README.md','project_docs/README.md')]);
-  deepEq(docs,docsRev,'same semantic input must be deterministic');
+  // Diff normalization deliberately has no rename heuristic.
+  for (const s of ['A','M','D','T']) eq(run([C(s,'content.js')]).changedPaths[0].status,s,`status ${s}`);
+  throwsCode(()=>run([C('R','content.js')]),'PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
+  throwsCode(()=>run([C('C','copy.js')]),'PR_IMPACT_DIFF_STATUS_UNSUPPORTED');
+  throwsCode(()=>run([C('M','../x.js')]),'PR_IMPACT_PATH_INVALID');
+  throwsCode(()=>run([C('M','x.js'),C('A','x.js')]),'PR_IMPACT_DUPLICATE_PATH');
+  throwsCode(()=>run(new Array(MAX_CHANGES+1).fill(0).map((_,i)=>C('A',`x${i}.js`))),'PR_IMPACT_DIFF_FAILED');
 
-  const reorderA=impact([C('M','content.js','content.js'),C('M','README.md','README.md')]);
-  const reorderB=impact([C('M','README.md','README.md'),C('M','content.js','content.js')]);
-  deepEq(reorderA,reorderB,'diff input order must not alter projection');
+  // Docs-only path is not S0-I package/generation impact.
+  const docs=run([C('M','README.md')]);
+  eq(docs.touched.packageMember,false);
+  eq(docs.touched.generationClosure,false);
+  eq(docs.requires.candidateGenerationVerification,false);
+  eq(docs.requires.shadowIdentityRecompute,false);
+  eq(docs.trust.automaticClassificationTrusted,true);
 
-  // Package content impact.
-  const pm=impact([C('M','content.js','content.js')]);
-  eq(pm.package.authority_changed,false);
-  deepEq(pm.package.touched_base_members,['content.js']);
-  deepEq(pm.package.touched_head_members,['content.js']);
-  eq(pm.package.candidate_package_relevant,true);
-  eq(pm.candidate_generation_relevant,true);
-  eq(pm.requires_s0f_recheck,true);
+  // Input ordering cannot change output.
+  deepEq(run([C('M','README.md'),C('M','content.js')]),run([C('M','content.js'),C('M','README.md')]),'diff order invariance');
 
-  // Delete requires base authority even when head membership removes the path.
-  const headWithoutContent=pkg(CURRENT_PACKAGE_FILES.filter((p)=>p!=='content.js'));
-  const del=impact([C('D','content.js',null)],pkg(),headWithoutContent,src(),src());
-  eq(del.package.authority_changed,true);
-  deepEq(del.package.touched_base_members,['content.js']);
-  deepEq(del.package.touched_head_members,[]);
-  deepEq(del.package.removed_members,['content.js']);
-  eq(del.package.candidate_package_relevant,true);
+  // Package member touched under base+candidate union.
+  const pm=run([C('M','content.js')]);
+  eq(pm.touched.packageMember,true);
+  eq(pm.requires.candidateGenerationVerification,true);
+  eq(pm.requires.shadowIdentityRecompute,true);
 
-  // Add requires head authority.
-  const headWithNew=pkg([...CURRENT_PACKAGE_FILES,'new-runtime.js']);
-  const add=impact([C('A',null,'new-runtime.js')],pkg(),headWithNew,src(),src());
-  eq(add.package.authority_changed,true);
-  deepEq(add.package.touched_base_members,[]);
-  deepEq(add.package.touched_head_members,['new-runtime.js']);
-  deepEq(add.package.added_members,['new-runtime.js']);
+  // Package delete evasion: candidate removed member, base union catches deleted path.
+  const cpWithout=packageView(CURRENT_PACKAGE_FILES.filter((p)=>p!=='content.js'));
+  const del=run([C('D','content.js')],{candidatePackage:cpWithout});
+  eq(del.authority.packageTopologyChanged,true);
+  eq(del.touched.packageMember,true);
+  eq(del.requires.candidateGenerationVerification,true);
 
-  // Rename uses old base + new head sides.
-  const baseRename=pkg([...CURRENT_PACKAGE_FILES.filter((p)=>p!=='content.js'),'old-runtime.js']);
-  const headRename=pkg([...CURRENT_PACKAGE_FILES.filter((p)=>p!=='content.js'),'new-runtime.js']);
-  const ren=impact([C('R','old-runtime.js','new-runtime.js')],baseRename,headRename,src(),src());
-  deepEq(ren.package.touched_base_members,['old-runtime.js']);
-  deepEq(ren.package.touched_head_members,['new-runtime.js']);
-  deepEq(ren.package.removed_members,['old-runtime.js']);
-  deepEq(ren.package.added_members,['new-runtime.js']);
+  // Package add detected from candidate view.
+  const cpWith=packageView([...CURRENT_PACKAGE_FILES,'new-runtime.js']);
+  const add=run([C('A','new-runtime.js')],{candidatePackage:cpWith});
+  eq(add.authority.packageTopologyChanged,true);
+  eq(add.touched.packageMember,true);
 
-  // Semantic package reorder is not authority change.
-  const reorderedPkg=pkg([...CURRENT_PACKAGE_FILES].reverse());
-  const fmt=impact([C('M','control/release_package_manifest_v1.json','control/release_package_manifest_v1.json')],pkg(),reorderedPkg,src(),src());
-  eq(fmt.package.authority_changed,false);
-  eq(fmt.package.candidate_package_relevant,false);
+  // Rename is exact D+A, not R similarity semantics.
+  const bpRename=packageView([...CURRENT_PACKAGE_FILES.filter((p)=>p!=='content.js'),'old-runtime.js']);
+  const cpRename=packageView([...CURRENT_PACKAGE_FILES.filter((p)=>p!=='content.js'),'new-runtime.js']);
+  const ren=run([C('D','old-runtime.js'),C('A','new-runtime.js')],{basePackage:bpRename,candidatePackage:cpRename});
+  eq(ren.touched.packageMember,true);
+  eq(ren.changedPaths.length,2);
 
-  // Runtime governance is intentionally not package authority.
-  const nonMemberRuntime=impact([C('M','future-runtime.js','future-runtime.js')]);
-  eq(nonMemberRuntime.package.candidate_package_relevant,false);
-  eq(nonMemberRuntime.candidate_generation_relevant,false);
-  check(/RUNTIME_SUFFIXES/.test(checker),'old checker still has independent runtime suffix governance');
+  // Nonmember root JS demonstrates release package != legacy runtime suffix policy.
+  const nonmember=run([C('M','diagnostic.js')]);
+  eq(nonmember.touched.packageMember,false);
+  eq(nonmember.requires.candidateGenerationVerification,false);
+  check(checker.includes('.js'),'legacy checker can still classify root JS independently');
 
-  // Source relation path impacts.
-  for (const [p, reasonBase, reasonHead] of [
-    ['public_suffix_list.dat','base-input-touched','head-input-touched'],
-    ['project_tools/build_public_suffix_js.py','base-generator-touched','head-generator-touched'],
-    ['public-suffix.js','base-output-touched','head-output-touched'],
+  // Generation roles are consumed from explicit S0-B relation only.
+  for (const [p,key] of [
+    ['public_suffix_list.dat','generationInput'],
+    ['project_tools/build_public_suffix_js.py','generationGenerator'],
+    ['public-suffix.js','generatedOutput'],
   ]) {
-    const x=impact([C('M',p,p)]);
-    eq(x.source_generation.affected_relations.length,1,`${p} must affect relation`);
-    check(x.source_generation.affected_relations[0].reasons.includes(reasonBase),`${p} base reason`);
-    check(x.source_generation.affected_relations[0].reasons.includes(reasonHead),`${p} head reason`);
-    eq(x.requires_s0f_recheck,true,`${p} must request S0-F recheck`);
+    const x=run([C('M',p)]);
+    eq(x.touched[key],true,`${p} role`);
+    eq(x.touched.generationClosure,true,`${p} closure`);
+    eq(x.affectedGenerationRelations.length,1,`${p} relation`);
+    eq(x.affectedGenerationRelations[0].relationId,'public-suffix-js');
+    eq(x.requires.candidateGenerationVerification,true);
   }
+  const unrelatedBuilder=run([C('M','project_tools/build_recovery_archive.py')]);
+  eq(unrelatedBuilder.touched.generationClosure,false,'build_* heuristic forbidden');
 
-  // Output-only changes are both package and source-generation relevant.
-  const outputOnly=impact([C('M','public-suffix.js','public-suffix.js')]);
-  eq(outputOnly.package.candidate_package_relevant,true);
-  eq(outputOnly.source_generation.affected_relations.length,1);
+  // Relation removal remains visible even if candidate declaration disappears.
+  const removed=run([C('D','project_tools/build_public_suffix_js.py')],{candidateGeneration:sourceView([])});
+  eq(removed.authority.sourceGenerationTopologyChanged,true);
+  eq(removed.touched.generationGenerator,true);
+  check(removed.affectedGenerationRelations[0].reasons.includes('relation-removed'),'removed relation reason');
+  check(removed.affectedGenerationRelations[0].reasons.includes('generator-path-touched'),'old generator union reason');
 
-  // Removed relation must remain visible through base authority even without touched relation paths.
-  const removedRel=impact([],pkg(),pkg(),src(),src([]));
-  eq(removedRel.source_generation.authority_changed,true);
-  eq(removedRel.source_generation.affected_relations.length,1);
-  eq(removedRel.source_generation.affected_relations[0].relation_id,'public-suffix-js');
-  deepEq(removedRel.source_generation.affected_relations[0].reasons,['relation-removed']);
-  eq(removedRel.requires_s0f_recheck,true);
-
-  // Added relation, with output explicitly added to package topology for consistency.
+  // Relation addition detected from candidate view.
   const second={id:'second-gen',runtime_profile:'cpython-3.12.10-v1',generator:'project_tools/gen_second.py',inputs:['second.dat'],outputs:['second.js']};
-  const hp2=pkg([...CURRENT_PACKAGE_FILES,'second.js']);
-  const addedRel=impact([],pkg(),hp2,src(),src([...CURRENT_RELATIONS,second]));
-  eq(addedRel.source_generation.authority_changed,true);
-  check(addedRel.source_generation.affected_relations.some((r)=>r.relation_id==='second-gen'&&r.reasons.includes('relation-added')),'added relation must be reported');
+  const addedRel=run([C('A','second.dat')],{candidateGeneration:sourceView([...CURRENT_RELATIONS,second])});
+  eq(addedRel.authority.sourceGenerationTopologyChanged,true);
+  check(addedRel.affectedGenerationRelations.some((r)=>r.relationId==='second-gen'&&r.reasons.includes('relation-added')),'new relation reported');
+  eq(addedRel.touched.generationInput,true);
 
-  // Same id declaration change is explicit; path touch is not required to detect it.
-  const changedRel=clone(CURRENT_RELATIONS[0]); changedRel.runtime_profile='cpython-3.12.11-v2';
-  const decl=impact([],pkg(),pkg(),src(),src([changedRel]));
-  eq(decl.source_generation.authority_changed,true);
-  deepEq(decl.source_generation.affected_relations[0].reasons,['relation-declaration-changed']);
-  eq(decl.source_generation.affected_relations[0].declaration_changed,true);
+  // Same relation id with changed paths/profile is semantic topology change.
+  const changed=clone(CURRENT_RELATIONS[0]); changed.generator='project_tools/new_psl.py'; changed.inputs=['new_psl.dat'];
+  const changedRel=run([C('D','project_tools/build_public_suffix_js.py'),C('A','project_tools/new_psl.py')],{candidateGeneration:sourceView([changed])});
+  eq(changedRel.authority.sourceGenerationTopologyChanged,true);
+  check(changedRel.affectedGenerationRelations[0].reasons.includes('relation-declaration-changed'),'declaration change reason');
+  eq(changedRel.touched.generationGenerator,true);
 
-  // Old generator/output deletes remain caught after relation replacement.
-  const replacement={id:'new-psl',runtime_profile:'cpython-3.12.10-v1',generator:'project_tools/new_psl.py',inputs:['new_psl.dat'],outputs:['public-suffix.js']};
-  const repl=impact([C('D','project_tools/build_public_suffix_js.py',null)],pkg(),pkg(),src(),src([replacement]));
-  const oldReport=repl.source_generation.affected_relations.find((r)=>r.relation_id==='public-suffix-js');
-  check(oldReport.reasons.includes('relation-removed'),'old relation removal must be visible');
-  check(oldReport.reasons.includes('base-generator-touched'),'deleted old generator must be visible');
-  check(repl.source_generation.affected_relations.some((r)=>r.relation_id==='new-psl'&&r.reasons.includes('relation-added')),'new relation addition must be visible');
+  // Authority source formatting-only touches remain provenance, not semantic topology change.
+  const pkgFmt=run([C('M',PACKAGE_AUTHORITY_SOURCE)]);
+  eq(pkgFmt.touched.packageAuthoritySource,true);
+  eq(pkgFmt.authority.packageTopologyChanged,false);
+  eq(pkgFmt.requires.candidateGenerationVerification,false);
+  const srcFmt=run([C('M',SOURCE_AUTHORITY_SOURCE)]);
+  eq(srcFmt.touched.sourceGenerationAuthoritySource,true);
+  eq(srcFmt.authority.sourceGenerationTopologyChanged,false);
+  eq(srcFmt.requires.candidateGenerationVerification,false);
 
-  // Relation path rename checks both sides.
-  const baseR={id:'r',runtime_profile:'cpython-3.12.10-v1',generator:'old-gen.py',inputs:['old.dat'],outputs:['public-suffix.js']};
-  const headR={id:'r',runtime_profile:'cpython-3.12.10-v1',generator:'new-gen.py',inputs:['new.dat'],outputs:['public-suffix.js']};
-  const rr=impact([C('R','old-gen.py','new-gen.py'),C('R','old.dat','new.dat')],pkg(),pkg(),src([baseR]),src([headR]));
-  const rrec=rr.source_generation.affected_relations[0];
-  check(rrec.reasons.includes('base-generator-touched'),'rename must inspect base generator');
-  check(rrec.reasons.includes('head-generator-touched'),'rename must inspect head generator');
-  check(rrec.reasons.includes('base-input-touched'),'rename must inspect base input');
-  check(rrec.reasons.includes('head-input-touched'),'rename must inspect head input');
-  check(rrec.reasons.includes('relation-declaration-changed'),'rename must report declaration change');
+  // Semantic authority change requires later candidate-generation verification even without direct package path diff.
+  const semanticPkg=run([C('M',PACKAGE_AUTHORITY_SOURCE)],{candidatePackage:packageView([...CURRENT_PACKAGE_FILES,'new-runtime.js'])});
+  eq(semanticPkg.authority.packageTopologyChanged,true);
+  eq(semanticPkg.requires.candidateGenerationVerification,true);
+  const semanticSrc=run([C('M',SOURCE_AUTHORITY_SOURCE)],{candidateGeneration:sourceView([])});
+  eq(semanticSrc.authority.sourceGenerationTopologyChanged,true);
+  eq(semanticSrc.requires.candidateGenerationVerification,true);
 
-  // Authority parsing/integrity failures never fall back to filename heuristics.
-  throwsCode(()=>impact([], {schema:'bad',path_profile:PATH_PROFILE,files:['manifest.json']}, pkg(), src(), src()),'PR_IMPACT_BASE_PACKAGE_AUTHORITY_INVALID');
-  throwsCode(()=>impact([], pkg(), {schema:'bad',path_profile:PATH_PROFILE,files:['manifest.json']}, src(), src()),'PR_IMPACT_HEAD_PACKAGE_AUTHORITY_INVALID');
-  throwsCode(()=>impact([], pkg(), pkg(), {schema:'bad',relations:[]}, src()),'PR_IMPACT_BASE_SOURCE_GENERATION_INVALID');
-  throwsCode(()=>impact([], pkg(), pkg(), src(), {schema:'bad',relations:[]}), 'PR_IMPACT_HEAD_SOURCE_GENERATION_INVALID');
-  const badOutput={id:'bad',runtime_profile:'cpython-3.12.10-v1',generator:'g.py',inputs:['i.dat'],outputs:['not-in-package.js']};
-  throwsCode(()=>impact([],pkg(),pkg(),src(),src([badOutput])),'PR_IMPACT_HEAD_AUTHORITY_INCONSISTENT');
-
-  // S0-I is impact only; no admission/readiness/release authority leaks into result.
-  const sample=impact([C('M','content.js','content.js')]);
-  for (const forbidden of ['admitted','generation_pass','rpf','bcf','qcf','rcf','release_ready','approved_for_release','official_artifact','tag','release_id','deployment_id']) {
-    check(!JSON.stringify(sample).includes(`"${forbidden}"`),`S0-I projection must not carry ${forbidden}`);
+  // Control-plane self-change cannot self-certify automatic trust.
+  for (const p of AUTHORITY_IMPLEMENTATION) {
+    const x=run([C('M',p)]);
+    eq(x.touched.authorityImplementation,true,p);
+    eq(x.requires.trustedControlPlaneReview,true,p);
+    eq(x.trust.automaticClassificationTrusted,false,p);
+    eq(x.requires.candidateGenerationVerification,true,p);
   }
-  eq(sample.requires_s0f_recheck,true,'handoff is recheck only');
+  for (const p of CHECKER_CONTROL_PLANE) {
+    const x=run([C('M',p)]);
+    eq(x.touched.prCheckerControlPlane,true,p);
+    eq(x.requires.trustedControlPlaneReview,true,p);
+    eq(x.trust.automaticClassificationTrusted,false,p);
+    eq(x.requires.shadowIdentityRecompute,true,p);
+  }
 
-  // Current portability defect remains outside S0-I truth.
-  const currentPortability='blocked-portability';
-  eq(currentPortability,'blocked-portability');
-  check(!Object.prototype.hasOwnProperty.call(sample,'current_gate'),'S0-I must not copy S0-F gate state into PR impact authority');
+  // Typed predecessor-view validation is fail closed, not heuristic fallback.
+  throwsCode(()=>run([], {basePackage:{schema:'bad',files:['manifest.json'],topologyDigest:`sha256:${'0'.repeat(64)}`}}),'PR_IMPACT_PACKAGE_TOPOLOGY_INVALID');
+  throwsCode(()=>run([], {candidateGeneration:{schema:'bad',relations:[],topologyDigest:`sha256:${'0'.repeat(64)}`}}),'PR_IMPACT_SOURCE_GENERATION_TOPOLOGY_INVALID');
+  throwsCode(()=>run([], {basePackage:{schema:PACKAGE_SCHEMA,files:['manifest.json','manifest.json'],topologyDigest:`sha256:${'0'.repeat(64)}`}}),'PR_IMPACT_PACKAGE_TOPOLOGY_INVALID');
+
+  // S0-I never leaks identity/admission/readiness authority.
+  const sample=run([C('M','content.js')]);
+  const serialized=JSON.stringify(sample);
+  for (const forbidden of ['"rpf"','"qcf"','"rcf"','"bcf"','"admitted"','"generationPass"','"releaseReady"','"approvedForRelease"','"officialArtifact"','"tag"','"releaseId"','"deploymentId"']) {
+    check(!serialized.includes(forbidden),`forbidden authority field ${forbidden}`);
+  }
+  check(!Object.prototype.hasOwnProperty.call(sample,'currentGate'),'S0-F current gate not copied into S0-I result');
+
+  // Current known S0-F portability blocker remains separate truth.
+  const currentS0fGate='blocked-portability';
+  eq(currentS0fGate,'blocked-portability');
+
+  // Research result digest is diagnostic only.
+  const diagDigest=sha256(stable(sample));
+  check(/^[0-9a-f]{64}$/.test(diagDigest),'diagnostic digest shape');
+
+  // Run predecessor models as composition smoke tests on this exact checkout.
+  for (const test of [
+    'test_p1_231_s0a_package_authority_source_spec_model.js',
+    'test_p1_231_s0b_source_generation_authority_source_spec_model.js',
+    'test_p1_231_s0b_strict_parser_composition_refinement_model.js',
+  ]) {
+    const p=spawnSync(process.execPath,[path.join(ROOT,'project_tools',test)],{encoding:'utf8'});
+    eq(p.status,0,`${test} predecessor status`);
+    check(/PASS/.test(p.stdout),`${test} predecessor PASS`);
+  }
 
   console.log(
     `P1-231 S0-I PR checker integration source-spec model: PASS; cases=${cases}; schema=${SCHEMA}; `+
-    `package_files=${CURRENT_PACKAGE_FILES.length}; relations=${CURRENT_RELATIONS.length}; base_head_union=true; `+
-    `rename_aware=true; admission_owner=s0f; current_s0f_gate=blocked-portability; production_checker_unchanged=true; head=${exactHead}`
+    `package_files=${CURRENT_PACKAGE_FILES.length}; relations=${CURRENT_RELATIONS.length}; `+
+    `base_candidate_union=true; synthetic_merge_identity=required; no_renames=true; `+
+    `self_change=fail-closed; admission_owner=s0f; current_s0f_gate=blocked-portability; `+
+    `production_checker_unchanged=true; head=${exactHead}`
   );
 })();
