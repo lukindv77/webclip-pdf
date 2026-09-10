@@ -8,11 +8,9 @@ Real Chrome/Yandex L5: **NOT RUN**
 Release-policy activation: **NONE**  
 New P-code: **NO**
 
-This tranche continues existing ACTIVE **P1-179**. It does not reopen or duplicate the historical 2026-09-07 research; it measures that contract against current canonical source after #206–#209 and refines the still-unabsorbed namespace boundary.
+This tranche continues existing ACTIVE **P1-179**. It does not reopen or duplicate the historical 2026-09-07 research. It measures that contract against current canonical source after #206–#209 and refines the still-unabsorbed namespace boundary. No production source is changed.
 
-No production source is changed.
-
-## 1. Canonical owners and composition
+## 1. Canonical composition
 
 Current Registry authority:
 
@@ -41,24 +39,22 @@ P1-210 owns unknown-effect settlement semantics.
 
 No new P-code is required.
 
-## 2. Historical provenance retained, not wholesale imported
+## 2. Historical provenance versus current main
 
-The historical P1-179 tranche on 2026-09-07 already established four important failure schedules:
+The historical P1-179 tranche on 2026-09-07 already established four failure schedules:
 
 1. prepared backup checkpoint lacked durable account/root identity;
-2. same textual root under a different account could be probed as though it were the old namespace;
-3. a root change could cause an old checkpoint to be evaluated/deleted under the new root;
+2. the same textual root under another account could be probed as though it were the old namespace;
+3. root change could make an old checkpoint be evaluated or deleted under the new root;
 4. global success/retry scheduler state could migrate across account/root changes.
 
-It proposed a versioned `backupNamespace` concept and namespace-bound lease/checkpoint/state.
+It proposed a versioned namespace concept and namespace-bound lease/checkpoint/state. That branch is provenance only. Current acceptance comes from current `main`.
 
-That historical branch is provenance. Current acceptance must be derived from current `main`, not by treating the old branch as implementation.
-
-## 3. Current-main absorption audit
+## 3. Current-main absorption review
 
 Current canonical source still does **not** expose a durable `backupNamespace` / equivalent account-root key for backup state.
 
-### 3.1 Lease is token-owned, not namespace-owned
+### 3.1 Lease: useful token CAS, missing namespace CAS
 
 Current backup lease records approximately:
 
@@ -70,7 +66,7 @@ acquiredAt
 expiresAt
 ```
 
-Renew/release ownership is protected by token comparison. This is useful and must be preserved.
+Renew/release ownership is protected by token comparison. Preserve that positive control.
 
 But:
 
@@ -78,11 +74,11 @@ But:
 lease token CAS != account/root namespace CAS
 ```
 
-If a lease began under account A/root R1 and current settings move to B/R2 while the token remains the local lease owner, token equality alone cannot prove that the resumed stage still belongs to the same remote namespace.
+A lease that began under A/R1 cannot continue merely because its token still matches after current settings move to A/R2 or B/R2.
 
 ### 3.2 Prepared checkpoint is not durably account/root scoped
 
-The current prepared backup checkpoint records fields such as:
+Current prepared checkpoint records fields such as:
 
 ```text
 phase
@@ -99,45 +95,37 @@ exportedAt
 reason
 ```
 
-It does not visibly persist the proven account UID and root identity that authorized the upload.
-
-`remotePath` alone is not sufficient because Yandex Disk path identity is account-relative.
-
-Thus:
+It does not visibly persist proven account UID and captured root identity.
 
 ```text
 same remotePath string under account A != same object/namespace under account B
 ```
 
-### 3.3 Recovery still consults current infrastructure before historical namespace proof
+A Yandex Disk path is account-relative. `remotePath` alone cannot establish remote namespace identity.
 
-Current `recoverPendingJournalBackup(...)` loads the pending checkpoint, then calls current `ensureYandexServiceFolders({ includeBackup: true, ... })`, and only afterwards validates/reconciles the stored `remotePath`.
+### 3.3 Recovery is still preempted by current provisioning
 
-After canonical #209 this is explicitly classified as P1-138 H2 recovery-preemption.
+Current `recoverPendingJournalBackup(...)` loads the pending checkpoint, then calls current `ensureYandexServiceFolders({ includeBackup: true, ... })`, and only then validates/reconciles stored `remotePath`.
 
-P1-179 refinement:
+Canonical #209 classifies this as P1-138 H2 recovery-preemption. P1-179 adds the namespace rule:
 
 ```text
 historical namespace proof must precede both current provisioning and remote reconciliation
 ```
 
-### 3.4 Scheduler status is global while root is current
+### 3.4 Scheduler state is global while root is current
 
-Current `getJournalBackupStatus()` reads current `yandexConfig.rootPath` together with global `journalBackupState` fields including `lastSuccessAt`, `lastFailureAt`, and `lastRemotePath`.
+Current `getJournalBackupStatus()` combines current `yandexConfig.rootPath` with unqualified `journalBackupState.lastSuccessAt`, `lastFailureAt`, and `lastRemotePath`.
 
-Due/retry decisions therefore compose current root with potentially historical timestamps.
-
-Consequences:
+That permits semantic migration:
 
 ```text
 A/R1 lastSuccessAt can suppress first backup in A/R2 or B/R1.
 A/R1 lastFailureAt can retry-block A/R2 or B/R1.
-lastRemotePath can be displayed/interpreted under a namespace different from the one that produced it.
+lastRemotePath from A/R1 can be presented under a different current namespace.
 ```
 
-### 3.5 Positive controls already present
-
-This refinement must not erase useful current protections:
+### 3.5 Existing positive controls to preserve
 
 ```text
 backup lease acquisition is serialized
@@ -147,68 +135,66 @@ remote-verified checkpoint is retained until success housekeeping commits state
 prepared 404 retirement has grace/attempt controls
 ```
 
-The defect is missing namespace authority, not absence of all concurrency controls.
+The remaining defect is missing namespace authority, not absence of concurrency controls.
 
-## 4. Durable `BackupNamespaceIdentity`
+## 4. `BackupNamespaceIdentity`
 
-The target is a non-secret immutable identity object. Exact field naming is implementation detail; semantics are:
+Target semantics are a non-secret immutable identity object:
 
 ```text
 BackupNamespaceIdentity {
   schema: 1,
-  accountUid,       // proven semantic Yandex account identity
-  rootPath,         // normalized captured root authority
-  journalRootPath   // deterministic child namespace, optional redundancy/check
+  accountUid,
+  rootPath,
+  journalRootPath
 }
 ```
 
-Properties:
+Requirements:
 
 ```text
-non-secret
-immutable after physical effect admission
-account-relative
-root-relative
+semantic account identity, not token material
+captured normalized root authority
+immutable after physical-effect admission
+account-relative and root-relative
 locally comparable
-not derived from current settings during historical recovery
+not reconstructed from current settings during historical recovery
 contains no access token, refresh token, auth code, signed URL or Authorization header
 ```
 
-P0-074 operation generation remains a separate operation-context concept. Do not invent a second root-generation system merely to name this identity.
+P0-074 operation generation remains a separate operation-context concept. Do not introduce a second root-generation authority merely to name this identity.
 
-## 5. Namespace-bound physical backup checkpoint
+## 5. Namespace-bound physical checkpoint
 
-A prepared physical backup checkpoint must bind:
+Prepared and remote-verified backup checkpoints must bind at least:
 
 ```text
-phase = prepared|remote-verified|...
+phase
 operationId
 physicalEffectId or equivalent durable effect identity
 backupNamespace
 remotePath
-createdAt / attempt evidence
+created/attempt evidence
 expected content evidence
 ```
 
-`remotePath` must be validated as a child of the checkpoint's own captured `journalRootPath`, not today's configured root.
+`remotePath` is validated against the checkpoint's own captured `journalRootPath`, never today's root.
 
-For exact adoption after unknown upload, P1-184 applies:
+P1-184 remains independently authoritative for exact adoption:
 
 ```text
 path + expectedBytes != exact remote content identity
 ```
 
-P1-179 does not redefine P1-184. It guarantees that P1-184 reconciliation is performed in the correct account/root namespace.
+P1-179 guarantees the correct account/root namespace in which P1-184 reconciliation executes; it does not replace P1-184 object/content proof.
 
-## 6. Credential rotation versus semantic account identity
-
-Credential/token material can rotate while semantic account identity remains the same.
+## 6. Credential rotation and semantic account identity
 
 Allowed:
 
 ```text
 checkpoint A/R1
-current proven credential => account A
+current proven credential => semantic account A
 current configured root => R2
 => use credential read-only to reconcile exact historical A/R1 target
 ```
@@ -216,8 +202,8 @@ current configured root => R2
 Forbidden:
 
 ```text
-use current R2 as replacement target
-create R2 infrastructure before deciding A/R1 settlement
+retarget old R1 checkpoint to R2
+create R2 infrastructure before deciding R1 settlement
 rewrite checkpoint root from R1 to R2
 ```
 
@@ -227,15 +213,15 @@ Different semantic account:
 checkpoint A/R1
 current credential proves B
 => zero remote probe of A/R1 through B
-=> do not age/delete checkpoint based on B's 404
+=> do not age/delete checkpoint from B's 404
 => defer/manual/foreign-namespace state
 ```
 
+Credential material may rotate; semantic account identity cannot be substituted.
+
 ## 7. Namespace-bound lease
 
-The lease must preserve current token CAS and add namespace ownership.
-
-Conceptually:
+Preserve current token CAS and add namespace ownership:
 
 ```text
 BackupLease {
@@ -255,54 +241,40 @@ stored token == lease token
 AND stored namespace == operation namespace
 ```
 
-Token equality with namespace mismatch is stale ownership and cannot authorize continuation.
+Token equality plus namespace mismatch is stale ownership. Lease expiry remains not-cancellation evidence for already-started external effects; P1-076/P1-210 semantics still apply.
 
-Lease expiry remains not-cancellation evidence for already-started external effects; P1-076/P1-210 semantics still apply.
+## 8. Namespace-local scheduler state
 
-## 8. Namespace-bound scheduler state
+`journalBackupState` cannot be a single unqualified success/failure timeline across account/root transitions.
 
-`journalBackupState` cannot be one unqualified global success/failure timeline if account/root can change.
-
-Acceptable architectures include:
-
-```text
-stateByNamespace[namespaceKey]
-```
-
-or a single active row carrying exact namespace identity plus separately retained historical rows.
-
-Required semantics are independent of storage shape:
+Storage may use `stateByNamespace[namespaceKey]` or an equivalent representation. Required semantics are storage-shape independent:
 
 ```text
 lastSuccessAt(A,R1) does not suppress due(A,R2)
 lastSuccessAt(A,R1) does not suppress due(B,R1)
 lastFailureAt(A,R1) does not retry-block A/R2
 lastFailureAt(A,R1) does not retry-block B/R1
-lastRemotePath(A,R1) is never presented as belonging to A/R2/B/R1
+lastRemotePath(A,R1) is never presented as belonging to A/R2 or B/R1
 ```
 
-A profile-global policy value such as interval duration may remain global if explicitly intended; settlement timestamps are namespace-local.
+Profile-global interval policy may remain global if explicitly intended; settlement timestamps remain namespace-local.
 
-## 9. Alarm/retry generation handoff
+## 9. Alarm/retry handoff
 
-Alarms are trigger mechanisms, not namespace authority.
-
-On alarm fire:
+Alarms are trigger mechanisms, not namespace authority. On alarm fire:
 
 ```text
 read current scheduler generation/policy
 resolve current proven namespace
-compare any durable retry intent/lease namespace
+compare durable retry intent/lease namespace
 only then admit new physical work
 ```
 
-A stale alarm originating from A/R1 cannot force a backup in B/R2 merely because its alarm name is shared.
+A stale trigger associated with A/R1 cannot force work in B/R2. Old A/R1 failure state also cannot suppress B/R2 through an unqualified retry timestamp.
 
-Conversely, old A/R1 failure state cannot suppress B/R2 because the alarm handler reads an unqualified global retry timestamp.
+## 10. Historical recovery ordering
 
-## 10. Recovery ordering
-
-Target recovery sequence:
+Target sequence:
 
 ```text
 1. load pending checkpoint
@@ -314,20 +286,20 @@ Target recovery sequence:
 7. GET exact checkpoint target under historical root
 8. apply P1-184 exact object/content reconciliation
 9. update only matching namespace checkpoint/state
-10. if a new repair/provisioning/write is needed, create a fresh MutationIntent under current namespace
+10. if new repair/provisioning/write is needed, create a fresh MutationIntent under current namespace
 ```
 
 Current `ensureYandexServiceFolders()` is not part of steps 1–8.
 
 ## 11. 404 aging and retirement
 
-A 404 contributes to prepared-checkpoint retirement only if all of the following are true:
+A 404 contributes to prepared-checkpoint retirement only when all are true:
 
 ```text
 semantic account matches checkpoint account
 query target == checkpoint target
 query root/namespace == checkpoint namespace
-read itself is authoritative enough for this purpose
+read is authoritative enough for this purpose
 phase/grace/attempt policy permits aging
 ```
 
@@ -343,28 +315,24 @@ This prevents false negative settlement from namespace drift.
 
 ## 12. Success housekeeping
 
-The current design correctly keeps `remote-verified` pending state until backup state is durably updated. Preserve that ordering, but scope it.
-
-Housekeeping may consume/clear a checkpoint only when:
+Preserve current ordering that keeps `remote-verified` pending state until backup state is durably updated. Add namespace scope:
 
 ```text
 success namespace == checkpoint namespace == state namespace
 ```
 
-A newer current namespace cannot consume an older verified checkpoint.
+Only then may housekeeping consume/clear the checkpoint. A newer current namespace cannot consume an older verified checkpoint.
 
 ## 13. Legacy checkpoint handling
 
-Old rows lacking namespace identity cannot be safely repaired by reading today's account/root and filling the blanks.
-
-Target:
+Rows missing durable account/root identity cannot safely be repaired from today's settings.
 
 ```text
 legacy/missing account or root identity
-=> fail closed / manual resolution / explicit bounded migration only if provenance proves identity
+=> fail closed / manual resolution / explicitly proven bounded migration
 ```
 
-Never:
+Never accept:
 
 ```text
 legacy remotePath + current account/root => synthesized authority
@@ -372,7 +340,7 @@ legacy remotePath + current account/root => synthesized authority
 
 ## 14. Deterministic negative matrix
 
-The companion model covers at minimum:
+The companion model covers:
 
 ```text
 N01 A/R1 prepared -> current A/R2 => reconcile R1 read-only
@@ -409,15 +377,15 @@ N28 no runtime/L5/S2/release action
 
 P1-179 refinement research is complete when deterministic evidence proves:
 
-1. current-main absorption audit preserves positive controls and identifies the unabsorbed namespace gap;
+1. current-main absorption review preserves positive controls and identifies the unabsorbed namespace gap;
 2. namespace identity is semantic account + captured normalized root, not token material;
 3. prepared/verified checkpoints preserve immutable namespace identity;
-4. lease renewal requires both token ownership and namespace ownership;
+4. lease renewal requires token ownership and namespace ownership;
 5. scheduler success/failure/last-path truth is namespace-local;
 6. wrong account/root cannot probe, age, delete, adopt or retarget an old checkpoint;
 7. same-account credential rotation may support historical read-only reconciliation;
 8. 404 retirement counts only in the matching namespace;
-9. exact remote adoption remains subject to P1-184 content/object proof;
+9. exact remote adoption remains subject to P1-184 object/content proof;
 10. current-root provisioning is a separate fresh P1-138 mutation after historical reconciliation;
 11. no durable secrets are introduced;
 12. no new P-code is allocated;
