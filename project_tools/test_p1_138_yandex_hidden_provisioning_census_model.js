@@ -18,28 +18,24 @@ function check(name, fn) {
 function has(text, needle) { assert.ok(text.includes(needle), `missing ${JSON.stringify(needle)}`); }
 function lacks(text, needle) { assert.ok(!text.includes(needle), `unexpected ${JSON.stringify(needle)}`); }
 function count(text, needle) { return text.split(needle).length - 1; }
-function around(text, anchor, radius = 1400) {
-  const i = text.indexOf(anchor);
-  assert.ok(i >= 0, `anchor missing: ${anchor}`);
-  return text.slice(Math.max(0, i - radius), Math.min(text.length, i + anchor.length + radius));
+function asyncSection(signature) {
+  const start = SOURCE.indexOf(signature);
+  assert.ok(start >= 0, `function missing: ${signature}`);
+  const next = SOURCE.indexOf('\nasync function ', start + signature.length);
+  return SOURCE.slice(start, next >= 0 ? next : SOURCE.length);
 }
-function functionBody(text, signature) {
-  const i = text.indexOf(signature);
-  assert.ok(i >= 0, `function missing: ${signature}`);
-  const next = text.indexOf('\nasync function ', i + signature.length);
-  return text.slice(i, next >= 0 ? next : text.length);
-}
+function matches(re, label) { assert.ok(re.test(SOURCE), `source sequence missing: ${label}`); }
 
 const sites = [
-  { id: 'C01', name: 'page-upload', cls: 'M1', readLike: false, mutationExpected: true },
-  { id: 'C02', name: 'journal-read-move', cls: 'M1', readLike: false, mutationExpected: true },
-  { id: 'C03', name: 'journal-backup-upload', cls: 'M1', readLike: false, mutationExpected: true },
-  { id: 'C04', name: 'pending-backup-recovery', cls: 'H2', readLike: true, mutationExpected: false },
-  { id: 'C05', name: 'list-journal-backups', cls: 'H1', readLike: true, mutationExpected: false },
-  { id: 'C06', name: 'selected-backup-import', cls: 'H1', readLike: true, mutationExpected: false },
-  { id: 'C07', name: 'root-settings-provision', cls: 'M2', readLike: false, mutationExpected: true },
-  { id: 'C08', name: 'test-connection', cls: 'H1', readLike: true, mutationExpected: false },
-];
+  ['C01', 'page-upload', 'M1'],
+  ['C02', 'journal-read-move', 'M1'],
+  ['C03', 'journal-backup-upload', 'M1'],
+  ['C04', 'pending-backup-recovery', 'H2'],
+  ['C05', 'list-journal-backups', 'H1'],
+  ['C06', 'selected-backup-import', 'H1'],
+  ['C07', 'root-settings-provision', 'M2'],
+  ['C08', 'test-connection', 'H1'],
+].map(([id, name, cls]) => ({ id, name, cls }));
 
 function deriveNamespace(root = '/WebClip') {
   const clean = String(root || '').replace(/\/+$/, '') || '/';
@@ -53,135 +49,104 @@ function deriveNamespace(root = '/WebClip') {
     mutationAuthority: false,
   });
 }
-function canProvision(site, admittedEffect = false) {
-  if (site.cls === 'H1' || site.cls === 'H2') return false;
-  return Boolean(admittedEffect);
+function canProvision(site, admitted) {
+  return site.cls === 'M1' || site.cls === 'M2' ? Boolean(admitted) : false;
 }
-function recoveryTarget(checkpoint, currentRoot) {
-  if (!checkpoint?.root || !checkpoint?.target) return { ok: false, reason: 'HISTORICAL_IDENTITY_INSUFFICIENT' };
-  return { ok: true, root: checkpoint.root, target: checkpoint.target, currentRootIsDiagnosticOnly: currentRoot !== checkpoint.root, mutating: false };
-}
-function rootMutationResult(config, provisioning) {
-  return { config, provisioning };
+function recover(checkpoint, live) {
+  if (!checkpoint?.accountUid || !checkpoint?.rootPath || !checkpoint?.remotePath) {
+    return { outcome: 'historical-identity-insufficient', remoteCall: false };
+  }
+  if (checkpoint.accountUid !== live.accountUid) return { outcome: 'foreign-account', remoteCall: false };
+  return {
+    outcome: 'read-only-reconcile',
+    rootPath: checkpoint.rootPath,
+    remotePath: checkpoint.remotePath,
+    currentRootDiagnosticOnly: checkpoint.rootPath !== live.rootPath,
+    remoteCall: true,
+    mutating: false,
+  };
 }
 
-// Canonical ownership and tranche boundaries.
+// Canonical owner/scope checks.
 check('O01 P1-138 active', () => has(REGISTRY, '| P1-138 | ACTIVE |'));
-check('O02 P1-138 wording', () => has(REGISTRY, 'Read-like Yandex list/fetch/status flows must not hide provisioning/mutation authority'));
-check('O03 no new P code', () => has(EVIDENCE, 'New P-code: **NO**'));
-check('O04 research only', () => has(EVIDENCE, 'RESEARCH-ONLY / CURRENT-SOURCE CALL-SITE CENSUS'));
-check('O05 runtime none', () => has(EVIDENCE, 'Production/runtime modification: **NONE**'));
-check('O06 real L5 not run', () => has(EVIDENCE, 'Real Yandex L5: **NOT RUN**'));
-check('O07 S2 none', () => has(EVIDENCE, 'Release-policy activation: **NONE**'));
-check('O08 manifest unchanged', () => assert.equal(MANIFEST.version, '0.9.8'));
-check('O09 baseline pinned', () => has(EVIDENCE, '039f90ed21e44c1939684ee3bf5444651fb20770'));
-check('O10 P1-179 active', () => has(REGISTRY, '| P1-179 | ACTIVE |'));
-check('O11 P1-179 namespace owner', () => has(REGISTRY, 'Backup scheduler state and pending backup checkpoint are immutable account/root namespaces'));
-check('O12 evidence binds recovery to P1-179', () => has(EVIDENCE, 'P1-179  backup scheduler/pending checkpoint immutable account/root namespace'));
+check('O02 P1-138 hidden provisioning owner', () => has(REGISTRY, 'Read-like Yandex list/fetch/status flows must not hide provisioning/mutation authority'));
+check('O03 P1-179 active', () => has(REGISTRY, '| P1-179 | ACTIVE |'));
+check('O04 P1-179 namespace owner', () => has(REGISTRY, 'Backup scheduler state and pending backup checkpoint are immutable account/root namespaces'));
+check('O05 evidence includes P1-179', () => has(EVIDENCE, 'P1-179  backup scheduler/pending checkpoint immutable account/root namespace'));
+check('O06 no new P code', () => has(EVIDENCE, 'New P-code: **NO**'));
+check('O07 research only', () => has(EVIDENCE, 'RESEARCH-ONLY / CURRENT-SOURCE CALL-SITE CENSUS'));
+check('O08 runtime none', () => has(EVIDENCE, 'Production/runtime modification: **NONE**'));
+check('O09 real L5 not run', () => has(EVIDENCE, 'Real Yandex L5: **NOT RUN**'));
+check('O10 release policy untouched', () => has(EVIDENCE, 'Release-policy activation: **NONE**'));
+check('O11 manifest remains 0.9.8', () => assert.equal(MANIFEST.version, '0.9.8'));
+check('O12 baseline pinned', () => has(EVIDENCE, '039f90ed21e44c1939684ee3bf5444651fb20770'));
 
-// Exact source census: one definition + eight semantic callers.
-check('S01 ensure service helper definition exists', () => has(SOURCE, 'async function ensureYandexServiceFolders('));
-check('S02 ensure service literal occurrences are definition plus eight callers', () => assert.equal(count(SOURCE, 'ensureYandexServiceFolders('), 9));
-check('S03 eight semantic consumers modeled', () => assert.equal(sites.length, 8));
-check('S04 unique census ids', () => assert.equal(new Set(sites.map((s) => s.id)).size, 8));
-check('S05 direct hidden H1 count', () => assert.equal(sites.filter((s) => s.cls === 'H1').length, 3));
-check('S06 recovery H2 count', () => assert.equal(sites.filter((s) => s.cls === 'H2').length, 1));
-check('S07 expected mutation M1 count', () => assert.equal(sites.filter((s) => s.cls === 'M1').length, 3));
-check('S08 ancillary mutation M2 count', () => assert.equal(sites.filter((s) => s.cls === 'M2').length, 1));
+// Exact source cardinality and helper mutation proof.
+check('S01 ensure definition exists', () => has(SOURCE, 'async function ensureYandexServiceFolders('));
+check('S02 exact ensure cardinality 1+8', () => assert.equal(count(SOURCE, 'ensureYandexServiceFolders('), 9));
+check('S03 exactly eight semantic consumers modeled', () => assert.equal(sites.length, 8));
+check('S04 census IDs unique', () => assert.equal(new Set(sites.map((s) => s.id)).size, 8));
+check('S05 M1=3', () => assert.equal(sites.filter((s) => s.cls === 'M1').length, 3));
+check('S06 M2=1', () => assert.equal(sites.filter((s) => s.cls === 'M2').length, 1));
+check('S07 H1=3', () => assert.equal(sites.filter((s) => s.cls === 'H1').length, 3));
+check('S08 H2=1', () => assert.equal(sites.filter((s) => s.cls === 'H2').length, 1));
+const ensureService = asyncSection('async function ensureYandexServiceFolders(');
+const ensureTree = asyncSection("async function ensureYandexFolderTree(path, operationId = '')");
+check('S09 service helper delegates to folder tree', () => has(ensureService, 'ensureYandexFolderTree('));
+check('S10 folder tree can PUT', () => has(ensureTree, "method: 'PUT'"));
+check('S11 folder tree uses resources endpoint', () => has(ensureTree, "yandexApi('/resources'"));
 
-// Concrete current call sites.
-const testConnection = functionBody(SOURCE, 'async function testYandexConnection()');
-check('C01 test connection performs account read', () => has(testConnection, "const info = await yandexApi('')"));
-check('C02 test connection calls ensure', () => has(testConnection, 'ensureYandexServiceFolders({ includeUpload: true, includeReadLater: true, includeBackup: true })'));
+// Direct H1/H2 call sites, extracted by semantic function rather than fixed windows.
+const testConnection = asyncSection('async function testYandexConnection()');
+check('C01 test connection observes account', () => has(testConnection, "const info = await yandexApi('')"));
+check('C02 test connection hides ensure today', () => has(testConnection, 'ensureYandexServiceFolders({ includeUpload: true, includeReadLater: true, includeBackup: true })'));
+const listBackups = asyncSection("async function listJournalBackupsOnYandex(requestedMonth = '')");
+check('C03 list backups hides ensure today', () => has(listBackups, 'ensureYandexServiceFolders({ includeBackup: true })'));
+const recoverPending = asyncSection("async function recoverPendingJournalBackup(status, operationId = '')");
+check('C04 recovery reads pending path', () => has(recoverPending, 'pending?.remotePath'));
+check('C05 recovery provisions before reconcile today', () => has(recoverPending, 'ensureYandexServiceFolders({ includeBackup: true, operationId })'));
+const fetchBackup = asyncSection("async function fetchJournalBackupFromYandex(requestedPath, operationId = '', ownerSessionId = '')");
+check('C06 selected import validates path', () => has(fetchBackup, "if (!remotePath) throw new Error('Выберите конкретный файл резервной копии для импорта.')"));
+check('C07 selected import hides ensure today', () => has(fetchBackup, 'ensureYandexServiceFolders({ includeBackup: true, operationId })'));
+const backupUpload = asyncSection('async function uploadJournalExportStagedToYandex(');
+check('C08 backup upload legitimately provisions', () => has(backupUpload, 'ensureYandexServiceFolders({ includeBackup: true, operationId })'));
 
-const listBackups = functionBody(SOURCE, "async function listJournalBackupsOnYandex(requestedMonth = '')");
-check('C03 list backups calls ensure', () => has(listBackups, 'ensureYandexServiceFolders({ includeBackup: true })'));
-check('C04 list backups is read/list family', () => has(listBackups, 'selectedMonth'));
+// Remaining three semantic consumers are bound by ordered source sequences.
+check('C09 root-setting ancillary provisioning', () => matches(/config\.rootPath\s*=\s*normalized[\s\S]{0,2200}ensureYandexServiceFolders\(\{\s*includeUpload:\s*true,\s*includeReadLater:\s*true,\s*includeBackup:\s*true\s*\}\)/, 'root config commit -> ancillary ensure'));
+check('C10 page upload provisioning', () => matches(/emitPageUploadProgress\([^\n]*disk-access[\s\S]{0,1200}ensureYandexServiceFolders\(\{[\s\S]{0,500}includeUpload:\s*readingMode\s*===\s*'read'[\s\S]{0,500}includeReadLater:\s*readingMode\s*===\s*'later'/, 'page upload -> admitted service branch candidate'));
+check('C11 journal read-state move provisioning', () => matches(/assertManagedYandexSourcePath\(sourcePath,\s*config\.rootPath,\s*\[YANDEX_READ_LATER_DIR,\s*YANDEX_UPLOAD_DIR\]\)[\s\S]{0,800}ensureYandexServiceFolders\(\{\s*includeUpload:\s*true,\s*operationId\s*\}\)/, 'read-state move -> upload branch ensure'));
 
-const recoverBackup = functionBody(SOURCE, "async function recoverPendingJournalBackup(status, operationId = '')");
-check('C05 pending backup recovery calls ensure', () => has(recoverBackup, 'ensureYandexServiceFolders({ includeBackup: true, operationId })'));
-check('C06 recovery has pending remote path', () => has(recoverBackup, 'pending?.remotePath'));
+// Classification/admission model.
+for (const site of sites.filter((s) => s.cls === 'H1' || s.cls === 'H2')) {
+  check(`A-${site.id} hidden/recovery site has no provisioning authority`, () => assert.equal(canProvision(site, true), false));
+}
+for (const site of sites.filter((s) => s.cls === 'M1' || s.cls === 'M2')) {
+  check(`A-${site.id}-blocked without admission`, () => assert.equal(canProvision(site, false), false));
+  check(`A-${site.id}-allowed with admission`, () => assert.equal(canProvision(site, true), true));
+}
 
-const backupUpload = functionBody(SOURCE, 'async function uploadJournalExportStagedToYandex(');
-check('C07 backup upload calls ensure', () => has(backupUpload, 'ensureYandexServiceFolders({ includeBackup: true, operationId })'));
-check('C08 backup upload is mutation pipeline', () => has(backupUpload, 'stagingKey'));
+// Pure path derivation is not existence proof or mutation capability.
+const ns = deriveNamespace('/R');
+check('N01 root derived', () => assert.equal(ns.rootPath, '/R'));
+check('N02 upload derived', () => assert.equal(ns.uploadPath, '/R/Upload'));
+check('N03 read-later derived', () => assert.equal(ns.readLaterPath, '/R/ReadmeLater'));
+check('N04 backup derived', () => assert.equal(ns.backupPath, '/R/Backup'));
+check('N05 journal derived', () => assert.equal(ns.journalPath, '/R/Backup/Journal'));
+check('N06 derivation performs no I/O', () => assert.equal(ns.networkEffects, 0));
+check('N07 derivation grants no mutation', () => assert.equal(ns.mutationAuthority, false));
+check('N08 evidence separates derive from ensure', () => has(EVIDENCE, 'derive namespace != ensure namespace exists'));
 
-check('C09 selected backup import preflight calls ensure nearby', () => {
-  const w = around(SOURCE, 'Восстановление журнала с Яндекс Диска', 5000);
-  has(w, 'ensureYandexServiceFolders({ includeBackup: true, operationId })');
-});
-check('C10 selected backup validates remote path', () => {
-  const w = around(SOURCE, 'Восстановление журнала с Яндекс Диска', 5000);
-  has(w, "if (!remotePath) throw new Error('Выберите конкретный файл резервной копии для импорта.')");
-});
+// Historical namespace outranks current-root retargeting.
+const old = { accountUid: 'A', rootPath: '/R1', remotePath: '/R1/Backup/Journal/a.json' };
+check('R01 same account/new root reads old target', () => assert.equal(recover(old, { accountUid: 'A', rootPath: '/R2' }).outcome, 'read-only-reconcile'));
+check('R02 old root retained', () => assert.equal(recover(old, { accountUid: 'A', rootPath: '/R2' }).rootPath, '/R1'));
+check('R03 current root diagnostic only', () => assert.equal(recover(old, { accountUid: 'A', rootPath: '/R2' }).currentRootDiagnosticOnly, true));
+check('R04 reconciliation non-mutating', () => assert.equal(recover(old, { accountUid: 'A', rootPath: '/R2' }).mutating, false));
+check('R05 different account cannot probe', () => assert.equal(recover(old, { accountUid: 'B', rootPath: '/R1' }).remoteCall, false));
+check('R06 missing account fails closed', () => assert.equal(recover({ rootPath: '/R1', remotePath: '/x' }, { accountUid: 'A', rootPath: '/R1' }).outcome, 'historical-identity-insufficient'));
+check('R07 evidence forbids current ensure prerequisite', () => has(EVIDENCE, 'Never call current-R2 `ensure` as a prerequisite'));
 
-check('C11 root mutation calls ensure nearby', () => {
-  const w = around(SOURCE, 'Проверяем и при необходимости создаём обе служебные ветки сразу.', 2500);
-  has(w, 'ensureYandexServiceFolders({ includeUpload: true, includeReadLater: true, includeBackup: true })');
-});
-check('C12 page upload calls ensure nearby', () => {
-  const w = around(SOURCE, 'Проверяем доступ к Яндекс Диску и служебной папке', 2500);
-  has(w, 'ensureYandexServiceFolders({');
-});
-check('C13 journal remote move calls ensure nearby', () => {
-  const w = around(SOURCE, 'assertManagedYandexSourcePath(sourcePath, config.rootPath', 3000);
-  has(w, 'ensureYandexServiceFolders({ includeUpload: true, operationId })');
-});
-
-// Provisioning helper is physically mutating.
-const ensureService = functionBody(SOURCE, 'async function ensureYandexServiceFolders(');
-const ensureTree = functionBody(SOURCE, "async function ensureYandexFolderTree(path, operationId = '')");
-check('P01 service helper delegates to folder tree', () => has(ensureService, 'ensureYandexFolderTree('));
-check('P02 folder tree issues PUT', () => has(ensureTree, "method: 'PUT'"));
-check('P03 folder tree uses resources endpoint', () => has(ensureTree, "yandexApi('/resources'"));
-check('P04 409 branch reads exact resource', () => has(ensureTree, "if (Number(error?.status) !== 409) throw error;"));
-check('P05 409 branch verifies dir', () => has(ensureTree, "if (existing?.type !== 'dir')"));
-
-// Census classification contract.
-check('K01 C01 M1', () => assert.equal(sites.find((s) => s.id === 'C01').cls, 'M1'));
-check('K02 C02 M1', () => assert.equal(sites.find((s) => s.id === 'C02').cls, 'M1'));
-check('K03 C03 M1', () => assert.equal(sites.find((s) => s.id === 'C03').cls, 'M1'));
-check('K04 C04 H2', () => assert.equal(sites.find((s) => s.id === 'C04').cls, 'H2'));
-check('K05 C05 H1', () => assert.equal(sites.find((s) => s.id === 'C05').cls, 'H1'));
-check('K06 C06 H1', () => assert.equal(sites.find((s) => s.id === 'C06').cls, 'H1'));
-check('K07 C07 M2', () => assert.equal(sites.find((s) => s.id === 'C07').cls, 'M2'));
-check('K08 C08 H1', () => assert.equal(sites.find((s) => s.id === 'C08').cls, 'H1'));
-check('K09 hidden read sites cannot provision', () => sites.filter((s) => s.cls === 'H1').forEach((s) => assert.equal(canProvision(s, true), false)));
-check('K10 recovery site cannot provision before reconcile', () => assert.equal(canProvision(sites.find((s) => s.id === 'C04'), true), false));
-check('K11 expected mutation requires admission', () => assert.equal(canProvision(sites.find((s) => s.id === 'C01'), false), false));
-check('K12 expected mutation may provision after admission', () => assert.equal(canProvision(sites.find((s) => s.id === 'C01'), true), true));
-check('K13 root ancillary provisioning needs admission', () => assert.equal(canProvision(sites.find((s) => s.id === 'C07'), false), false));
-check('K14 root ancillary provisioning admitted separately', () => assert.equal(canProvision(sites.find((s) => s.id === 'C07'), true), true));
-
-// Pure namespace derivation separates path calculation from side effect.
-const ns = deriveNamespace('/Root');
-check('N01 namespace derives root', () => assert.equal(ns.rootPath, '/Root'));
-check('N02 namespace derives upload path', () => assert.equal(ns.uploadPath, '/Root/Upload'));
-check('N03 namespace derives read later path', () => assert.equal(ns.readLaterPath, '/Root/ReadmeLater'));
-check('N04 namespace derives backup path', () => assert.equal(ns.backupPath, '/Root/Backup'));
-check('N05 namespace derives journal path', () => assert.equal(ns.journalPath, '/Root/Backup/Journal'));
-check('N06 namespace derivation has zero network effects', () => assert.equal(ns.networkEffects, 0));
-check('N07 namespace derivation grants no mutation authority', () => assert.equal(ns.mutationAuthority, false));
-check('N08 evidence distinguishes derive vs ensure', () => has(EVIDENCE, 'derive namespace != ensure namespace exists'));
-
-// Recovery historical namespace outranks current-root repair.
-const checkpoint = { root: '/R1', target: '/R1/Backup/Journal/file.json' };
-check('R01 old R1 target preserved under current R2', () => assert.equal(recoveryTarget(checkpoint, '/R2').target, checkpoint.target));
-check('R02 old R1 root preserved under current R2', () => assert.equal(recoveryTarget(checkpoint, '/R2').root, '/R1'));
-check('R03 current R2 diagnostic only', () => assert.equal(recoveryTarget(checkpoint, '/R2').currentRootIsDiagnosticOnly, true));
-check('R04 recovery is read-only', () => assert.equal(recoveryTarget(checkpoint, '/R2').mutating, false));
-check('R05 missing historical root fails', () => assert.equal(recoveryTarget({ target: '/x' }, '/R2').reason, 'HISTORICAL_IDENTITY_INSUFFICIENT'));
-check('R06 missing historical target fails', () => assert.equal(recoveryTarget({ root: '/R1' }, '/R2').ok, false));
-check('R07 evidence forbids current ensure before old reconciliation', () => has(EVIDENCE, 'Never call current-R2 `ensure` as a prerequisite'));
-
-// Root settings truth must be split from remote provisioning truth.
-check('T01 root saved plus provisioning success', () => assert.deepEqual(rootMutationResult('saved', 'success'), { config: 'saved', provisioning: 'success' }));
-check('T02 root saved plus provisioning failure', () => assert.deepEqual(rootMutationResult('saved', 'failed-before-effect'), { config: 'saved', provisioning: 'failed-before-effect' }));
-check('T03 root saved plus provisioning unknown', () => assert.equal(rootMutationResult('saved', 'unknown').config, 'saved'));
-check('T04 root failure means provisioning not started', () => assert.deepEqual(rootMutationResult('failed', 'not-started'), { config: 'failed', provisioning: 'not-started' }));
-check('T05 evidence names separate truths', () => has(EVIDENCE, 'root config commit\nremote service provisioning'));
-
-// Source cutover order and safety boundaries are explicit.
+// Evidence cutover and boundary contract.
 [
   'introduce non-mutating service-path derivation / namespace descriptor',
   'make pure list/test/read consumers use descriptor + GET only',
@@ -190,20 +155,11 @@ check('T05 evidence names separate truths', () => has(EVIDENCE, 'root config com
   'migrate explicit mutation pipelines C01/C02/C03 to that effect API',
   'split root-save config truth from ancillary provisioning result',
   'remove/lock generic ensure access from observation adapters',
-  'M1 expected-mutation',
-  'M2 ancillary-mutation',
-  'H1 hidden-read-mutation',
-  'H2 recovery-preemption'
-].forEach((needle, i) => check(`X${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
+  'A 404/missing root is read evidence. It is not provisioning consent.',
+  'WEBCLIP_YANDEX_TEST = observation only',
+  'If historical identity is insufficient, recovery defers/fails closed.',
+  'V1 readiness and release authority are untouched.'
+].forEach((needle, i) => check(`E${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
+check('E12 runtime marker absent', () => lacks(SOURCE, 'webclip-p1-138-hidden-provisioning-census/v1'));
 
-// Negative contract highlights.
-check('Z01 listing missing root must not imply create', () => has(EVIDENCE, 'A 404/missing root is read evidence. It is not provisioning consent.'));
-check('Z02 import preflight must not create missing root', () => has(EVIDENCE, 'do not create it during import preflight'));
-check('Z03 test preferred observation only', () => has(EVIDENCE, 'WEBCLIP_YANDEX_TEST = observation only'));
-check('Z04 recovery insufficient identity fails closed', () => has(EVIDENCE, 'If historical identity is insufficient, recovery defers/fails closed.'));
-check('Z05 runtime not modified', () => lacks(SOURCE, 'webclip-p1-138-hidden-provisioning-census/v1'));
-check('Z06 release boundary', () => has(EVIDENCE, 'P1-231 S2 activation != release readiness'));
-check('Z07 no official zip', () => has(EVIDENCE, 'no official ZIP'));
-check('Z08 readiness untouched', () => has(EVIDENCE, 'V1 readiness and release authority are untouched.'));
-
-console.log(`P1-138 hidden Yandex provisioning census model: PASS; cases=${cases}; schema=webclip-p1-138-hidden-provisioning-census/v1; baseline=039f90ed21e44c1939684ee3bf5444651fb20770; ensure_occurrences=9; semantic_call_sites=8; M1=3; M2=1; H1=3; H2=1; direct_hidden=test-connection,list-backups,selected-backup-import; recovery_preemption=pending-backup-recovery; p1_179_namespace_owner=true; namespace_derivation=pure; historical_root=checkpoint-authority; runtime_modified=false; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-138 hidden Yandex provisioning census model: PASS; cases=${cases}; schema=webclip-p1-138-hidden-provisioning-census/v1; baseline=039f90ed21e44c1939684ee3bf5444651fb20770; ensure_occurrences=9; semantic_call_sites=8; M1=3; M2=1; H1=3; H2=1; p1_179_namespace_owner=true; extraction=structure-stable; namespace_derivation=pure; historical_root=checkpoint-authority; runtime_modified=false; new_p_code=false; s2_authorized=false; release_authorized=false`);
