@@ -1,7 +1,9 @@
 name: P1-231 S0-I PR checker research
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - research/p1-231-s0i-pr-checker-integration-2026-09-10
 
 permissions:
   contents: read
