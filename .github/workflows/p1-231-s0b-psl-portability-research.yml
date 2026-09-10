@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: '3.12.10'
 
-      - name: Probe generator bytes in isolated temp tree
+      - name: Probe generator against exact Git blob
         shell: bash
         run: |
           set -euo pipefail
@@ -39,12 +39,34 @@ jobs:
           import hashlib, os, shutil, subprocess, tempfile
 
           root = Path.cwd()
-          committed = (root / 'public-suffix.js').read_bytes()
+          git_blob = subprocess.run(
+              ['git', 'cat-file', 'blob', 'HEAD:public-suffix.js'],
+              cwd=root,
+              check=True,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+          ).stdout
+          working_tree = (root / 'public-suffix.js').read_bytes()
+          source_git_blob = subprocess.run(
+              ['git', 'cat-file', 'blob', 'HEAD:public_suffix_list.dat'],
+              cwd=root,
+              check=True,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+          ).stdout
+          generator_git_blob = subprocess.run(
+              ['git', 'cat-file', 'blob', 'HEAD:project_tools/build_public_suffix_js.py'],
+              cwd=root,
+              check=True,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+          ).stdout
+
           with tempfile.TemporaryDirectory(prefix='webclip-s0b-') as td:
               t = Path(td)
               (t / 'project_tools').mkdir()
-              shutil.copyfile(root / 'public_suffix_list.dat', t / 'public_suffix_list.dat')
-              shutil.copyfile(root / 'project_tools' / 'build_public_suffix_js.py', t / 'project_tools' / 'build_public_suffix_js.py')
+              (t / 'public_suffix_list.dat').write_bytes(source_git_blob)
+              (t / 'project_tools' / 'build_public_suffix_js.py').write_bytes(generator_git_blob)
               proc = subprocess.run(
                   ['python', str(t / 'project_tools' / 'build_public_suffix_js.py')],
                   cwd=t,
@@ -56,17 +78,25 @@ jobs:
               generated = (t / 'public-suffix.js').read_bytes()
 
           def sha(b): return hashlib.sha256(b).hexdigest()
+          def count_crlf(b): return b.count(bytes([13,10]))
+          def count_lf(b): return b.count(bytes([10]))
           print(f'platform={os.name}')
           print(f'generator_stdout={proc.stdout.strip()}')
-          print(f'committed_bytes={len(committed)}')
+          print(f'git_blob_bytes={len(git_blob)}')
+          print(f'working_tree_bytes={len(working_tree)}')
           print(f'generated_bytes={len(generated)}')
-          print(f'committed_sha256={sha(committed)}')
+          print(f'git_blob_sha256={sha(git_blob)}')
+          print(f'working_tree_sha256={sha(working_tree)}')
           print(f'generated_sha256={sha(generated)}')
-          print(f'byte_match={str(committed == generated).lower()}')
-          print(f'committed_crlf={committed.count(bytes([13,10]))}')
-          print(f'generated_crlf={generated.count(bytes([13,10]))}')
-          print(f'committed_lf={committed.count(bytes([10]))}')
-          print(f'generated_lf={generated.count(bytes([10]))}')
+          print(f'working_tree_matches_git_blob={str(working_tree == git_blob).lower()}')
+          print(f'generated_matches_git_blob={str(generated == git_blob).lower()}')
+          print(f'generated_matches_working_tree={str(generated == working_tree).lower()}')
+          print(f'git_blob_crlf={count_crlf(git_blob)}')
+          print(f'working_tree_crlf={count_crlf(working_tree)}')
+          print(f'generated_crlf={count_crlf(generated)}')
+          print(f'git_blob_lf={count_lf(git_blob)}')
+          print(f'working_tree_lf={count_lf(working_tree)}')
+          print(f'generated_lf={count_lf(generated)}')
           PY
 
       - name: Upload bounded diagnostics
