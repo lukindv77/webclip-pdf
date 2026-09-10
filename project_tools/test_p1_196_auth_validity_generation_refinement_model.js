@@ -100,7 +100,7 @@ check('S09 caller headers are spread after OAuth header', () => {
 });
 check('S10 runtime has no authGeneration field yet', () => lacks(SOURCE, 'authGeneration'));
 check('S11 OAuth unknown expiry stored as zero', () => has(SOURCE, 'expiresAt: expiresInSeconds ? now + expiresInSeconds * 1000 : 0'));
-const recovery = asyncSection("async function recoverPendingRemoteSaves(trigger = 'startup')");
+const recovery = asyncSection("async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6)");
 check('S12 recovery snapshots authAvailable before loop', () => {
   const authAt = recovery.indexOf('let authAvailable = true');
   const loopAt = recovery.indexOf('for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1)');
