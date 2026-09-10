@@ -100,7 +100,7 @@ check('S16 finish has no auth generation check', () => lacks(finish, 'authGenera
 
 const manual = asyncSection('async function setManualYandexToken(token)');
 check('S17 manual writes auth', () => has(manual, 'writeYandexAuth(yandexAuth)'));
-check('S18 manual performs provider read', () => has(manual, "yandexApi('', {"));
+check('S18 manual performs provider read', () => has(manual, "await yandexApi('')"));
 check('S19 manual failure clears auth', () => has(manual, 'writeYandexAuth(null)'));
 check('S20 manual has no auth generation guard', () => lacks(manual, 'authGeneration'));
 
