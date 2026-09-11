@@ -25,11 +25,7 @@ class PermissionLifecycleModel {
 
   ensureScope(scope) {
     if (!this.scopes.has(scope)) {
-      this.scopes.set(scope, {
-        granted: false,
-        era: 0,
-        receipt: null,
-      });
+      this.scopes.set(scope, { granted: false, era: 0, receipt: null });
     }
     return this.scopes.get(scope);
   }
@@ -65,6 +61,12 @@ class PermissionLifecycleModel {
     return { ok: true, child };
   }
 
+  isOrdinaryCurrent(child, era) {
+    if (!child || !child.authority || child.permissionStatus !== 'active') return false;
+    const state = this.ensureScope(child.scope);
+    return state.granted && state.era === era && child.era === era;
+  }
+
   startSelection(frameKey, era, session) {
     const child = this.children.get(frameKey);
     if (!this.isOrdinaryCurrent(child, era)) return false;
@@ -91,12 +93,6 @@ class PermissionLifecycleModel {
     child.printGeneration = generation;
     child.printPrepared = true;
     return true;
-  }
-
-  isOrdinaryCurrent(child, era) {
-    if (!child || !child.authority || child.permissionStatus !== 'active') return false;
-    const state = this.ensureScope(child.scope);
-    return state.granted && state.era === era && child.era === era;
   }
 
   revoke(scope) {
@@ -144,9 +140,7 @@ class PermissionLifecycleModel {
     const state = this.ensureScope(scope);
     if (!state.granted || state.era !== era) return { ok: false, reason: 'not-current-grant' };
     const old = this.children.get(frameKey);
-    if (old && old.documentId !== documentId) {
-      this.children.delete(frameKey);
-    }
+    if (old && old.documentId !== documentId) this.children.delete(frameKey);
     const child = {
       frameKey,
       documentId,
@@ -167,9 +161,7 @@ class PermissionLifecycleModel {
 }
 
 function cleanupCapabilityAllows(command) {
-  return new Set([
-    'permission-revoke-cleanup',
-  ]).has(command);
+  return command === 'permission-revoke-cleanup';
 }
 
 function testCurrentShapeNeedsEventDrivenClose() {
@@ -331,13 +323,16 @@ function testIdentityDomainsAreDistinct() {
 
 function testSourceBoundCurrentGap() {
   assert.match(registry, /\| P1-201 \| ACTIVE \| Optional host-permission revoke\/regrant must clean\/fence already injected frame-agent authority and never revive old session state\. \|/);
-  assert.match(worker, /chrome\.permissions\.contains\(\{ origins: \[pattern\] \}\)/);
-  assert.match(worker, /Frame-agent не зарегистрирован, устарел после навигации или permission отозван\./);
-  assert.match(worker, /Host permission для iframe отсутствует или был отозван\./);
+  assert(worker.includes('chrome.permissions.contains({ origins: [pattern] })'));
+  assert(worker.includes('Frame-agent не зарегистрирован, устарел после навигации или permission отозван.'));
+  assert(worker.includes('Host permission для iframe отсутствует или был отозван.'));
   assert(!worker.includes('chrome.permissions.onRemoved.addListener'));
   assert(!worker.includes('chrome.permissions.onAdded.addListener'));
-  assert.match(childSource, /__WEBCLIP_FRAME_AGENT_LOADED__/);
-  assert.match(childSource, /phase:'idle'.*mode:'include'.*includes:new Map\(\).*excludes:new Map\(\)/s);
+  assert(childSource.includes('__WEBCLIP_FRAME_AGENT_LOADED__'));
+  assert(childSource.includes("phase: 'idle'"));
+  assert(childSource.includes("mode: 'include'"));
+  assert(childSource.includes('includes: new Map()'));
+  assert(childSource.includes('excludes: new Map()'));
   assert(!childSource.includes('permissionEra'));
   assert(!childSource.includes('permissionGeneration'));
 }
@@ -345,13 +340,10 @@ function testSourceBoundCurrentGap() {
 function testEvidenceContractAndReleaseFence() {
   assert.match(evidence, /Canonical baseline inspected: `main@d813e25bfa3ef952293899284247308c66e80dea`/);
   assert.match(evidence, /cleaned \| unreachable \| unknown/);
-  assert.match(evidence, /P1-193 owns/);
-  assert.match(evidence, /P1-171 owns/);
-  assert.match(evidence, /P1-200 owns/);
-  assert.match(evidence, /P1-199 owns/);
-  assert.match(evidence, /P1-203 owns/);
-  assert.match(evidence, /P1-214 owns/);
-  assert.match(evidence, /EXPLICIT_USER_APPROVAL_FOR_RELEASE_POLICY_ACTIVATION/);
+  for (const owner of ['P1-193', 'P1-171', 'P1-200', 'P1-199', 'P1-203', 'P1-214']) {
+    assert(evidence.includes(`${owner} owns`), owner);
+  }
+  assert(evidence.includes('EXPLICIT_USER_APPROVAL_FOR_RELEASE_POLICY_ACTIVATION'));
   assert.equal(manifest.version, '0.9.8');
   assert(!registry.includes('| P1-232 |'));
 }
