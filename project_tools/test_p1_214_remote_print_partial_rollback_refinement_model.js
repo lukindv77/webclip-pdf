@@ -420,7 +420,7 @@ function currentAggregatePrepare(childrenAndModes) {
 check(evidence.includes('necessary but insufficient'), 'evidence lost exact-document defense-in-depth boundary');
 check(evidence.includes('bounded per-child, exact-document, exact-print-generation compensation saga'), 'target invariant summary missing');
 check(evidence.includes('AWS Prescriptive Guidance') && evidence.includes('Microsoft'), 'multi-source external comparison missing');
-check(evidence.includes('Stack Overflow'), 'community comparison search boundary missing');
+check(evidence.includes('StackOverflow') && evidence.includes('stackoverflow.com/questions/49542628'), 'community comparison search boundary missing');
 
 if (failures.length) {
   console.error(`P1-214 refinement model: ${failures.length}/${checks} checks failed`);
