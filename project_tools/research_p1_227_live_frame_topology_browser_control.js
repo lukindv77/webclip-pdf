@@ -1,31 +1,21 @@
-// P1-227 browser-side research control.
-// Evaluate this whole file in an ordinary same-origin page through DevTools/CDP
-// Runtime.evaluate with awaitPromise=true. The returned object is the evidence
-// payload. This is not a Node deterministic test and does not modify WebClip.
 (async () => {
   const results = [];
-  const check = (label, ok, detail = '') => results.push({ label, ok: Boolean(ok), detail });
-  const sleep = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
-  const frameLoaded = (frame) => new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }));
+  const check = (label, ok, detail = '') => results.push({label, ok: Boolean(ok), detail});
+  const sleep = (ms = 0) => new Promise(r => setTimeout(r, ms));
+  const frameLoaded = frame => new Promise(resolve => frame.addEventListener('load', resolve, {once:true}));
   const mkFrame = async (parentDoc, name, body = name) => {
-    const frame = parentDoc.createElement('iframe');
-    frame.dataset.name = name;
-    const loaded = frameLoaded(frame);
-    frame.srcdoc = `<!doctype html><body><div>${body}</div></body>`;
-    parentDoc.body.appendChild(frame);
-    await loaded;
-    return frame;
+    const f = parentDoc.createElement('iframe');
+    f.dataset.name = name;
+    const p = frameLoaded(f);
+    f.srcdoc = `<!doctype html><body><div>${body}</div></body>`;
+    parentDoc.body.appendChild(f);
+    await p;
+    return f;
   };
 
-  // Exact current-source-shaped behavior for the topology surface: discovery is
-  // explicit and load callbacks exist only for frames found by a prior refresh.
-  const currentState = {
-    phase: 'selecting',
-    frameDocuments: new Set(),
-    frameLoadHandlers: new Map()
-  };
+  // Exact current-source-shaped refresh behavior for the P1-227 topology surface.
+  const currentState = { phase: 'selecting', frameDocuments: new Set(), frameLoadHandlers: new Map() };
   let currentRefreshes = 0;
-
   function currentRefreshFrameDocuments() {
     currentRefreshes += 1;
     const discovered = new Set();
@@ -64,18 +54,17 @@
   const initial = await mkFrame(document, 'initial');
   currentRefreshFrameDocuments();
   check('current discovers frame existing at refresh', currentState.frameDocuments.has(initial.contentDocument));
-
   const late = await mkFrame(document, 'late');
   await sleep(20);
   check('current does not auto-discover newly inserted frame element', !currentState.frameDocuments.has(late.contentDocument));
   check('new frame has no current load handler before rediscovery', !currentState.frameLoadHandlers.has(late));
-
   const beforeExplicit = currentRefreshes;
   currentRefreshFrameDocuments();
   check('explicit refresh discovers late frame', currentState.frameDocuments.has(late.contentDocument));
   check('explicit refresh attached late frame load handler', currentState.frameLoadHandlers.has(late));
   check('explicit refresh count advanced once', currentRefreshes === beforeExplicit + 1);
 
+  // Research contract control using actual MutationObserver and iframe load events.
   class LiveTracker {
     constructor(topDoc) {
       this.topDoc = topDoc;
@@ -87,7 +76,6 @@
       this.queuedGeneration = null;
       this.flushes = 0;
     }
-
     start() {
       this.stop(false);
       this.generation += 1;
@@ -95,67 +83,59 @@
       this.reconcile(this.generation);
       return this.generation;
     }
-
     stop(bump = true) {
       if (bump) this.generation += 1;
       this.active = false;
       this.queuedGeneration = null;
-      for (const observer of this.observers.values()) observer.disconnect();
+      for (const obs of this.observers.values()) obs.disconnect();
       this.observers.clear();
       for (const [frame, handler] of this.frameHandlers) frame.removeEventListener('load', handler, true);
       this.frameHandlers.clear();
       this.docs.clear();
     }
-
-    schedule(generation) {
-      if (!this.active || generation !== this.generation || this.queuedGeneration === generation) return;
-      this.queuedGeneration = generation;
+    schedule(gen) {
+      if (!this.active || gen !== this.generation || this.queuedGeneration === gen) return;
+      this.queuedGeneration = gen;
       queueMicrotask(() => {
-        if (this.queuedGeneration === generation) this.queuedGeneration = null;
-        if (!this.active || generation !== this.generation) return;
+        if (this.queuedGeneration === gen) this.queuedGeneration = null;
+        if (!this.active || gen !== this.generation) return;
         this.flushes += 1;
-        this.reconcile(generation);
+        this.reconcile(gen);
       });
     }
-
-    observeDocument(doc, generation) {
+    observeDoc(doc, gen) {
       if (this.observers.has(doc)) return;
-      const observer = new MutationObserver((records) => {
-        if (records.some((record) => record.type === 'childList')) this.schedule(generation);
+      const obs = new MutationObserver(records => {
+        if (records.some(r => r.type === 'childList')) this.schedule(gen);
       });
-      observer.observe(doc, { childList: true, subtree: true });
-      this.observers.set(doc, observer);
+      obs.observe(doc, {childList:true, subtree:true});
+      this.observers.set(doc, obs);
     }
-
-    ownFrame(frame, generation) {
+    ownFrame(frame, gen) {
       if (this.frameHandlers.has(frame)) return;
-      const handler = () => this.schedule(generation);
+      const handler = () => this.schedule(gen);
       this.frameHandlers.set(frame, handler);
       frame.addEventListener('load', handler, true);
     }
-
-    reconcile(generation) {
-      if (!this.active || generation !== this.generation) return;
+    reconcile(gen) {
+      if (!this.active || gen !== this.generation) return;
       const docs = new Set();
       const frames = new Set();
-      const visit = (doc) => {
+      const visit = doc => {
         if (!doc || docs.has(doc)) return;
         docs.add(doc);
         let found = [];
         try { found = [...doc.querySelectorAll('iframe, frame')]; } catch (_) {}
         for (const frame of found) {
           frames.add(frame);
-          this.ownFrame(frame, generation);
-          try {
-            if (frame.contentDocument?.documentElement) visit(frame.contentDocument);
-          } catch (_) {}
+          this.ownFrame(frame, gen);
+          try { if (frame.contentDocument?.documentElement) visit(frame.contentDocument); } catch (_) {}
         }
       };
       visit(this.topDoc);
-
-      for (const [doc, observer] of [...this.observers]) {
+      for (const [doc, obs] of [...this.observers]) {
         if (docs.has(doc)) continue;
-        observer.disconnect();
+        obs.disconnect();
         this.observers.delete(doc);
       }
       for (const [frame, handler] of [...this.frameHandlers]) {
@@ -163,14 +143,13 @@
         frame.removeEventListener('load', handler, true);
         this.frameHandlers.delete(frame);
       }
-      for (const doc of docs) this.observeDocument(doc, generation);
+      for (const doc of docs) this.observeDoc(doc, gen);
       this.docs = docs;
     }
   }
 
   const tracker = new LiveTracker(document);
-  const generation1 = tracker.start();
-
+  const g1 = tracker.start();
   const dynamic = await mkFrame(document, 'dynamic');
   await sleep(30);
   check('MutationObserver plus load discovers dynamic top frame', tracker.docs.has(dynamic.contentDocument));
@@ -181,7 +160,8 @@
   check('observer on child document discovers nested dynamic frame', tracker.docs.has(nested.contentDocument));
   check('nested dynamic frame gets owned load handler', tracker.frameHandlers.has(nested));
 
-  const oldDynamicDocument = dynamic.contentDocument;
+  // Replacement of frame element is topology change and must converge without unrelated refresh.
+  const oldDynamicDoc = dynamic.contentDocument;
   const replacement = document.createElement('iframe');
   replacement.dataset.name = 'replacement';
   const replacementLoaded = frameLoaded(replacement);
@@ -190,29 +170,27 @@
   await replacementLoaded;
   await sleep(30);
   check('replacement frame element becomes discovered', tracker.docs.has(replacement.contentDocument));
-  check('detached replaced document is removed', !tracker.docs.has(oldDynamicDocument));
+  check('detached replaced document is removed', !tracker.docs.has(oldDynamicDoc));
   check('detached replaced frame handler is removed', !tracker.frameHandlers.has(dynamic));
 
-  const oldReplacementDocument = replacement.contentDocument;
+  // Known-frame navigation/reload remains a positive control.
+  const oldReplacementDoc = replacement.contentDocument;
   const reloadDone = frameLoaded(replacement);
   replacement.srcdoc = '<!doctype html><body>replacement-v2</body>';
   await reloadDone;
   await sleep(30);
   check('known frame load discovers navigated document', tracker.docs.has(replacement.contentDocument));
-  check('known frame load drops previous document identity', !tracker.docs.has(oldReplacementDocument));
+  check('known frame load drops previous document identity', !tracker.docs.has(oldReplacementDoc));
 
+  // Synchronous mutation burst must produce at most one tracker flush for that burst.
   const beforeBurst = tracker.flushes;
-  for (let index = 0; index < 20; index += 1) {
+  for (let i = 0; i < 20; i++) {
     const span = document.createElement('span');
-    span.textContent = String(index);
+    span.textContent = String(i);
     document.body.appendChild(span);
   }
   await sleep(30);
-  check(
-    'synchronous DOM mutation burst is coalesced to one rediscovery flush',
-    tracker.flushes === beforeBurst + 1,
-    `${beforeBurst}->${tracker.flushes}`
-  );
+  check('synchronous DOM mutation burst is coalesced to one rediscovery flush', tracker.flushes === beforeBurst + 1, `${beforeBurst}->${tracker.flushes}`);
 
   const trackedBeforeRemove = nested.contentDocument;
   nested.remove();
@@ -224,18 +202,10 @@
   const docsAfterStop = tracker.docs.size;
   await mkFrame(document, 'post-stop');
   await sleep(30);
-  check(
-    'stop disconnects observers so later insertion cannot repopulate tracker',
-    tracker.docs.size === docsAfterStop && docsAfterStop === 0
-  );
+  check('stop disconnects observers so later insertion cannot repopulate tracker', tracker.docs.size === docsAfterStop && docsAfterStop === 0);
   check('stop clears frame handlers', tracker.frameHandlers.size === 0);
-  check('stop advances generation', tracker.generation > generation1);
+  check('stop advances generation', tracker.generation > g1);
 
-  const passed = results.filter((result) => result.ok).length;
-  return {
-    browser: navigator.userAgent,
-    passed,
-    total: results.length,
-    results
-  };
+  const passed = results.filter(r => r.ok).length;
+  return { browser: navigator.userAgent, passed, total: results.length, results };
 })()
