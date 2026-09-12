@@ -32,6 +32,21 @@ Eight older staged families were already present outside that cleanup set when t
 
 ## Supplemental durable evidence
 
+### 2026-09-12/13 closure-oriented revalidation tranche
+
+These files are fresh-current-source owner/coverage evidence added after the older family consolidation. They are listed here for navigation only: `RESEARCH_REGISTRY.md` still controls current owner/status, and none of these pointers by itself implies implementation closure or release readiness.
+
+- `RESEARCH_P1_227_LIVE_FRAME_TOPOLOGY_REVALIDATION_2026-09-12_EVIDENCE.md` — P1-227 live same-origin frame-topology revalidation; deterministic model `project_tools/test_p1_227_live_frame_topology_revalidation_model.js` plus browser control `project_tools/research_p1_227_live_frame_topology_browser_control.js` (PR #241).
+- `RESEARCH_FULL_RESTART_C42_YANDEX_UPLOAD_OBJECT_PUBLIC_IDENTITY_2026-09-12_EVIDENCE.md` — C42 exact Yandex upload/object/public identity evidence, with deterministic object-receipt model `project_tools/test_c42_yandex_exact_object_receipt_model.js` (PR #242).
+- `RESEARCH_EXTERNAL_USER_INTENT_DELTA_2026-09-12.md` — fresh external user-intent evidence stream used by the final coverage reconciliation (PR #242).
+- `RESEARCH_FULL_RESTART_COVERAGE_RECONCILIATION_FINAL_SYNTHESIS_2026-09-12.md` — project-wide research-coverage synthesis. Its `DEEP-RESEARCH-COVERAGE-COMPLETE` declaration means research coverage complete only; it does **not** mean critical closure complete or release ready (PR #242).
+- `RESEARCH_P0_072_BULK_RESET_EXTERNAL_EFFECT_FENCE_REVALIDATION_2026-09-12_EVIDENCE.md` — P0-072 bulk clear/replace versus admitted external side-effect receipts; deterministic model `project_tools/test_p0_072_bulk_reset_external_effect_fence_model.js` (PR #243).
+- `RESEARCH_P0_076_SINGLE_ENTRY_GENERATION_CAS_REVALIDATION_2026-09-12_EVIDENCE.md` — P0-076 stale single-entry writes versus replacement Journal generation/CAS; deterministic model `project_tools/test_p0_076_single_entry_generation_cas_model.js` (PR #244).
+- `RESEARCH_P0_074_YANDEX_OPERATION_CONTEXT_GENERATION_REVALIDATION_2026-09-13_EVIDENCE.md` — P0-074 immutable Yandex auth/account/root/config/publication operation context; deterministic model `project_tools/test_p0_074_yandex_operation_context_generation_model.js` (PR #245).
+- `RESEARCH_P0_073_REMOTE_RECOVERY_NAMESPACE_BINDING_REVALIDATION_2026-09-13_EVIDENCE.md` — P0-073 restart recovery bound to the exact account/root namespace; deterministic model `project_tools/test_p0_073_remote_recovery_namespace_binding_model.js` (PR #246).
+- `RESEARCH_P0_078_PUBLICATION_GENERATION_REVOCATION_REVALIDATION_2026-09-13_EVIDENCE.md` — P0-078 publication policy generation/revocation authority; deterministic model `project_tools/test_p0_078_publication_generation_revocation_model.js` (PR #247).
+- `RESEARCH_P0_079_OPERATION_OWNED_PDF_CACHE_REVALIDATION_2026-09-13_EVIDENCE.md` — P0-079 operation-owned immutable PDF byte generation for Yandex upload/retry; deterministic model `project_tools/test_p0_079_operation_owned_pdf_cache_model.js` (PR #248).
+
 ### Selection, scope and frame topology
 
 - `RESEARCH_SELECTION_CAPTURE_FIDELITY_EVIDENCE.md` — P0-004 / P1-226 selection/capture fidelity summary; exact retired source is in `RESEARCH_RETIRED_DELTA_EVIDENCE.md`.
