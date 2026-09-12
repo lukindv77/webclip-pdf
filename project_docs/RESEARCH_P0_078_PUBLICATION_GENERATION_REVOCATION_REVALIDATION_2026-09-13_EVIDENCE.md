@@ -320,10 +320,6 @@ Current official Yandex Disk command documentation exposes separate `publish` an
 
 - https://yandex.com/support/yandex-360/customers/disk/desktop/linux/en/cli-commands
 
-Current Yandex 360 audit-event documentation likewise distinguishes creation of public/shared access (`disk_fs-set-public`) from removal/closing of access (`disk_fs-set-private`):
-
-- https://yandex.ru/dev/api360/doc/ru/audit-logs/get-logs
-
 These sources do not prove the WebClip race. They establish that creating and removing public access are distinct external state transitions. The WebClip race is proven by combining that provider semantics with current source, where publication authorization is only an old boolean and no unpublish operation exists in the worker.
 
 ## Deterministic model
