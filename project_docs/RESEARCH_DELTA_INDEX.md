@@ -47,6 +47,7 @@ These files are fresh-current-source owner/coverage evidence added after the old
 - `RESEARCH_P0_078_PUBLICATION_GENERATION_REVOCATION_REVALIDATION_2026-09-13_EVIDENCE.md` — P0-078 publication policy generation/revocation authority; deterministic model `project_tools/test_p0_078_publication_generation_revocation_model.js` (PR #247).
 - `RESEARCH_P0_079_OPERATION_OWNED_PDF_CACHE_REVALIDATION_2026-09-13_EVIDENCE.md` — P0-079 operation-owned immutable PDF byte generation for Yandex upload/retry; deterministic model `project_tools/test_p0_079_operation_owned_pdf_cache_model.js` (PR #248).
 - `RESEARCH_P0_080_SPA_APPLICATION_GENERATION_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-080 same-document SPA/application generation and live-selection authority; deterministic model `project_tools/test_p0_080_spa_application_generation_revalidation_model.js`.
+- `RESEARCH_P0_070_END_TO_END_SOURCE_GENERATION_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-070 end-to-end exact source-document/application generation authority from save admission through print and downstream lineage; deterministic model `project_tools/test_p0_070_end_to_end_source_generation_revalidation_model.js`.
 
 ### Selection, scope and frame topology
 
@@ -62,7 +63,7 @@ These files are fresh-current-source owner/coverage evidence added after the old
 
 - `RESEARCH_FULL_RESTART_C16_SAME_ORIGIN_IFRAME_2026-09-02.md` — fresh exact-source C16 physical evidence for ordinary/nested same-origin selections and the P1-150 `200000px` stabilization-boundary finding.
 - `RESEARCH_CAPTURE_ADMISSION_RESOURCE_FIDELITY_EVIDENCE_2026-08-29.md`
-- `RESEARCH_COMPLEX_LAYOUT_FRAME_PROXY_FIDELITY_EVIDENCE_2026-08-29.md`
+- `RESEARCH_COMPLEX_LAYOUT_FRAME_PROXY_FIDELITY_EVIDENCE.md`
 - `RESEARCH_CAPTURE_REPRESENTATION_DEPENDENCY_EVIDENCE.md`
 - `RESEARCH_REMOTE_FRAME_PRINT_MEDIA_GEOMETRY_2026-08-30_EVIDENCE.md`
 - `RESEARCH_SELECTED_ONLY_CASCADE_AUTHORITY_2026-08-30_EVIDENCE.md`
