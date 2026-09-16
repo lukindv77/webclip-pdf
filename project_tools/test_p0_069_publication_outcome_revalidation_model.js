@@ -3,25 +3,28 @@
 const assert = require('node:assert/strict');
 
 let checks = 0;
-function check(condition, message) {
-  checks += 1;
-  assert.ok(condition, message);
-}
+function ok(value, message) { checks += 1; assert.ok(value, message); }
+function eq(actual, expected, message) { checks += 1; assert.equal(actual, expected, message); }
 
-function currentDelete({ published, diskAction }) {
-  if (!['keep', 'trash'].includes(diskAction)) throw new Error('bad disk action');
+function currentDelete({ isYandex = true, hasPublicUrl = false, diskAction = 'keep' } = {}) {
+  if (isYandex && !['keep', 'trash'].includes(diskAction)) {
+    return { ok: false, reason: 'invalid-disk-action' };
+  }
   return {
-    localJournalDeleted: true,
+    ok: true,
     diskAction,
-    publicationOutcome: published ? 'implicit-unknown' : 'not-applicable',
+    remoteFileAction: isYandex && diskAction === 'trash' ? 'move-to-webclip-trash' : 'none',
+    localJournalDeleted: true,
+    publicationOutcome: hasPublicUrl ? 'implicit-unchanged' : 'not-applicable',
     unpublishStarted: false,
     durablePublicationCheckpoint: false
   };
 }
 
 function candidateDelete({
-  published,
-  diskAction,
+  isYandex = true,
+  hasPublicUrl = false,
+  diskAction = 'keep',
   publicationAction = '',
   exactObjectIdentity = false,
   immutableContext = false,
@@ -30,9 +33,12 @@ function candidateDelete({
   revokeSettlement = 'none',
   postStateVerified = false,
   entryCasCurrent = true
-}) {
-  if (!['keep', 'trash'].includes(diskAction)) return { ok: false, reason: 'disk-action' };
-  if (!published) {
+} = {}) {
+  if (isYandex && !['keep', 'trash'].includes(diskAction)) {
+    return { ok: false, reason: 'invalid-disk-action' };
+  }
+
+  if (!isYandex || !hasPublicUrl) {
     if (!entryCasCurrent) return { ok: false, reason: 'entry-cas' };
     return { ok: true, localJournalDeleted: true, publicationOutcome: 'not-applicable' };
   }
@@ -75,147 +81,154 @@ function candidateDelete({
   };
 }
 
-function publicationReceipt({ entryId, resourceId, publicUrl, action, settlement }) {
+function makePublicationReceipt({ entryId, resourceId, publicUrl, action, settlement }) {
   return Object.freeze({ entryId, resourceId, publicUrl, action, settlement });
 }
 
-// Current implementation admits published-entry deletion without publication settlement.
-const curKeep = currentDelete({ published: true, diskAction: 'keep' });
-check(curKeep.localJournalDeleted === true, 'current keep deletes local Journal record');
-check(curKeep.publicationOutcome === 'implicit-unknown', 'current keep has no explicit publication result');
-check(curKeep.unpublishStarted === false, 'current keep does not unpublish');
-check(curKeep.durablePublicationCheckpoint === false, 'current keep has no publication checkpoint');
+// Current implementation: keep/trash settle file placement but not publication.
+const currentKeep = currentDelete({ isYandex: true, hasPublicUrl: true, diskAction: 'keep' });
+ok(currentKeep.ok, 'current keep is admitted');
+eq(currentKeep.localJournalDeleted, true, 'current keep deletes local Journal record');
+eq(currentKeep.publicationOutcome, 'implicit-unchanged', 'current keep has no explicit publication result');
+eq(currentKeep.unpublishStarted, false, 'current keep does not start unpublish');
+eq(currentKeep.durablePublicationCheckpoint, false, 'current keep has no publication checkpoint');
 
-const curTrash = currentDelete({ published: true, diskAction: 'trash' });
-check(curTrash.localJournalDeleted === true, 'current trash deletes local Journal record');
-check(curTrash.diskAction === 'trash', 'current trash is only a file-placement action');
-check(curTrash.publicationOutcome === 'implicit-unknown', 'current trash does not prove publication outcome');
-check(curTrash.unpublishStarted === false, 'moving a file is not an explicit unpublish call');
+const currentTrash = currentDelete({ isYandex: true, hasPublicUrl: true, diskAction: 'trash' });
+ok(currentTrash.ok, 'current trash is admitted');
+eq(currentTrash.remoteFileAction, 'move-to-webclip-trash', 'current trash is a file-placement operation');
+eq(currentTrash.publicationOutcome, 'implicit-unchanged', 'current trash does not settle publication');
+eq(currentTrash.unpublishStarted, false, 'moving a file is not an explicit unpublish call');
 
-// Unpublished positive control.
-const ordinary = candidateDelete({ published: false, diskAction: 'keep', entryCasCurrent: true });
-check(ordinary.ok === true, 'unpublished entry can follow ordinary delete path');
-check(ordinary.publicationOutcome === 'not-applicable', 'unpublished entry does not invent publication work');
-check(ordinary.localJournalDeleted === true, 'unpublished entry can be removed locally');
+// Unpublished / local entries remain a positive control.
+const ordinary = candidateDelete({ isYandex: true, hasPublicUrl: false, diskAction: 'keep', entryCasCurrent: true });
+ok(ordinary.ok, 'unpublished entry can follow ordinary delete path');
+eq(ordinary.publicationOutcome, 'not-applicable', 'unpublished entry does not invent publication work');
+eq(ordinary.localJournalDeleted, true, 'unpublished entry can be removed locally');
+
+const localEntry = candidateDelete({ isYandex: false, hasPublicUrl: false, entryCasCurrent: true });
+ok(localEntry.ok, 'local-download entry needs no Yandex publication outcome');
+eq(localEntry.publicationOutcome, 'not-applicable', 'local entry is publication-neutral');
 
 // Published entries require an independent publication choice.
-const noPublicationChoice = candidateDelete({ published: true, diskAction: 'keep' });
-check(noPublicationChoice.ok === false, 'published entry cannot delete without publication choice');
-check(noPublicationChoice.reason === 'publication-choice-required', 'missing publication choice fails closed');
+const noChoice = candidateDelete({ isYandex: true, hasPublicUrl: true, diskAction: 'keep' });
+eq(noChoice.ok, false, 'published entry cannot delete without publication choice');
+eq(noChoice.reason, 'publication-choice-required', 'missing publication choice fails closed');
 
 const preserve = candidateDelete({
-  published: true,
+  isYandex: true,
+  hasPublicUrl: true,
   diskAction: 'keep',
   publicationAction: 'preserve',
   entryCasCurrent: true
 });
-check(preserve.ok === true, 'explicit preserve is a valid outcome');
-check(preserve.publicationOutcome === 'preserved-explicitly', 'preserve is recorded explicitly');
-check(preserve.localJournalDeleted === true, 'explicit preserve can allow local deletion');
-check(preserve.durablePublicationCheckpoint === true, 'preserve must have a durable publication receipt');
+ok(preserve.ok, 'explicit preserve is a valid outcome');
+eq(preserve.publicationOutcome, 'preserved-explicitly', 'preserve is recorded explicitly');
+eq(preserve.localJournalDeleted, true, 'explicit preserve can allow local deletion');
+eq(preserve.durablePublicationCheckpoint, true, 'preserve has durable outcome receipt');
 
 const preserveTrash = candidateDelete({
-  published: true,
+  isYandex: true,
+  hasPublicUrl: true,
   diskAction: 'trash',
   publicationAction: 'preserve',
   entryCasCurrent: true
 });
-check(preserveTrash.ok === true, 'file placement and publication outcome are independent');
-check(preserveTrash.publicationOutcome === 'preserved-explicitly', 'trash does not silently redefine public access');
+ok(preserveTrash.ok, 'file placement and publication outcome are independent');
+eq(preserveTrash.publicationOutcome, 'preserved-explicitly', 'trash does not redefine public access');
 
-// Revoke requires exact identity and immutable context.
+// Revoke requires exact object identity and immutable context.
 const weakIdentity = candidateDelete({
-  published: true, diskAction: 'trash', publicationAction: 'revoke',
+  isYandex: true, hasPublicUrl: true, diskAction: 'trash', publicationAction: 'revoke',
   exactObjectIdentity: false, immutableContext: true, checkpointWritten: true,
   revokeStarted: true, revokeSettlement: 'success', postStateVerified: true
 });
-check(weakIdentity.ok === false, 'revoke rejects weak path/name identity');
-check(weakIdentity.reason === 'exact-object-required', 'P0-022 identity is required');
+eq(weakIdentity.ok, false, 'revoke rejects weak path/name identity');
+eq(weakIdentity.reason, 'exact-object-required', 'P0-022 identity is required');
 
 const mutableContext = candidateDelete({
-  published: true, diskAction: 'trash', publicationAction: 'revoke',
+  isYandex: true, hasPublicUrl: true, diskAction: 'trash', publicationAction: 'revoke',
   exactObjectIdentity: true, immutableContext: false, checkpointWritten: true,
   revokeStarted: true, revokeSettlement: 'success', postStateVerified: true
 });
-check(mutableContext.ok === false, 'revoke rejects mutable account/root context');
-check(mutableContext.reason === 'immutable-context-required', 'P0-074 context is required');
+eq(mutableContext.ok, false, 'revoke rejects mutable account/root context');
+eq(mutableContext.reason, 'immutable-context-required', 'P0-074 context is required');
 
 const noCheckpoint = candidateDelete({
-  published: true, diskAction: 'trash', publicationAction: 'revoke',
+  isYandex: true, hasPublicUrl: true, diskAction: 'trash', publicationAction: 'revoke',
   exactObjectIdentity: true, immutableContext: true, checkpointWritten: false,
   revokeStarted: true, revokeSettlement: 'success', postStateVerified: true
 });
-check(noCheckpoint.ok === false, 'revoke requires durable intent before side effect');
-check(noCheckpoint.reason === 'checkpoint-required', 'checkpoint omission fails closed');
+eq(noCheckpoint.ok, false, 'revoke requires durable intent before side effect');
+eq(noCheckpoint.reason, 'checkpoint-required', 'checkpoint omission fails closed');
 
 const noRevoke = candidateDelete({
-  published: true, diskAction: 'trash', publicationAction: 'revoke',
+  isYandex: true, hasPublicUrl: true, diskAction: 'trash', publicationAction: 'revoke',
   exactObjectIdentity: true, immutableContext: true, checkpointWritten: true,
   revokeStarted: false, revokeSettlement: 'none', postStateVerified: false
 });
-check(noRevoke.ok === false, 'requested revoke cannot be replaced by file movement');
-check(noRevoke.reason === 'revoke-not-started', 'explicit unpublish/revoke must start');
+eq(noRevoke.ok, false, 'requested revoke cannot be replaced by file movement');
+eq(noRevoke.reason, 'revoke-not-started', 'explicit unpublish/revoke must start');
 
 const unknown = candidateDelete({
-  published: true, diskAction: 'trash', publicationAction: 'revoke',
+  isYandex: true, hasPublicUrl: true, diskAction: 'trash', publicationAction: 'revoke',
   exactObjectIdentity: true, immutableContext: true, checkpointWritten: true,
   revokeStarted: true, revokeSettlement: 'unknown', postStateVerified: false
 });
-check(unknown.ok === false, 'unknown revoke settlement is not success');
-check(unknown.reason === 'revoke-unknown', 'unknown outcome is classified');
-check(unknown.pendingRecovery === true, 'unknown outcome remains recoverable');
-check(unknown.localJournalDeleted === false, 'control record is not discarded on unknown settlement');
+eq(unknown.ok, false, 'unknown revoke settlement is not success');
+eq(unknown.reason, 'revoke-unknown', 'unknown outcome is classified');
+eq(unknown.pendingRecovery, true, 'unknown outcome remains recoverable');
+eq(unknown.localJournalDeleted, false, 'control record is not discarded on unknown settlement');
 
 const failed = candidateDelete({
-  published: true, diskAction: 'keep', publicationAction: 'revoke',
+  isYandex: true, hasPublicUrl: true, diskAction: 'keep', publicationAction: 'revoke',
   exactObjectIdentity: true, immutableContext: true, checkpointWritten: true,
   revokeStarted: true, revokeSettlement: 'failed', postStateVerified: false
 });
-check(failed.ok === false, 'failed revoke blocks delete success');
-check(failed.reason === 'revoke-failed', 'failed revoke is explicit');
-check(failed.localJournalDeleted === false, 'failed revoke preserves local control state');
+eq(failed.ok, false, 'failed revoke blocks delete success');
+eq(failed.reason, 'revoke-failed', 'failed revoke is explicit');
+eq(failed.localJournalDeleted, false, 'failed revoke preserves local control state');
 
-const successWithoutVerify = candidateDelete({
-  published: true, diskAction: 'trash', publicationAction: 'revoke',
+const unverified = candidateDelete({
+  isYandex: true, hasPublicUrl: true, diskAction: 'trash', publicationAction: 'revoke',
   exactObjectIdentity: true, immutableContext: true, checkpointWritten: true,
   revokeStarted: true, revokeSettlement: 'success', postStateVerified: false
 });
-check(successWithoutVerify.ok === false, 'transport/API success alone is insufficient');
-check(successWithoutVerify.reason === 'revoke-post-state-unverified', 'public post-state must be verified');
+eq(unverified.ok, false, 'API success alone is insufficient');
+eq(unverified.reason, 'revoke-post-state-unverified', 'public post-state must be verified');
 
 const staleEntry = candidateDelete({
-  published: true, diskAction: 'trash', publicationAction: 'revoke',
+  isYandex: true, hasPublicUrl: true, diskAction: 'trash', publicationAction: 'revoke',
   exactObjectIdentity: true, immutableContext: true, checkpointWritten: true,
   revokeStarted: true, revokeSettlement: 'success', postStateVerified: true,
   entryCasCurrent: false
 });
-check(staleEntry.ok === false, 'late revoke cannot delete replacement Journal entry');
-check(staleEntry.reason === 'entry-cas', 'P0-076 CAS still gates local mutation');
+eq(staleEntry.ok, false, 'late revoke cannot delete replacement Journal entry');
+eq(staleEntry.reason, 'entry-cas', 'P0-076 CAS still gates local mutation');
 
 const revoked = candidateDelete({
-  published: true, diskAction: 'trash', publicationAction: 'revoke',
+  isYandex: true, hasPublicUrl: true, diskAction: 'trash', publicationAction: 'revoke',
   exactObjectIdentity: true, immutableContext: true, checkpointWritten: true,
   revokeStarted: true, revokeSettlement: 'success', postStateVerified: true,
   entryCasCurrent: true
 });
-check(revoked.ok === true, 'verified revoke can complete');
-check(revoked.publicationOutcome === 'revoked-verified', 'verified revoke has explicit outcome');
-check(revoked.localJournalDeleted === true, 'local deletion happens only after settlement and CAS');
-check(revoked.durablePublicationCheckpoint === true, 'revoke retains durable receipt');
+ok(revoked.ok, 'verified revoke can complete');
+eq(revoked.publicationOutcome, 'revoked-verified', 'verified revoke has explicit outcome');
+eq(revoked.localJournalDeleted, true, 'local deletion happens after settlement and CAS');
+eq(revoked.durablePublicationCheckpoint, true, 'revoke retains durable receipt');
 
-const receipt = publicationReceipt({
+const receipt = makePublicationReceipt({
   entryId: 'journal-1', resourceId: 'resource-1', publicUrl: 'https://example.invalid/public-capability',
   action: 'revoke', settlement: 'success'
 });
-check(Object.isFrozen(receipt), 'publication receipt is immutable');
-check(receipt.entryId === 'journal-1', 'receipt binds Journal entry');
-check(receipt.resourceId === 'resource-1', 'receipt binds exact remote object');
-check(receipt.action === 'revoke', 'receipt binds requested publication action');
-check(receipt.settlement === 'success', 'receipt binds external settlement');
+ok(Object.isFrozen(receipt), 'publication receipt is immutable');
+eq(receipt.entryId, 'journal-1', 'receipt binds Journal entry');
+eq(receipt.resourceId, 'resource-1', 'receipt binds exact remote object');
+eq(receipt.action, 'revoke', 'receipt binds requested publication action');
+eq(receipt.settlement, 'success', 'receipt binds external settlement');
 
 // Publish, unpublish and path movement are distinct authorities.
 const actions = new Set(['publish', 'unpublish', 'move']);
-check(actions.size === 3, 'publish/unpublish/move are distinct operations');
-check(actions.has('unpublish'), 'explicit unpublish authority exists as its own concept');
+eq(actions.size, 3, 'publish/unpublish/move are distinct operations');
+ok(actions.has('unpublish'), 'explicit unpublish authority exists as its own concept');
 
 console.log(`P0-069 publication-outcome model: PASS ${checks} checks`);
