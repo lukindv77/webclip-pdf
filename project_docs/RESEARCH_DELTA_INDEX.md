@@ -32,7 +32,7 @@ Eight older staged families were already present outside that cleanup set when t
 
 ## Supplemental durable evidence
 
-### 2026-09-12/13/16/17 closure-oriented revalidation tranche
+### 2026-09-12/13/16 closure-oriented revalidation tranche
 
 These files are fresh-current-source owner/coverage evidence added after the older family consolidation. They are listed here for navigation only: `RESEARCH_REGISTRY.md` still controls current owner/status, and none of these pointers by itself implies implementation closure or release readiness.
 
