@@ -32,7 +32,7 @@ Eight older staged families were already present outside that cleanup set when t
 
 ## Supplemental durable evidence
 
-### 2026-09-12/13 closure-oriented revalidation tranche
+### 2026-09-12/13/16 closure-oriented revalidation tranche
 
 These files are fresh-current-source owner/coverage evidence added after the older family consolidation. They are listed here for navigation only: `RESEARCH_REGISTRY.md` still controls current owner/status, and none of these pointers by itself implies implementation closure or release readiness.
 
@@ -46,6 +46,7 @@ These files are fresh-current-source owner/coverage evidence added after the old
 - `RESEARCH_P0_073_REMOTE_RECOVERY_NAMESPACE_BINDING_REVALIDATION_2026-09-13_EVIDENCE.md` — P0-073 restart recovery bound to the exact account/root namespace; deterministic model `project_tools/test_p0_073_remote_recovery_namespace_binding_model.js` (PR #246).
 - `RESEARCH_P0_078_PUBLICATION_GENERATION_REVOCATION_REVALIDATION_2026-09-13_EVIDENCE.md` — P0-078 publication policy generation/revocation authority; deterministic model `project_tools/test_p0_078_publication_generation_revocation_model.js` (PR #247).
 - `RESEARCH_P0_079_OPERATION_OWNED_PDF_CACHE_REVALIDATION_2026-09-13_EVIDENCE.md` — P0-079 operation-owned immutable PDF byte generation for Yandex upload/retry; deterministic model `project_tools/test_p0_079_operation_owned_pdf_cache_model.js` (PR #248).
+- `RESEARCH_P0_080_SPA_APPLICATION_GENERATION_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-080 same-document SPA/application generation and live-selection authority; deterministic model `project_tools/test_p0_080_spa_application_generation_revalidation_model.js`.
 
 ### Selection, scope and frame topology
 
