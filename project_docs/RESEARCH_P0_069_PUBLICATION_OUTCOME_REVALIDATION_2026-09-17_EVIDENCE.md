@@ -106,7 +106,7 @@ Fresh Yandex documentation distinguishes sharing/publication from file deletion/
 
 - Yandex Disk sharing guidance describes a public/permanent link as continuing until access is explicitly revoked/restricted; restricting access is a distinct user action.
 - Yandex 360 business sharing guidance similarly separates creating a permanent shared link from restricting all access.
-- Yandex 360 audit-log event taxonomy distinguishes `disk_fs-set-public` from `disk_fs-set-private`; file/trash/removal events are separate event categories.
+- Yandex 360 event-log taxonomy distinguishes `disk_fs-set-public` from `disk_fs-set-private`; file/trash/removal events are separate event categories.
 - Yandex Disk documentation treats Trash/file deletion as its own lifecycle rather than as the sharing-policy operation.
 
 Therefore WebClip must not infer an exact publication result merely from a successful path move or local record deletion.
