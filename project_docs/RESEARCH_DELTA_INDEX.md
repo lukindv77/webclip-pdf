@@ -53,6 +53,7 @@ These files are fresh-current-source owner/coverage evidence added after the old
 - `RESEARCH_P0_045_INCOGNITO_ISOLATION_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-045 Incognito fail-closed isolation across Action, contextual popup and optional frame-permission capability paths; deterministic model `project_tools/test_p0_045_incognito_isolation_revalidation_model.js`.
 - `RESEARCH_P0_066_DURABLE_URL_CONFIDENTIALITY_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-066 unified durable/display URL confidentiality across source, locator, import and public-capability metadata; deterministic model `project_tools/test_p0_066_durable_url_confidentiality_revalidation_model.js`.
 - `RESEARCH_P0_013_SELECTED_BACKUP_AUTHORITY_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-013 exact selected-Yandex-backup object authority from picker receipt through remote revalidation and staged `contentSha256`; deterministic model `project_tools/test_p0_013_selected_backup_receipt_revalidation_model.js`.
+- `RESEARCH_P0_069_PUBLICATION_OUTCOME_REVALIDATION_2026-09-17_EVIDENCE.md` — P0-069 explicit publication preserve/revoke outcome when deleting a Journal entry for a published Yandex object; deterministic model `project_tools/test_p0_069_publication_outcome_revalidation_model.js`.
 
 ### Selection, scope and frame topology
 
