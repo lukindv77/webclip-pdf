@@ -51,6 +51,7 @@ These files are fresh-current-source owner/coverage evidence added after the old
 - `RESEARCH_P0_023_RETRY_SOURCE_DOCUMENT_GENERATION_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-023 exact source-document generation binding for current-page cached-PDF retry/download after same-URL reload/replacement; deterministic model `project_tools/test_p0_023_retry_source_document_generation_revalidation_model.js`.
 - `RESEARCH_P0_075_HOST_PAGE_CONTROL_PLANE_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-075 host-page control-plane isolation for sensitive input, trusted user authorization and extension-held selection/print authority; deterministic model `project_tools/test_p0_075_host_page_control_plane_revalidation_model.js`.
 - `RESEARCH_P0_045_INCOGNITO_ISOLATION_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-045 Incognito fail-closed isolation across Action, contextual popup and optional frame-permission capability paths; deterministic model `project_tools/test_p0_045_incognito_isolation_revalidation_model.js`.
+- `RESEARCH_P0_066_DURABLE_URL_CONFIDENTIALITY_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-066 unified durable/display URL confidentiality across source, locator, import and public-capability metadata; deterministic model `project_tools/test_p0_066_durable_url_confidentiality_revalidation_model.js`.
 
 ### Selection, scope and frame topology
 
