@@ -48,6 +48,7 @@ These files are fresh-current-source owner/coverage evidence added after the old
 - `RESEARCH_P0_079_OPERATION_OWNED_PDF_CACHE_REVALIDATION_2026-09-13_EVIDENCE.md` — P0-079 operation-owned immutable PDF byte generation for Yandex upload/retry; deterministic model `project_tools/test_p0_079_operation_owned_pdf_cache_model.js` (PR #248).
 - `RESEARCH_P0_080_SPA_APPLICATION_GENERATION_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-080 same-document SPA/application generation and live-selection authority; deterministic model `project_tools/test_p0_080_spa_application_generation_revalidation_model.js`.
 - `RESEARCH_P0_070_END_TO_END_SOURCE_GENERATION_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-070 end-to-end exact source-document/application generation authority from save admission through print and downstream lineage; deterministic model `project_tools/test_p0_070_end_to_end_source_generation_revalidation_model.js`.
+- `RESEARCH_P0_023_RETRY_SOURCE_DOCUMENT_GENERATION_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-023 exact source-document generation binding for current-page cached-PDF retry/download after same-URL reload/replacement; deterministic model `project_tools/test_p0_023_retry_source_document_generation_revalidation_model.js`.
 
 ### Selection, scope and frame topology
 
