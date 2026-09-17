@@ -1,12 +1,14 @@
 (() => {
   'use strict';
 
-  const INSTALL_MARKER = '__webclipApplicationGenerationTrackerV2';
+  const INSTALL_MARKER = '__webclipApplicationGenerationTrackerV3';
   const DEFAULT_POLL_MS = 250;
   const HISTORY_EVENT = 'webclip-pdf:application-history-transition';
   const INCLUDE_ATTR = 'data-webclip-pdf-include';
   const EXCLUDE_ATTR = 'data-webclip-pdf-exclude';
   const SAVE_MESSAGE_TYPES = new Set(['WEBCLIP_GENERATE_PDF', 'WEBCLIP_SEND_PDF_TO_YANDEX']);
+  const CONFIRMATION_COMMANDS = new Set(['finish', 'download', 'yandex']);
+  const IMMEDIATE_ADMISSION_COMMANDS = new Set(['start', 'clear', 'auto-content', 'read-later']);
 
   function normalizeHref(value) {
     try {
@@ -130,14 +132,46 @@
     const observedDocuments = new WeakSet();
     const observers = [];
     let currentDocuments = new Set();
+    let selectionRevision = 1;
+    let pendingConfirmation = null;
 
     const isSelected = (element) => {
       try { return Boolean(element?.hasAttribute?.(INCLUDE_ATTR) || element?.hasAttribute?.(EXCLUDE_ATTR)); } catch (_) { return false; }
     };
 
+    function selectedAttributeState(element) {
+      let include = null;
+      let exclude = null;
+      try { include = element?.getAttribute?.(INCLUDE_ATTR); } catch (_) { include = null; }
+      try { exclude = element?.getAttribute?.(EXCLUDE_ATTR); } catch (_) { exclude = null; }
+      return Object.freeze({
+        include: include == null ? null : String(include),
+        exclude: exclude == null ? null : String(exclude)
+      });
+    }
+
+    function sameAttributeState(receipt, element) {
+      if (!receipt) return false;
+      const state = selectedAttributeState(element);
+      return receipt.includeValue === state.include && receipt.excludeValue === state.exclude;
+    }
+
+    function invalidateConfirmation() {
+      if (pendingConfirmation && !pendingConfirmation.invalidated) {
+        pendingConfirmation = Object.freeze({ ...pendingConfirmation, invalidated: true });
+      }
+    }
+
+    function bumpSelectionRevision() {
+      selectionRevision = selectionRevision >= Number.MAX_SAFE_INTEGER ? 1 : selectionRevision + 1;
+      invalidateConfirmation();
+    }
+
     function clearReceipt(element) {
+      const had = receipts.has(element) || tracked.has(element);
       receipts.delete(element);
       tracked.delete(element);
+      if (had) bumpSelectionRevision();
     }
 
     function stamp(element, reason = 'selection-mutation') {
@@ -146,8 +180,21 @@
         return;
       }
       tracker.observe(reason);
-      receipts.set(element, tracker.receipt());
+      const generationReceipt = tracker.receipt();
+      const state = selectedAttributeState(element);
+      const previous = receipts.get(element);
+      const changed = !previous
+        || Number(previous.generation || 0) !== Number(generationReceipt.generation || 0)
+        || normalizeHref(previous.href) !== normalizeHref(generationReceipt.href)
+        || previous.includeValue !== state.include
+        || previous.excludeValue !== state.exclude;
+      receipts.set(element, Object.freeze({
+        ...generationReceipt,
+        includeValue: state.include,
+        excludeValue: state.exclude
+      }));
       tracked.add(element);
+      if (changed) bumpSelectionRevision();
     }
 
     function patchDocument(doc) {
@@ -196,7 +243,14 @@
         for (const mutation of mutations || []) {
           if (mutation?.type === 'attributes') {
             const element = mutation.target;
-            if (!isSelected(element)) clearReceipt(element);
+            if (!isSelected(element)) {
+              clearReceipt(element);
+            } else if (receipts.has(element) && !sameAttributeState(receipts.get(element), element)) {
+              // A selected DOM marker changed without passing through the isolated-world
+              // WebClip hooks (for example a page-world mutation). Do not restamp it as
+              // current authority; remove the receipt so save admission fails closed.
+              clearReceipt(element);
+            }
           } else if (mutation?.type === 'childList') {
             refresh = true;
           }
@@ -250,7 +304,51 @@
         ok: true,
         receipt: Object.freeze({
           applicationGeneration: current,
+          selectionRevision,
           selectedCount: Number(result.selectedCount || 0)
+        })
+      });
+    }
+
+    function captureConfirmation() {
+      const result = admit();
+      if (!result.ok) {
+        pendingConfirmation = Object.freeze({ invalidated: true, rejectedCode: result.code || 'WEBCLIP_SELECTION_GENERATION_REJECTED' });
+        return result;
+      }
+      pendingConfirmation = Object.freeze({
+        invalidated: false,
+        applicationGeneration: result.receipt.applicationGeneration,
+        selectionRevision: result.receipt.selectionRevision,
+        selectedCount: result.receipt.selectedCount
+      });
+      return Object.freeze({ ok: true, receipt: pendingConfirmation });
+    }
+
+    function clearConfirmation() {
+      pendingConfirmation = null;
+    }
+
+    function admitForSave() {
+      const current = admit();
+      if (!current.ok) return current;
+      if (!pendingConfirmation) return current;
+      const same = !pendingConfirmation.invalidated
+        && tracker.matches(pendingConfirmation.applicationGeneration)
+        && Number(pendingConfirmation.selectionRevision || 0) === Number(current.receipt.selectionRevision || 0)
+        && Number(pendingConfirmation.selectedCount || 0) === Number(current.receipt.selectedCount || 0);
+      if (!same) {
+        return Object.freeze({
+          ok: false,
+          code: 'WEBCLIP_SAVE_CONFIRMATION_STALE',
+          reason: 'Selection changed after save confirmation. Confirm the current selection again.'
+        });
+      }
+      return Object.freeze({
+        ok: true,
+        receipt: Object.freeze({
+          ...current.receipt,
+          confirmedSelectionRevision: pendingConfirmation.selectionRevision
         })
       });
     }
@@ -259,6 +357,9 @@
 
     return Object.freeze({
       admit,
+      admitForSave,
+      captureConfirmation,
+      clearConfirmation,
       stamp,
       refreshDocuments,
       dispose() {
@@ -279,7 +380,7 @@
       const message = messageIndex >= 0 ? args[messageIndex] : null;
       if (!message || !SAVE_MESSAGE_TYPES.has(String(message.type || ''))) return rawSendMessage(...args);
 
-      const result = admission.admit();
+      const result = typeof admission.admitForSave === 'function' ? admission.admitForSave() : admission.admit();
       if (!result.ok) {
         const failure = createSaveFailure(result);
         const callback = typeof args[args.length - 1] === 'function' ? args[args.length - 1] : null;
@@ -313,6 +414,23 @@
     }
     if (!installed) throw new Error('P0-080: failed to install save-generation admission gate.');
     return { installed: true };
+  }
+
+  function installConfirmationCommandObserver(chromeApi, admission) {
+    const event = chromeApi?.runtime?.onMessage;
+    if (!event || typeof event.addListener !== 'function') return { installed: false, reason: 'chrome.runtime.onMessage unavailable' };
+    const listener = (message) => {
+      if (message?.type !== 'WEBCLIP_COMMAND') return false;
+      const command = String(message.command || '');
+      if (CONFIRMATION_COMMANDS.has(command)) {
+        admission.captureConfirmation();
+      } else if (IMMEDIATE_ADMISSION_COMMANDS.has(command)) {
+        admission.clearConfirmation();
+      }
+      return false;
+    };
+    event.addListener(listener);
+    return Object.freeze({ installed: true, listener });
   }
 
   function install(win = globalThis, options = {}) {
@@ -349,6 +467,7 @@
     try { timer = win.setInterval(() => observe('url-poll'), pollMs); } catch (_) { timer = 0; }
 
     const selectionAdmission = installSelectionAdmission(win, tracker);
+    const confirmationObserver = installConfirmationCommandObserver(win.chrome || globalThis.chrome, selectionAdmission);
     const messageGate = installSaveMessageGate(win.chrome || globalThis.chrome, selectionAdmission);
 
     const api = Object.freeze({
@@ -357,6 +476,10 @@
       advance: tracker.advance,
       matches: tracker.matches,
       admitSelection: selectionAdmission.admit,
+      admitSave: selectionAdmission.admitForSave,
+      captureSelectionConfirmation: selectionAdmission.captureConfirmation,
+      clearSelectionConfirmation: selectionAdmission.clearConfirmation,
+      confirmationObserver,
       messageGate,
       dispose() {
         for (const [type, handler] of eventHandlers) {
@@ -364,6 +487,11 @@
         }
         try { observer?.disconnect(); } catch (_) {}
         try { selectionAdmission.dispose(); } catch (_) {}
+        try {
+          if (confirmationObserver?.listener && win.chrome?.runtime?.onMessage?.removeListener) {
+            win.chrome.runtime.onMessage.removeListener(confirmationObserver.listener);
+          }
+        } catch (_) {}
         try { if (timer) win.clearInterval(timer); } catch (_) {}
       }
     });
@@ -393,6 +521,8 @@
     INCLUDE_ATTR,
     EXCLUDE_ATTR,
     SAVE_MESSAGE_TYPES,
+    CONFIRMATION_COMMANDS,
+    IMMEDIATE_ADMISSION_COMMANDS,
     normalizeHref,
     createTracker,
     evaluateSelectionRecords,
@@ -401,6 +531,7 @@
     collectSameOriginDocuments,
     installSelectionAdmission,
     installSaveMessageGate,
+    installConfirmationCommandObserver,
     install
   });
   if (typeof module !== 'undefined' && module?.exports) module.exports = exported;
