@@ -169,7 +169,7 @@ function frameHostPermissionPattern(origin) {
 
 async function ensureTopContentScript(tabId) {
   await readPopupExtensionApiBounded(
-    () => chrome.scripting.executeScript({ target: { tabId }, files: ['frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'content.js'] }),
+    () => chrome.scripting.executeScript({ target: { tabId }, files: ['application-generation.js', 'frame-proxy-budget-guard.js', 'frame-proxy-inert-guard.js', 'content.js'] }),
     'Подключение WebClip к текущей странице'
   );
 }
