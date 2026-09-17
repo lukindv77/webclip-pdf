@@ -26,6 +26,12 @@ GitHub Actions workflow `Repository integrity` is the current automated gate for
 
 The repository-hygiene PR immediately preceding this policy change demonstrated the intended process: exact PR head CI PASS, expected-head merge, then a separate post-merge PASS on resulting `main`. That is process evidence, not a permanent current-SHA claim.
 
+## Current P0-080 implementation evidence
+
+The first bounded P0-080 implementation tranche adds the application-generation runtime primitive as a current package member. Its deterministic model proves 27 checks covering immutable generation receipts, URL-change generation advancement, unchanged-URL stability, hash/history transitions and stale-receipt mismatch. The package-topology census explicitly admits 34 current package files including `application-generation.js`.
+
+This evidence does **not** prove save admission or P0-080 closure. The primitive is intentionally not yet wired into selection/save authority in this tranche. Receipt consumption, save confirmation, disconnected/mixed selection revalidation, remote-frame/downstream generation composition, and the required real unpacked-Chrome evidence remain pending. P0-080 therefore remains **ACTIVE** and release readiness remains **NOT READY**.
+
 ## Historical product gate
 
 Before the later research/consolidation stream, the historical documented checkpoint was:

@@ -14,6 +14,7 @@ const ROOT = path.resolve(__dirname, '..');
 const PACKAGE_SCHEMA = 'webclip-extension-package/v1';
 
 const PACKAGE_ROOT_FILES = Object.freeze([
+  'application-generation.js',
   'content-injection-guard.js',
   'content.js',
   'frame-agent.js',
@@ -162,10 +163,10 @@ function provePslRegeneration() {
 }
 
 (function main() {
-  eq(PACKAGE_ROOT_FILES.length, 33, 'current package census must contain exactly 33 root files');
+  eq(PACKAGE_ROOT_FILES.length, 34, 'current package census must contain exactly 34 root files');
   eq(PACKAGE_SET.size, PACKAGE_ROOT_FILES.length, 'package list must not contain duplicates');
   eq(PACKAGE_ROOT_FILES.filter((p) => p === 'manifest.json').length, 1, 'manifest.json must appear exactly once');
-  eq(PACKAGE_ROOT_FILES.filter((p) => p.endsWith('.js')).length, 23, 'JS census drift');
+  eq(PACKAGE_ROOT_FILES.filter((p) => p.endsWith('.js')).length, 24, 'JS census drift');
   eq(PACKAGE_ROOT_FILES.filter((p) => p.endsWith('.html')).length, 5, 'HTML census drift');
   eq(PACKAGE_ROOT_FILES.filter((p) => p.endsWith('.css')).length, 4, 'CSS census drift');
 
