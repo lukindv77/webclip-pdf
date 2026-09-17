@@ -19,6 +19,7 @@ function between(s, a, b) {
 }
 const currentFunctions = between(agent, '  async function preparePrint()', '  chrome.runtime.onMessage.addListener');
 assert.doesNotMatch(currentFunctions, /printGeneration|permissionEra/);
+assert.match(currentFunctions, /admitSelectionGeneration\('remote-prepare-print'\)/, 'P0-080 application-generation admission must precede the current P1-199 print path.');
 assert.match(content, /commandMappedRemoteFrames\('prepare-print', \{\}/);
 const routing = between(worker, "case 'WEBCLIP_FRAME_AGENT_TARGET':", "case 'WEBCLIP_OFFSCREEN_IDLE_CLOSE_REQUEST':");
 assert.doesNotMatch(routing, /printGeneration|permissionEra/);
@@ -32,6 +33,7 @@ function currentHarness() {
     createElement() { return {remove() {const i = nodes.indexOf(this); if (i >= 0) nodes.splice(i, 1);}}; }
   };
   const context = vm.createContext({state, document, PRINT_STYLE_ID:'print', INCLUDE_ATTR:'include', EXCLUDE_ATTR:'exclude',
+    admitSelectionGeneration() { return {ok:true, receipt:null}; },
     prefetchSelected() {const d = deferred(); waits.push(d); return d.promise;}});
   vm.runInContext(currentFunctions + '\nthis.prepare = preparePrint; this.restore = restorePrint;', context);
   return {context, state, nodes, waits};
