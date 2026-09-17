@@ -180,10 +180,12 @@ const workerInjectionRewrite = (async function testWorkerInjectionRewrite() {
   const untouched = context.WebClipContentInjectionGuard.rewriteDetails({ target: { tabId: 9 }, files: ['frame-agent.js'] });
   assert.deepEqual(Array.from(untouched.files), ['frame-agent.js']);
   await context.chrome.scripting.executeScript({ target: { tabId: 9 }, files: ['content.js'] });
-  assert.equal(calls.length, 3, 'content bootstrap must settle MAIN signal and generation primitive before historical guard prefix');
+  assert.equal(calls.length, 4, 'content bootstrap must settle MAIN signal, generation primitive, and confirmation bridge before historical guard prefix');
   assert.equal(calls[0].world, 'MAIN', 'MAIN-world history signal must be first');
   assert.deepEqual(Array.from(calls[1].files), ['application-generation.js'], 'isolated application generation must run second');
-  assert.deepEqual(Array.from(calls[2].files), expected, 'historical P0-064/P0-067/P0-068 guard prefix remains the final content injection');
+  assert.equal(calls[2].world, 'ISOLATED', 'selection confirmation bridge must stay in isolated world');
+  assert.equal(typeof calls[2].func, 'function', 'selection confirmation bridge must be a bounded injected function');
+  assert.deepEqual(Array.from(calls[3].files), expected, 'historical P0-064/P0-067/P0-068 guard prefix remains the final content injection');
 })();
 
 (function testRepositoryWiringAndSingleCloneBoundary() {
