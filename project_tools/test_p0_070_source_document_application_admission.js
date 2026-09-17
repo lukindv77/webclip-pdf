@@ -38,8 +38,6 @@ function sender(documentId = 'doc-A', frameId = 0) {
 }
 
 (async () => {
-  // Pure admission normalization keeps browser document identity and
-  // same-document application generation as distinct fields.
   const normalized = guard.normalizeWorkerSaveAdmission(message(), sender(), 1234);
   eq(normalized.operationId, 'op-1', 'operation identity retained');
   eq(normalized.tabId, 17, 'tab identity retained');
@@ -161,13 +159,13 @@ function sender(documentId = 'doc-A', frameId = 0) {
   );
   now = 20_000;
 
-  // Wrapper composition: admission is consumed once, render is checked both
-  // before and after Page.printToPDF, and diagnostics target exact documentId.
   let rawBlobCalls = 0;
   let rawDiagnosticsCalls = 0;
+  let mutateDuringRawBlob = false;
   const host = {
     async generatePdfBlob(tabId) {
       rawBlobCalls += 1;
+      if (mutateDuringRawBlob) currentGeneration = 6;
       return { size: 111, tabId };
     },
     async collectPrintDiagnosticsForTab() {
@@ -201,40 +199,29 @@ function sender(documentId = 'doc-A', frameId = 0) {
   eq(controller.active(17), null, 'active source receipt is retired after operation');
 
   controller.capture(message('op-race'), sender());
-  const rawBlob = host.generatePdfBlob;
-  // Replace only the underlying current-generation behavior by changing the
-  // deterministic probe state during the raw render promise.
   currentGeneration = 4;
-  const originalWrappedBlob = host.generatePdfBlob;
-  let raceRawCalls = 0;
-  host.generatePdfBlob = async function raceHarness(tabId) {
-    // Exercise the exported controller directly for the same pre/post invariant
-    // because the installed wrapper has already captured its raw function.
-    const receipt = controller.active(tabId);
-    await controller.assertCurrent(receipt);
-    raceRawCalls += 1;
-    currentGeneration = 6;
-    await rejectsCode(
-      () => controller.assertCurrent(receipt),
-      'WEBCLIP_SOURCE_APPLICATION_CHANGED',
-      'generation change during render invalidates provisional bytes'
-    );
-    throw guard.sourceGenerationError('WEBCLIP_SOURCE_APPLICATION_CHANGED', 'race');
-  };
+  mutateDuringRawBlob = true;
   await rejectsCode(
     () => host.generatePdfAndDownload(17, { title: 'A' }, 'op-race'),
     'WEBCLIP_SOURCE_APPLICATION_CHANGED',
-    'outer save does not continue after render-generation race'
+    'installed post-render fence rejects generation change during provisional render'
   );
-  eq(raceRawCalls, 1, 'race harness reached provisional render boundary once');
+  eq(rawBlobCalls, 2, 'race reaches raw PDF generation once before post-check rejection');
+  eq(tabMessages.length, 1, 'stale provisional PDF never reaches diagnostics or downstream stage');
   eq(controller.active(17), null, 'failed operation retires active source receipt');
-  host.generatePdfBlob = originalWrappedBlob;
+  mutateDuringRawBlob = false;
   currentGeneration = 4;
-  void rawBlob;
 
-  // The shared worker bootstrap must load this guard before ordinary
-  // service-worker handlers are registered, while the worker source keeps the
-  // four guarded function declarations at top level for post-bootstrap wrapping.
+  controller.capture(message('op-replace'), sender());
+  currentDocumentId = 'doc-B';
+  await rejectsCode(
+    () => host.generatePdfAndUploadToYandex(17, { title: 'A' }, 'op-replace'),
+    'WEBCLIP_SOURCE_DOCUMENT_CHANGED',
+    'replacement document is rejected before Yandex generation starts'
+  );
+  eq(rawBlobCalls, 2, 'replacement document is rejected before raw PDF bytes exist');
+  currentDocumentId = 'doc-A';
+
   const root = path.resolve(__dirname, '..');
   const bootstrap = fs.readFileSync(path.join(root, 'journal-text-filter.js'), 'utf8');
   const worker = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
