@@ -422,7 +422,7 @@ function baseReceipts(sourceSha = A) {
 
 // Canonical predecessor integration.
 test('current S0-E protocol is exact', () => assert.strictEqual(s0e.kv.protocol, 'WEBCLIP_RELEASE_IDENTITY_V1'));
-test('current S0-E RPF exact', () => assert.strictEqual(currentIds.rpf, 'sha256:1a9551f839b70410c834ba0f040b9c285de58965771a927cef2d95700c86e792'));
+test('current S0-E RPF exact', () => assert.strictEqual(currentIds.rpf, 'sha256:57a517f9af320758755dcd07c9389cfe4384503c65b452a68003d030be5534f0'));
 test('current Chrome QCF exact', () => assert.strictEqual(currentIds.qcf['unpacked-chrome'], 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c'));
 test('current Yandex QCF exact', () => assert.strictEqual(currentIds.qcf['yandex-e2e'], 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1'));
 test('current full RCF exact', () => assert.strictEqual(currentIds.rcf, 'sha256:e6119c800c60513405541bfae552f424985e13fa109e28390ae1bac7ba075f13'));

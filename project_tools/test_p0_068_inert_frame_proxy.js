@@ -152,7 +152,7 @@ function descendants(root) {
   assert.ok(guard.stats.strippedDuplicateIdentity >= 5);
 })();
 
-(function testWorkerInjectionRewrite() {
+const workerInjectionRewrite = (async function testWorkerInjectionRewrite() {
   const source = fs.readFileSync(path.join(ROOT, 'content-injection-guard.js'), 'utf8');
   const calls = [];
   const context = {
@@ -179,8 +179,11 @@ function descendants(root) {
   assert.deepEqual(Array.from(rewritten.files), expected);
   const untouched = context.WebClipContentInjectionGuard.rewriteDetails({ target: { tabId: 9 }, files: ['frame-agent.js'] });
   assert.deepEqual(Array.from(untouched.files), ['frame-agent.js']);
-  context.chrome.scripting.executeScript({ target: { tabId: 9 }, files: ['content.js'] });
-  assert.deepEqual(Array.from(calls.at(-1).files), expected);
+  await context.chrome.scripting.executeScript({ target: { tabId: 9 }, files: ['content.js'] });
+  assert.equal(calls.length, 3, 'content bootstrap must settle MAIN signal and generation primitive before historical guard prefix');
+  assert.equal(calls[0].world, 'MAIN', 'MAIN-world history signal must be first');
+  assert.deepEqual(Array.from(calls[1].files), ['application-generation.js'], 'isolated application generation must run second');
+  assert.deepEqual(Array.from(calls[2].files), expected, 'historical P0-064/P0-067/P0-068 guard prefix remains the final content injection');
 })();
 
 (function testRepositoryWiringAndSingleCloneBoundary() {
@@ -198,4 +201,9 @@ function descendants(root) {
   assert.match(content, /proxy\.appendChild\(node\.cloneNode\(true\)\)/);
 })();
 
-console.log('P0-068 / P1-213 inert flattened-frame proxy: PASS');
+workerInjectionRewrite.then(() => {
+  console.log('P0-068 / P1-213 inert flattened-frame proxy: PASS');
+}).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

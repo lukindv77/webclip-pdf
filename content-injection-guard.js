@@ -2,15 +2,21 @@
   'use strict';
 
   // Worker/popup-side admission guard for WebClip top content-script injection.
-  // Any request that injects content.js must load the flattened-frame budget,
-  // inert-clone and page-control activation guards first, in that order, in
-  // the same isolated world.
-  const INSTALL_MARKER = '__webclipContentInjectionGuardV2';
+  // Any request that injects content.js must first install the bounded MAIN-world
+  // history signal, then the isolated application-generation primitive, then the
+  // already-closed frame/control guard prefix and content.js.
+  const INSTALL_MARKER = '__webclipContentInjectionGuardV3';
+  const APPLICATION_GENERATION_FILE = 'application-generation.js';
   const BUDGET_HELPER_FILE = 'frame-proxy-budget-guard.js';
   const INERT_HELPER_FILE = 'frame-proxy-inert-guard.js';
   const HOST_CONTROL_HELPER_FILE = 'host-control-activation-guard.js';
   const CONTENT_FILE = 'content.js';
-  const REQUIRED_PREFIX = Object.freeze([BUDGET_HELPER_FILE, INERT_HELPER_FILE, HOST_CONTROL_HELPER_FILE]);
+  const HISTORY_EVENT = 'webclip-pdf:application-history-transition';
+  const REQUIRED_PREFIX = Object.freeze([
+    BUDGET_HELPER_FILE,
+    INERT_HELPER_FILE,
+    HOST_CONTROL_HELPER_FILE
+  ]);
 
   function rewriteDetails(details) {
     if (!details || typeof details !== 'object') return details;
@@ -18,6 +24,7 @@
     if (!files || !files.includes(CONTENT_FILE)) return details;
     const rewritten = [];
     for (const file of files) {
+      if (file === APPLICATION_GENERATION_FILE) continue;
       if (file === CONTENT_FILE) {
         for (const helper of REQUIRED_PREFIX) {
           if (!files.includes(helper) && !rewritten.includes(helper)) rewritten.push(helper);
@@ -26,6 +33,77 @@
       rewritten.push(file);
     }
     return { ...details, files: rewritten };
+  }
+
+  function needsGenerationBootstrap(details) {
+    return Boolean(
+      details
+      && typeof details === 'object'
+      && Array.isArray(details.files)
+      && details.files.includes(CONTENT_FILE)
+      && String(details.world || 'ISOLATED').toUpperCase() !== 'MAIN'
+      && details.target
+    );
+  }
+
+  function installHistoryBridge(eventName) {
+    const marker = '__webclipApplicationHistoryBridgeV1';
+    if (globalThis[marker]) return;
+    const signal = () => {
+      try { globalThis.dispatchEvent(new Event(eventName)); } catch (_) {}
+    };
+    for (const name of ['pushState', 'replaceState']) {
+      const raw = globalThis.history?.[name];
+      if (typeof raw !== 'function') continue;
+      const guarded = function webClipHistoryTransition(...args) {
+        const result = raw.apply(this, args);
+        signal();
+        return result;
+      };
+      try { globalThis.history[name] = guarded; } catch (_) {}
+      if (globalThis.history?.[name] !== guarded) {
+        try {
+          Object.defineProperty(globalThis.history, name, {
+            value: guarded,
+            configurable: true,
+            enumerable: false,
+            writable: true
+          });
+        } catch (_) {}
+      }
+      if (globalThis.history?.[name] !== guarded) {
+        throw new Error(`P0-080: failed to install MAIN-world ${name} generation signal.`);
+      }
+    }
+    try {
+      Object.defineProperty(globalThis, marker, {
+        value: true,
+        configurable: false,
+        enumerable: false,
+        writable: false
+      });
+    } catch (_) { globalThis[marker] = true; }
+  }
+
+  function historyBridgeDetails(details) {
+    return {
+      target: details.target,
+      world: 'MAIN',
+      func: installHistoryBridge,
+      args: [HISTORY_EVENT]
+    };
+  }
+
+  function applicationGenerationDetails(details) {
+    const generationDetails = {
+      target: details.target,
+      world: 'ISOLATED',
+      files: [APPLICATION_GENERATION_FILE]
+    };
+    if (Object.prototype.hasOwnProperty.call(details, 'injectImmediately')) {
+      generationDetails.injectImmediately = Boolean(details.injectImmediately);
+    }
+    return generationDetails;
   }
 
   function install(chromeApi = globalThis.chrome) {
@@ -37,8 +115,31 @@
     const rawExecuteScript = scripting.executeScript.bind(scripting);
     const guardedExecuteScript = function guardedWebClipExecuteScript(details, callback) {
       const rewritten = rewriteDetails(details);
-      if (typeof callback === 'function') return rawExecuteScript(rewritten, callback);
-      return rawExecuteScript(rewritten);
+      if (!needsGenerationBootstrap(details)) {
+        if (typeof callback === 'function') return rawExecuteScript(rewritten, callback);
+        return rawExecuteScript(rewritten);
+      }
+
+      const bridge = historyBridgeDetails(details);
+      const generation = applicationGenerationDetails(details);
+      if (typeof callback === 'function') {
+        return rawExecuteScript(bridge, () => {
+          if (chromeApi?.runtime?.lastError) {
+            callback(undefined);
+            return;
+          }
+          rawExecuteScript(generation, () => {
+            if (chromeApi?.runtime?.lastError) {
+              callback(undefined);
+              return;
+            }
+            rawExecuteScript(rewritten, callback);
+          });
+        });
+      }
+      return Promise.resolve(rawExecuteScript(bridge))
+        .then(() => rawExecuteScript(generation))
+        .then(() => rawExecuteScript(rewritten));
     };
     let installed = false;
     try {
@@ -56,20 +157,28 @@
         installed = scripting.executeScript === guardedExecuteScript;
       } catch (_) {}
     }
-    if (!installed) throw new Error('P0-064/P0-068/P0-067: failed to install content injection guard.');
+    if (!installed) throw new Error('P0-064/P0-068/P0-067/P0-080: failed to install content injection guard.');
     globalThis[INSTALL_MARKER] = true;
     return { installed: true };
   }
 
-  globalThis.WebClipContentInjectionGuard = Object.freeze({
+  const exported = Object.freeze({
+    APPLICATION_GENERATION_FILE,
     BUDGET_HELPER_FILE,
     INERT_HELPER_FILE,
     HOST_CONTROL_HELPER_FILE,
     CONTENT_FILE,
+    HISTORY_EVENT,
     REQUIRED_PREFIX,
     rewriteDetails,
+    needsGenerationBootstrap,
+    installHistoryBridge,
+    historyBridgeDetails,
+    applicationGenerationDetails,
     install
   });
+  globalThis.WebClipContentInjectionGuard = exported;
+  if (typeof module !== 'undefined' && module?.exports) module.exports = exported;
 
   install();
 })();
