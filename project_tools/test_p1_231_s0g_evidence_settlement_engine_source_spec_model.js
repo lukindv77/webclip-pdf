@@ -420,7 +420,6 @@ function baseReceipts(sourceSha = A) {
   ];
 }
 
-// Canonical predecessor integration.
 test('current S0-E protocol is exact', () => assert.strictEqual(s0e.kv.protocol, 'WEBCLIP_RELEASE_IDENTITY_V1'));
 test('current S0-E RPF exact', () => assert.strictEqual(currentIds.rpf, 'sha256:6e4819c11d1ff5f8cb63071cc9e7c1330363dcf877fce9ff05cf1f60df7668db'));
 test('current Chrome QCF exact', () => assert.strictEqual(currentIds.qcf['unpacked-chrome'], 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c'));
@@ -470,7 +469,7 @@ test('old conceptual v1 is not v2 receipt', () => {
   const r = { ...validChrome, schema: 'webclip-release-evidence/v1' };
   assert(validateReceipt(r).includes('schema'));
 });
-test('historical prose is not receipt object', () => assert(validateReceipt('TEST_EVIDENCE row').includes('receipt-object'));
+test('historical prose is not receipt object', () => assert(validateReceipt('TEST_EVIDENCE row').includes('receipt-object'))));
 
 for (const [name, mutate, expected] of [
   ['bad id empty', (r) => { r.receiptId = ''; }, 'receipt-id'],
