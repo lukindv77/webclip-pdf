@@ -45,6 +45,12 @@ Current focused C44 evidence adds real unpacked Chrome `152.0.7977.54` local Jou
 
 None of these substitutes for the final release browser/service gate below.
 
+## Current P0-080 implementation tranche
+
+The current P0-080 implementation tranche adds a same-document application-generation guard ahead of the existing content script, observes top-frame History/fragment navigation through `webNavigation`, and fences `finish`, `download`, `yandex` plus the privileged fresh-PDF messages against stale/disconnected selection authority. `project_tools/test_p0_080_local_generation_guard_model.js` deterministically covers unchanged live selection, route A→B, same-URL DOM detachment, selection mutation after confirmation, A→B→A traversal, and a same-URL state-only navigation control.
+
+This is **partial implementation evidence, not P0-080 closure**. Real unpacked-Chrome execution must still prove the extension API binding composition, SPA/history delivery, representative same-URL DOM replacement, remote-frame composition, and the downstream P0-070/P0-023/P0-079 generation handoff before the owner can close. The manifest version remains `0.9.8` and release readiness remains `NOT READY`.
+
 ## Release readiness
 
 `project_docs/RELEASE_READINESS.md` is the machine-readable current declaration. Current state is intentionally **NOT READY**.
