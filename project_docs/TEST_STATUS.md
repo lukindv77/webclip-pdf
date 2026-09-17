@@ -28,9 +28,13 @@ The repository-hygiene PR immediately preceding this policy change demonstrated 
 
 ## Current P0-080 implementation evidence
 
-The first bounded P0-080 implementation tranche adds the application-generation runtime primitive as a current package member. Its deterministic model proves 27 checks covering immutable generation receipts, URL-change generation advancement, unchanged-URL stability, hash/history transitions and stale-receipt mismatch. The package-topology census explicitly admits 34 current package files including `application-generation.js`.
+P0-080 is being implemented in bounded application-generation tranches while keeping same-document application generation distinct from browser `documentId` identity.
 
-This evidence does **not** prove save admission or P0-080 closure. The primitive is intentionally not yet wired into selection/save authority in this tranche. Receipt consumption, save confirmation, disconnected/mixed selection revalidation, remote-frame/downstream generation composition, and the required real unpacked-Chrome evidence remain pending. P0-080 therefore remains **ACTIVE** and release readiness remains **NOT READY**.
+The first tranche (PR #262) added `application-generation.js` as a current package member and proved the standalone application-generation primitive. The next durable tranche (PR #263) wired that primitive into production content bootstrap and save admission: WebClip-selected same-origin DOM carries application-generation receipts; `WEBCLIP_GENERATE_PDF` and `WEBCLIP_SEND_PDF_TO_YANDEX` are revalidated immediately before privileged dispatch; detached, untracked, mixed-generation and stale-generation local selection authority fails closed. PR #263 was expected-head squash-merged as `51838511f8869cb80aaa9199ed00a5a809907637`, and post-merge Repository Integrity run `35239611224` / job `105264352083` completed successfully on that exact `main` SHA.
+
+Current source additionally binds manual save confirmation to an exact live selection revision and revalidates that revision at privileged dispatch. External `finish` / `download` / `yandex` commands and the internal WebClip Finish control capture confirmation authority; later selection mutation, detachment, application-generation change, mixed-generation state or an unobserved page-world selected-marker mutation cannot silently inherit that confirmation. Automatic `read-later` remains an immediate-admission path rather than inheriting an old dialog confirmation.
+
+This evidence still does **not** close P0-080. Cross-origin/remote-frame browser-document and application-generation composition, downstream operation/document-generation handoff, and required real unpacked-Chrome navigation/reload/SPA evidence remain pending. P0-080 therefore remains **ACTIVE** and release readiness remains **NOT READY**.
 
 ## Historical product gate
 
