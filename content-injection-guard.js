@@ -5,7 +5,7 @@
   // Any request that injects content.js must first install the bounded MAIN-world
   // history signal, then the isolated application-generation primitive, then the
   // already-closed frame/control guard prefix and content.js.
-  const INSTALL_MARKER = '__webclipContentInjectionGuardV3';
+  const INSTALL_MARKER = '__webclipContentInjectionGuardV4';
   const APPLICATION_GENERATION_FILE = 'application-generation.js';
   const BUDGET_HELPER_FILE = 'frame-proxy-budget-guard.js';
   const INERT_HELPER_FILE = 'frame-proxy-inert-guard.js';
@@ -85,6 +85,35 @@
     } catch (_) { globalThis[marker] = true; }
   }
 
+  function installInternalConfirmationBridge() {
+    const marker = '__webclipInternalConfirmationBridgeV1';
+    if (globalThis[marker]) return;
+    const listener = (event) => {
+      let path = [];
+      try { path = typeof event?.composedPath === 'function' ? event.composedPath() : []; } catch (_) { path = []; }
+      if (!Array.isArray(path) || !path.length) return;
+      let hasWebClipHost = false;
+      let isFinish = false;
+      for (const node of path) {
+        try {
+          if (node?.id === 'webclip-pdf-extension-root') hasWebClipHost = true;
+          if (node?.getAttribute?.('data-action') === 'finish') isFinish = true;
+        } catch (_) {}
+      }
+      if (!hasWebClipHost || !isFinish) return;
+      try { globalThis.WebClipApplicationGeneration?.captureSelectionConfirmation?.(); } catch (_) {}
+    };
+    globalThis.document?.addEventListener?.('click', listener, true);
+    try {
+      Object.defineProperty(globalThis, marker, {
+        value: true,
+        configurable: false,
+        enumerable: false,
+        writable: false
+      });
+    } catch (_) { globalThis[marker] = true; }
+  }
+
   function historyBridgeDetails(details) {
     return {
       target: details.target,
@@ -106,6 +135,18 @@
     return generationDetails;
   }
 
+  function confirmationBridgeDetails(details) {
+    const bridgeDetails = {
+      target: details.target,
+      world: 'ISOLATED',
+      func: installInternalConfirmationBridge
+    };
+    if (Object.prototype.hasOwnProperty.call(details, 'injectImmediately')) {
+      bridgeDetails.injectImmediately = Boolean(details.injectImmediately);
+    }
+    return bridgeDetails;
+  }
+
   function install(chromeApi = globalThis.chrome) {
     if (globalThis[INSTALL_MARKER]) return { installed: true, alreadyInstalled: true };
     const scripting = chromeApi?.scripting;
@@ -122,6 +163,7 @@
 
       const bridge = historyBridgeDetails(details);
       const generation = applicationGenerationDetails(details);
+      const confirmation = confirmationBridgeDetails(details);
       if (typeof callback === 'function') {
         return rawExecuteScript(bridge, () => {
           if (chromeApi?.runtime?.lastError) {
@@ -133,12 +175,19 @@
               callback(undefined);
               return;
             }
-            rawExecuteScript(rewritten, callback);
+            rawExecuteScript(confirmation, () => {
+              if (chromeApi?.runtime?.lastError) {
+                callback(undefined);
+                return;
+              }
+              rawExecuteScript(rewritten, callback);
+            });
           });
         });
       }
       return Promise.resolve(rawExecuteScript(bridge))
         .then(() => rawExecuteScript(generation))
+        .then(() => rawExecuteScript(confirmation))
         .then(() => rawExecuteScript(rewritten));
     };
     let installed = false;
@@ -173,8 +222,10 @@
     rewriteDetails,
     needsGenerationBootstrap,
     installHistoryBridge,
+    installInternalConfirmationBridge,
     historyBridgeDetails,
     applicationGenerationDetails,
+    confirmationBridgeDetails,
     install
   });
   globalThis.WebClipContentInjectionGuard = exported;
