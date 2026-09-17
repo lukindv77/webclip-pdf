@@ -30,6 +30,10 @@ Release gate должен оставаться fail-closed, пока однов�
 6. `manifest.json` уже содержит именно target version кандидата;
 7. candidate SHA точно совпадает с checkout release-gate.
 
+## Current implementation note
+
+P0-080 получил partial implementation tranche с `webNavigation`-сигналами и generation/liveness fence для локального save admission. Это не меняет readiness-поля выше: требуется реальный unpacked-Chrome evidence для новой permission/API-binding композиции, SPA/history переходов и downstream generation handoff, а сам P0-080 остаётся открытым до выполнения полного owner closure contract.
+
 ## Evidence fields
 
 Статус `pass`/`approved` допустим только вместе с конкретной durable evidence-ссылкой или идентификатором: GitHub Issue/PR, test artifact, externally retained QA record или project evidence document.
