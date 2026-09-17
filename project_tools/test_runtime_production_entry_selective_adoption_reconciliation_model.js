@@ -145,7 +145,7 @@ function releaseAuthority({ runtimeComplete = false, shadowComplete = false, exp
 
   const implementationDelta = changedPaths(IMPLEMENTATION_ENTRY_BASE);
   const implementationRuntimeDelta = implementationDelta.filter((path) => !isResearchControlPath(path));
-  deepEq(implementationRuntimeDelta, ['application-generation.js', 'content-injection-guard.js'], 'P0-080 production entry admits the generation primitive and bounded bootstrap wiring');
+  deepEq(implementationRuntimeDelta, ['application-generation.js', 'content-injection-guard.js', 'frame-agent.js'], 'P0-080 production entry admits the generation primitive, bounded bootstrap wiring and remote-frame application-generation consumer');
   check(implementationDelta.includes('project_tools/test_p0_080_application_generation_primitive.js'), 'primitive deterministic proof accompanies runtime path');
   check(implementationDelta.includes('project_tools/test_p0_080_generation_bootstrap.js'), 'generation bootstrap ordering proof accompanies production wiring');
   check(implementationDelta.includes('project_tools/test_p0_080_save_admission_generation.js'), 'save-admission deterministic proof accompanies production wiring');
