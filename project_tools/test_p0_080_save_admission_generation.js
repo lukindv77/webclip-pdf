@@ -1,8 +1,12 @@
 'use strict';
 const assert = require('assert');
 const {
+  INCLUDE_ATTR,
   evaluateSelectionRecords,
+  createTracker,
+  installSelectionAdmission,
   installSaveMessageGate,
+  installConfirmationCommandObserver,
   getMessageIndex
 } = require('../application-generation.js');
 
@@ -46,9 +50,48 @@ const oldHref = Object.freeze({ generation: current.generation, href: 'https://e
 result = evaluateSelectionRecords([{ ...currentRecord, receipt: oldHref }], current);
 eq(result.ok, false, 'same counter with wrong logical href is rejected');
 eq(result.code, 'WEBCLIP_SELECTION_STALE_GENERATION', 'href mismatch is stale authority');
-
 eq(getMessageIndex([{ type: 'WEBCLIP_GENERATE_PDF' }]), 0, 'one-argument sendMessage locates message');
 eq(getMessageIndex(['extension-id', { type: 'WEBCLIP_GENERATE_PDF' }]), 1, 'extension-id overload locates message');
+
+class FakeMutationObserver {
+  static instances = [];
+  constructor(callback) {
+    this.callback = callback;
+    FakeMutationObserver.instances.push(this);
+  }
+  observe() {}
+  disconnect() {}
+  static fire(records) {
+    for (const instance of FakeMutationObserver.instances) instance.callback(records);
+  }
+}
+
+function makeSelectionFixture() {
+  const elements = [];
+  const frames = [];
+  const doc = {
+    documentElement: {},
+    querySelectorAll(selector) {
+      if (selector === 'iframe,frame') return frames;
+      return elements.filter((element) => element.hasAttribute('data-webclip-pdf-include') || element.hasAttribute('data-webclip-pdf-exclude'));
+    }
+  };
+  class FakeElement {
+    constructor() {
+      this.ownerDocument = doc;
+      this.isConnected = true;
+      this.attrs = new Map();
+      elements.push(this);
+    }
+    setAttribute(name, value) { this.attrs.set(String(name), String(value)); }
+    removeAttribute(name) { this.attrs.delete(String(name)); }
+    hasAttribute(name) { return this.attrs.has(String(name)); }
+    getAttribute(name) { return this.attrs.has(String(name)) ? this.attrs.get(String(name)) : null; }
+  }
+  const win = { Element: FakeElement, MutationObserver: FakeMutationObserver };
+  doc.defaultView = win;
+  return { doc, win, FakeElement };
+}
 
 (async () => {
   const rawCalls = [];
@@ -89,8 +132,11 @@ eq(getMessageIndex(['extension-id', { type: 'WEBCLIP_GENERATE_PDF' }]), 1, 'exte
     }
   };
   installSaveMessageGate(rejectedChrome, {
-    admit() {
+    admitForSave() {
       return { ok: false, code: 'WEBCLIP_SELECTION_MIXED_GENERATION', reason: 'mixed' };
+    },
+    admit() {
+      throw new Error('admit fallback must not run when confirmation-aware admission exists');
     }
   });
   const rejected = await rejectedChrome.runtime.sendMessage({ type: 'WEBCLIP_SEND_PDF_TO_YANDEX' });
@@ -104,6 +150,83 @@ eq(getMessageIndex(['extension-id', { type: 'WEBCLIP_GENERATE_PDF' }]), 1, 'exte
   ok(callbackResult && callbackResult.ok === false, 'callback overload receives fail-closed result');
   eq(rejectedCalls.length, 0, 'callback rejection also avoids privileged runtime handler');
 
+  const commandListeners = [];
+  let captures = 0;
+  let clears = 0;
+  const commandChrome = {
+    runtime: {
+      onMessage: {
+        addListener(listener) { commandListeners.push(listener); }
+      }
+    }
+  };
+  const commandObserver = installConfirmationCommandObserver(commandChrome, {
+    captureConfirmation() { captures += 1; return { ok: true }; },
+    clearConfirmation() { clears += 1; }
+  });
+  ok(commandObserver.installed, 'confirmation observer installs without replacing onMessage.addListener');
+  eq(commandListeners.length, 1, 'confirmation observer uses one ordinary runtime listener');
+  commandListeners[0]({ type: 'WEBCLIP_COMMAND', command: 'finish' });
+  commandListeners[0]({ type: 'WEBCLIP_COMMAND', command: 'download' });
+  commandListeners[0]({ type: 'WEBCLIP_COMMAND', command: 'yandex' });
+  eq(captures, 3, 'manual save entry commands capture confirmation authority');
+  commandListeners[0]({ type: 'WEBCLIP_COMMAND', command: 'read-later' });
+  eq(clears, 1, 'automatic read-later clears old dialog confirmation and uses immediate admission');
+  commandListeners[0]({ type: 'WEBCLIP_PROGRESS' });
+  eq(captures, 3, 'unrelated messages do not capture confirmation');
+  eq(clears, 1, 'unrelated messages do not clear confirmation');
+
+  FakeMutationObserver.instances.length = 0;
+  const fixture = makeSelectionFixture();
+  let href = 'https://example.test/article';
+  const tracker = createTracker({ readHref: () => href });
+  const admission = installSelectionAdmission({
+    document: fixture.doc,
+    MutationObserver: FakeMutationObserver
+  }, tracker);
+  const first = new fixture.FakeElement();
+  first.setAttribute(INCLUDE_ATTR, 'include-1');
+  result = admission.captureConfirmation();
+  ok(result.ok, 'connected current selection can be captured for confirmation');
+  const capturedRevision = result.receipt.selectionRevision;
+  ok(Number.isSafeInteger(capturedRevision), 'confirmation receipt carries exact selection revision');
+  result = admission.admitForSave();
+  ok(result.ok, 'unchanged confirmed selection remains admitted');
+  eq(result.receipt.confirmedSelectionRevision, capturedRevision, 'save receipt binds the confirmed selection revision');
+
+  first.setAttribute(INCLUDE_ATTR, 'include-2');
+  result = admission.admitForSave();
+  eq(result.ok, false, 'selection mutation after confirmation is rejected');
+  eq(result.code, 'WEBCLIP_SAVE_CONFIRMATION_STALE', 'post-confirmation mutation uses explicit stale-confirmation code');
+
+  result = admission.captureConfirmation();
+  ok(result.ok, 'fresh confirmation can bind the changed live selection');
+  first.isConnected = false;
+  result = admission.admitForSave();
+  eq(result.ok, false, 'selection detached after confirmation is revalidated at save');
+  eq(result.code, 'WEBCLIP_SELECTION_DETACHED', 'detached revalidation preserves precise failure code');
+  first.isConnected = true;
+
+  result = admission.captureConfirmation();
+  ok(result.ok, 'selection can be reconfirmed after reconnect in the current document');
+  const second = new fixture.FakeElement();
+  tracker.advance('history-state', href);
+  second.setAttribute(INCLUDE_ATTR, 'include-3');
+  result = admission.admitForSave();
+  eq(result.ok, false, 'mixed old/new generation selection is rejected after confirmation');
+  eq(result.code, 'WEBCLIP_SELECTION_MIXED_GENERATION', 'mixed-generation revalidation remains fail closed');
+  second.removeAttribute(INCLUDE_ATTR);
+  first.setAttribute(INCLUDE_ATTR, 'include-4');
+  result = admission.captureConfirmation();
+  ok(result.ok, 'current-generation selection can be confirmed after stale selection is restamped');
+
+  first.attrs.set(INCLUDE_ATTR, 'page-world-change');
+  FakeMutationObserver.fire([{ type: 'attributes', target: first }]);
+  result = admission.admitForSave();
+  eq(result.ok, false, 'page-world selected-marker mutation cannot silently inherit old receipt');
+  eq(result.code, 'WEBCLIP_SELECTION_UNTRACKED', 'unobserved selected-marker mutation fails as untracked authority');
+
+  admission.dispose();
   console.log(`PASS ${checks} checks`);
 })().catch((error) => {
   console.error(error);
