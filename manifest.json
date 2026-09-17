@@ -13,7 +13,8 @@
     "storage",
     "alarms",
     "contextMenus",
-    "tabs"
+    "tabs",
+    "webNavigation"
   ],
   "host_permissions": [
     "https://cloud-api.yandex.net/*",
@@ -32,7 +33,7 @@
     "open_in_tab": true
   },
   "background": {
-    "service_worker": "service-worker.js"
+    "service_worker": "service-worker-entry.js"
   },
   "optional_host_permissions": [
     "http://*/*",
