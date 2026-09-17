@@ -28,6 +28,7 @@ function isResearchControlPath(path) {
 const BASELINE = '8704480b2ec0df9a7a9753821407d6772dee858a';
 const HISTORICAL_BASE_A = 'd4f5b268fa3f7ced5a7bc68da52784863d614138';
 const HISTORICAL_BASE_B = 'e971bb796e1eed8c295032ab439bd2a8ef5e0d1a';
+const IMPLEMENTATION_ENTRY_BASE = 'e4c012f822d0f3ad8fc23307082e0acc76885715';
 const HEX40 = /^[0-9a-f]{40}$/;
 
 const historical = Object.freeze([
@@ -126,19 +127,27 @@ function releaseAuthority({ runtimeComplete = false, shadowComplete = false, exp
   const head = git('rev-parse', 'HEAD');
   check(HEX40.test(head), 'exact checkout SHA is valid');
   check(isAncestor(BASELINE, 'HEAD'), 'research branch/merge candidate descends from canonical baseline');
-  check(isAncestor(HISTORICAL_BASE_A, 'HEAD'), 'historical baseline A remains an ancestor of current line');
-  check(isAncestor(HISTORICAL_BASE_B, 'HEAD'), 'historical baseline B remains an ancestor of current line');
+  check(isAncestor(HISTORICAL_BASE_A, IMPLEMENTATION_ENTRY_BASE), 'historical baseline A remains an ancestor of implementation entry');
+  check(isAncestor(HISTORICAL_BASE_B, IMPLEMENTATION_ENTRY_BASE), 'historical baseline B remains an ancestor of implementation entry');
+  check(isAncestor(IMPLEMENTATION_ENTRY_BASE, 'HEAD'), 'bounded implementation descends from exact canonical entry base');
 
-  // Freshness: the changes since the two historical production-source baselines are
-  // confined to research/control documentation and tools in this research snapshot.
-  const deltaA = changedPaths(HISTORICAL_BASE_A);
-  const deltaB = changedPaths(HISTORICAL_BASE_B);
-  check(deltaA.length > 0, 'historical baseline A has later canonical changes');
-  check(deltaB.length > 0, 'historical baseline B has later canonical changes');
-  check(deltaA.every(isResearchControlPath), 'no runtime/product file changed since historical baseline A');
-  check(deltaB.every(isResearchControlPath), 'no runtime/product file changed since historical baseline B');
-  check(deltaA.includes('project_docs/RESEARCH_REGISTRY.md'), 'baseline A delta includes current ownership authority update');
-  check(deltaB.includes('project_docs/RESEARCH_REGISTRY.md'), 'baseline B delta includes current ownership authority update');
+  // Freshness: the historical production-source baselines remained research/control-only
+  // through the exact implementation-entry base. Runtime changes after that boundary are
+  // separately admitted below rather than rewriting historical evidence.
+  const historicalDeltaA = changedPaths(HISTORICAL_BASE_A, IMPLEMENTATION_ENTRY_BASE);
+  const historicalDeltaB = changedPaths(HISTORICAL_BASE_B, IMPLEMENTATION_ENTRY_BASE);
+  check(historicalDeltaA.length > 0, 'historical baseline A has later canonical changes');
+  check(historicalDeltaB.length > 0, 'historical baseline B has later canonical changes');
+  check(historicalDeltaA.every(isResearchControlPath), 'no runtime/product file changed between historical baseline A and implementation entry');
+  check(historicalDeltaB.every(isResearchControlPath), 'no runtime/product file changed between historical baseline B and implementation entry');
+  check(historicalDeltaA.includes('project_docs/RESEARCH_REGISTRY.md'), 'baseline A delta includes current ownership authority update');
+  check(historicalDeltaB.includes('project_docs/RESEARCH_REGISTRY.md'), 'baseline B delta includes current ownership authority update');
+
+  const implementationDelta = changedPaths(IMPLEMENTATION_ENTRY_BASE);
+  const implementationRuntimeDelta = implementationDelta.filter((path) => !isResearchControlPath(path));
+  deepEq(implementationRuntimeDelta, ['application-generation.js'], 'P0-080 primitive tranche admits exactly one runtime/product path after implementation entry');
+  check(implementationDelta.includes('project_tools/test_p0_080_application_generation_primitive.js'), 'primitive deterministic proof accompanies runtime path');
+  check(implementationDelta.includes('project_tools/test_p1_231_package_topology_census_model.js'), 'package census explicitly admits the runtime path');
 
   const requirements = read('project_docs/USER_REQUIREMENTS.md');
   const decisions = read('project_docs/DECISIONS_AND_RATIONALE.md');
