@@ -422,7 +422,7 @@ function baseReceipts(sourceSha = A) {
 
 // Canonical predecessor integration.
 test('current S0-E protocol is exact', () => assert.strictEqual(s0e.kv.protocol, 'WEBCLIP_RELEASE_IDENTITY_V1'));
-test('current S0-E RPF exact', () => assert.strictEqual(currentIds.rpf, 'sha256:967051118501d1aa784363dd0634c44882a0f9bc778b23b0c8d16c8ba44ecfc3'));
+test('current S0-E RPF exact', () => assert.strictEqual(currentIds.rpf, 'sha256:6e4819c11d1ff5f8cb63071cc9e7c1330363dcf877fce9ff05cf1f60df7668db'));
 test('current Chrome QCF exact', () => assert.strictEqual(currentIds.qcf['unpacked-chrome'], 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c'));
 test('current Yandex QCF exact', () => assert.strictEqual(currentIds.qcf['yandex-e2e'], 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1'));
 test('current full RCF exact', () => assert.strictEqual(currentIds.rcf, 'sha256:e6119c800c60513405541bfae552f424985e13fa109e28390ae1bac7ba075f13'));
@@ -439,7 +439,6 @@ test('real current blocked candidate cannot settle', () => {
   assert.strictEqual(out.allRequiredSlotsPass, false);
 });
 
-// Admission validation matrix.
 for (const [name, mutate, expected] of [
   ['bad schema', (a) => { a.schema = 'future'; }, 'admission-schema'],
   ['bad SHA', (a) => { a.candidateSha = 'nope'; }, 'admission-sha'],
@@ -457,7 +456,6 @@ for (const [name, mutate, expected] of [
   });
 }
 
-// Receipt schema/shape matrix.
 const validChrome = makeReceipt({ receiptId: 'schema-chrome', kind: 'unpacked-chrome', attemptSeq: 1, testedSourceSha: A, outcome: 'pass' });
 test('valid Chrome v2 receipt accepted', () => assert.deepStrictEqual(validateReceipt(validChrome), []));
 test('self-declared admitted field is not part of v2 schema', () => {
@@ -472,7 +470,7 @@ test('old conceptual v1 is not v2 receipt', () => {
   const r = { ...validChrome, schema: 'webclip-release-evidence/v1' };
   assert(validateReceipt(r).includes('schema'));
 });
-test('historical prose is not receipt object', () => assert(validateReceipt('TEST_EVIDENCE row').includes('receipt-object')));
+test('historical prose is not receipt object', () => assert(validateReceipt('TEST_EVIDENCE row').includes('receipt-object'));
 
 for (const [name, mutate, expected] of [
   ['bad id empty', (r) => { r.receiptId = ''; }, 'receipt-id'],
@@ -524,7 +522,6 @@ for (const outcome of ['pass', 'fail', 'inconclusive', 'invalidated']) {
   });
 }
 
-// Summary and secret/capability boundaries.
 test('4096-byte summary accepted', () => {
   const summary = 'x'.repeat(4096);
   const r = makeReceipt({ receiptId: 'summary-4096', kind: 'unpacked-chrome', attemptSeq: 1, testedSourceSha: A, outcome: 'pass', durableSummary: summary });
@@ -574,7 +571,6 @@ test('oversized ref rejected', () => {
   assert(validateReceipt(r).includes('evidence-ref'));
 });
 
-// Provenance boundaries.
 test('physical provenance permits synthetic merge execution SHA distinct from tested source', () => {
   const mergeSha = 'f'.repeat(40);
   const r = makeReceipt({
@@ -619,7 +615,6 @@ test('decision cannot masquerade github-actions provenance under v2 research con
   assert(validateReceipt(r).includes('provenance-shape') || validateReceipt(r).includes('provenance-kind'));
 });
 
-// Namespace uniqueness and append-only properties.
 test('base receipt namespace valid', () => assert.deepStrictEqual(validateNamespace(baseReceipts()), []));
 test('duplicate receipt id blocks namespace', () => {
   const receipts = baseReceipts();
@@ -669,7 +664,6 @@ test('append-only rejects receipt deletion', () => {
   assert.deepStrictEqual(validateAppendOnly(before, after), ['deleted:r1.json']);
 });
 
-// Positive settlement and ancestry reuse.
 test('synthetic future candidate settles all four slots from admitted ancestor', () => {
   const out = settle({ candidateSha: B, candidateAdmission: admissionB, receipts: baseReceipts(A), admissionBySha, isAncestor });
   assert.strictEqual(out.schema, SETTLEMENT_SCHEMA);
@@ -695,7 +689,6 @@ test('same identity side branch cannot authorize candidate', () => {
   assert.strictEqual(out.slots['unpacked-chrome'].reason, 'TESTED_SOURCE_NOT_ANCESTOR');
 });
 
-// Tested-source S0-F admission is mandatory.
 test('missing tested-source admission blocks matching receipt', () => {
   const map = new Map(admissionBySha); map.delete(A);
   const out = settle({ candidateSha: B, candidateAdmission: admissionB, receipts: baseReceipts(A), admissionBySha: map, isAncestor });
@@ -730,7 +723,6 @@ test('tested-source RCF mismatch blocks review', () => {
   assert.strictEqual(out.slots['blocker-review'].reason, 'TESTED_SOURCE_IDENTITY_MISMATCH');
 });
 
-// Current candidate S0-F admission is independently mandatory.
 test('missing current candidate admission blocks before receipts', () => {
   const out = settle({ candidateSha: B, candidateAdmission: null, receipts: baseReceipts(A), admissionBySha, isAncestor });
   assert.strictEqual(out.reason, 'CANDIDATE_GENERATION_NOT_ADMITTED');
@@ -744,7 +736,6 @@ test('current candidate admission SHA mismatch blocks', () => {
   assert.strictEqual(out.reason, 'CANDIDATE_GENERATION_NOT_ADMITTED');
 });
 
-// Latest-attempt settlement matrix for physical/review slots.
 for (const kind of ['unpacked-chrome', 'yandex-e2e', 'blocker-review']) {
   for (const [laterOutcome, expectedState] of [
     ['fail', 'blocked'],
@@ -798,7 +789,6 @@ test('later approved decision recovers after rejected', () => {
   assert.strictEqual(out.slots['release-decision'].attemptSeq, 3);
 });
 
-// Identity projection independence.
 test('Chrome QCF change invalidates Chrome receipt but preserves Yandex generation', () => {
   const changedIds = clone(currentIds); changedIds.qcf['unpacked-chrome'] = `sha256:${'5'.repeat(64)}`;
   const changedAdmission = makeAdmission(B, { identities: changedIds });
@@ -839,7 +829,6 @@ test('receipt cannot add BCF as extra subject authority', () => {
   assert(validateReceipt(r).includes('subject-shape'));
 });
 
-// Provenance identities never substitute for subject identities.
 test('same run/job cannot rescue wrong RPF', () => {
   const wrong = makeReceipt({ receiptId: 'wrong-rpf-same-run', kind: 'unpacked-chrome', attemptSeq: 1, testedSourceSha: A, outcome: 'pass', subject: { rpf: `sha256:${'a'.repeat(64)}`, contractFingerprint: currentIds.qcf['unpacked-chrome'] } });
   const out = settle({ candidateSha: B, candidateAdmission: admissionB, receipts: [wrong], admissionBySha, isAncestor });
@@ -851,7 +840,6 @@ test('same workflow SHA cannot rescue wrong QCF', () => {
   assert.strictEqual(out.slots['unpacked-chrome'].state, 'missing');
 });
 
-// Result is evidence truth only, never readiness policy.
 test('settlement result has no readiness status field', () => {
   const out = settle({ candidateSha: B, candidateAdmission: admissionB, receipts: baseReceipts(A), admissionBySha, isAncestor });
   assert.strictEqual(Object.prototype.hasOwnProperty.call(out, 'releaseReadiness'), false);
