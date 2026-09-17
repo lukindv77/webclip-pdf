@@ -55,6 +55,7 @@ These files are fresh-current-source owner/coverage evidence added after the old
 - `RESEARCH_P0_013_SELECTED_BACKUP_AUTHORITY_REVALIDATION_2026-09-16_EVIDENCE.md` — P0-013 exact selected-Yandex-backup object authority from picker receipt through remote revalidation and staged `contentSha256`; deterministic model `project_tools/test_p0_013_selected_backup_receipt_revalidation_model.js`.
 - `RESEARCH_P0_069_PUBLICATION_OUTCOME_REVALIDATION_2026-09-17_EVIDENCE.md` — P0-069 explicit publication preserve/revoke outcome when deleting a Journal entry for a published Yandex object; deterministic model `project_tools/test_p0_069_publication_outcome_revalidation_model.js`.
 - `RESEARCH_P0_022_IMPORTED_REMOTE_IDENTITY_PROVENANCE_REVALIDATION_2026-09-17_EVIDENCE.md` — P0-022 imported/legacy Yandex locator metadata versus current provider-observed destructive remote-object authority; deterministic model `project_tools/test_p0_022_imported_remote_identity_provenance_revalidation_model.js`.
+- `RESEARCH_P0_050_URLSTATS_GENERATION_REVALIDATION_2026-09-17_EVIDENCE.md` — P0-050 versioned `urlStats` rebuild/publication generation isolation from concurrent point mutations; deterministic model `project_tools/test_p0_050_urlstats_generation_revalidation_model.js`.
 
 ### Selection, scope and frame topology
 
