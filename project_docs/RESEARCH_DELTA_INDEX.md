@@ -57,6 +57,7 @@ These files are fresh-current-source owner/coverage evidence added after the old
 - `RESEARCH_P0_022_IMPORTED_REMOTE_IDENTITY_PROVENANCE_REVALIDATION_2026-09-17_EVIDENCE.md` — P0-022 imported/legacy Yandex locator metadata versus current provider-observed destructive remote-object authority; deterministic model `project_tools/test_p0_022_imported_remote_identity_provenance_revalidation_model.js`.
 - `RESEARCH_P0_050_URLSTATS_GENERATION_REVALIDATION_2026-09-17_EVIDENCE.md` — P0-050 versioned `urlStats` rebuild/publication generation isolation from concurrent point mutations; deterministic model `project_tools/test_p0_050_urlstats_generation_revalidation_model.js`.
 - `RESEARCH_P0_004_SELECTED_REPRESENTATION_FIDELITY_REVALIDATION_2026-09-17_EVIDENCE.md` — P0-004 selected representation completeness and selection-bounded presentation across retained ordinary ancestors, responsive state and the admitted visual cut; deterministic model `project_tools/test_p0_004_selected_representation_fidelity_revalidation_model.js`.
+- `RESEARCH_P1_003_RENDERER_RESOURCE_GRAPH_REVALIDATION_2026-09-17_EVIDENCE.md` — P1-003 selected renderer-resource graph readiness, pseudo/CSS visual dependencies and cross-origin frame parity under bounded truthful omission semantics; deterministic model `project_tools/test_p1_003_renderer_resource_graph_revalidation_model.js`.
 
 ### Selection, scope and frame topology
 
