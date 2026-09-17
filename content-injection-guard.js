@@ -1,16 +1,18 @@
 (() => {
   'use strict';
 
-  // Worker/popup-side admission guard for WebClip top content-script injection.
-  // Any request that injects content.js must first install the bounded MAIN-world
-  // history signal, then the isolated application-generation primitive, then the
-  // already-closed frame/control guard prefix and content.js.
-  const INSTALL_MARKER = '__webclipContentInjectionGuardV4';
+  // Worker/popup-side admission guard for WebClip content-script injection.
+  // Top content.js and cross-origin frame-agent.js both receive the bounded
+  // MAIN-world history signal plus isolated application-generation primitive
+  // before their own code executes. Only top content.js needs the internal
+  // save-confirmation bridge and the historical guard prefix.
+  const INSTALL_MARKER = '__webclipContentInjectionGuardV5';
   const APPLICATION_GENERATION_FILE = 'application-generation.js';
   const BUDGET_HELPER_FILE = 'frame-proxy-budget-guard.js';
   const INERT_HELPER_FILE = 'frame-proxy-inert-guard.js';
   const HOST_CONTROL_HELPER_FILE = 'host-control-activation-guard.js';
   const CONTENT_FILE = 'content.js';
+  const FRAME_AGENT_FILE = 'frame-agent.js';
   const HISTORY_EVENT = 'webclip-pdf:application-history-transition';
   const REQUIRED_PREFIX = Object.freeze([
     BUDGET_HELPER_FILE,
@@ -18,10 +20,18 @@
     HOST_CONTROL_HELPER_FILE
   ]);
 
+  function injectionFiles(details) {
+    return Array.isArray(details?.files) ? details.files.map((value) => String(value || '')) : null;
+  }
+
+  function needsApplicationGeneration(files) {
+    return Boolean(files && (files.includes(CONTENT_FILE) || files.includes(FRAME_AGENT_FILE)));
+  }
+
   function rewriteDetails(details) {
     if (!details || typeof details !== 'object') return details;
-    const files = Array.isArray(details.files) ? details.files.map((value) => String(value || '')) : null;
-    if (!files || !files.includes(CONTENT_FILE)) return details;
+    const files = injectionFiles(details);
+    if (!needsApplicationGeneration(files)) return details;
     const rewritten = [];
     for (const file of files) {
       if (file === APPLICATION_GENERATION_FILE) continue;
@@ -36,14 +46,19 @@
   }
 
   function needsGenerationBootstrap(details) {
+    const files = injectionFiles(details);
     return Boolean(
       details
       && typeof details === 'object'
-      && Array.isArray(details.files)
-      && details.files.includes(CONTENT_FILE)
+      && needsApplicationGeneration(files)
       && String(details.world || 'ISOLATED').toUpperCase() !== 'MAIN'
       && details.target
     );
+  }
+
+  function needsConfirmationBridge(details) {
+    const files = injectionFiles(details);
+    return Boolean(files && files.includes(CONTENT_FILE));
   }
 
   function installHistoryBridge(eventName) {
@@ -163,7 +178,7 @@
 
       const bridge = historyBridgeDetails(details);
       const generation = applicationGenerationDetails(details);
-      const confirmation = confirmationBridgeDetails(details);
+      const confirmation = needsConfirmationBridge(details) ? confirmationBridgeDetails(details) : null;
       if (typeof callback === 'function') {
         return rawExecuteScript(bridge, () => {
           if (chromeApi?.runtime?.lastError) {
@@ -173,6 +188,10 @@
           rawExecuteScript(generation, () => {
             if (chromeApi?.runtime?.lastError) {
               callback(undefined);
+              return;
+            }
+            if (!confirmation) {
+              rawExecuteScript(rewritten, callback);
               return;
             }
             rawExecuteScript(confirmation, () => {
@@ -187,7 +206,7 @@
       }
       return Promise.resolve(rawExecuteScript(bridge))
         .then(() => rawExecuteScript(generation))
-        .then(() => rawExecuteScript(confirmation))
+        .then(() => confirmation ? rawExecuteScript(confirmation) : undefined)
         .then(() => rawExecuteScript(rewritten));
     };
     let installed = false;
@@ -217,10 +236,12 @@
     INERT_HELPER_FILE,
     HOST_CONTROL_HELPER_FILE,
     CONTENT_FILE,
+    FRAME_AGENT_FILE,
     HISTORY_EVENT,
     REQUIRED_PREFIX,
     rewriteDetails,
     needsGenerationBootstrap,
+    needsConfirmationBridge,
     installHistoryBridge,
     installInternalConfirmationBridge,
     historyBridgeDetails,
