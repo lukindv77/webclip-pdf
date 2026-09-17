@@ -26,7 +26,8 @@ assert.ok(worker.includes("case 'WEBCLIP_FRAME_AGENT_TARGET'"), 'Current worker 
 assert.ok(worker.includes('WEBCLIP_FRAME_AGENT_STATE'), 'Current worker must still expose child state route.');
 assert.ok(agent.includes("case'start':start(msg.mode)"), 'Current child must still expose start command.');
 assert.ok(agent.includes("case'clear':clear()"), 'Current child must still expose clear command.');
-assert.ok(agent.includes("case'get-state':return{ok:true,snapshot:snapshot(),phase:state.phase}"), 'Current child must still expose snapshot-bearing get-state response.');
+assert.ok(agent.includes("case'get-state':{const a=admitSelectionGeneration('remote-get-state')"), 'Current child must gate get-state by P0-080 application generation.');
+assert.ok(agent.includes("a.ok?{ok:true,snapshot:snapshot(),phase:state.phase}:a"), 'Current child must still expose snapshot-bearing get-state response after application-generation admission.');
 assert.ok(agent.includes("type:'WEBCLIP_FRAME_AGENT_STATE'"), 'Current child must still emit state events.');
 
 // Current production does not yet carry the target semantics.
