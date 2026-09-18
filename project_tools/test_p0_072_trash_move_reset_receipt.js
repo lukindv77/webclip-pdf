@@ -200,5 +200,5 @@ console.log(
   'P0-072 Trash reset receipt: PASS; checks=' + checks +
   '; db=v8; detached_receipt=true; prepared_drop=true; admitted_survives=true;' +
   ' terminal_delete_atomic=true; same_id_replacement_safe=true; keep_path_unchanged=true;' +
-  ' p1_090_exact_object=false; p0_076_receipt_cursor=true; p0_076_full_cas=false; release_closed=false'
+  ' p1_090_exact_object=false; p0_076_receipt_cursor=true; p0_076_full_cas=true; release_closed=false'
 );
