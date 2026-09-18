@@ -79,8 +79,10 @@ async function* chunkText(text, size) {
   assert(!serviceWorkerSource.includes('const parsed = parseJournalExportText(text)'));
   assert(offscreenSource.includes('stageResponseBodyAsJournalImport'));
   assert(!/mode === 'text-download'[\s\S]{0,500}readResponseTextBounded\(response/.test(offscreenSource), 'Yandex journal download must not materialize response text');
-  assert.strictEqual((serviceWorkerSource.match(/const JOURNAL_DB_VERSION = 7;/g) || []).length, 1);
-  assert.strictEqual((journalSource.match(/const JOURNAL_DB_VERSION = 7;/g) || []).length, 1);
+  assert.strictEqual((serviceWorkerSource.match(/const JOURNAL_DB_VERSION = 8;/g) || []).length, 1);
+  assert.strictEqual((journalSource.match(/const JOURNAL_DB_VERSION = 8;/g) || []).length, 1);
+  assert(serviceWorkerSource.includes("JOURNAL_PENDING_DESTRUCTIVE_STORE = 'pendingDestructiveMoves'"));
+  assert(journalSource.includes("db.createObjectStore('pendingDestructiveMoves'"));
 
   console.log('PASS P1-030 streaming import parser/staging regression');
 })().catch((error) => {
