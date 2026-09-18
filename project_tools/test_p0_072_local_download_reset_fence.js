@@ -169,6 +169,8 @@ const bindSection = section(
   'async function getPendingLocalDownload'
 );
 ok(bindSection.includes("const bound = { ...intent, downloadId: id, kind: 'download', updatedAt: Date.now() };"), 'binding carries admission/reset provenance by spread');
+ok(bindSection.includes('intent.supersededByJournalReset === true'), 'existing same-operation alias path cannot strip reset provenance');
+ok(bindSection.includes('journalResetAt: Math.max(0, Number(intent.journalResetAt) || 0)'), 'existing bound row inherits reset generation timestamp');
 ok(bindSection.includes('WEBCLIP_DOWNLOAD_ID_ALREADY_BOUND'), 'numeric DownloadItem collision remains fail closed');
 
 const clearSection = section(
