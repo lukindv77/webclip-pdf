@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  pinned-cft:
+  pinned-cft-headed:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
@@ -25,19 +25,23 @@ jobs:
           ref: e6cb567b44eeff28a89fc90cc82294bf064bad23
           fetch-depth: 0
 
-      - name: Verify exact source
+      - name: Overlay research-only headed launcher
         shell: bash
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$WEBCLIP_CANONICAL_SHA"
-          git diff --exit-code
+          git cat-file -e "$GITHUB_SHA^{commit}"
+          git show "$GITHUB_SHA:project_tools/browser_p1_007_unpacked_integration.js"             > project_tools/browser_p1_007_unpacked_integration.js
+          test "$(git diff --name-only)" = "project_tools/browser_p1_007_unpacked_integration.js"
           node project_tools/test_p0_072_real_chrome_reset_restart_harness.js
 
       - name: Install historically proven pinned Chrome for Testing
         shell: bash
         run: |
           set -euo pipefail
+          xvfb="$(command -v xvfb-run || true)"
+          test -n "$xvfb"
           curl --fail --location --silent --show-error             https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.64/linux64/chrome-linux64.zip             -o "$RUNNER_TEMP/chrome-152.zip"
           unzip -q "$RUNNER_TEMP/chrome-152.zip" -d "$RUNNER_TEMP/chrome-152"
           chrome="$RUNNER_TEMP/chrome-152/chrome-linux64/chrome"
@@ -45,14 +49,14 @@ jobs:
           "$chrome" --version
           echo "WEBCLIP_CHROME_FOR_TESTING=$chrome" >> "$GITHUB_ENV"
 
-      - name: Run existing P1-007 real Chrome prerequisite
+      - name: Run existing P1-007 prerequisite headed under Xvfb
         shell: bash
         run: |
           set -euo pipefail
-          node project_tools/browser_p1_007_unpacked_integration.js
+          xvfb-run -a env WEBCLIP_CHROME_HEADED=1             node project_tools/browser_p1_007_unpacked_integration.js
 
-      - name: Run P0-072 physical reset restart harness
+      - name: Run P0-072 reset restart harness headed under Xvfb
         shell: bash
         run: |
           set -euo pipefail
-          node project_tools/research_p0_072_real_chrome_reset_restart.js
+          xvfb-run -a env WEBCLIP_CHROME_HEADED=1             node project_tools/research_p0_072_real_chrome_reset_restart.js
