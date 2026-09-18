@@ -1,5 +1,5 @@
 name: P0-072 physical Chrome evidence
-# one-shot authorization audit marker: fd77d7e7 local-download reset/restart evidence attempt-6-inert-controller
+# one-shot authorization audit marker: fd77d7e7 local-download reset/restart evidence attempt-7-baseline-control
 
 on:
   push:
