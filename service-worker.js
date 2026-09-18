@@ -5320,7 +5320,7 @@ async function appendJournalEntryFromDurableCheckpoint(data, operationId = '', {
     });
     if (!entry) {
       return {
-        warning: `Запись журнала не добавлена: ${label} был удалён конкурентной очисткой/заменой журнала.`,
+        warning: `Запись журнала не добавлена: ${label} был удалён или superseded конкурентной очисткой/заменой журнала.`,
         recoveryGuaranteed: false,
         cancelled: true,
         journalEntryId: prepared.journalEntryId
