@@ -160,7 +160,7 @@ ok(clearSection.includes('pendingDownloadStore.clear()'), 'local-download reset 
 const importSection = section(
   worker,
   'async function commitStagedJournalImport',
-  'async function importJournalDocument'
+  'async function previewStagedJournalImport'
 );
 ok(importSection.includes('reconcilePendingRemoteStoreForJournalReset(tx.objectStore(JOURNAL_PENDING_REMOTE_STORE)'), 'import replace routes remote checkpoints through reset fence');
 ok(!importSection.includes('tx.objectStore(JOURNAL_PENDING_REMOTE_STORE).clear()'), 'import replace no longer blind-clears remote checkpoints');
