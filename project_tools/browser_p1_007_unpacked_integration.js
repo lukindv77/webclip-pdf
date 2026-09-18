@@ -380,7 +380,7 @@ async function runBrowserIntegration() {
     mark('browser-launched');
     extensionId = browser.extensionId;
     mark('options-attach');
-    options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'options extension page');
+    options = await browser.attachPage(`chrome-extension://${extensionId}/popup.html`, 'popup extension controller');
     mark('options-attached');
 
     // Fresh profile already isolates data, but explicit reset makes retries in a
