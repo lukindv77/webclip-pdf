@@ -192,7 +192,7 @@ async function createSelectedFixtureTab(options, articleUrl, label) {
         // reliable opportunity to pause the physical write before completion.
         const bulk = document.createElement('div');
         bulk.id = 'p0-072-physical-bulk';
-        for (let i = 0; i < 240; i += 1) {
+        for (let i = 0; i < 96; i += 1) {
           const page = document.createElement('section');
           page.style.breakAfter = 'page';
           page.textContent = 'P0-072 physical Chrome reset/restart synthetic page ' + i + ' '.repeat(32);
@@ -238,7 +238,32 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
   const created = await waitFor(async () => {
     const evidence = await options.evaluate('globalThis.__p0072ChromeDownloadEvidence');
     const rows = Array.isArray(evidence?.created) ? evidence.created : [];
-    return rows.find((item) => !previousIds.has(Number(item.id))) || null;
+    const createdRow = rows.find((item) => !previousIds.has(Number(item.id))) || null;
+    if (createdRow) return createdRow;
+    const pauseErrors = Array.isArray(evidence?.pauseErrors) ? evidence.pauseErrors : [];
+    if (pauseErrors.length) {
+      throw new Error(label + ': chrome.downloads.pause failed before evidence capture: ' + JSON.stringify(pauseErrors.slice(-3)));
+    }
+    const ui = await options.evaluate(`(async () => {
+      const result = await chrome.scripting.executeScript({
+        target: { tabId: ${Number(tabId)} },
+        func: () => {
+          const shadow = document.getElementById('webclip-pdf-extension-root')?.shadowRoot;
+          return {
+            title: String(shadow?.querySelector('.modal h2')?.textContent || ''),
+            text: String(shadow?.querySelector('.modal p')?.textContent || '')
+          };
+        }
+      });
+      return result[0]?.result || null;
+    })()`);
+    if (/Не удалось сформировать PDF/.test(ui?.title || '')) {
+      throw new Error(label + ': production PDF UI failed before DownloadItem creation: ' + ui.title + ': ' + String(ui.text || ''));
+    }
+    if (/PDF передан в загрузки|PDF скачан/.test(ui?.title || '')) {
+      throw new Error(label + ': production UI reached download completion but chrome.downloads.onCreated was not observed');
+    }
+    return null;
   }, { timeoutMs: 70_000, intervalMs: 100, label: label + ' download onCreated+pause' });
 
   assert(Number.isInteger(Number(created.id)), label + ': download id missing');
@@ -494,8 +519,6 @@ async function run() {
     await fixture.close().catch(() => {});
   }
 }
-
-module.exports = Object.freeze({ sourceContract });
 
 if (require.main === module) {
   const timer = setTimeout(() => {
