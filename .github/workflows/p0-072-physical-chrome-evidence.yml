@@ -1,54 +1,49 @@
 name: P0-072 physical Chrome evidence
-# one-shot authorization audit marker: fd77d7e7 local-download reset/restart evidence attempt-7-baseline-control
 
 on:
-  push:
-    branches:
-      - research/p0-072-physical-run-fd77d7e7
+  workflow_dispatch:
+    inputs:
+      canonical_sha:
+        description: Exact canonical main SHA to execute
+        required: true
+        type: string
+      authorization:
+        description: Type P0-072-LOCAL-DOWNLOAD-ONLY to authorize this physical run
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: p0-072-physical-chrome-fd77d7e7
+  group: p0-072-physical-chrome-${{ inputs.canonical_sha }}
   cancel-in-progress: false
 
 jobs:
   real-chrome-reset-restart:
     name: real-chrome-reset-restart
-    if: ${{ contains(github.event.head_commit.message, '[authorized-p0-072-physical]') }}
+    if: ${{ github.ref == 'refs/heads/main' && inputs.authorization == 'P0-072-LOCAL-DOWNLOAD-ONLY' && inputs.canonical_sha == github.sha }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 10
     env:
-      WEBCLIP_CANONICAL_SHA: fd77d7e7785c54aae4dcffd5798a2b0ad46537ba
+      WEBCLIP_CANONICAL_SHA: ${{ inputs.canonical_sha }}
     steps:
-      - name: Checkout exact canonical commit
+      - name: Checkout exact canonical main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: fd77d7e7785c54aae4dcffd5798a2b0ad46537ba
+          ref: ${{ inputs.canonical_sha }}
           fetch-depth: 0
-
-      - name: Overlay reviewed research harness from authorized branch head
-        shell: bash
-        run: |
-          set -euo pipefail
-          actual="$(git rev-parse HEAD)"
-          echo "P0_072_CANONICAL_SHA=$actual"
-          test "$actual" = "$WEBCLIP_CANONICAL_SHA"
-          test "$GITHUB_REF_NAME" = "research/p0-072-physical-run-fd77d7e7"
-          git cat-file -e "$GITHUB_SHA^{commit}"
-          for path in             project_tools/research_p0_072_real_chrome_reset_restart.js             project_tools/test_p0_072_real_chrome_reset_restart_harness.js
-          do
-            git show "$GITHUB_SHA:$path" > "$path"
-          done
-          changed="$(git diff --name-only)"
-          test "$changed" = "$(printf '%s\n'             project_tools/research_p0_072_real_chrome_reset_restart.js             project_tools/test_p0_072_real_chrome_reset_restart_harness.js)"
-          sha256sum             project_tools/research_p0_072_real_chrome_reset_restart.js             project_tools/test_p0_072_real_chrome_reset_restart_harness.js
 
       - name: Verify exact source and browser
         shell: bash
         run: |
           set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          echo "P0_072_CANONICAL_SHA=$actual"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$actual" = "$WEBCLIP_CANONICAL_SHA"
+          test "$actual" = "$GITHUB_SHA"
+          git diff --exit-code
           node project_tools/test_p0_072_real_chrome_reset_restart_harness.js
           browser="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           if [ -z "$browser" ]; then
@@ -58,10 +53,12 @@ jobs:
           echo "WEBCLIP_CHROME_FOR_TESTING=$browser" >> "$GITHUB_ENV"
           "$browser" --version
 
-      - name: Run existing real Chrome integration control
+      - name: Run existing real Chrome integration prerequisite
         shell: bash
         run: |
           set -euo pipefail
+          # Existing P1-007 control is synthetic/localhost only. Its disposable
+          # extension copy rewrites the Yandex API base to the local fixture.
           node project_tools/browser_p1_007_unpacked_integration.js
 
       - name: Run P0-072 real Chrome reset/restart harness
