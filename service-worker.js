@@ -70,6 +70,9 @@ const JOURNAL_PENDING_REMOTE_STORE = 'pendingRemoteSaves';
 const JOURNAL_PENDING_DESTRUCTIVE_STORE = 'pendingDestructiveMoves';
 const JOURNAL_IMPORT_STAGING_STORE = 'importStaging';
 const JOURNAL_META_REVISION_KEY = 'revision';
+const JOURNAL_RESET_GENERATION_KEY = 'resetGeneration';
+const JOURNAL_INITIAL_RESET_GENERATION = 1;
+const JOURNAL_INITIAL_ENTRY_REVISION = 1;
 const JOURNAL_EXPORT_SCHEMA = 'webclip-journal';
 const JOURNAL_EXPORT_VERSION = 1;
 const JOURNAL_STATS_DIRTY_KEY = 'webclipJournalStatsDirty';
@@ -4698,6 +4701,80 @@ function touchJournalDbRevision(tx, reason = 'changed') {
   });
 }
 
+function normalizeJournalResetGeneration(value) {
+  const generation = Number(value);
+  return Number.isSafeInteger(generation) && generation >= JOURNAL_INITIAL_RESET_GENERATION
+    ? generation
+    : JOURNAL_INITIAL_RESET_GENERATION;
+}
+
+function normalizeJournalEntryRevision(value) {
+  const revision = Number(value);
+  return Number.isSafeInteger(revision) && revision >= JOURNAL_INITIAL_ENTRY_REVISION
+    ? revision
+    : JOURNAL_INITIAL_ENTRY_REVISION;
+}
+
+function nextJournalEntryRevision(value) {
+  const current = normalizeJournalEntryRevision(value);
+  if (current >= Number.MAX_SAFE_INTEGER) {
+    const error = new Error('Revision записи журнала исчерпала безопасный числовой диапазон.');
+    error.code = 'JOURNAL_ENTRY_REVISION_EXHAUSTED';
+    throw error;
+  }
+  return current + 1;
+}
+
+function advanceJournalResetGeneration(tx, reason = 'reset', fail = () => {}) {
+  const meta = tx.objectStore(JOURNAL_META_STORE);
+  const request = meta.get(JOURNAL_RESET_GENERATION_KEY);
+  request.onsuccess = () => {
+    try {
+      const current = normalizeJournalResetGeneration(request.result?.value);
+      if (current >= Number.MAX_SAFE_INTEGER) {
+        const error = new Error('Generation журнала исчерпала безопасный числовой диапазон.');
+        error.code = 'JOURNAL_RESET_GENERATION_EXHAUSTED';
+        fail(error);
+        return;
+      }
+      const next = current + 1;
+      const put = meta.put({
+        key: JOURNAL_RESET_GENERATION_KEY,
+        value: next,
+        changedAt: Date.now(),
+        reason: String(reason || 'reset').slice(0, 120)
+      });
+      put.onerror = () => fail(put.error || new Error('Не удалось обновить generation журнала.'));
+    } catch (error) { fail(error); }
+  };
+  request.onerror = () => fail(request.error || new Error('Не удалось прочитать generation журнала.'));
+  return request;
+}
+
+function journalEntryAuthorityToken(resetGeneration, entry = {}) {
+  const entryId = String(entry?.id || '').trim();
+  if (!entryId) return null;
+  return Object.freeze({
+    entryId,
+    resetGeneration: normalizeJournalResetGeneration(resetGeneration),
+    entryRevision: normalizeJournalEntryRevision(entry?.entryRevision)
+  });
+}
+
+function normalizeJournalEntryAuthorityToken(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const entryId = String(value.entryId || '').trim();
+  const resetGeneration = Number(value.resetGeneration);
+  const entryRevision = Number(value.entryRevision);
+  if (
+    !entryId
+    || entryId.length > MAX_IMPORTED_ENTRY_ID_CHARS
+    || !Number.isSafeInteger(resetGeneration) || resetGeneration < JOURNAL_INITIAL_RESET_GENERATION
+    || !Number.isSafeInteger(entryRevision) || entryRevision < JOURNAL_INITIAL_ENTRY_REVISION
+  ) return null;
+  return Object.freeze({ entryId, resetGeneration, entryRevision });
+}
+
 async function rebuildUrlStatsForUrl(urlKey) {
   const key = String(urlKey || '');
   if (!key) return { urlKey: '', lastSavedAt: 0, uniqueDays: 0, dayCounts: {} };
@@ -6130,6 +6207,7 @@ async function appendJournalEntry({ destination, filename, remotePath = '', fold
   });
   const entry = {
     id,
+    entryRevision: JOURNAL_INITIAL_ENTRY_REVISION,
     createdAt,
     localDayKey: localDayKey(createdAt),
     operationDateTime: String(meta.localDateTime || ''),
@@ -6643,12 +6721,246 @@ async function getJournalEntryById(id) {
   } finally { db.close(); }
 }
 
+function journalEntryAuthorityMatches(resetGeneration, entry, tokenValue) {
+  const token = normalizeJournalEntryAuthorityToken(tokenValue);
+  if (!token || !entry || typeof entry !== 'object') return false;
+  return (
+    String(entry.id || '') === token.entryId
+    && normalizeJournalResetGeneration(resetGeneration) === token.resetGeneration
+    && normalizeJournalEntryRevision(entry.entryRevision) === token.entryRevision
+  );
+}
+
+async function journalResetGenerationSnapshot() {
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_META_STORE,
+      'readonly',
+      'Чтение generation журнала',
+      ({ store, setResult, fail }) => {
+        const request = store().get(JOURNAL_RESET_GENERATION_KEY);
+        request.onsuccess = () => setResult(normalizeJournalResetGeneration(request.result?.value));
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать generation журнала.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function readJournalEntryWithAuthority(id) {
+  const entryId = String(id || '').trim();
+  if (!entryId) return null;
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_STORE, JOURNAL_META_STORE],
+      'readonly',
+      'Чтение записи журнала с CAS authority',
+      ({ tx, setResult, fail }) => {
+        let entryReady = false;
+        let generationReady = false;
+        let entry = null;
+        let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+        const publish = () => {
+          if (!entryReady || !generationReady) return;
+          if (!entry) { setResult(null); return; }
+          const normalizedEntry = {
+            ...entry,
+            entryRevision: normalizeJournalEntryRevision(entry.entryRevision)
+          };
+          setResult({
+            entry: normalizedEntry,
+            token: journalEntryAuthorityToken(resetGeneration, normalizedEntry)
+          });
+        };
+
+        const entryRequest = tx.objectStore(JOURNAL_STORE).get(entryId);
+        entryRequest.onsuccess = () => {
+          entry = entryRequest.result || null;
+          entryReady = true;
+          publish();
+        };
+        entryRequest.onerror = () => fail(entryRequest.error || new Error('Не удалось прочитать запись журнала для CAS authority.'));
+
+        const generationRequest = tx.objectStore(JOURNAL_META_STORE).get(JOURNAL_RESET_GENERATION_KEY);
+        generationRequest.onsuccess = () => {
+          resetGeneration = normalizeJournalResetGeneration(generationRequest.result?.value);
+          generationReady = true;
+          publish();
+        };
+        generationRequest.onerror = () => fail(generationRequest.error || new Error('Не удалось прочитать generation журнала для CAS authority.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function captureJournalEntryAuthority(id) {
+  const snapshot = await readJournalEntryWithAuthority(id);
+  return snapshot?.token || null;
+}
+
+async function updateJournalEntryRecordCas(tokenValue, patch = {}) {
+  const token = normalizeJournalEntryAuthorityToken(tokenValue);
+  if (!token) {
+    const error = new Error('Некорректный CAS token записи журнала.');
+    error.code = 'JOURNAL_ENTRY_AUTHORITY_TOKEN_INVALID';
+    throw error;
+  }
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_STORE, JOURNAL_META_STORE],
+      'readwrite',
+      'CAS обновление записи журнала',
+      ({ tx, setResult, fail }) => {
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
+        let entryReady = false;
+        let generationReady = false;
+        let current = null;
+        let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+        let compared = false;
+        const compareAndWrite = () => {
+          if (compared || !entryReady || !generationReady) return;
+          compared = true;
+          if (!journalEntryAuthorityMatches(resetGeneration, current, token)) {
+            setResult({ ok: false, stale: true, entry: null, token: null });
+            return;
+          }
+          try {
+            const updated = {
+              ...current,
+              ...patch,
+              id: current.id,
+              entryRevision: nextJournalEntryRevision(current.entryRevision)
+            };
+            const put = entries.put(updated);
+            put.onsuccess = () => {
+              touchJournalDbRevision(tx, 'cas-update-entry');
+              setResult({
+                ok: true,
+                stale: false,
+                entry: updated,
+                token: journalEntryAuthorityToken(resetGeneration, updated)
+              });
+            };
+            put.onerror = () => fail(put.error || new Error('Не удалось CAS-обновить запись журнала.'));
+          } catch (error) { fail(error); }
+        };
+
+        const entryRequest = entries.get(token.entryId);
+        entryRequest.onsuccess = () => {
+          current = entryRequest.result || null;
+          entryReady = true;
+          compareAndWrite();
+        };
+        entryRequest.onerror = () => fail(entryRequest.error || new Error('Не удалось прочитать запись журнала для CAS-обновления.'));
+
+        const generationRequest = meta.get(JOURNAL_RESET_GENERATION_KEY);
+        generationRequest.onsuccess = () => {
+          resetGeneration = normalizeJournalResetGeneration(generationRequest.result?.value);
+          generationReady = true;
+          compareAndWrite();
+        };
+        generationRequest.onerror = () => fail(generationRequest.error || new Error('Не удалось прочитать generation журнала для CAS-обновления.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function deleteJournalEntryRecordOnlyCas(tokenValue) {
+  const token = normalizeJournalEntryAuthorityToken(tokenValue);
+  if (!token) {
+    const error = new Error('Некорректный CAS token записи журнала.');
+    error.code = 'JOURNAL_ENTRY_AUTHORITY_TOKEN_INVALID';
+    throw error;
+  }
+  const statsToken = await beginJournalStatsMutation('delete');
+  const db = await openJournalDb();
+  let result = null;
+  try {
+    result = await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_STORE, JOURNAL_META_STORE],
+      'readwrite',
+      'CAS удаление записи журнала',
+      ({ tx, setResult, fail }) => {
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
+        let entryReady = false;
+        let generationReady = false;
+        let current = null;
+        let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+        let compared = false;
+        const compareAndDelete = () => {
+          if (compared || !entryReady || !generationReady) return;
+          compared = true;
+          if (!journalEntryAuthorityMatches(resetGeneration, current, token)) {
+            setResult({ ok: false, stale: true, entry: null });
+            return;
+          }
+          const del = entries.delete(token.entryId);
+          del.onsuccess = () => {
+            touchJournalDbRevision(tx, 'cas-delete-entry');
+            setResult({ ok: true, stale: false, entry: current });
+          };
+          del.onerror = () => fail(del.error || new Error('Не удалось CAS-удалить запись журнала.'));
+        };
+
+        const entryRequest = entries.get(token.entryId);
+        entryRequest.onsuccess = () => {
+          current = entryRequest.result || null;
+          entryReady = true;
+          compareAndDelete();
+        };
+        entryRequest.onerror = () => fail(entryRequest.error || new Error('Не удалось прочитать запись журнала для CAS-удаления.'));
+
+        const generationRequest = meta.get(JOURNAL_RESET_GENERATION_KEY);
+        generationRequest.onsuccess = () => {
+          resetGeneration = normalizeJournalResetGeneration(generationRequest.result?.value);
+          generationReady = true;
+          compareAndDelete();
+        };
+        generationRequest.onerror = () => fail(generationRequest.error || new Error('Не удалось прочитать generation журнала для CAS-удаления.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } catch (error) {
+    await completeJournalStatsMutation(statsToken).catch(() => {});
+    throw error;
+  } finally { db.close(); }
+
+  if (!result?.ok) {
+    await completeJournalStatsMutation(statsToken).catch(() => {});
+    return result || { ok: false, stale: true, entry: null };
+  }
+
+  const entry = result.entry;
+  if (entry?.urlKey) {
+    try {
+      await rebuildUrlStatsForUrl(entry.urlKey);
+      await completeJournalStatsMutation(statsToken);
+    } catch (error) {
+      console.warn('WebClip urlStats CAS delete deferred repair:', error);
+    }
+  } else {
+    await completeJournalStatsMutation(statsToken);
+  }
+  return result;
+}
+
 async function updateJournalEntryRecord(id, patch = {}) {
   const db = await openJournalDb();
   try {
     return await runIndexedDbTransactionBounded(db, [JOURNAL_STORE, JOURNAL_META_STORE], 'readwrite', 'Обновление записи журнала', ({ tx, setResult, fail }) => {
       const store = tx.objectStore(JOURNAL_STORE); const req = store.get(id);
-      req.onsuccess = () => { try { const current = req.result; if (!current) { setResult(null); return; } const updated = { ...current, ...patch, id: current.id }; store.put(updated); touchJournalDbRevision(tx, 'update-entry'); setResult(updated); } catch (e) { fail(e); } };
+      req.onsuccess = () => { try { const current = req.result; if (!current) { setResult(null); return; } const updated = { ...current, ...patch, id: current.id, entryRevision: nextJournalEntryRevision(current.entryRevision) }; store.put(updated); touchJournalDbRevision(tx, 'update-entry'); setResult(updated); } catch (e) { fail(e); } };
       req.onerror = () => fail(req.error || new Error('Не удалось прочитать запись журнала для обновления.'));
     }, JOURNAL_CRUD_IDB_TX_TIMEOUT_MS);
   } finally { db.close(); }
@@ -7414,7 +7726,7 @@ async function updateReadMoveJournalCheckpointFromReceipt(receiptId, patch = {})
               try {
                 const current = entryReq.result;
                 if (!pendingDestructiveMoveEntryMatches(receipt, current)) { setResult(null); return; }
-                const updated = { ...current, ...patch, id: current.id };
+                const updated = { ...current, ...patch, id: current.id, entryRevision: nextJournalEntryRevision(current.entryRevision) };
                 entries.put(updated);
                 touchJournalDbRevision(tx, 'read-move-checkpoint');
                 setResult(updated);
@@ -7798,7 +8110,7 @@ async function finalizeReadMoveJournalFromReceipt(receiptId, patch = {}) {
                   setResult({ cancelled: true, entry: null, sourceAuthorityLost: true });
                   return;
                 }
-                const updated = { ...current, ...patch, id: current.id };
+                const updated = { ...current, ...patch, id: current.id, entryRevision: nextJournalEntryRevision(current.entryRevision) };
                 entries.put(updated);
                 receipts.delete(key);
                 touchJournalDbRevision(tx, 'read-move-finalize');
@@ -8190,6 +8502,7 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
         const pendingRemoteStore = tx.objectStore(JOURNAL_PENDING_REMOTE_STORE);
         const destructiveStore = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
         touchJournalDbRevision(tx, `clear-${scope}`);
+        advanceJournalResetGeneration(tx, `clear-${scope}`, fail);
         if (!urlKey && !siteKey) {
           store.clear();
           pendingStore.clear();
@@ -8391,7 +8704,8 @@ async function readJournalEntryBatch(afterId = '', limit = 250, deadline = 0) {
         let json;
         try {
           const entry = cursor.value || {};
-          json = JSON.stringify({ ...entry, journalComments: normalizeJournalComments(entry) });
+          const { entryRevision: _localEntryRevision, ...portableEntry } = entry;
+          json = JSON.stringify({ ...portableEntry, journalComments: normalizeJournalComments(entry) });
         } catch (error) {
           abortWith(error);
           return;
@@ -8665,6 +8979,7 @@ function normalizeImportedJournalEntry(raw, index, seenIds = null, forcedId = ''
     : null;
   return {
     id,
+    entryRevision: JOURNAL_INITIAL_ENTRY_REVISION,
     createdAt,
     localDayKey: /^\d{4}-\d{2}-\d{2}$/.test(importedDayKey) ? importedDayKey : localDayKey(createdAt),
     operationDateTime: boundedImportString(raw.operationDateTime || '', MAX_IMPORTED_DATETIME_CHARS),
@@ -9684,6 +9999,7 @@ async function commitStagedJournalImport(prepared, operationId, expectedJournalR
           fail: abort
         });
         touchJournalDbRevision(tx, 'import-replace');
+        advanceJournalResetGeneration(tx, 'import-replace', abort);
         const clearRequest = journalStore.clear();
         clearRequest.onerror = () => abort(clearRequest.error || new Error('Не удалось очистить старый журнал перед импортом.'));
         clearRequest.onsuccess = () => {
@@ -9704,7 +10020,7 @@ async function commitStagedJournalImport(prepared, operationId, expectedJournalR
               abort(new Error('Staging импорта содержит повреждённую запись.'));
               return;
             }
-            const put = journalStore.put(entry);
+            const put = journalStore.put({ ...entry, entryRevision: JOURNAL_INITIAL_ENTRY_REVISION });
             put.onerror = () => abort(put.error || new Error('Не удалось записать импортируемую запись журнала.'));
             put.onsuccess = () => {
               const del = cursor.delete();

@@ -65,7 +65,9 @@ ok(importSection.includes("...(importedSourceReceipt ? { sourceReceipt: imported
 ok(!importSection.includes("required: true"), 'legacy imports without source receipt remain accepted');
 
 const exportSection = section('async function readJournalEntryBatch', 'function safeTextChunkEnd');
-ok(exportSection.includes("JSON.stringify({ ...entry, journalComments: normalizeJournalComments(entry) })"), 'file export serializes additive source receipt automatically');
+ok(exportSection.includes('const { entryRevision: _localEntryRevision, ...portableEntry } = entry'), 'file export strips only local CAS authority before serialization');
+ok(exportSection.includes("JSON.stringify({ ...portableEntry, journalComments: normalizeJournalComments(entry) })"), 'file export serializes additive source receipt through the portable entry projection');
+ok(!exportSection.includes('sourceReceipt: _'), 'portable export projection does not strip additive source receipt');
 
 const restoreGuard = fs.readFileSync(path.join(ROOT, 'journal-restore-envelope-guard.js'), 'utf8');
 ok(restoreGuard.includes("JSON.stringify({ ...entry, journalComments: globalThis.normalizeJournalComments(entry) })"), 'guarded backup export also preserves additive receipt');

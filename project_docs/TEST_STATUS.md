@@ -100,6 +100,24 @@ Focused deterministic production witnesses:
 
 P0-072 remains **ACTIVE**, not DONE. Production reset-survival and local restart handling are implemented for the known external-effect classes, but closure still requires real browser-process restart/crash evidence, authorized real Chrome automatic-download reset/late-terminal evidence, authorized isolated Yandex destructive unknown/late-settlement evidence, and a reviewed operator/manual-resolution path for permanently unknown destructive receipts. P1-090/P0-076/P1-198 remain separate ACTIVE owners. Release readiness remains **NOT READY**.
 
+## Current P0-076 implementation boundary
+
+P0-076 owns local Journal authority for delayed single-entry mutations. The first production tranche introduces the **authority primitive** only: a dedicated Journal/reset generation plus per-entry revision accounting and generic atomic CAS patch/delete helpers. Caller migration is intentionally separate, so P0-076 remains **ACTIVE**.
+
+`JOURNAL_RESET_GENERATION_KEY = resetGeneration` lives in the existing Journal meta store and is distinct from `JOURNAL_META_REVISION_KEY`. Missing legacy metadata deterministically means generation 1. Every scoped/full `clearJournalEntries()` and every staged import-replace schedules exactly one generation increment inside the same IndexedDB readwrite transaction as the authority-replacing Journal transition. Ordinary append/point update/delete do not advance this dedicated reset generation. The older all-mutations revision remains unchanged for export/import preview and view invalidation semantics.
+
+Every new Journal row and every imported replacement starts with local `entryRevision = 1`. Import normalization does not trust a serialized `raw.entryRevision`, and export deliberately strips `entryRevision` before serializing schema-v1 entries: a restored backup therefore creates fresh local authority even when it reuses the same textual id and visible fields. Legacy rows that predate this tranche are interpreted as revision 1 without a bulk migration.
+
+Every production point write of an existing row currently present in `service-worker.js` advances `entryRevision`: the generic `updateJournalEntryRecord()`, the detached ReadLater checkpoint update, and the detached ReadLater terminal local finalize. Deletes remove the row. This makes any previously captured token stale after a same-entry mutation even before all callers migrate to CAS.
+
+`readJournalEntryWithAuthority()` reads the row and dedicated reset generation in one readonly transaction and returns `{ entry, token }`; `captureJournalEntryAuthority()` returns the exact token `{ entryId, resetGeneration, entryRevision }`. `updateJournalEntryRecordCas()` and `deleteJournalEntryRecordOnlyCas()` compare both authority values and perform the final write/delete in the same readwrite transaction. An exact-current patch increments `entryRevision` exactly once and returns the next token. A reset/import generation mismatch, same-entry revision mismatch, missing row or same-id replacement produces `stale: true` rather than retargeting the old operation. CAS delete preserves the existing URL-stats dirty-marker/rebuild protocol.
+
+Focused deterministic production witness:
+- `project_tools/test_p0_076_journal_cas_authority_primitive.js` — dedicated reset-generation wiring, fresh import revision, export authority stripping, all production point-write revision accounting, atomic row+generation token capture, atomic CAS patch/delete, stale negative controls and explicit caller non-migration.
+- `project_tools/test_p0_076_single_entry_generation_cas_model.js` remains the broader acceptance model for same-id import replacement, concurrent Mark Read, comment lost-update, scoped reset and P0-072 composition.
+
+This is **not P0-076 closure**. Existing comment mutations and legacy generic delete/update call sites still invoke blind helpers and do not yet capture/use CAS tokens. Mark Read/Delete external-effect paths have P0-072 receipt identity guards but are not yet expressed through the generic P0-076 token primitive. Subsequent bounded tranches must migrate delayed/high-risk callers and define conflict/reread behavior without weakening P0-072 or P1-090. P0-076 remains **ACTIVE** and release readiness remains **NOT READY**.
+
 ## Current P0-023 implementation boundary
 
 P0-023 owns authority for a **live current-page** cached-PDF retry/download to claim an already sealed P0-079 generation. The live retry/download message handler now requires the top content sender's exact Chrome `documentId`, probes that exact document in the isolated world, and reads the current P0-080 application/selection receipt from `WebClipApplicationGeneration.admitSelection()`. The exact-document probe is bounded by the canonical scripting timeout and deliberately does not use the injection late-success cache: a late probe result is not reusable as fresh live authority.
