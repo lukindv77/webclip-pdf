@@ -93,7 +93,7 @@ ok(importCommit.includes('journalStore.put({ ...entry, entryRevision: JOURNAL_IN
 const importNormalize = functionSource(worker, 'normalizeImportedJournalEntry');
 ok(importNormalize.includes('entryRevision: JOURNAL_INITIAL_ENTRY_REVISION'), 'import normalization assigns local revision');
 ok(!importNormalize.includes('raw.entryRevision'), 'serialized revision is never trusted');
-eq(occurrences(worker, 'advanceJournalResetGeneration(tx,'), 2, 'only clear and import-replace advance dedicated reset generation');
+eq(occurrences(worker, 'advanceJournalResetGeneration(tx,'), 3, 'definition plus exactly clear and import-replace use dedicated reset generation');
 
 // 3) Comment lost-update paths use CAS once, with no silent rebind.
 for (const name of ['addJournalComment', 'editJournalComment', 'deleteJournalComment']) {
