@@ -7562,9 +7562,10 @@ function pendingDestructiveMoveJournalAuthorityToken(receipt = {}) {
 function pendingDestructiveMoveJournalAuthorityMatches(receipt = {}, resetGeneration, entry = {}) {
   if (!pendingDestructiveMoveEntryMatches(receipt, entry)) return false;
   const token = pendingDestructiveMoveJournalAuthorityToken(receipt);
-  // Legacy receipts predate P0-076 composition. They retain the reviewed
-  // P0-072 createdAt/resource identity fallback for restart reconciliation.
-  return token ? journalEntryAuthorityMatches(resetGeneration, entry, token) : true;
+  // P0-076: local Journal mutation requires exact generation+revision authority.
+  // Legacy receipts without this cursor retain remote evidence but cannot mutate
+  // current Journal state automatically.
+  return Boolean(token && journalEntryAuthorityMatches(resetGeneration, entry, token));
 }
 
 function pendingDestructiveMoveAdvanceJournalAuthority(receipt = {}, resetGeneration, entry = {}) {
@@ -7985,6 +7986,7 @@ async function markPendingDestructiveMoveFailure(id, error) {
 }
 
 function pendingDestructiveMoveRecoveryDisposition(item = {}) {
+  if (item?.manualResolutionRequired === true) return 'retain-manual';
   const phase = String(item.phase || '');
   if (phase === 'prepared') return 'drop-prepared';
   if (phase === 'admitted-unknown') return 'manual-resolution';
@@ -8137,6 +8139,24 @@ async function reconcilePendingDestructiveMoves(trigger = 'maintenance', maxItem
       }
 
       if (disposition !== 'finalize-local') continue;
+
+      // A reset-superseded verified receipt is history-only and can be retired
+      // without touching Journal state. Otherwise, legacy verified receipts that
+      // predate the P0-076 cursor cannot automatically patch/delete the current
+      // row: preserve their terminal remote evidence for manual resolution.
+      if (item.supersededByJournalReset !== true && !pendingDestructiveMoveJournalAuthorityToken(item)) {
+        const reason = 'Verified legacy destructive receipt не содержит exact P0-076 Journal authority; automatic local Journal finalization запрещена. Remote terminal evidence сохранён для manual resolution.';
+        await markPendingDestructiveMoveManualResolution(id, reason, trigger);
+        manualResolution += 1;
+        recordOperationStage(operationId, 'recovery-manual', reason, 100, 'partial', {
+          trigger,
+          kind,
+          recoveryState: 'manual-resolution',
+          legacyJournalAuthority: true
+        });
+        await flushOperationLogWrites(operationId).catch(() => {});
+        continue;
+      }
 
       if (kind === 'trash-move') {
         const result = await finalizeTrashDeleteFromReceipt(id);
