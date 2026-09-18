@@ -145,10 +145,16 @@ function releaseAuthority({ runtimeComplete = false, shadowComplete = false, exp
 
   const implementationDelta = changedPaths(IMPLEMENTATION_ENTRY_BASE);
   const implementationRuntimeDelta = implementationDelta.filter((path) => !isResearchControlPath(path));
-  deepEq(implementationRuntimeDelta, ['application-generation.js', 'content-injection-guard.js', 'frame-agent.js'], 'P0-080 production entry admits the generation primitive, bounded bootstrap wiring and remote-frame application-generation consumer');
+  deepEq(
+    implementationRuntimeDelta,
+    ['application-generation.js', 'content-injection-guard.js', 'frame-agent.js', 'service-worker.js'],
+    'current production entry contains the bounded P0-080 generation paths plus the separate P0-070 worker/render-generation consumer'
+  );
   check(implementationDelta.includes('project_tools/test_p0_080_application_generation_primitive.js'), 'primitive deterministic proof accompanies runtime path');
   check(implementationDelta.includes('project_tools/test_p0_080_generation_bootstrap.js'), 'generation bootstrap ordering proof accompanies production wiring');
   check(implementationDelta.includes('project_tools/test_p0_080_save_admission_generation.js'), 'save-admission deterministic proof accompanies production wiring');
+  check(implementationDelta.includes('project_tools/test_p0_070_source_document_application_admission.js'), 'P0-070 exact-document/application-generation worker proof accompanies service-worker consumption');
+  check(implementationDelta.includes('project_tools/test_p0_070_render_window_navigation_fence.js'), 'P0-070 render-window navigation proof accompanies service-worker consumption');
   check(implementationDelta.includes('project_tools/test_p1_231_package_topology_census_model.js'), 'package census explicitly admits the runtime path');
 
   const requirements = read('project_docs/USER_REQUIREMENTS.md');
@@ -170,6 +176,9 @@ function releaseAuthority({ runtimeComplete = false, shadowComplete = false, exp
   check(serviceWorker.includes("const YANDEX_FIXED_REDIRECT_URI = 'https://oauth.yandex.ru/verification_code';"), 'current source uses exact fixed redirect');
   check(serviceWorker.includes("url.searchParams.set('redirect_uri', YANDEX_FIXED_REDIRECT_URI)"), 'current authorization request consumes fixed redirect');
   check(serviceWorker.includes("url.searchParams.set('code_challenge_method', 'S256')"), 'current source uses PKCE S256');
+  check(serviceWorker.includes('function createPdfRenderNavigationFence'), 'current P0-070 worker path owns an explicit PDF render-window navigation fence');
+  check(serviceWorker.includes("method === 'Page.frameStartedNavigating'"), 'current P0-070 render fence treats navigation start as monotonic stale evidence');
+  check(serviceWorker.includes("chrome.debugger.sendCommand(debuggee, 'Page.getFrameTree')"), 'current P0-070 render fence binds the exact CDP main frame');
   check(serviceWorker.includes("case 'WEBCLIP_YANDEX_FINISH_AUTH':"), 'current flow has explicit manual finish-auth boundary');
   check(!serviceWorker.includes('chrome.identity.launchWebAuthFlow'), 'current source does not use launchWebAuthFlow');
   check(!serviceWorker.includes('chrome.identity.getRedirectURL'), 'current source does not derive chromiumapp redirect');
