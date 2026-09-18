@@ -22,14 +22,26 @@ function section(source, start, end) {
 function functionSource(source, name) {
   const start = source.indexOf(`function ${name}(`);
   if (start < 0) throw new Error(`function not found: ${name}`);
+  const paramsStart = source.indexOf('(', start);
+  let parens = 0;
+  let paramsEnd = -1;
+  for (let i = paramsStart; i < source.length; i += 1) {
+    if (source[i] === '(') parens += 1;
+    else if (source[i] === ')') {
+      parens -= 1;
+      if (parens === 0) { paramsEnd = i; break; }
+    }
+  }
+  if (paramsEnd < 0) throw new Error(`parameter boundary not found: ${name}`);
+  const bodyStart = source.indexOf('{', paramsEnd);
+  if (bodyStart < 0) throw new Error(`body not found: ${name}`);
   let depth = 0;
-  let seen = false;
-  for (let i = start; i < source.length; i += 1) {
+  for (let i = bodyStart; i < source.length; i += 1) {
     const ch = source[i];
-    if (ch === '{') { depth += 1; seen = true; }
+    if (ch === '{') depth += 1;
     else if (ch === '}') {
       depth -= 1;
-      if (seen && depth === 0) return source.slice(start, i + 1);
+      if (depth === 0) return source.slice(start, i + 1);
     }
   }
   throw new Error(`function boundary not found: ${name}`);
