@@ -85,6 +85,11 @@ throwsCode(
   'sibling prefix fails closed'
 );
 throwsCode(
+  () => authority.proveRecoveryNamespace({ receipt: receipt({ remotePath: '/WebClip/../OtherRoot/a.pdf' }), currentAccountUid: 'acct-A' }),
+  'WEBCLIP_REMOTE_RECOVERY_PATH_OUTSIDE_ROOT',
+  'dot-segment escape fails after normalization'
+);
+throwsCode(
   () => authority.proveRecoveryNamespace({ receipt: receipt(), currentAccountUid: '' }),
   'WEBCLIP_REMOTE_RECOVERY_AUTH_REQUIRED',
   'unknown current account fails closed'
