@@ -16,12 +16,20 @@ function section(source, startMarker, endMarker) {
 function createContext({ maxBytes = 48 * 1024 * 1024, reads }) {
   const events = [];
   let readIndex = 0;
+  const debuggerListeners = new Set();
   const chrome = {
     debugger: {
+      onEvent: {
+        addListener(listener) { debuggerListeners.add(listener); events.push('onEvent.addListener'); },
+        removeListener(listener) { debuggerListeners.delete(listener); events.push('onEvent.removeListener'); }
+      },
       attach() { events.push('attach'); return Promise.resolve(); },
       detach() { events.push('detach'); return Promise.resolve(); },
       sendCommand(_debuggee, method, params) {
         events.push(method);
+        if (method === 'Page.getFrameTree') {
+          return Promise.resolve({ frameTree: { frame: { id: `main-${_debuggee.tabId}` } } });
+        }
         if (method === 'Page.printToPDF') {
           assert.strictEqual(params.transferMode, 'ReturnAsStream');
           return Promise.resolve({ stream: 'stream-1' });
@@ -77,6 +85,9 @@ async function testStreamingSuccess() {
   assert.strictEqual(Buffer.from(await blob.arrayBuffer()).toString('utf8'), 'abcde');
   assert.strictEqual(events.filter((x) => x === 'IO.read').length, 2);
   assert(events.includes('IO.close'), 'stream handle must be closed on success');
+  assert(events.includes('Page.getFrameTree'), 'PDF render must identify the exact main frame');
+  assert(events.includes('onEvent.addListener'), 'PDF render must install the navigation fence');
+  assert(events.includes('onEvent.removeListener'), 'PDF render must remove the navigation fence');
   assert(events.indexOf('IO.close') < events.lastIndexOf('detach'), 'IO.close must happen before debugger detach');
 }
 
