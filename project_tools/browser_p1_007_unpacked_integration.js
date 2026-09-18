@@ -247,16 +247,18 @@ async function startFixtureServer() {
   };
 }
 
-async function prepareTestExtension(fixtureOrigin, apiBase) {
+async function prepareTestExtension(fixtureOrigin, apiBase, { mockYandex = true } = {}) {
   const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'webclip-p1-007-ext-'));
   await fsp.cp(root, tempRoot, { recursive: true });
 
-  const swPath = path.join(tempRoot, 'service-worker.js');
-  let sw = await fsp.readFile(swPath, 'utf8');
-  const original = "const YANDEX_API_BASE = 'https://cloud-api.yandex.net/v1/disk';";
-  assert(sw.includes(original), 'P1-007 browser test expects the production YANDEX_API_BASE constant');
-  sw = sw.replace(original, `const YANDEX_API_BASE = ${JSON.stringify(apiBase)}; // P1-007 TEST COPY ONLY`);
-  await fsp.writeFile(swPath, sw);
+  if (mockYandex) {
+    const swPath = path.join(tempRoot, 'service-worker.js');
+    let sw = await fsp.readFile(swPath, 'utf8');
+    const original = "const YANDEX_API_BASE = 'https://cloud-api.yandex.net/v1/disk';";
+    assert(sw.includes(original), 'P1-007 browser test expects the production YANDEX_API_BASE constant');
+    sw = sw.replace(original, `const YANDEX_API_BASE = ${JSON.stringify(apiBase)}; // P1-007 TEST COPY ONLY`);
+    await fsp.writeFile(swPath, sw);
+  }
 
   const manifestPath = path.join(tempRoot, 'manifest.json');
   const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
@@ -268,8 +270,8 @@ async function prepareTestExtension(fixtureOrigin, apiBase) {
   return { path: tempRoot, cleanup: () => fsp.rm(tempRoot, { recursive: true, force: true }) };
 }
 
-async function launchChromium(extensionPath) {
-  const profile = await fsp.mkdtemp(path.join(os.tmpdir(), 'webclip-p1-007-profile-'));
+async function launchChromium(extensionPath, { profilePath = '', preserveProfile = false } = {}) {
+  const profile = profilePath || await fsp.mkdtemp(path.join(os.tmpdir(), 'webclip-p1-007-profile-'));
   const downloads = path.join(profile, 'Downloads');
   await fsp.mkdir(downloads, { recursive: true });
   const stdoutPath = path.join(profile, 'chromium.stdout.log');
@@ -318,18 +320,26 @@ async function launchChromium(extensionPath) {
         }, { timeoutMs: 15_000, intervalMs: 100, label: `${label} ready` });
         return session;
       },
-      async stop() {
+      async stop({ preserveProfile: keepProfile = preserveProfile, signal = 'SIGTERM' } = {}) {
         cdp.close();
         if (proc.exitCode == null) {
-          proc.kill('SIGTERM');
-          await Promise.race([
-            new Promise((resolve) => proc.once('exit', resolve)),
-            sleep(1500).then(() => { if (proc.exitCode == null) proc.kill('SIGKILL'); })
-          ]).catch(() => {});
+          if (signal === 'SIGKILL') {
+            proc.kill('SIGKILL');
+            await Promise.race([
+              new Promise((resolve) => proc.once('exit', resolve)),
+              sleep(1500)
+            ]).catch(() => {});
+          } else {
+            proc.kill('SIGTERM');
+            await Promise.race([
+              new Promise((resolve) => proc.once('exit', resolve)),
+              sleep(1500).then(() => { if (proc.exitCode == null) proc.kill('SIGKILL'); })
+            ]).catch(() => {});
+          }
         }
         stdout.end(); stderr.end();
         await sleep(100);
-        await fsp.rm(profile, { recursive: true, force: true }).catch(() => {});
+        if (!keepProfile) await fsp.rm(profile, { recursive: true, force: true }).catch(() => {});
       }
     };
   } catch (error) {
@@ -337,7 +347,7 @@ async function launchChromium(extensionPath) {
     if (proc.exitCode == null) proc.kill('SIGTERM');
     stdout.end(); stderr.end();
     const stderrText = await fsp.readFile(stderrPath, 'utf8').catch(() => '');
-    await fsp.rm(profile, { recursive: true, force: true }).catch(() => {});
+    if (!preserveProfile) await fsp.rm(profile, { recursive: true, force: true }).catch(() => {});
     if (stderrText && !error.browserStderr) error.browserStderr = stderrText.slice(-4000);
     throw error;
   }
@@ -503,20 +513,31 @@ async function runBrowserIntegration() {
   }
 }
 
-(async () => {
-  const timer = setTimeout(() => {
-    console.error(`P1-007 browser integration exceeded ${MAX_BROWSER_TEST_MS} ms`);
-    process.exit(2);
-  }, MAX_BROWSER_TEST_MS);
-  timer.unref?.();
-  try {
-    const result = await runBrowserIntegration();
-    console.log('P1-007 real Chromium browser integration OK');
-    console.log(JSON.stringify(result, null, 2));
-  } finally {
-    clearTimeout(timer);
-  }
-})().catch((error) => {
-  console.error(error?.stack || error);
-  process.exitCode = 1;
+module.exports = Object.freeze({
+  sleep,
+  waitFor,
+  startFixtureServer,
+  prepareTestExtension,
+  launchChromium,
+  js
 });
+
+if (require.main === module) {
+  (async () => {
+    const timer = setTimeout(() => {
+      console.error(`P1-007 browser integration exceeded ${MAX_BROWSER_TEST_MS} ms`);
+      process.exit(2);
+    }, MAX_BROWSER_TEST_MS);
+    timer.unref?.();
+    try {
+      const result = await runBrowserIntegration();
+      console.log('P1-007 real Chromium browser integration OK');
+      console.log(JSON.stringify(result, null, 2));
+    } finally {
+      clearTimeout(timer);
+    }
+  })().catch((error) => {
+    console.error(error?.stack || error);
+    process.exitCode = 1;
+  });
+}
