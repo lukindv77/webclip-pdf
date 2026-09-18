@@ -247,16 +247,18 @@ async function startFixtureServer() {
   };
 }
 
-async function prepareTestExtension(fixtureOrigin, apiBase) {
+async function prepareTestExtension(fixtureOrigin, apiBase, { mockYandex = true } = {}) {
   const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'webclip-p1-007-ext-'));
   await fsp.cp(root, tempRoot, { recursive: true });
 
-  const swPath = path.join(tempRoot, 'service-worker.js');
-  let sw = await fsp.readFile(swPath, 'utf8');
-  const original = "const YANDEX_API_BASE = 'https://cloud-api.yandex.net/v1/disk';";
-  assert(sw.includes(original), 'P1-007 browser test expects the production YANDEX_API_BASE constant');
-  sw = sw.replace(original, `const YANDEX_API_BASE = ${JSON.stringify(apiBase)}; // P1-007 TEST COPY ONLY`);
-  await fsp.writeFile(swPath, sw);
+  if (mockYandex) {
+    const swPath = path.join(tempRoot, 'service-worker.js');
+    let sw = await fsp.readFile(swPath, 'utf8');
+    const original = "const YANDEX_API_BASE = 'https://cloud-api.yandex.net/v1/disk';";
+    assert(sw.includes(original), 'P1-007 browser test expects the production YANDEX_API_BASE constant');
+    sw = sw.replace(original, `const YANDEX_API_BASE = ${JSON.stringify(apiBase)}; // P1-007 TEST COPY ONLY`);
+    await fsp.writeFile(swPath, sw);
+  }
 
   const manifestPath = path.join(tempRoot, 'manifest.json');
   const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
