@@ -75,6 +75,7 @@ const orderedMarkers = [
   'await attachDebuggerBounded(debuggee)',
   'navigationFence = createPdfRenderNavigationFence',
   'navigationFence.install()',
+  'await assertPdfSourceGenerationAfterAttach(tabId)',
   "chrome.debugger.sendCommand(debuggee, 'Page.enable')",
   "chrome.debugger.sendCommand(debuggee, 'Page.getFrameTree')",
   'navigationFence.arm(mainFrame)',
@@ -245,6 +246,7 @@ assert.match(workerSource, /Page\.frameStartedNavigating/, 'production fence mus
 assert.match(workerSource, /Page\.frameNavigated/, 'production fence must observe committed main-frame navigation');
 assert.match(workerSource, /Page\.navigatedWithinDocument/, 'production fence must observe same-document navigation');
 assert.match(workerSource, /Page\.getFrameTree/, 'production render path must resolve the exact main CDP frame');
-checks += 4;
+assert.match(workerSource, /WEBCLIP_SOURCE_GENERATION_GUARD_UNAVAILABLE/, 'post-attach exact-source guard must fail closed if bootstrap is unavailable');
+checks += 5;
 
 console.log(`P0-070 render-window navigation fence: PASS; checks=${checks}; main_frame_only=true; navigation_start=true; same_document=true; buffered_pre_arm=true; no_webNavigation=true`);

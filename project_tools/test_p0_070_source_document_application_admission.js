@@ -111,6 +111,19 @@ function sender(documentId = 'doc-A', frameId = 0) {
   checks += 1;
   eq(executeCalls.at(-1).world, 'ISOLATED', 'probe executes in isolated world');
 
+  const workerGuardHost = { __webclipSourceGenerationWorkerGuardV1: { controller } };
+  eq(await guard.assertActiveWorkerSourceCurrent(workerGuardHost, 17), true, 'post-attach helper is a no-op without an active generation-bound save');
+  controller.enter(admitted);
+  eq(await guard.assertActiveWorkerSourceCurrent(workerGuardHost, 17), true, 'post-attach helper revalidates the active exact source');
+  currentGeneration = 5;
+  await rejectsCode(
+    () => guard.assertActiveWorkerSourceCurrent(workerGuardHost, 17),
+    'WEBCLIP_SOURCE_APPLICATION_CHANGED',
+    'post-attach helper rejects a BFCache/application generation advance before Page setup'
+  );
+  currentGeneration = 4;
+  controller.leave(admitted);
+
   currentGeneration = 5;
   await rejectsCode(
     () => controller.assertCurrent(admitted),

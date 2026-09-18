@@ -10022,6 +10022,18 @@ function makePdfRenderNavigationError(code, message) {
   return error;
 }
 
+async function assertPdfSourceGenerationAfterAttach(tabId) {
+  const guard = globalThis.WebClipContentInjectionGuard;
+  if (!guard || typeof guard.assertActiveWorkerSourceCurrent !== 'function') {
+    throw makePdfRenderNavigationError(
+      'WEBCLIP_SOURCE_GENERATION_GUARD_UNAVAILABLE',
+      'Exact source-generation guard is unavailable after debugger attach.'
+    );
+  }
+  await guard.assertActiveWorkerSourceCurrent(globalThis, tabId);
+  return true;
+}
+
 function createPdfRenderNavigationFence(debuggerApi, debuggee, maxBufferedEvents = 64) {
   const eventApi = debuggerApi?.onEvent;
   const tabId = Number(debuggee?.tabId);
@@ -10161,6 +10173,7 @@ async function generatePdfBlob(tabId) {
     attached = true;
     navigationFence = createPdfRenderNavigationFence(chrome.debugger, debuggee);
     navigationFence.install();
+    await assertPdfSourceGenerationAfterAttach(tabId);
     await withOperationTimeout(chrome.debugger.sendCommand(debuggee, 'Page.enable'), 15_000, 'Инициализация Page');
     const frameTreeResult = await withOperationTimeout(
       chrome.debugger.sendCommand(debuggee, 'Page.getFrameTree'),
