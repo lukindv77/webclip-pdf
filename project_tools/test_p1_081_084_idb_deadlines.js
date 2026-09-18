@@ -38,7 +38,7 @@ assert(operationMaintenance.includes('MAINTENANCE_IDB_TX_TIMEOUT_MS'), 'maintena
 const pdfSections = [
   section(sw, 'async function putCachedPdf(record) {', 'async function getCachedPdfByKey(key) {'),
   section(sw, 'async function getCachedPdfByKey(key) {', 'async function getCachedPdfMetadataByKey(key) {'),
-  section(sw, 'async function getCachedPdfMetadataByKey(key) {', 'async function getValidCachedPdfForTab(tabId) {'),
+  section(sw, 'async function getCachedPdfMetadataByKey(key) {', 'async function getValidCachedPdfForTab(tabId, currentSourceReceipt) {'),
   section(sw, 'async function deleteCachedPdfByKey(key) {', 'async function deleteCachedPdfGeneration(record) {')
 ];
 for (const source of pdfSections) {
@@ -50,7 +50,7 @@ assert(pdfSections[2].includes('setResult(request.result || null)'), 'PDF metada
 assert(pdfSections[0].includes('[PDF_CACHE_STORE, PDF_CACHE_META_STORE]'), 'PDF + metadata write must remain atomic in one transaction');
 assert(pdfSections[3].includes('[PDF_CACHE_STORE, PDF_CACHE_META_STORE]'), 'PDF + metadata delete must remain atomic in one transaction');
 
-const validCache = section(sw, 'async function getValidCachedPdfForTab(tabId) {', 'async function cleanupExpiredPdfCache() {');
+const validCache = section(sw, 'async function getValidCachedPdfForTab(tabId, currentSourceReceipt) {', 'async function cleanupExpiredPdfCache() {');
 assert(validCache.includes('PDF_CACHE_TTL_MS'));
 assert(validCache.includes('currentUrl !== cachedUrl'), 'P0-023 URL binding must remain intact');
 const pdfMaintenance = section(sw, 'async function cleanupExpiredPdfCache() {', 'async function deleteCachedPdfByKey(key) {');

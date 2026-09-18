@@ -15,7 +15,12 @@ function section(source, startMarker, endMarker) {
 assert(sw.includes('const SCRIPT_EXECUTION_TIMEOUT_MS = 10_000;'));
 assert(sw.includes('const SCRIPT_EXECUTION_LATE_SUCCESS_TTL_MS = 60_000;'));
 assert(sw.includes('const scriptExecutionSettlements = new Map();'));
-assert.strictEqual((sw.match(/chrome\.scripting\.executeScript\(/g) || []).length, 1);
+assert.strictEqual((sw.match(/chrome\.scripting\.executeScript\(/g) || []).length, 2);
+const retryProbe = section(sw, 'async function captureCurrentPdfRetrySourceReceipt(sender)', 'function liveRetrySourceReceiptMatches');
+assert(retryProbe.includes('withOperationTimeout('), 'live retry exact-document probe must remain bounded');
+assert(retryProbe.includes('SCRIPT_EXECUTION_TIMEOUT_MS'), 'live retry probe uses the canonical scripting timeout');
+assert(retryProbe.includes('Promise.resolve(chrome.scripting.executeScript({'), 'live retry probe is the only direct non-singleton executeScript authority check');
+assert(!retryProbe.includes('executeScriptSingletonBounded('), 'fresh authority probe must not reuse singleton late-success state');
 assert(content.includes('__WEBCLIP_PDF_PROTOTYPE_LOADED__'));
 assert(frameAgent.includes('__WEBCLIP_FRAME_AGENT_LOADED__'));
 assert(/async function enableFrameAgentsForTab[\s\S]{0,2500}executeScriptSingletonBounded\(/.test(sw));

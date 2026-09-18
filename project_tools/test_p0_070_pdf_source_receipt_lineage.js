@@ -111,13 +111,15 @@ ok(swSource.includes('sourceReceipt: cached.sourceReceipt,\n      meta'), 'remot
 ok(swSource.includes('function pdfRetryIndexKey(tabId)'), 'P0-079 keeps tab identity only as retry discovery index');
 ok(!swSource.includes('function pdfCacheKey(tabId)'), 'P0-079 removes mutable tab alias from PDF byte-object identity');
 ok(swSource.includes('const cacheGeneration = issuePdfCacheGeneration();'), 'P0-070 source receipt composes with worker-issued P0-079 byte generation');
-ok(swSource.includes('async function getValidCachedPdfForTab(tabId)'), 'P0-023 retry authority remains a separate existing function');
-ok(!section(swSource, 'async function getValidCachedPdfForTab(tabId)', 'async function cleanupExpiredPdfCache').includes('sourceReceipt'), 'retry lookup does not pretend source receipt closes P0-023');
+ok(swSource.includes('async function getValidCachedPdfForTab(tabId, currentSourceReceipt)'), 'P0-023 retry authority remains a separate existing function');
+const retryAdmissionSection = section(swSource, 'async function getValidCachedPdfForTab(tabId, currentSourceReceipt)', 'async function cleanupExpiredPdfCache');
+ok(retryAdmissionSection.includes('liveRetrySourceReceiptMatches(cached.sourceReceipt, currentSourceReceipt)'), 'P0-023 consumes immutable P0-070 source provenance for live comparison');
+ok(!retryAdmissionSection.includes('cached.sourceReceipt = currentSourceReceipt'), 'P0-023 live authority never rewrites immutable P0-070 source provenance');
 const journalEntrySection = section(swSource, 'async function appendJournalEntry(', 'async function getJournalEntryById');
 ok(journalEntrySection.includes('sourceReceipt = null'), 'later P0-070 finalization may accept additive Journal source provenance');
 ok(journalEntrySection.includes("...(journalSourceReceipt ? { sourceReceipt: journalSourceReceipt } : {})"), 'Journal provenance remains optional and operation-bound');
 
-console.log(`P0-070 PDF source receipt lineage: PASS; checks=${checks}; p0_079_generation_composed=true; retry_authority_unchanged=true; journal_schema_additive=true`);
+console.log(`P0-070 PDF source receipt lineage: PASS; checks=${checks}; p0_079_generation_composed=true; p0_023_live_comparison_composed=true; journal_schema_additive=true`);
 })().catch((error) => {
   console.error(error);
   process.exit(1);
