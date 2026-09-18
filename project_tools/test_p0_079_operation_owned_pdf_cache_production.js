@@ -109,6 +109,11 @@ ok(lookupSection.includes('const cached = await getCachedPdfMetadataByKey(pointe
 ok(lookupSection.includes('clearPdfRetryIndexIfMatches(tabId, pointer.cacheKey, pointer.cacheGeneration)'), 'source/index mismatch clears only exact pointer');
 ok(!lookupSection.includes('deleteCachedPdfByKey(pointer.cacheKey)'), 'source mismatch does not destroy operation-owned bytes');
 
+const ttlCleanup = section(worker, 'async function cleanupExpiredPdfCache', 'async function deleteCachedPdfByKey');
+ok(ttlCleanup.indexOf('await getPendingRemotePdfCacheRetentionSnapshot()') < ttlCleanup.indexOf('await openPdfCacheDb()'), 'TTL cleanup reads durable remote retention authority before delete transaction');
+ok(ttlCleanup.includes('pdfCacheGenerationMatchesRemoteRetention(stale, retentionSnapshot)'), 'TTL cleanup preserves exact admitted remote generation');
+ok(ttlCleanup.includes('Number(stale.createdAt || 0) < cutoff && !protectedByRemoteCheckpoint'), 'TTL deletes only unprotected expired generations');
+
 const generationDelete = section(worker, 'async function deleteCachedPdfGeneration(record)', 'function withOperationTimeout');
 ok(generationDelete.includes('String(current.cacheGeneration || \'\') !== generation'), 'cleanup revalidates exact stored generation');
 ok(generationDelete.includes('pointer.cacheKey === cacheKey && pointer.cacheGeneration === generation'), 'cleanup CAS-checks retry pointer');
@@ -131,6 +136,10 @@ ok(uploadSection.includes("pdfCacheKey: String(cached.key || '')"), 'offscreen r
 ok(uploadSection.includes("pdfCacheGeneration: String(cached.cacheGeneration || '')"), 'offscreen receives exact generation receipt');
 ok(uploadSection.includes('expectedPdfBytes,'), 'offscreen receipt binds expected byte size');
 ok(!uploadSection.includes('pdfCacheKey(tabId)'), 'remote upload cannot silently fall back to mutable tab alias');
+ok(uploadSection.includes("pdfCacheKey: String(cached.key || '')"), 'durable remote checkpoint links exact local cache key');
+ok(uploadSection.includes("pdfCacheGeneration: String(cached.cacheGeneration || '')"), 'durable remote checkpoint links exact local cache generation');
+ok(uploadSection.indexOf('checkpointPendingRemoteSaveIntent({') < uploadSection.indexOf('runOffscreenSignedTransfer({'), 'admitted-unknown checkpoint commits before signed transfer');
+ok(!uploadSection.includes('markPendingRemoteSaveAdmitted'), 'no separate prepared-to-admitted transition can race TTL cleanup');
 
 const transportSection = section(worker, 'async function runOffscreenSignedTransfer', 'async function ensureYandexFolderTree');
 ok(transportSection.includes("pdfCacheGeneration: String(spec.pdfCacheGeneration || '')"), 'worker transport preserves cache generation');
@@ -153,4 +162,4 @@ ok(signedTransfer.includes("String(spec.pdfCacheGeneration || '')"), 'offscreen 
 ok(signedTransfer.includes('Number(spec.expectedPdfBytes || 0)'), 'offscreen upload consumes expected byte size');
 ok(!signedTransfer.includes('getPdfCacheRecord(String(spec.pdfCacheKey'), 'legacy key-only dereference removed from upload');
 
-console.log(`P0-079 operation-owned PDF cache production: PASS; checks=${checks}; db=v4; sealed_add=true; retry_index=true; offscreen_exact=true; p0_023_live_source_admission=true`);
+console.log(`P0-079 operation-owned PDF cache production: PASS; checks=${checks}; db=v4; sealed_add=true; retry_index=true; offscreen_exact=true; p0_023_live_source_admission=true; nonterminal_remote_retention=true`);

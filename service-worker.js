@@ -4164,13 +4164,23 @@ async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, 
   let remoteCheckpoint = null;
   const ensureRemoteCheckpoint = async () => {
     if (remoteCheckpoint) return remoteCheckpoint;
+    // This helper is reached only after either an upload URL was issued or
+    // an existing remote file was observed. Persist admitted-unknown directly:
+    // a separate prepared -> admitted write would leave a cross-DB race where
+    // PDF TTL cleanup could consume a stale pre-admission snapshot.
     remoteCheckpoint = await checkpointPendingRemoteSaveIntent({
       destination: 'yandex', filename, remotePath, folder: targetFolder, publicUrl: '', resourceId: '', accountUid, rootPath,
       journalEntryId: remoteJournalEntryId,
       journalCreatedAt: Math.max(0, Number(cached.createdAt) || 0) || Date.now(),
       sourceReceipt: cached.sourceReceipt,
       meta
-    }, { expectedPdfBytes, createPublicLinks: config.createPublicLinks, operationId });
+    }, {
+      expectedPdfBytes,
+      createPublicLinks: config.createPublicLinks,
+      operationId,
+      pdfCacheKey: String(cached.key || ''),
+      pdfCacheGeneration: String(cached.cacheGeneration || '')
+    });
     recordOperationStage(operationId, 'remote-checkpoint', 'Создан durable checkpoint удалённого сохранения до передачи/финализации файла.', 66, 'running', {
       journalEntryId: remoteCheckpoint.id, remotePath, expectedPdfBytes
     });
@@ -4994,10 +5004,109 @@ async function recoverPendingJournalAppends(trigger = 'maintenance', maxItems = 
 }
 
 
-async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, createPublicLinks = false, operationId = '' } = {}) {
+function normalizePendingRemotePdfCacheReceipt(value = {}) {
+  const pdfCacheGeneration = String(value.pdfCacheGeneration || '').trim();
+  const pdfCacheKey = String(value.pdfCacheKey || '').trim();
+  const expectedPdfBytes = Math.max(0, Number(value.expectedPdfBytes) || 0);
+  if (
+    !pdfCacheGeneration ||
+    pdfCacheGeneration.length > 80 ||
+    pdfCacheKey !== `pdf:${pdfCacheGeneration}` ||
+    expectedPdfBytes <= 0
+  ) return null;
+  return Object.freeze({ pdfCacheKey, pdfCacheGeneration, expectedPdfBytes });
+}
+
+function pendingRemotePdfCacheRetentionIdentity(item = {}) {
+  const phase = String(item.phase || '');
+  const receipt = normalizePendingRemotePdfCacheReceipt(item);
+  if (phase === 'admitted-unknown') {
+    if (receipt) {
+      return Object.freeze({
+        exactIdentity: `${receipt.pdfCacheKey}\u0000${receipt.pdfCacheGeneration}`,
+        legacyJournalEntryId: ''
+      });
+    }
+    const journalEntryId = String(item.id || item.data?.journalEntryId || '').trim();
+    return journalEntryId
+      ? Object.freeze({ exactIdentity: '', legacyJournalEntryId: journalEntryId })
+      : null;
+  }
+  if (phase === 'prepared' && !receipt) {
+    // Older builds did not persist an admission phase or exact local-cache
+    // receipt. Treat a legacy active row as ambiguous until recovery resolves
+    // it; new exact "prepared" rows remain disposable before admission.
+    const journalEntryId = String(item.id || item.data?.journalEntryId || '').trim();
+    return journalEntryId
+      ? Object.freeze({ exactIdentity: '', legacyJournalEntryId: journalEntryId })
+      : null;
+  }
+  return null;
+}
+
+function pdfCacheGenerationMatchesRemoteRetention(record = {}, snapshot = {}) {
+  if (!isExactSealedPdfCacheIdentity(record)) return false;
+  const exactIdentity = `${String(record.key || '')}\u0000${String(record.cacheGeneration || '')}`;
+  const journalEntryId = String(record.journalEntryId || '');
+  return Boolean(
+    (snapshot.exactIdentities || []).includes(exactIdentity) ||
+    (journalEntryId && (snapshot.legacyJournalEntryIds || []).includes(journalEntryId))
+  );
+}
+
+async function getPendingRemotePdfCacheRetentionSnapshot() {
+  const db = await openJournalDb(RECOVERY_IDB_TX_TIMEOUT_MS);
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_REMOTE_STORE,
+      'readonly',
+      'Чтение durable-защиты PDF cache из checkpoints удалённых сохранений',
+      ({ store, setResult, fail }) => {
+        const exactIdentities = [];
+        const legacyJournalEntryIds = [];
+        const request = store().openCursor();
+        request.onsuccess = () => {
+          try {
+            const cursor = request.result;
+            if (!cursor) {
+              setResult({ exactIdentities, legacyJournalEntryIds });
+              return;
+            }
+            const retention = pendingRemotePdfCacheRetentionIdentity(cursor.value || {});
+            if (retention?.exactIdentity) exactIdentities.push(retention.exactIdentity);
+            if (retention?.legacyJournalEntryId) legacyJournalEntryIds.push(retention.legacyJournalEntryId);
+            cursor.continue();
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать durable-защиту PDF cache.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    ) || { exactIdentities: [], legacyJournalEntryIds: [] };
+  } finally { db.close(); }
+}
+
+async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, createPublicLinks = false, operationId = '', pdfCacheKey = '', pdfCacheGeneration = '' } = {}) {
   const prepared = normalizePendingJournalAppendData({ ...data, destination: 'yandex', operationId: String(operationId || data?.operationId || '').slice(0, MAX_OPERATION_ID_CHARS) });
+  const pdfCacheReceipt = normalizePendingRemotePdfCacheReceipt({ pdfCacheKey, pdfCacheGeneration, expectedPdfBytes });
+  if (!pdfCacheReceipt) {
+    const error = new Error('Checkpoint удалённого сохранения требует exact sealed PDF cache generation.');
+    error.code = 'WEBCLIP_REMOTE_PDF_CACHE_RECEIPT_REQUIRED';
+    throw error;
+  }
   const now = Date.now();
-  const item = { id: prepared.journalEntryId, phase: 'prepared', createdAt: now, updatedAt: now, attemptCount: 0, operationId: String(operationId || '').slice(0, 180), lastError: '', expectedPdfBytes: requirePositiveByteSize(expectedPdfBytes, 'Размер PDF в checkpoint удалённого сохранения'), createPublicLinks: Boolean(createPublicLinks), data: prepared };
+  const item = {
+    id: prepared.journalEntryId,
+    phase: 'admitted-unknown',
+    createdAt: now,
+    updatedAt: now,
+    attemptCount: 0,
+    operationId: String(operationId || '').slice(0, 180),
+    lastError: '',
+    ...pdfCacheReceipt,
+    createPublicLinks: Boolean(createPublicLinks),
+    data: prepared
+  };
   if (jsonSizeChars(item) > MAX_PENDING_JOURNAL_APPEND_JSON_CHARS) item.data.meta.selectionSnapshot = { includes: [], excludes: [] };
   if (jsonSizeChars(item) > MAX_PENDING_JOURNAL_APPEND_JSON_CHARS) throw new Error('Checkpoint удалённого сохранения превышает безопасный размер.');
   const db = await openJournalDb();
@@ -10251,6 +10360,11 @@ async function getValidCachedPdfForTab(tabId, currentSourceReceipt) {
 
 async function cleanupExpiredPdfCache() {
   const cutoff = Date.now() - PDF_CACHE_TTL_MS;
+  // Read durable remote-effect ownership before opening the PDF-cache
+  // maintenance transaction. If this read fails, cleanup fails closed and
+  // ensureStorageBudget may reject new work rather than erase reconciliation
+  // bytes whose external outcome is still unknown.
+  const retentionSnapshot = await getPendingRemotePdfCacheRetentionSnapshot();
   const db = await openPdfCacheDb();
   let deleted = 0;
   try {
@@ -10269,7 +10383,8 @@ async function cleanupExpiredPdfCache() {
           if (!cursor) return;
           const stale = cursor.value || {};
           const staleKey = String(cursor.primaryKey || '');
-          if (Number(stale.createdAt || 0) < cutoff) {
+          const protectedByRemoteCheckpoint = pdfCacheGenerationMatchesRemoteRetention(stale, retentionSnapshot);
+          if (Number(stale.createdAt || 0) < cutoff && !protectedByRemoteCheckpoint) {
             pdfStore.delete(cursor.primaryKey);
             cursor.delete();
             if (isExactSealedPdfCacheIdentity(stale)) {
