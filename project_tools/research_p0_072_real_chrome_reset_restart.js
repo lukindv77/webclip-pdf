@@ -275,6 +275,7 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
   assert(start?.command?.ok, label + ': download command failed');
   assert(start?.clicked?.ok, label + ': PDF proceed button missing: ' + String(start?.clicked?.reason || ''));
 
+  let lastCreatedState = null;
   const created = await waitFor(async () => {
     const state = await options.evaluate(`(async () => {
       const evidence = globalThis.__p0072ChromeDownloadEvidence || { created: [], pauseErrors: [] };
@@ -295,6 +296,7 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
         modal: modal[0]?.result || null
       };
     })()`);
+    lastCreatedState = state;
     const rows = Array.isArray(state?.evidence?.created) ? state.evidence.created : [];
     const observed = rows.find((item) => !previousIds.has(Number(item.id))) || null;
     if (observed) return observed;
@@ -318,7 +320,21 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
       throw new Error(label + ': PDF UI failure: ' + String(state?.modal?.text || state?.modal?.title || ''));
     }
     return null;
-  }, { timeoutMs: 70_000, intervalMs: 150, label: label + ' download onCreated+pause' });
+  }, { timeoutMs: 70_000, intervalMs: 150, label: label + ' download onCreated+pause' }).catch((error) => {
+    const compact = {
+      modal: lastCreatedState?.modal || null,
+      evidence: lastCreatedState?.evidence || null,
+      downloads: (Array.isArray(lastCreatedState?.downloads) ? lastCreatedState.downloads : []).slice(0, 5).map((item) => ({
+        id: item?.id,
+        filename: item?.filename,
+        state: item?.state,
+        paused: item?.paused,
+        canResume: item?.canResume,
+        error: item?.error
+      }))
+    };
+    throw new Error(String(error?.message || error) + '; lastState=' + JSON.stringify(compact));
+  });
 
   assert(Number.isInteger(Number(created.id)), label + ': download id missing');
   const id = Number(created.id);
