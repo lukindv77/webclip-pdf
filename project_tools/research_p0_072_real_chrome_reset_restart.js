@@ -331,7 +331,7 @@ async function createSelectedFixtureTab(options, articleUrl, label) {
   );
   const selected = await options.evaluate(`chrome.scripting.executeScript({
     target: { tabId: ${tabId} },
-    func: () => {
+    func: (noisePages) => {
       const article = document.getElementById('article');
       if (!article) return { ok: false, reason: 'article-missing' };
       // Make the real PDF physically large enough that the downloads API
@@ -346,7 +346,7 @@ async function createSelectedFixtureTab(options, articleUrl, label) {
         seed ^= seed << 5;
         return seed & 0xff;
       };
-      for (let pageIndex = 0; pageIndex < 4; pageIndex += 1) {
+      for (let pageIndex = 0; pageIndex < noisePages; pageIndex += 1) {
         const page = document.createElement('section');
         page.style.breakAfter = 'page';
         const canvas = document.createElement('canvas');
@@ -373,7 +373,8 @@ async function createSelectedFixtureTab(options, articleUrl, label) {
         included: Boolean(article.getAttribute('data-webclip-pdf-include')),
         root: Boolean(document.getElementById('webclip-pdf-extension-root'))
       };
-    }
+    },
+    args: [${label === 'restart' ? 5 : 4}]
   })`);
   const selectedResult = Array.isArray(selected) ? selected[0]?.result || null : null;
   assert(started?.ok, label + ': selection start failed');
@@ -472,7 +473,11 @@ async function triggerPdfDownload(options, observerPage, tabId, previousIds, lab
     const item = Array.isArray(items) ? items[0] : null;
     if (!item) return null;
     if (item.state === 'complete') {
-      throw new Error(label + ': physical PDF completed before pause boundary could be observed');
+      const observerState = await downloadObserverState(observerPage).catch(() => null);
+      throw new Error(
+        label + ': physical PDF completed before pause boundary could be observed; observer='
+        + JSON.stringify(observerState)
+      );
     }
     return item.paused ? item : null;
   }, { timeoutMs: 10_000, intervalMs: 50, label: label + ' paused DownloadItem' });
@@ -603,6 +608,7 @@ async function run() {
 
     assert(terminalA.filename && fs.existsSync(terminalA.filename), 'late-complete: physical PDF file must exist');
     const statA = fs.statSync(terminalA.filename);
+    console.log('P0_072_CASE_A_PDF_BYTES=' + statA.size);
     assert(statA.size > 500, 'late-complete: physical PDF unexpectedly small');
     const magic = Buffer.alloc(5);
     const fd = fs.openSync(terminalA.filename, 'r');
