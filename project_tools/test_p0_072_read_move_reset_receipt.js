@@ -148,7 +148,10 @@ ok(!idSource.includes('operationId'), 'caller textual operationId is not destruc
 const checkpointSource = functionSource(worker, 'checkpointPendingReadMoveIntent');
 ok(checkpointSource.includes("kind: 'read-move'"), 'detached receipt names exact effect class');
 ok(checkpointSource.includes("phase: 'prepared'"), 'receipt is created before remote admission');
-ok(checkpointSource.includes('sourceJournalCreatedAt'), 'receipt captures source Journal generation discriminator');
+ok(checkpointSource.includes('sourceJournalCreatedAt'), 'receipt retains legacy Journal discriminator');
+ok(checkpointSource.includes('sourceJournalResetGeneration'), 'new receipt captures P0-076 reset generation');
+ok(checkpointSource.includes('sourceJournalEntryRevision'), 'new receipt captures P0-076 entry revision');
+ok(checkpointSource.includes('journalAuthority = null'), 'P0-076 local cursor is an explicit input separate from receipt identity');
 ok(checkpointSource.includes('sourceResourceId'), 'receipt captures known remote identity evidence');
 ok(checkpointSource.includes('sourcePublicUrl'), 'receipt captures secondary remote identity evidence');
 ok(checkpointSource.includes('pending.add(item)'), 'new receipt is create-once');
@@ -159,11 +162,13 @@ ok(admissionSource.includes("phase: 'admitted-unknown'"), 'destructive receipt h
 ok(admissionSource.includes('WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_MISSING_BEFORE_ADMISSION'), 'reset-deleted prepared receipt fails closed');
 ok(admissionSource.includes('WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_SUPERSEDED_BEFORE_ADMISSION'), 'superseded receipt cannot admit a new destructive move');
 ok(!admissionSource.includes('operationId ==='), 'destructive admission does not trust caller correlation equality');
+ok(admissionSource.includes('pendingDestructiveMoveJournalAuthorityMatches(current, resetGeneration, journalEntry)'), 'pre-POST admission additionally rechecks local P0-076 authority');
 
 const guardedCheckpointSource = functionSource(worker, 'updateReadMoveJournalCheckpointFromReceipt');
 ok(guardedCheckpointSource.includes('[JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE]'), 'pre-move Journal checkpoint and detached authority share one transaction');
 ok(guardedCheckpointSource.includes('receipt.supersededByJournalReset === true'), 'pre-move Journal mutation rejects reset-superseded receipt');
-ok(guardedCheckpointSource.includes('pendingDestructiveMoveEntryMatches(receipt, current)'), 'pre-move Journal mutation revalidates source entry identity');
+ok(guardedCheckpointSource.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)'), 'pre-move Journal mutation revalidates P0-072 source identity plus P0-076 cursor');
+ok(guardedCheckpointSource.includes('pendingDestructiveMoveAdvanceJournalAuthority(receipt, resetGeneration, updated)'), 'own checkpoint advances the receipt cursor with the committed row revision');
 
 const verifiedSource = functionSource(worker, 'markPendingDestructiveMoveVerified');
 ok(verifiedSource.includes("phase: 'remote-verified'"), 'terminal remote outcome is explicit');
@@ -175,7 +180,7 @@ ok(finalizeSource.includes('[JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, J
 ok(finalizeSource.includes("receipt.phase !== 'remote-verified'"), 'Journal finalize requires actual terminal remote verification');
 ok(finalizeSource.includes('receipt.supersededByJournalReset === true'), 'reset-superseded old receipt cannot mutate replacement Journal');
 ok(finalizeSource.includes('receipts.delete(key)'), 'terminal receipt is retired in the same finalize transaction');
-ok(finalizeSource.includes('pendingDestructiveMoveEntryMatches(receipt, current)'), 'terminal finalize revalidates source Journal authority');
+ok(finalizeSource.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)'), 'terminal finalize revalidates P0-072 source identity plus exact P0-076 cursor');
 
 const clearSection = section(worker, 'async function clearJournalEntries', 'async function journalRevisionSnapshot');
 ok(clearSection.includes('JOURNAL_PENDING_DESTRUCTIVE_STORE'), 'Journal clear transaction includes detached destructive store');
@@ -204,7 +209,7 @@ ok(moveSection.includes('markPendingDestructiveMoveFailure(detachedReceiptId, er
 ok(moveSection.includes('removePendingDestructiveMove(detachedReceiptId)'), 'pre-admission failure retires disposable receipt');
 
 const trashSection = functionSource(worker, 'deleteJournalEntry');
-ok(trashSection.includes('moveJournalYandexFileToTrash(entry, operationId)'), 'Delete-to-Trash remains a separate destructive call-site class');
+ok(trashSection.includes('moveJournalYandexFileToTrash(entry, operationId, deleteAuthority)'), 'Delete-to-Trash remains a separate P0-072 class while receiving only a local P0-076 cursor');
 ok(!trashSection.includes('checkpointPendingReadMoveIntent'), 'Trash never borrows the ReadLater receipt creator');
 ok(trashSection.includes('finalizeTrashDeleteFromReceipt(moved.detachedReceiptId)'), 'later Trash tranche composes the shared detached store through its own terminal finalizer');
 
@@ -212,5 +217,5 @@ console.log(
   'P0-072 read-move reset receipt: PASS; checks=' + checks +
   '; db=v8; detached_receipt=true; prepared_drop=true; admitted_survives=true;' +
   ' journal_finalize_atomic=true; same_id_replacement_safe=true;' +
-  ' p1_090_exact_object=false; p0_076_full_cas=false; trash_move_composed=true; release_closed=false'
+  ' p1_090_exact_object=false; p0_076_receipt_cursor=true; p0_076_full_cas=false; trash_move_composed=true; release_closed=false'
 );

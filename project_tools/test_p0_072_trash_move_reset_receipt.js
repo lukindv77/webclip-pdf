@@ -71,7 +71,10 @@ ok(creator.includes("makePendingDestructiveMoveId('trash-move')"), 'Trash receip
 ok(creator.includes("kind: 'trash-move'"), 'Trash effect class is explicit');
 ok(creator.includes("phase: 'prepared'"), 'Trash receipt starts pre-admission');
 ok(creator.includes('sourceJournalEntryId'), 'Trash receipt captures source Journal id');
-ok(creator.includes('sourceJournalCreatedAt'), 'Trash receipt captures source Journal generation discriminator');
+ok(creator.includes('sourceJournalCreatedAt'), 'Trash receipt retains legacy Journal discriminator');
+ok(creator.includes('sourceJournalResetGeneration'), 'new Trash receipt captures P0-076 reset generation');
+ok(creator.includes('sourceJournalEntryRevision'), 'new Trash receipt captures P0-076 entry revision');
+ok(creator.includes('journalAuthority = null'), 'Trash local cursor is explicit and separate from worker-issued receipt identity');
 ok(creator.includes('sourceUrlKey'), 'Trash receipt captures URL reset scope');
 ok(creator.includes('sourceSiteKey'), 'Trash receipt captures site reset scope');
 ok(creator.includes('sourcePath'), 'Trash receipt captures source remote path');
@@ -89,13 +92,14 @@ ok(admission.includes("phase: 'admitted-unknown'"), 'Trash move has explicit adm
 ok(admission.includes('WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_MISSING_BEFORE_ADMISSION'), 'reset-deleted prepared receipt fails closed');
 ok(admission.includes('WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_SUPERSEDED_BEFORE_ADMISSION'), 'reset-superseded receipt cannot start remote move');
 ok(!admission.includes('operationId ==='), 'caller operationId is not admission capability');
+ok(admission.includes('pendingDestructiveMoveJournalAuthorityMatches(current, resetGeneration, journalEntry)'), 'pre-POST admission additionally rechecks local P0-076 authority');
 
 const finalize = functionSource(worker, 'finalizeTrashDeleteFromReceipt');
 ok(finalize.includes('beginJournalStatsMutation(\'delete\')'), 'Trash terminal delete preserves Journal stats dirty-marker protocol');
 ok(finalize.includes('[JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE]'), 'Journal delete and receipt consumption share one transaction');
 ok(finalize.includes("receipt.kind !== 'trash-move' || receipt.phase !== 'remote-verified'"), 'local deletion requires terminal verified Trash receipt');
 ok(finalize.includes('receipt.supersededByJournalReset === true'), 'reset-superseded Trash receipt cannot delete replacement Journal entry');
-ok(finalize.includes('pendingDestructiveMoveEntryMatches(receipt, current)'), 'terminal delete revalidates source Journal identity');
+ok(finalize.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)'), 'terminal delete revalidates P0-072 source identity plus exact P0-076 cursor');
 ok(finalize.includes('entries.delete(current.id)'), 'authorized original entry is deleted only inside receipt transaction');
 ok(finalize.includes('receipts.delete(key)'), 'terminal receipt is consumed atomically');
 ok(finalize.includes("touchJournalDbRevision(tx, 'trash-move-finalize')"), 'authorized Trash delete advances Journal revision');
@@ -118,14 +122,15 @@ ok(move.includes('if (moveAdmitted)'), 'error cleanup distinguishes admitted fro
 ok(!move.includes('deleteJournalEntryRecordOnly'), 'remote helper never performs an unguarded local Journal delete');
 
 const del = functionSource(worker, 'deleteJournalEntry');
-const moveCall = del.indexOf('moved = await moveJournalYandexFileToTrash(entry, operationId)');
+const moveCall = del.indexOf('moved = await moveJournalYandexFileToTrash(entry, operationId, deleteAuthority)');
 const finalizeCall = del.indexOf('finalizeTrashDeleteFromReceipt(moved.detachedReceiptId)');
 ok(moveCall >= 0 && finalizeCall > moveCall, 'Yandex Trash verification precedes guarded local deletion');
 ok(del.includes("if (isYandex && action === 'trash')"), 'only Yandex Trash enters detached destructive finalization');
 ok(del.includes('journalSuperseded = Boolean(finalized?.cancelled)'), 'reset/replacement cancellation is surfaced');
 ok(del.includes('if (!journalSuperseded) notifyJournalChanged(\'delete\')'), 'old operation does not announce deletion of replacement Journal state');
 ok(del.includes('deleteJournalEntryRecordOnlyCas(deleteAuthority)'), 'keep/local-only delete remains local while composing P0-076 CAS authority');
-ok(!del.includes('moveJournalYandexFileToTrash(entry, operationId, deleteAuthority)'), 'P0-076 local delete token is not reused as Trash external-effect authority');
+ok(del.includes('moveJournalYandexFileToTrash(entry, operationId, deleteAuthority)'), 'Trash receives the already-captured P0-076 token only as a local Journal cursor');
+ok(creator.includes("makePendingDestructiveMoveId('trash-move')"), 'worker-issued detached receipt remains the external-effect identity');
 ok(del.includes('journalSuperseded,'), 'caller receives no-resurrection outcome');
 ok(del.includes('statsWarning'), 'caller receives deferred stats repair warning if needed');
 
@@ -195,5 +200,5 @@ console.log(
   'P0-072 Trash reset receipt: PASS; checks=' + checks +
   '; db=v8; detached_receipt=true; prepared_drop=true; admitted_survives=true;' +
   ' terminal_delete_atomic=true; same_id_replacement_safe=true; keep_path_unchanged=true;' +
-  ' p1_090_exact_object=false; p0_076_full_cas=false; release_closed=false'
+  ' p1_090_exact_object=false; p0_076_receipt_cursor=true; p0_076_full_cas=false; release_closed=false'
 );

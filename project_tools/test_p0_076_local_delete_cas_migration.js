@@ -83,10 +83,10 @@ ok(casDelete.includes('{ ok: false, stale: true, entry: null }'), 'same-id repla
 ok(casDelete.includes("touchJournalDbRevision(tx, 'cas-delete-entry')"), 'successful CAS delete preserves Journal revision semantics');
 ok(casDelete.includes('rebuildUrlStatsForUrl(entry.urlKey)'), 'successful CAS delete preserves URL stats repair');
 
-ok(del.includes('moved = await moveJournalYandexFileToTrash(entry, operationId)'), 'Trash external-effect path remains receipt-driven');
+ok(del.includes('moved = await moveJournalYandexFileToTrash(entry, operationId, deleteAuthority)'), 'Trash external-effect path remains receipt-driven while carrying a separate local CAS cursor');
 ok(del.includes('const finalized = await finalizeTrashDeleteFromReceipt(moved.detachedReceiptId)'), 'Trash finalization still consumes detached P0-072 receipt');
-ok(!del.includes('moveJournalYandexFileToTrash(entry, operationId, deleteAuthority)'), 'generic P0-076 token is not substituted for P0-072 move authority');
-ok(trashFinalize.includes('pendingDestructiveMoveEntryMatches(receipt, current)'), 'Trash same-entry protection remains its receipt guard');
+ok(functionSource(worker, 'checkpointPendingTrashMoveIntent').includes("makePendingDestructiveMoveId('trash-move')"), 'generic P0-076 cursor does not replace worker-issued P0-072 receipt identity');
+ok(trashFinalize.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)'), 'Trash local finalizer now composes P0-072 receipt identity with exact P0-076 cursor');
 ok(trashFinalize.includes("receipt.kind !== 'trash-move' || receipt.phase !== 'remote-verified'"), 'Trash delete still requires remote verification');
 
 const addComment = functionSource(worker, 'addJournalComment');
@@ -106,5 +106,5 @@ ok(/\*\*NOT READY\.\*\*/.test(readiness), 'release readiness remains NOT READY')
 console.log(
   'P0-076 local delete CAS migration: PASS; checks=' + checks +
   '; admission_snapshot=true; local_delete_cas=true; stale_nonretarget=true;' +
-  ' trash_receipt_unchanged=true; comments_cas=true; release_closed=false'
+  ' trash_receipt_authority_separate=true; destructive_receipt_cas=true; comments_cas=true; release_closed=false'
 );
