@@ -174,7 +174,7 @@ function durableProjection(cp) {
   const dag = read('project_docs/RESEARCH_P1_231_CONSOLIDATED_IMPLEMENTATION_DAG_2026-09-10_EVIDENCE.md');
 
   // Exact current-source/current-authority facts.
-  check(worker.includes('const JOURNAL_DB_VERSION = 7;'), 'current Journal remains v7');
+  check(worker.includes('const JOURNAL_DB_VERSION = 8;'), 'current Journal uses v8 for detached destructive receipts');
   check(worker.includes("const JOURNAL_PENDING_REMOTE_STORE = 'pendingRemoteSaves';"), 'current pendingRemoteSaves integration surface exists');
   check(worker.includes('async function recoverPendingRemoteSaves'), 'current remote-save recovery exists');
   check(worker.includes('async function uploadCachedRecordToYandex'), 'current remote upload path exists');
