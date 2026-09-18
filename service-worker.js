@@ -7039,62 +7039,101 @@ function assertManagedYandexSourcePath(path, rootPath, allowedBranches) {
 }
 
 async function moveJournalYandexFileToTrash(entry, operationId = '') {
-  emitJournalOperationProgress(operationId, 'locate', 'Ищем актуальное расположение файла на Яндекс Диске…', 12);
-  const config = await getYandexConfig();
-  if (!config.rootPath) throw new Error('В настройках не выбрана корневая папка Яндекс Диска.');
-  const current = await findYandexFileForJournalEntry(entry, operationId);
-  const sourcePath = current?.path ? normalizeYandexDiskPathFromApi(current.path) : normalizeDiskPath(entry?.remotePath || '');
-  if (!sourcePath) throw new Error('Яндекс Диск не вернул текущий путь файла.');
-  assertManagedYandexSourcePath(sourcePath, config.rootPath, [YANDEX_UPLOAD_DIR, YANDEX_READ_LATER_DIR, YANDEX_TRASH_DIR]);
+  let detachedReceiptId = '';
+  let moveAdmitted = false;
+  try {
+    emitJournalOperationProgress(operationId, 'locate', 'Ищем актуальное расположение файла на Яндекс Диске…', 12);
+    const config = await getYandexConfig();
+    if (!config.rootPath) throw new Error('В настройках не выбрана корневая папка Яндекс Диска.');
+    const current = await findYandexFileForJournalEntry(entry, operationId);
+    const sourcePath = current?.path ? normalizeYandexDiskPathFromApi(current.path) : normalizeDiskPath(entry?.remotePath || '');
+    if (!sourcePath) throw new Error('Яндекс Диск не вернул текущий путь файла.');
+    assertManagedYandexSourcePath(sourcePath, config.rootPath, [YANDEX_UPLOAD_DIR, YANDEX_READ_LATER_DIR, YANDEX_TRASH_DIR]);
 
-  const deletionDate = new Date();
-  const monthName = journalBackupMonthFolderName(deletionDate);
-  const trashRoot = joinDiskPath(config.rootPath, YANDEX_TRASH_DIR);
-  const monthFolder = joinDiskPath(trashRoot, monthName);
-  emitJournalOperationProgress(operationId, 'folder', `Подготавливаем папку ${YANDEX_TRASH_DIR}/${monthName}…`, 30, 'running', { sourcePath, monthFolder });
-  await ensureYandexFolderTree(monthFolder, operationId);
+    const deletionDate = new Date();
+    const monthName = journalBackupMonthFolderName(deletionDate);
+    const trashRoot = joinDiskPath(config.rootPath, YANDEX_TRASH_DIR);
+    const monthFolder = joinDiskPath(trashRoot, monthName);
+    emitJournalOperationProgress(operationId, 'folder', `Подготавливаем папку ${YANDEX_TRASH_DIR}/${monthName}…`, 30, 'running', { sourcePath, monthFolder });
+    await ensureYandexFolderTree(monthFolder, operationId);
 
-  const currentName = current?.name ? normalizeYandexItemNameFromApi(current.name) : String(entry?.filename || 'WebClip.pdf');
-  const alreadyInTrash = normalizeDiskPath(sourcePath).startsWith(`${normalizeDiskPath(trashRoot)}/`);
-  const targetPath = alreadyInTrash ? sourcePath : await chooseYandexTrashTarget(monthFolder, currentName, deletionDate, operationId);
-  emitJournalOperationProgress(operationId, 'move', alreadyInTrash ? 'Файл уже находится в Trash. Повторное перемещение не требуется…' : 'Перемещаем файл в папку Trash…', 55, 'running', { sourcePath, targetPath });
-  if (!alreadyInTrash && normalizeDiskPath(sourcePath) !== normalizeDiskPath(targetPath)) {
-    await yandexApi('/resources/move', { method: 'POST', query: { from: sourcePath, path: targetPath, overwrite: 'false', force_async: 'false' }, timeoutMs: 15_000, operationId });
-  }
+    const currentName = current?.name ? normalizeYandexItemNameFromApi(current.name) : String(entry?.filename || 'WebClip.pdf');
+    const alreadyInTrash = normalizeDiskPath(sourcePath).startsWith(`${normalizeDiskPath(trashRoot)}/`);
+    const targetPath = alreadyInTrash ? sourcePath : await chooseYandexTrashTarget(monthFolder, currentName, deletionDate, operationId);
 
-  emitJournalOperationProgress(operationId, 'verify', 'Проверяем результат перемещения на Яндекс Диске…', 78, 'running', { targetPath });
-  let moved = null;
-  const verifyDeadline = Date.now() + 45_000;
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    let remaining = verifyDeadline - Date.now();
-    if (remaining <= 500) break;
-    if (attempt) {
-      await new Promise((resolve) => setTimeout(resolve, Math.min(250 * attempt, Math.max(0, remaining - 500))));
-      remaining = verifyDeadline - Date.now();
-      if (remaining <= 500) break;
-    }
-    try {
-      moved = await yandexApi('/resources', {
-        method: 'GET',
-        query: { path: targetPath, fields: 'name,path,type,size,public_url,resource_id' },
-        timeoutMs: Math.max(1_000, Math.min(8_000, remaining)),
-        operationId,
-        retryAttempt: attempt
+    const detachedReceipt = await checkpointPendingTrashMoveIntent(entry, {
+      sourcePath,
+      targetPath,
+      sourceResourceId: current?.resource_id ? normalizeYandexResourceIdFromApi(current.resource_id) : String(entry?.resourceId || ''),
+      sourcePublicUrl: current?.public_url ? normalizeYandexPublicUrlFromApi(current.public_url) : String(entry?.publicUrl || ''),
+      operationId
+    });
+    detachedReceiptId = detachedReceipt.id;
+
+    emitJournalOperationProgress(operationId, 'move', alreadyInTrash ? 'Файл уже находится в Trash. Повторное перемещение не требуется…' : 'Перемещаем файл в папку Trash…', 55, 'running', { sourcePath, targetPath });
+    if (!alreadyInTrash && normalizeDiskPath(sourcePath) !== normalizeDiskPath(targetPath)) {
+      await markPendingDestructiveMoveAdmitted(detachedReceiptId);
+      moveAdmitted = true;
+      await yandexApi('/resources/move', {
+        method: 'POST',
+        query: { from: sourcePath, path: targetPath, overwrite: 'false', force_async: 'false' },
+        timeoutMs: 15_000,
+        operationId
       });
-      if (moved?.type === 'file') break;
-    } catch (error) { if (Number(error?.status) !== 404) throw error; }
-  }
-  if (moved?.type !== 'file') {
-    const error = new Error('Яндекс Диск не подтвердил перемещение файла в Trash за 45 с. Запись журнала оставлена без изменений.');
-    error.code = 'YANDEX_TIMEOUT';
+    }
+
+    emitJournalOperationProgress(operationId, 'verify', 'Проверяем результат перемещения на Яндекс Диске…', 78, 'running', { targetPath });
+    let moved = null;
+    const verifyDeadline = Date.now() + 45_000;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      let remaining = verifyDeadline - Date.now();
+      if (remaining <= 500) break;
+      if (attempt) {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(250 * attempt, Math.max(0, remaining - 500))));
+        remaining = verifyDeadline - Date.now();
+        if (remaining <= 500) break;
+      }
+      try {
+        moved = await yandexApi('/resources', {
+          method: 'GET',
+          query: { path: targetPath, fields: 'name,path,type,size,public_url,resource_id' },
+          timeoutMs: Math.max(1_000, Math.min(8_000, remaining)),
+          operationId,
+          retryAttempt: attempt
+        });
+        if (moved?.type === 'file') break;
+      } catch (error) {
+        if (Number(error?.status) !== 404) throw error;
+      }
+    }
+    if (moved?.type !== 'file') {
+      const error = new Error('Яндекс Диск не подтвердил перемещение файла в Trash за 45 с. Detached recovery receipt сохранён после remote admission.');
+      error.code = 'YANDEX_TIMEOUT';
+      throw error;
+    }
+
+    const trashPath = moved?.path ? normalizeYandexDiskPathFromApi(moved.path) : targetPath;
+    const resourceId = moved?.resource_id
+      ? normalizeYandexResourceIdFromApi(moved.resource_id)
+      : (current?.resource_id ? normalizeYandexResourceIdFromApi(current.resource_id) : String(entry?.resourceId || ''));
+    await markPendingDestructiveMoveVerified(detachedReceiptId, {
+      remotePath: trashPath,
+      resourceId
+    });
+    return {
+      sourcePath,
+      trashPath,
+      trashMonth: monthName,
+      resourceId,
+      detachedReceiptId
+    };
+  } catch (error) {
+    if (detachedReceiptId) {
+      if (moveAdmitted) await markPendingDestructiveMoveFailure(detachedReceiptId, error).catch(() => {});
+      else await removePendingDestructiveMove(detachedReceiptId).catch(() => {});
+    }
     throw error;
   }
-  return {
-    sourcePath,
-    trashPath: moved?.path ? normalizeYandexDiskPathFromApi(moved.path) : targetPath,
-    trashMonth: monthName,
-    resourceId: moved?.resource_id ? normalizeYandexResourceIdFromApi(moved.resource_id) : (current?.resource_id ? normalizeYandexResourceIdFromApi(current.resource_id) : String(entry?.resourceId || ''))
-  };
 }
 
 function makePendingDestructiveMoveId(kind = 'move') {
@@ -7223,6 +7262,70 @@ async function checkpointPendingReadMoveIntent(entry, {
   return item;
 }
 
+async function checkpointPendingTrashMoveIntent(entry, {
+  sourcePath = '',
+  targetPath = '',
+  sourceResourceId = '',
+  sourcePublicUrl = '',
+  operationId = ''
+} = {}) {
+  const now = Date.now();
+  const item = {
+    id: makePendingDestructiveMoveId('trash-move'),
+    kind: 'trash-move',
+    phase: 'prepared',
+    createdAt: now,
+    updatedAt: now,
+    operationId: String(operationId || '').slice(0, 180),
+    sourceJournalEntryId: String(entry?.id || '').slice(0, MAX_IMPORTED_ENTRY_ID_CHARS),
+    sourceJournalCreatedAt: Math.max(0, Number(entry?.createdAt) || 0),
+    sourceUrlKey: normalizeJournalUrl(entry?.url || ''),
+    sourceSiteKey: getJournalSiteKey(entry?.url || entry?.hostname || ''),
+    sourcePath: normalizeDiskPath(sourcePath || ''),
+    targetPath: normalizeDiskPath(targetPath || ''),
+    sourceResourceId: String(sourceResourceId || entry?.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
+    sourcePublicUrl: String(sourcePublicUrl || entry?.publicUrl || '').slice(0, MAX_YANDEX_PUBLIC_URL_CHARS),
+    accountUid: String(entry?.accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
+    rootPath: normalizeDiskPath(entry?.rootPath || ''),
+    lastError: ''
+  };
+  if (!item.sourceJournalEntryId || !item.sourcePath || !item.targetPath) {
+    throw new Error('Destructive trash-move receipt требует exact source Journal id/source/target.');
+  }
+  const db = await openJournalDb();
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      'readwrite',
+      'Создание Trash destructive-move receipt',
+      ({ store, fail }) => {
+        const pending = store();
+        let count = 0;
+        const cursorReq = pending.openCursor();
+        cursorReq.onsuccess = () => {
+          try {
+            const cursor = cursorReq.result;
+            if (cursor) {
+              count += 1;
+              if (count >= MAX_PENDING_DESTRUCTIVE_MOVES) {
+                fail(new Error('Слишком много незавершённых destructive-move receipts. Требуется reconciliation/manual resolution.'));
+                return;
+              }
+              cursor.continue();
+              return;
+            }
+            pending.add(item);
+          } catch (error) { fail(error); }
+        };
+        cursorReq.onerror = () => fail(cursorReq.error || new Error('Не удалось проверить очередь Trash destructive-move receipts.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  return item;
+}
+
 async function markPendingDestructiveMoveAdmitted(id) {
   const key = String(id || '');
   const db = await openJournalDb();
@@ -7238,7 +7341,7 @@ async function markPendingDestructiveMoveAdmitted(id) {
         request.onsuccess = () => {
           try {
             const current = request.result;
-            if (!current || current.kind !== 'read-move') {
+            if (!current || (current.kind !== 'read-move' && current.kind !== 'trash-move')) {
               const error = new Error('Destructive-move receipt исчез до admission.');
               error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_MISSING_BEFORE_ADMISSION';
               fail(error);
@@ -7446,6 +7549,85 @@ async function finalizeReadMoveJournalFromReceipt(receiptId, patch = {}) {
   } finally { db.close(); }
 }
 
+async function finalizeTrashDeleteFromReceipt(receiptId) {
+  const key = String(receiptId || '');
+  const statsToken = await beginJournalStatsMutation('delete');
+  const db = await openJournalDb();
+  let result = null;
+  try {
+    result = await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE],
+      'readwrite',
+      'Финализация Trash Journal delete по detached receipt',
+      ({ tx, setResult, fail }) => {
+        const receipts = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        const request = receipts.get(key);
+        request.onsuccess = () => {
+          try {
+            const receipt = request.result;
+            if (!receipt) {
+              setResult({ cancelled: true, deletedEntry: null, receiptMissing: true });
+              return;
+            }
+            if (receipt.kind !== 'trash-move' || receipt.phase !== 'remote-verified') {
+              const error = new Error('Trash destructive-move receipt не имеет terminal remote verification.');
+              error.code = 'WEBCLIP_TRASH_MOVE_NOT_VERIFIED';
+              fail(error);
+              return;
+            }
+            if (receipt.supersededByJournalReset === true) {
+              receipts.delete(key);
+              setResult({ cancelled: true, deletedEntry: null, supersededByJournalReset: true });
+              return;
+            }
+            const entries = tx.objectStore(JOURNAL_STORE);
+            const entryReq = entries.get(receipt.sourceJournalEntryId);
+            entryReq.onsuccess = () => {
+              try {
+                const current = entryReq.result;
+                if (!pendingDestructiveMoveEntryMatches(receipt, current)) {
+                  receipts.delete(key);
+                  setResult({ cancelled: true, deletedEntry: null, sourceAuthorityLost: true });
+                  return;
+                }
+                entries.delete(current.id);
+                receipts.delete(key);
+                touchJournalDbRevision(tx, 'trash-move-finalize');
+                setResult({ cancelled: false, deletedEntry: current });
+              } catch (error) { fail(error); }
+            };
+            entryReq.onerror = () => fail(entryReq.error || new Error('Не удалось проверить Journal authority при terminal Trash finalize.'));
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать terminal Trash destructive-move receipt.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } catch (error) {
+    await completeJournalStatsMutation(statsToken).catch(() => {});
+    throw error;
+  } finally {
+    db.close();
+  }
+
+  const deletedEntry = result?.deletedEntry || null;
+  if (!deletedEntry) {
+    await completeJournalStatsMutation(statsToken).catch(() => {});
+    return { ...(result || { cancelled: true }), statsWarning: '' };
+  }
+
+  let statsWarning = '';
+  try {
+    if (deletedEntry.urlKey) await rebuildUrlStatsForUrl(deletedEntry.urlKey);
+    await completeJournalStatsMutation(statsToken);
+  } catch (error) {
+    statsWarning = normalizeError(error);
+    console.warn('WebClip urlStats Trash delete deferred repair:', error);
+  }
+  return { ...result, statsWarning };
+}
+
 async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } = {}) {
   operationId = String(operationId || '') || makeOperationLogId('journal-delete');
   if (!id) return { ok: false, error: 'Не указан идентификатор записи журнала.' };
@@ -7462,13 +7644,40 @@ async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } 
 
   let moved = null;
   try {
-    if (isYandex && action === 'trash') moved = await moveJournalYandexFileToTrash(entry, operationId);
-    emitJournalOperationProgress(operationId, 'journal', 'Удаляем запись из локального журнала…', 92);
-    await deleteJournalEntryRecordOnly(id);
+    let journalSuperseded = false;
+    let statsWarning = '';
+    if (isYandex && action === 'trash') {
+      moved = await moveJournalYandexFileToTrash(entry, operationId);
+      emitJournalOperationProgress(operationId, 'journal', 'Удаляем исходную запись журнала по verified Trash receipt…', 92);
+      const finalized = await finalizeTrashDeleteFromReceipt(moved.detachedReceiptId);
+      journalSuperseded = Boolean(finalized?.cancelled);
+      statsWarning = String(finalized?.statsWarning || '');
+    } else {
+      emitJournalOperationProgress(operationId, 'journal', 'Удаляем запись из локального журнала…', 92);
+      await deleteJournalEntryRecordOnly(id);
+    }
     refreshActionForAllTabs().catch(() => {});
-    notifyJournalChanged('delete');
-    emitJournalOperationProgress(operationId, 'complete', 'Удаление завершено.', 100, 'success', { trashPath: moved?.trashPath || '' });
-    return { ok: true, destination: isYandex ? 'yandex' : 'download', diskAction: isYandex ? action : 'local-only', trashPath: moved?.trashPath || '', trashMonth: moved?.trashMonth || '', operationId };
+    if (!journalSuperseded) notifyJournalChanged('delete');
+    emitJournalOperationProgress(
+      operationId,
+      'complete',
+      journalSuperseded
+        ? 'Файл подтверждён в Trash; исходная запись журнала уже очищена/заменена и не была затронута старой операцией.'
+        : 'Удаление завершено.',
+      100,
+      journalSuperseded || statsWarning ? 'partial' : 'success',
+      { trashPath: moved?.trashPath || '', journalSuperseded, statsWarning }
+    );
+    return {
+      ok: true,
+      destination: isYandex ? 'yandex' : 'download',
+      diskAction: isYandex ? action : 'local-only',
+      trashPath: moved?.trashPath || '',
+      trashMonth: moved?.trashMonth || '',
+      operationId,
+      journalSuperseded,
+      statsWarning
+    };
   } catch (error) {
     emitJournalOperationProgress(operationId, 'error', `Ошибка: ${normalizeError(error)}`, 100, 'error');
     throw error;
