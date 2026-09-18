@@ -5,6 +5,7 @@ const assert = require('assert');
 
 const root = path.resolve(__dirname, '..');
 const sw = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
+const localDownloadIdentity = fs.readFileSync(path.join(root, 'local-download-identity.js'), 'utf8');
 
 function section(startMarker, endMarker) {
   const start = sw.indexOf(startMarker);
@@ -87,7 +88,34 @@ function testP1087OwnExtensionIdentityGate() {
   const recovery = section('async function reconcilePendingLocalDownloads', 'async function appendJournalEntry');
   assert(recovery.includes('downloads: (Array.isArray(matches) ? matches : []).filter(isOwnExtensionDownload)'), 'P1-087: intent/fallback candidates must be ownership-filtered before identity classification');
   assert(recovery.includes('WebClipLocalDownloadIdentity?.chooseUniqueDownloadForIntent'), 'P1-087: ownership-filtered fallback candidates must flow through the unique identity classifier');
-  assert(recovery.includes('matches.find(isOwnExtensionDownload) || null'), 'P1-087: bound downloadId reconciliation must reject foreign DownloadItem');
+  assert(recovery.includes('WebClipLocalDownloadIdentity?.chooseUniqueBoundDownloadForReceipt'), 'P1-087/P0-072: bound downloadId reconciliation must use the strict receipt identity authority');
+  assert(recovery.includes('extensionId: chrome.runtime.id'), 'P1-087/P0-072: bound identity proof must receive the current extension id');
+  assert(!recovery.includes('matches.find(isOwnExtensionDownload) || null'), 'P1-087/P0-072: restart recovery must not depend unconditionally on byExtensionId');
+
+  const identityContext = { globalThis: null };
+  identityContext.globalThis = identityContext;
+  vm.createContext(identityContext);
+  vm.runInContext(localDownloadIdentity, identityContext, { filename: 'local-download-identity.js' });
+  const boundGuard = identityContext.WebClipLocalDownloadIdentity;
+  const blobUrl = 'blob:chrome-extension://webclip-extension-id/exact-bound';
+  const receipt = {
+    downloadId: 87,
+    kind: 'download',
+    downloadAdmissionPhase: 'admitted-unknown',
+    blobUrl
+  };
+  const foreignBound = boundGuard.chooseUniqueBoundDownloadForReceipt({
+    receipt,
+    downloads: [{ id: 87, byExtensionId: 'other-extension-id', url: blobUrl, finalUrl: blobUrl }],
+    extensionId: 'webclip-extension-id'
+  });
+  assert.strictEqual(foreignBound.download, null, 'P1-087: present foreign byExtensionId must fail closed even when weaker evidence matches');
+  const restartedBound = boundGuard.chooseUniqueBoundDownloadForReceipt({
+    receipt,
+    downloads: [{ id: 87, url: blobUrl, finalUrl: blobUrl }],
+    extensionId: 'webclip-extension-id'
+  });
+  assert.strictEqual(restartedBound.download.id, 87, 'P1-087/P0-072: exact bound WebClip Blob identity may recover when byExtensionId is absent');
 
   const expectedFilename = 'same.pdf';
   const expectedBytes = 12345;

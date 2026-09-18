@@ -29,8 +29,18 @@ function intent(key, filename = 'same.pdf', expectedBytes = 1234, blobUrl = '') 
     data: { filename }
   };
 }
-function download(id, filename = '/Downloads/same.pdf', bytes = 1234, url = '') {
-  return { id, filename, fileSize: bytes, totalBytes: bytes, url, finalUrl: url };
+function download(id, filename = '/Downloads/same.pdf', bytes = 1234, url = '', byExtensionId) {
+  return { id, filename, fileSize: bytes, totalBytes: bytes, url, finalUrl: url, ...(byExtensionId === undefined ? {} : { byExtensionId }) };
+}
+function boundReceipt(id, blobUrl = 'blob:chrome-extension://webclip-id/exact-bound') {
+  return {
+    downloadId: id,
+    kind: 'download',
+    downloadAdmissionPhase: 'admitted-unknown',
+    blobUrl,
+    expectedBytes: 1234,
+    data: { filename: 'same.pdf' }
+  };
 }
 
 {
@@ -88,12 +98,107 @@ function download(id, filename = '/Downloads/same.pdf', bytes = 1234, url = '') 
   assert.equal(result.mode, 'ambiguous-exact');
 }
 
+// P0-072 restart recovery controls for the P0-048 identity authority; P1-231 binds the resulting runtime bytes.
+{
+  const receipt = boundReceipt(21, '');
+  const result = guard.chooseUniqueBoundDownloadForReceipt({
+    receipt,
+    downloads: [download(21, 'same.pdf', 1234, 'https://example.invalid/file.pdf', 'webclip-id')],
+    extensionId: 'webclip-id'
+  });
+  assert.equal(result.download.id, 21, 'present matching byExtensionId remains the strongest ownership proof');
+  assert.equal(result.mode, 'by-extension-id');
+}
+
+{
+  const blobUrl = 'blob:chrome-extension://webclip-id/exact-bound';
+  const receipt = boundReceipt(22, blobUrl);
+  const result = guard.chooseUniqueBoundDownloadForReceipt({
+    receipt,
+    downloads: [download(22, 'same.pdf', 1234, blobUrl, 'foreign-id')],
+    extensionId: 'webclip-id'
+  });
+  assert.equal(result.download, null, 'present foreign byExtensionId must override matching weaker evidence');
+  assert.equal(result.mode, 'foreign-extension');
+}
+
+{
+  const blobUrl = 'blob:chrome-extension://webclip-id/exact-bound';
+  const receipt = boundReceipt(23, blobUrl);
+  const result = guard.chooseUniqueBoundDownloadForReceipt({
+    receipt,
+    downloads: [download(23, 'same.pdf', 1234, blobUrl)],
+    extensionId: 'webclip-id'
+  });
+  assert.equal(result.download.id, 23, 'restart recovery may use exact bound WebClip Blob identity when Chrome omits byExtensionId');
+  assert.equal(result.mode, 'bound-blob-url');
+}
+
+{
+  const receipt = boundReceipt(24, 'blob:chrome-extension://foreign-id/exact-bound');
+  const result = guard.chooseUniqueBoundDownloadForReceipt({
+    receipt,
+    downloads: [download(24, 'same.pdf', 1234, receipt.blobUrl)],
+    extensionId: 'webclip-id'
+  });
+  assert.equal(result.download, null, 'foreign Blob origin must fail closed when byExtensionId is absent');
+  assert.equal(result.mode, 'foreign-or-invalid-receipt-blob');
+}
+
+{
+  const blobUrl = 'blob:chrome-extension://webclip-id/exact-bound';
+  const receipt = boundReceipt(25, blobUrl);
+  const wrongUrl = guard.chooseUniqueBoundDownloadForReceipt({
+    receipt,
+    downloads: [download(25, 'same.pdf', 1234, 'blob:chrome-extension://webclip-id/other')],
+    extensionId: 'webclip-id'
+  });
+  assert.equal(wrongUrl.download, null, 'same-origin but different Blob identity must fail closed');
+  assert.equal(wrongUrl.mode, 'blob-url-mismatch');
+
+  const wrongId = guard.chooseUniqueBoundDownloadForReceipt({
+    receipt,
+    downloads: [download(26, 'same.pdf', 1234, blobUrl)],
+    extensionId: 'webclip-id'
+  });
+  assert.equal(wrongId.download, null, 'durable receipt must bind the exact numeric downloadId');
+  assert.equal(wrongId.mode, 'download-id-mismatch');
+}
+
+{
+  const blobUrl = 'blob:chrome-extension://webclip-id/exact-bound';
+  const receipt = boundReceipt(27, blobUrl);
+  const result = guard.chooseUniqueBoundDownloadForReceipt({
+    receipt,
+    downloads: [download(27, 'same.pdf', 1234, blobUrl), download(27, 'same.pdf', 1234, blobUrl)],
+    extensionId: 'webclip-id'
+  });
+  assert.equal(result.download, null, 'ambiguous exact-id search output must fail closed');
+  assert.equal(result.mode, 'ambiguous-download');
+}
+
+{
+  const blobUrl = 'blob:chrome-extension://webclip-id/exact-bound';
+  const receipt = { ...boundReceipt(28, blobUrl), downloadAdmissionPhase: 'prepared' };
+  const result = guard.chooseUniqueBoundDownloadForReceipt({
+    receipt,
+    downloads: [download(28, 'same.pdf', 1234, blobUrl)],
+    extensionId: 'webclip-id'
+  });
+  assert.equal(result.download, null, 'fallback proof requires an admitted bound durable receipt');
+  assert.equal(result.mode, 'receipt-not-admitted');
+}
+
 assert.match(workerSource, /importScripts\('public-suffix\.js', 'journal-import-stream\.js', 'journal-text-filter\.js', 'local-download-identity\.js'\)/,
   'service worker must load identity helper before body execution');
 assert.match(workerSource, /listPendingLocalDownloadFallbackIntents\(\)/,
   'reconciliation must load the bounded all-intent set');
 assert.match(workerSource, /globalThis\.WebClipLocalDownloadIdentity\?\.chooseUniqueDownloadForIntent/,
   'reconciliation must use unique intent/download classifier');
+assert.match(workerSource, /globalThis\.WebClipLocalDownloadIdentity\?\.chooseUniqueBoundDownloadForReceipt/,
+  'bound restart reconciliation must use fail-closed receipt/download identity proof');
+assert.doesNotMatch(workerSource, /const download = Array\.isArray\(matches\) \? matches\.find\(isOwnExtensionDownload\)/,
+  'numeric restart reconciliation must not depend unconditionally on byExtensionId');
 assert.match(workerSource, /const existingReq = pending\.get\(id\)/,
   'numeric downloadId binding must inspect existing durable owner');
 assert.match(workerSource, /WEBCLIP_DOWNLOAD_ID_ALREADY_BOUND/,

@@ -132,89 +132,257 @@ async function snapshot(session) {
   return session.evaluate(dbSnapshotExpression());
 }
 
-async function installPauseObserver(options) {
-  const installed = await options.evaluate(`(async () => {
-    globalThis.__p0072ChromeDownloadEvidence = { created: [], pauseErrors: [] };
-    const listener = async (item) => {
-      const filename = String(item?.filename || '');
-      if (!/\\.pdf$/i.test(filename)) return;
-      try {
-        await chrome.downloads.pause(item.id);
-      } catch (error) {
-        globalThis.__p0072ChromeDownloadEvidence.pauseErrors.push({
-          id: item.id,
-          error: String(error?.message || error || '')
-        });
-      }
-      const current = (await chrome.downloads.search({ id: item.id }))[0] || item;
-      globalThis.__p0072ChromeDownloadEvidence.created.push({
-        id: Number(item.id),
-        filename: String(current.filename || filename),
-        state: String(current.state || ''),
-        paused: Boolean(current.paused),
-        canResume: Boolean(current.canResume),
-        startTime: String(current.startTime || '')
-      });
-    };
-    chrome.downloads.onCreated.addListener(listener);
-    globalThis.__p0072ChromeDownloadListener = listener;
-    return true;
-  })()`);
-  assert.strictEqual(installed, true, 'download pause observer must install');
+async function prepareDownloadObserverExtension() {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'webclip-p0-072-download-observer-'));
+  const manifest = {
+    manifest_version: 3,
+    name: 'WebClip P0-072 Download Observer',
+    version: '1.0.0',
+    permissions: ['downloads', 'storage'],
+    background: { service_worker: 'observer.js' }
+  };
+  const worker = [
+    "'use strict';",
+    "const STATE_KEY = 'p0072ObserverState';",
+    "const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));",
+    "let enabled = true;",
+    "const keepAlivePorts = new Set();",
+    "chrome.runtime.onConnect.addListener((port) => {",
+    "  keepAlivePorts.add(port);",
+    "  port.onDisconnect.addListener(() => keepAlivePorts.delete(port));",
+    "  port.onMessage.addListener((message) => {",
+    "    if (message?.type === 'set-enabled') enabled = message.enabled !== false;",
+    "  });",
+    "});",
+    "const listener = (item) => {",
+    "  if (!enabled) return;",
+    "  let pausePromise;",
+    "  try { pausePromise = Promise.resolve(chrome.downloads.pause(item.id)); }",
+    "  catch (error) { pausePromise = Promise.reject(error); }",
+    "  void (async () => {",
+    "    const before = await chrome.storage.local.get(STATE_KEY);",
+    "    const state = before[STATE_KEY] || { enabled: true, created: [], pauseErrors: [] };",
+    "    const record = {",
+    "      id: Number(item.id),",
+    "      filename: String(item.filename || ''),",
+    "      state: String(item.state || ''),",
+    "      paused: Boolean(item.paused),",
+    "      canResume: Boolean(item.canResume),",
+    "      startTime: String(item.startTime || ''),",
+    "      observedAt: Date.now(),",
+    "      pauseSettled: false",
+    "    };",
+    "    const created = [...(Array.isArray(state.created) ? state.created : []).slice(-7), record];",
+    "    await chrome.storage.local.set({ [STATE_KEY]: { ...state, created } });",
+    "    let pauseError = '';",
+    "    try {",
+    "      await Promise.race([",
+    "        pausePromise,",
+    "        sleep(5000).then(() => { throw new Error('pause settlement timed out after 5000 ms'); })",
+    "      ]);",
+    "      record.pauseSettled = true;",
+    "    } catch (error) {",
+    "      pauseError = String(error?.message || error || '');",
+    "    }",
+    "    const current = (await chrome.downloads.search({ id: item.id }).catch(() => []))[0] || item;",
+    "    Object.assign(record, {",
+    "      filename: String(current.filename || record.filename || ''),",
+    "      state: String(current.state || record.state || ''),",
+    "      paused: Boolean(current.paused),",
+    "      canResume: Boolean(current.canResume),",
+    "      startTime: String(current.startTime || record.startTime || '')",
+    "    });",
+    "    const afterRaw = await chrome.storage.local.get(STATE_KEY);",
+    "    const after = afterRaw[STATE_KEY] || state;",
+    "    const rows = Array.isArray(after.created) ? after.created.slice() : [];",
+    "    const index = rows.findIndex((value) => Number(value?.id) === Number(item.id));",
+    "    if (index >= 0) rows[index] = record; else rows.push(record);",
+    "    const pauseErrors = Array.isArray(after.pauseErrors) ? after.pauseErrors.slice() : [];",
+    "    if (pauseError) pauseErrors.push({ id: Number(item.id), error: pauseError });",
+    "    await chrome.storage.local.set({ [STATE_KEY]: { ...after, created: rows.slice(-8), pauseErrors: pauseErrors.slice(-8) } });",
+    "  })().catch(async (error) => {",
+    "    const raw = await chrome.storage.local.get(STATE_KEY).catch(() => ({}));",
+    "    const state = raw[STATE_KEY] || { enabled: true, created: [], pauseErrors: [] };",
+    "    const pauseErrors = Array.isArray(state.pauseErrors) ? state.pauseErrors.slice() : [];",
+    "    pauseErrors.push({ id: Number(item?.id), error: String(error?.message || error || '') });",
+    "    await chrome.storage.local.set({ [STATE_KEY]: { ...state, pauseErrors: pauseErrors.slice(-8) } }).catch(() => {});",
+    "  });",
+    "};",
+    "chrome.downloads.onCreated.addListener(listener);"
+  ].join('\n');
+  await fsp.writeFile(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  await fsp.writeFile(path.join(dir, 'observer.js'), worker + '\n');
+  await fsp.writeFile(path.join(dir, 'observer.html'), '<!doctype html><meta charset="utf-8"><title>P0-072 Download Observer</title>\n');
+  return { path: dir, cleanup: () => fsp.rm(dir, { recursive: true, force: true }) };
 }
 
-async function removePauseObserver(options) {
-  await options.evaluate(`(() => {
-    const listener = globalThis.__p0072ChromeDownloadListener;
-    if (listener) chrome.downloads.onCreated.removeListener(listener);
-    globalThis.__p0072ChromeDownloadListener = null;
+async function loadDownloadObserver(browser, observerPath) {
+  const loaded = await browser.cdp.send('Extensions.loadUnpacked', { path: observerPath }, undefined, 20_000);
+  const extensionId = String(loaded?.id || '').trim();
+  assert(/^[a-p]{32}$/.test(extensionId), 'download observer extension id required');
+  await waitFor(async () => {
+    const targets = await browser.cdp.send('Target.getTargets', {}, undefined, 5_000);
+    return (targets?.targetInfos || []).find((item) =>
+      item?.type === 'service_worker'
+      && String(item?.url || '').startsWith('chrome-extension://' + extensionId + '/')
+    ) || null;
+  }, { timeoutMs: 10_000, intervalMs: 100, label: 'download observer service worker ready' });
+  const page = await browser.attachPage(
+    'chrome-extension://' + extensionId + '/observer.html',
+    'P0-072 download observer page'
+  );
+  await page.evaluate(`(async () => {
+    globalThis.__p0072ObserverPort = chrome.runtime.connect({ name: 'p0-072-observer' });
+    globalThis.__p0072ObserverPort.postMessage({ type: 'set-enabled', enabled: true });
+    await chrome.storage.local.set({
+      p0072ObserverState: { enabled: true, created: [], pauseErrors: [] }
+    });
     return true;
-  })()`).catch(() => {});
+  })()`);
+  return { extensionId, page };
+}
+
+async function downloadObserverState(observerPage) {
+  return observerPage.evaluate(`chrome.storage.local.get('p0072ObserverState')
+    .then((value) => value.p0072ObserverState || { enabled: true, created: [], pauseErrors: [] })`);
+}
+
+async function attachStablePopupController(browser, extensionId, label) {
+  const url = 'chrome-extension://' + extensionId + '/popup.html';
+  let lastError = null;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    let page = null;
+    try {
+      page = await browser.attachPage(url, label + ' attempt ' + attempt);
+      const ready = await waitFor(async () => {
+        try {
+          const state = await page.evaluate(`({
+            readyState: document.readyState,
+            marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
+            api: Boolean(globalThis.WebClipContentInjectionGuard),
+            ensureTopContentScript: typeof globalThis.ensureTopContentScript
+          })`);
+          return state?.readyState === 'complete'
+            && state?.marker
+            && state?.api
+            && state?.ensureTopContentScript === 'function'
+            ? state
+            : null;
+        } catch (error) {
+          lastError = error;
+          return null;
+        }
+      }, { timeoutMs: 3_000, intervalMs: 100, label: label + ' readiness attempt ' + attempt });
+      if (ready) {
+        await sleep(350);
+        const stable = await page.evaluate(`({
+          marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
+          api: Boolean(globalThis.WebClipContentInjectionGuard),
+          ensureTopContentScript: typeof globalThis.ensureTopContentScript
+        })`);
+        if (stable?.marker && stable?.api && stable?.ensureTopContentScript === 'function') return page;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await page?.close().catch(() => {});
+    await sleep(400);
+  }
+  throw new Error(label + ': stable popup controller unavailable: ' + String(lastError?.message || lastError || 'unknown'));
 }
 
 async function createSelectedFixtureTab(options, articleUrl, label) {
-  const result = await options.evaluate(`(async () => {
-    const tab = await chrome.tabs.create({ url: ${js(articleUrl)}, active: true });
-    const tabId = tab.id;
-    for (let i = 0; i < 120; i += 1) {
-      const current = await chrome.tabs.get(tabId);
-      if (current.status === 'complete') break;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-    const started = await chrome.tabs.sendMessage(tabId, { type: 'WEBCLIP_COMMAND', command: 'start' });
-    const selected = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: () => {
-        const article = document.getElementById('article');
-        if (!article) return { ok: false, reason: 'article-missing' };
-        // Make the real PDF non-trivial so chrome.downloads.onCreated has a
-        // reliable opportunity to pause the physical write before completion.
-        const bulk = document.createElement('div');
-        bulk.id = 'p0-072-physical-bulk';
-        for (let i = 0; i < 240; i += 1) {
-          const page = document.createElement('section');
-          page.style.breakAfter = 'page';
-          page.textContent = 'P0-072 physical Chrome reset/restart synthetic page ' + i + ' '.repeat(32);
-          bulk.append(page);
-        }
-        article.append(bulk);
-        article.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-        return {
-          ok: true,
-          included: Boolean(article.getAttribute('data-webclip-pdf-include')),
-          root: Boolean(document.getElementById('webclip-pdf-extension-root'))
-        };
-      }
+  const tab = await options.evaluate(`chrome.tabs.create({ url: ${js(articleUrl)}, active: true })`);
+  const tabId = Number(tab?.id);
+  assert(tabId > 0, label + ': fixture tab id missing');
+
+  await waitFor(async () => {
+    const current = await options.evaluate(`chrome.tabs.get(${tabId})`);
+    return current?.status === 'complete' ? current : null;
+  }, { timeoutMs: 10_000, intervalMs: 50, label: label + ' fixture tab load' });
+
+  const guardState = await waitFor(async () => {
+    const state = await options.evaluate(`({
+      marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
+      api: Boolean(globalThis.WebClipContentInjectionGuard),
+      ensureTopContentScript: typeof globalThis.ensureTopContentScript
+    })`);
+    return state?.marker && state?.api && state?.ensureTopContentScript === 'function' ? state : null;
+  }, { timeoutMs: 5_000, intervalMs: 50, label: label + ' production popup content-injection guard ready' });
+
+  await options.evaluate(`ensureTopContentScript(${tabId})`);
+  const generationProbe = await options.evaluate(`(async () => {
+    const rows = await chrome.scripting.executeScript({
+      target: { tabId: ${tabId} },
+      func: () => ({
+        marker: Boolean(globalThis.__webclipApplicationGenerationTrackerV3),
+        api: Boolean(globalThis.WebClipApplicationGeneration),
+        receipt: globalThis.WebClipApplicationGeneration?.receipt?.() || null,
+        sendName: String(chrome.runtime.sendMessage?.name || '')
+      })
     });
-    return { tabId, started, selected: selected[0]?.result || null };
+    return rows[0]?.result || null;
   })()`);
-  assert(result?.started?.ok, label + ': selection start failed');
-  assert(result?.selected?.ok && result.selected.included && result.selected.root, label + ': fixture selection failed');
-  return Number(result.tabId);
+  assert(generationProbe?.marker && generationProbe?.api, label + ': application-generation guard missing before selection');
+  assert(Number(generationProbe?.receipt?.generation) > 0, label + ': application-generation receipt missing before selection');
+
+  const started = await options.evaluate(
+    `chrome.tabs.sendMessage(${tabId}, { type: 'WEBCLIP_START_SELECTION' })`
+  );
+  const selected = await options.evaluate(`chrome.scripting.executeScript({
+    target: { tabId: ${tabId} },
+    func: (noisePages) => {
+      const article = document.getElementById('article');
+      if (!article) return { ok: false, reason: 'article-missing' };
+      // Make the real PDF physically large enough that the downloads API
+      // exposes an observable in-progress window. Deterministic noisy canvases
+      // resist PDF compression without changing production extension bytes.
+      const bulk = document.createElement('div');
+      bulk.id = 'p0-072-physical-bulk';
+      let seed = 0x720072;
+      const nextByte = () => {
+        seed ^= seed << 13;
+        seed ^= seed >>> 17;
+        seed ^= seed << 5;
+        return seed & 0xff;
+      };
+      for (let pageIndex = 0; pageIndex < noisePages; pageIndex += 1) {
+        const page = document.createElement('section');
+        page.style.breakAfter = 'page';
+        const canvas = document.createElement('canvas');
+        canvas.width = 1800;
+        canvas.height = 1800;
+        canvas.style.width = '7.5in';
+        canvas.style.height = '7.5in';
+        const context = canvas.getContext('2d', { alpha: false });
+        const image = context.createImageData(canvas.width, canvas.height);
+        for (let offset = 0; offset < image.data.length; offset += 4) {
+          image.data[offset] = nextByte();
+          image.data[offset + 1] = nextByte();
+          image.data[offset + 2] = nextByte();
+          image.data[offset + 3] = 255;
+        }
+        context.putImageData(image, 0, 0);
+        page.append(canvas);
+        bulk.append(page);
+      }
+      article.append(bulk);
+      article.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      return {
+        ok: true,
+        included: Boolean(article.getAttribute('data-webclip-pdf-include')),
+        root: Boolean(document.getElementById('webclip-pdf-extension-root'))
+      };
+    },
+    args: [${label === 'restart' ? 5 : 4}]
+  })`);
+  const selectedResult = Array.isArray(selected) ? selected[0]?.result || null : null;
+  assert(started?.ok, label + ': selection start failed');
+  assert(selectedResult?.ok && selectedResult.included && selectedResult.root, label + ': fixture selection failed');
+  return tabId;
 }
 
-async function triggerPdfDownload(options, tabId, previousIds, label) {
+async function triggerPdfDownload(options, observerPage, tabId, previousIds, label) {
   const start = await options.evaluate(`(async () => {
     const command = await chrome.tabs.sendMessage(${Number(tabId)}, { type: 'WEBCLIP_COMMAND', command: 'download' });
     const clicked = await chrome.scripting.executeScript({
@@ -235,11 +403,66 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
   assert(start?.command?.ok, label + ': download command failed');
   assert(start?.clicked?.ok, label + ': PDF proceed button missing: ' + String(start?.clicked?.reason || ''));
 
+  let lastCreatedState = null;
   const created = await waitFor(async () => {
-    const evidence = await options.evaluate('globalThis.__p0072ChromeDownloadEvidence');
-    const rows = Array.isArray(evidence?.created) ? evidence.created : [];
-    return rows.find((item) => !previousIds.has(Number(item.id))) || null;
-  }, { timeoutMs: 70_000, intervalMs: 100, label: label + ' download onCreated+pause' });
+    const evidence = await downloadObserverState(observerPage);
+    const state = await options.evaluate(`(async () => {
+      const downloads = await chrome.downloads.search({ orderBy: ['-startTime'], limit: 10 });
+      const modal = await chrome.scripting.executeScript({
+        target: { tabId: ${Number(tabId)} },
+        func: () => {
+          const shadow = document.getElementById('webclip-pdf-extension-root')?.shadowRoot;
+          return {
+            title: String(shadow?.querySelector('.modal h2')?.textContent || ''),
+            text: String(shadow?.querySelector('.modal p')?.textContent || '')
+          };
+        }
+      }).catch(() => []);
+      return {
+        downloads,
+        modal: modal[0]?.result || null
+      };
+    })()`);
+    state.evidence = evidence;
+    lastCreatedState = state;
+    const rows = Array.isArray(state?.evidence?.created) ? state.evidence.created : [];
+    const observed = rows.find((item) => !previousIds.has(Number(item.id))) || null;
+    if (observed) return observed;
+    const candidate = (Array.isArray(state?.downloads) ? state.downloads : []).find((item) =>
+      /\.pdf$/i.test(String(item?.filename || ''))
+      && !previousIds.has(Number(item?.id))
+    );
+    if (candidate) {
+      throw new Error(
+        label + ': PDF DownloadItem exists but extension-page onCreated observer has no evidence; '
+        + JSON.stringify({
+          id: candidate.id,
+          state: candidate.state,
+          paused: candidate.paused,
+          canResume: candidate.canResume,
+          pauseErrors: state?.evidence?.pauseErrors || []
+        })
+      );
+    }
+    if (/Не удалось сформировать PDF/.test(String(state?.modal?.title || ''))) {
+      throw new Error(label + ': PDF UI failure: ' + String(state?.modal?.text || state?.modal?.title || ''));
+    }
+    return null;
+  }, { timeoutMs: 70_000, intervalMs: 150, label: label + ' download onCreated+pause' }).catch((error) => {
+    const compact = {
+      modal: lastCreatedState?.modal || null,
+      evidence: lastCreatedState?.evidence || null,
+      downloads: (Array.isArray(lastCreatedState?.downloads) ? lastCreatedState.downloads : []).slice(0, 5).map((item) => ({
+        id: item?.id,
+        filename: item?.filename,
+        state: item?.state,
+        paused: item?.paused,
+        canResume: item?.canResume,
+        error: item?.error
+      }))
+    };
+    throw new Error(String(error?.message || error) + '; lastState=' + JSON.stringify(compact));
+  });
 
   assert(Number.isInteger(Number(created.id)), label + ': download id missing');
   const id = Number(created.id);
@@ -250,7 +473,11 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
     const item = Array.isArray(items) ? items[0] : null;
     if (!item) return null;
     if (item.state === 'complete') {
-      throw new Error(label + ': physical PDF completed before pause boundary could be observed');
+      const observerState = await downloadObserverState(observerPage).catch(() => null);
+      throw new Error(
+        label + ': physical PDF completed before pause boundary could be observed; observer='
+        + JSON.stringify(observerState)
+      );
     }
     return item.paused ? item : null;
   }, { timeoutMs: 10_000, intervalMs: 50, label: label + ' paused DownloadItem' });
@@ -306,6 +533,100 @@ async function waitPhysicalTerminal(options, downloadId, label) {
   }, { timeoutMs: 30_000, intervalMs: 100, label: label + ' physical terminal state' });
 }
 
+async function latestBackgroundMaintenanceLog(options) {
+  return options.evaluate(`new Promise((resolve) => {
+    const request = indexedDB.open('WebClipOperationLogs');
+    request.onerror = () => resolve(null);
+    request.onsuccess = () => {
+      const db = request.result;
+      try {
+        const tx = db.transaction('operations', 'readonly');
+        const getAll = tx.objectStore('operations').getAll();
+        getAll.onerror = () => { db.close(); resolve(null); };
+        getAll.onsuccess = () => {
+          const rows = Array.isArray(getAll.result) ? getAll.result : [];
+          const latest = rows
+            .filter((row) => row?.type === 'background-maintenance')
+            .sort((a, b) => Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0))[0] || null;
+          db.close();
+          resolve(latest ? {
+            operationId: latest.operationId,
+            status: latest.status,
+            summary: latest.summary || '',
+            createdAt: latest.createdAt,
+            updatedAt: latest.updatedAt,
+            meta: latest.meta || {}
+          } : null);
+        };
+      } catch (_) {
+        try { db.close(); } catch (_) {}
+        resolve(null);
+      }
+    };
+  })`);
+}
+
+async function removeLevelDbLocks(root) {
+  const entries = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    const full = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      await removeLevelDbLocks(full);
+    } else if (entry.name === 'LOCK') {
+      await fsp.rm(full, { force: true });
+    }
+  }
+}
+
+async function verifyKilledProfileReceipt(testExtensionPath, sourceProfile, expectedExtensionId, downloadId, operationId) {
+  const sourceIndexedDb = path.join(sourceProfile, 'Default', 'IndexedDB');
+  assert(fs.existsSync(sourceIndexedDb), 'killed profile must retain IndexedDB directory');
+  const witnessProfile = await fsp.mkdtemp(path.join(os.tmpdir(), 'webclip-p0-072-killed-profile-witness-'));
+  const witnessIndexedDb = path.join(witnessProfile, 'Default', 'IndexedDB');
+  let witnessBrowser = null;
+  let witnessPage = null;
+  try {
+    await fsp.mkdir(path.dirname(witnessIndexedDb), { recursive: true });
+    await fsp.cp(sourceIndexedDb, witnessIndexedDb, { recursive: true, force: true });
+    await removeLevelDbLocks(witnessIndexedDb);
+
+    witnessBrowser = await launchChromium(testExtensionPath, {
+      profilePath: witnessProfile,
+      preserveProfile: true
+    });
+    assert.strictEqual(
+      witnessBrowser.extensionId,
+      expectedExtensionId,
+      'killed-profile witness must retain exact unpacked extension identity'
+    );
+    witnessPage = await attachStablePopupController(
+      witnessBrowser,
+      expectedExtensionId,
+      'P0-072 killed-profile receipt witness controller'
+    );
+    const receipt = await waitFor(async () => {
+      const snap = await snapshot(witnessPage);
+      return (snap.pendingDownloads || []).find((item) =>
+        Number(item?.downloadId) === Number(downloadId)
+        && String(item?.operationId || '') === String(operationId || '')
+        && item?.supersededByJournalReset === true
+        && item?.downloadAdmissionPhase === 'admitted-unknown'
+      ) || null;
+    }, { timeoutMs: 10_000, intervalMs: 100, label: 'killed-profile durable superseded receipt witness' });
+    return {
+      downloadId: Number(receipt.downloadId),
+      operationId: String(receipt.operationId || ''),
+      updatedAt: Number(receipt.updatedAt || 0),
+      supersededByJournalReset: Boolean(receipt.supersededByJournalReset),
+      downloadAdmissionPhase: String(receipt.downloadAdmissionPhase || '')
+    };
+  } finally {
+    await witnessPage?.close().catch(() => {});
+    await witnessBrowser?.stop({ preserveProfile: true }).catch(() => {});
+    await fsp.rm(witnessProfile, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 async function waitReceiptRetiredWithoutJournal(options, downloadId, articleUrl, label) {
   return waitFor(async () => {
     const snap = await snapshot(options);
@@ -317,17 +638,28 @@ async function waitReceiptRetiredWithoutJournal(options, downloadId, articleUrl,
 }
 
 async function run() {
+  let stage = 'bootstrap';
+  const mark = (next) => {
+    stage = String(next || 'unknown');
+    console.log('P0_072_STAGE=' + stage);
+  };
   assert(fs.existsSync(CHROMIUM), 'Chromium binary not found: ' + CHROMIUM);
   const contract = sourceContract();
+  mark('fixture-start');
   const fixture = await startFixtureServer();
   let testExtension = null;
+  let observerExtension = null;
+  let observer = null;
   let browser = null;
   let options = null;
   let profile = '';
   const createdIds = new Set();
 
   try {
+    mark('extension-prepare');
     testExtension = await prepareTestExtension(fixture.origin, fixture.apiBase, { mockYandex: false });
+    mark('observer-prepare');
+    observerExtension = await prepareDownloadObserverExtension();
     const copiedWorker = await fsp.readFile(path.join(testExtension.path, 'service-worker.js'));
     assert.strictEqual(
       sha256Bytes(copiedWorker),
@@ -335,29 +667,42 @@ async function run() {
       'physical harness must preserve exact production service-worker.js bytes'
     );
 
+    mark('browser-launch');
     browser = await launchChromium(testExtension.path, { preserveProfile: true });
+    mark('browser-launched');
     profile = browser.profile;
     const extensionId = browser.extensionId;
-    options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'P0-072 options page');
+    mark('observer-load');
+    observer = await loadDownloadObserver(browser, observerExtension.path);
+    mark('observer-loaded');
+    mark('controller-attach');
+    options = await attachStablePopupController(browser, extensionId, 'P0-072 guarded popup controller');
+    mark('controller-attached');
     await options.evaluate(`(async () => {
       await chrome.storage.local.clear();
       await chrome.storage.session.clear();
       return true;
     })()`);
-    await installPauseObserver(options);
-
+    mark('case-a-create-selection');
     // Case A: exact real Chrome late completion after Journal reset.
     const tabA = await createSelectedFixtureTab(options, fixture.articleUrl, 'late-complete');
-    const downloadA = await triggerPdfDownload(options, tabA, createdIds, 'late-complete');
+    mark('case-a-trigger-download');
+    const downloadA = await triggerPdfDownload(options, observer.page, tabA, createdIds, 'late-complete');
+    mark('case-a-download-paused');
+    mark('case-a-clear');
     const resetA = await clearJournalAndRequireSuperseded(options, downloadA.id, 'late-complete');
+    mark('case-a-superseded');
 
+    mark('case-a-resume');
     await options.evaluate(`chrome.downloads.resume(${downloadA.id})`);
     const terminalA = await waitPhysicalTerminal(options, downloadA.id, 'late-complete');
     assert.strictEqual(terminalA.state, 'complete', 'late-complete: resumed real Chrome download must complete');
     await waitReceiptRetiredWithoutJournal(options, downloadA.id, fixture.articleUrl, 'late-complete');
+    mark('case-a-complete');
 
     assert(terminalA.filename && fs.existsSync(terminalA.filename), 'late-complete: physical PDF file must exist');
     const statA = fs.statSync(terminalA.filename);
+    console.log('P0_072_CASE_A_PDF_BYTES=' + statA.size);
     assert(statA.size > 500, 'late-complete: physical PDF unexpectedly small');
     const magic = Buffer.alloc(5);
     const fd = fs.openSync(terminalA.filename, 'r');
@@ -365,64 +710,150 @@ async function run() {
     fs.closeSync(fd);
     assert.strictEqual(magic.toString('ascii'), '%PDF-', 'late-complete: physical file must be a PDF');
 
+    mark('case-b-create-selection');
     // Case B: reset-superseded admitted effect survives an actual browser SIGKILL.
     const tabB = await createSelectedFixtureTab(options, fixture.articleUrl + '?restart=1', 'restart');
-    const downloadB = await triggerPdfDownload(options, tabB, createdIds, 'restart');
+    mark('case-b-trigger-download');
+    const downloadB = await triggerPdfDownload(options, observer.page, tabB, createdIds, 'restart');
+    mark('case-b-download-paused');
+    mark('case-b-clear');
     const resetB = await clearJournalAndRequireSuperseded(options, downloadB.id, 'restart');
+    mark('case-b-superseded');
 
-    await removePauseObserver(options);
+    await observer.page.evaluate(`chrome.storage.local.get('p0072ObserverState').then(async (value) => {
+      globalThis.__p0072ObserverPort?.postMessage({ type: 'set-enabled', enabled: false });
+      await chrome.storage.local.set({
+        p0072ObserverState: {
+          ...(value.p0072ObserverState || {}),
+          enabled: false
+        }
+      });
+      return true;
+    })`).catch(() => {});
+    await observer.page.close().catch(() => {});
+    observer = null;
+    mark('case-b-sigkill');
     await browser.stop({ preserveProfile: true, signal: 'SIGKILL' });
     browser = null;
     options = null;
 
+    mark('case-b-killed-profile-witness');
+    const killedProfileWitness = await verifyKilledProfileReceipt(
+      testExtension.path,
+      profile,
+      extensionId,
+      downloadB.id,
+      resetB.receipt?.operationId
+    );
+    mark('case-b-killed-profile-witness-confirmed');
+    console.log('P0_072_KILLED_PROFILE_RECEIPT=' + JSON.stringify(killedProfileWitness));
+
+    mark('case-b-restart-browser');
     browser = await launchChromium(testExtension.path, {
       profilePath: profile,
       preserveProfile: true
     });
+    mark('case-b-browser-restarted');
     assert.strictEqual(browser.extensionId, extensionId, 'same profile/path must retain exact unpacked extension identity');
-    options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'P0-072 options page after restart');
+    options = await attachStablePopupController(browser, extensionId, 'P0-072 guarded popup controller after restart');
 
-    const postRestartReceipt = await waitFor(async () => {
-      const snap = await snapshot(options);
-      return (snap.pendingDownloads || []).find((item) =>
-        Number(item?.downloadId) === downloadB.id
-        && item?.supersededByJournalReset === true
-      ) || null;
-    }, { timeoutMs: 15_000, intervalMs: 100, label: 'durable superseded receipt after SIGKILL restart' });
+    mark('case-b-receipt-after-restart');
+    const initialPostRestart = await snapshot(options);
+    let postRestartReceipt = (initialPostRestart.pendingDownloads || []).find((item) =>
+      Number(item?.downloadId) === downloadB.id
+      && item?.supersededByJournalReset === true
+    ) || null;
 
+    mark('case-b-download-after-restart');
     const restartItems = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`);
     const restartItem = Array.isArray(restartItems) ? restartItems[0] : null;
     assert(restartItem, 'restart: exact Chrome DownloadItem must remain discoverable after browser restart');
-
-    // If Chrome kept it resumable, allow it to continue. If Chrome already
-    // reached a terminal state during restart, maintenance will settle that
-    // terminal fact instead.
-    if (restartItem.state !== 'complete' && restartItem.state !== 'interrupted') {
-      if (restartItem.paused || restartItem.canResume) {
-        await options.evaluate(`chrome.downloads.resume(${downloadB.id})`).catch(() => {});
-      }
-    } else if (restartItem.state === 'interrupted' && restartItem.canResume) {
-      await options.evaluate(`chrome.downloads.resume(${downloadB.id})`).catch(() => {});
+    console.log('P0_072_RESTART_ITEM=' + JSON.stringify({
+      id: restartItem.id,
+      state: restartItem.state,
+      paused: restartItem.paused,
+      canResume: restartItem.canResume,
+      error: restartItem.error || '',
+      filename: restartItem.filename || ''
+    }));
+    if (postRestartReceipt) {
+      console.log('P0_072_RESTART_RECEIPT=' + JSON.stringify({
+        downloadId: postRestartReceipt.downloadId,
+        kind: postRestartReceipt.kind,
+        downloadAdmissionPhase: postRestartReceipt.downloadAdmissionPhase,
+        supersededByJournalReset: postRestartReceipt.supersededByJournalReset,
+        recoveryState: postRestartReceipt.recoveryState || ''
+      }));
+    } else {
+      console.log('P0_072_RESTART_RECEIPT=consumed-before-page-probe');
     }
 
-    let terminalB = await waitPhysicalTerminal(options, downloadB.id, 'restart').catch(() => null);
+    let terminalB = null;
+    let restartReconciliationMode = '';
 
-    // Force the existing durable maintenance boundary now instead of waiting
-    // one minute for the production startup alarm. This invokes the unmodified
-    // production alarm handler and reconciliation code.
-    await options.evaluate(`chrome.alarms.create('webclip-operation-log-cleanup', { when: Date.now() + 100 })`);
-    await sleep(500);
-    await waitFor(async () => {
-      const snap = await snapshot(options);
-      const row = (snap.pendingDownloads || []).find((item) => Number(item?.downloadId) === downloadB.id);
-      if (!row) return true;
-      if (row.kind === 'unknown' && row.recoveryState === 'manual-resolution' && row.supersededByJournalReset === true) return true;
-      return false;
-    }, { timeoutMs: 30_000, intervalMs: 200, label: 'restart maintenance reconciliation' });
+    if (!postRestartReceipt) {
+      assert(
+        restartItem.state === 'complete' || restartItem.state === 'interrupted',
+        'restart: early receipt consumption requires exact terminal Chrome DownloadItem'
+      );
+      await sleep(500);
+      const earlyFinal = await snapshot(options);
+      const earlyRow = (earlyFinal.pendingDownloads || []).find((item) => Number(item?.downloadId) === downloadB.id) || null;
+      assert.strictEqual(earlyRow, null, 'restart: early terminal reconciliation must retire exact durable receipt');
+      assert.strictEqual(
+        (earlyFinal.entries || []).some((entry) => String(entry?.url || '').startsWith(fixture.articleUrl)),
+        false,
+        'restart: early terminal reconciliation must not resurrect old-generation Journal metadata'
+      );
+      terminalB = restartItem;
+      restartReconciliationMode = 'terminal-onChanged-before-page-probe';
+      mark('case-b-reconciled-onchanged');
+    } else {
+      // If Chrome kept it resumable, allow it to continue. If Chrome already
+      // reached a terminal state during restart, maintenance will settle that
+      // terminal fact instead.
+      if (restartItem.state !== 'complete' && restartItem.state !== 'interrupted') {
+        if (restartItem.paused || restartItem.canResume) {
+          await options.evaluate(`chrome.downloads.resume(${downloadB.id})`).catch(() => {});
+        }
+      } else if (restartItem.state === 'interrupted' && restartItem.canResume) {
+        await options.evaluate(`chrome.downloads.resume(${downloadB.id})`).catch(() => {});
+      }
 
-    if (!terminalB) {
-      const rows = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`);
-      terminalB = Array.isArray(rows) ? rows[0] || null : null;
+      terminalB = await waitPhysicalTerminal(options, downloadB.id, 'restart').catch(() => null);
+
+      // Exercise the real production alarm boundary at Chrome's supported
+      // minimum timing rather than assuming a 100 ms alarm delivery.
+      mark('case-b-maintenance');
+      await options.evaluate(`chrome.alarms.create('webclip-operation-log-cleanup', { delayInMinutes: 0.5 })`);
+      let lastMaintenanceState = null;
+      await waitFor(async () => {
+        const snap = await snapshot(options);
+        const rows = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`).catch(() => []);
+        const alarm = await options.evaluate(`chrome.alarms.get('webclip-operation-log-cleanup')`).catch(() => null);
+        const row = (snap.pendingDownloads || []).find((item) => Number(item?.downloadId) === downloadB.id) || null;
+        lastMaintenanceState = {
+          row,
+          download: Array.isArray(rows) ? rows[0] || null : null,
+          alarm: alarm || null
+        };
+        if (!row) return true;
+        if (row.kind === 'unknown' && row.recoveryState === 'manual-resolution' && row.supersededByJournalReset === true) return true;
+        return false;
+      }, { timeoutMs: 140_000, intervalMs: 250, label: 'restart maintenance reconciliation' }).catch(async (error) => {
+        const maintenanceLog = await latestBackgroundMaintenanceLog(options).catch(() => null);
+        throw new Error(
+          String(error?.message || error)
+          + '; lastState=' + JSON.stringify(lastMaintenanceState)
+          + '; maintenanceLog=' + JSON.stringify(maintenanceLog)
+        );
+      });
+      restartReconciliationMode = 'production-maintenance';
+
+      if (!terminalB) {
+        const rows = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`);
+        terminalB = Array.isArray(rows) ? rows[0] || null : null;
+      }
     }
 
     const finalB = await snapshot(options);
@@ -466,15 +897,19 @@ async function run() {
         resetOperationId: resetB.operationId,
         preCrashReceiptUpdatedAt: Number(resetB.receipt?.updatedAt || 0),
         postRestartReceiptUpdatedAt: Number(postRestartReceipt?.updatedAt || 0),
+        killedProfileReceiptUpdatedAt: Number(killedProfileWitness.updatedAt || 0),
+        killedProfileReceiptWitness: true,
         chromeStateAfterRestart: String(restartItem.state || ''),
         chromeCanResumeAfterRestart: Boolean(restartItem.canResume),
         terminalStateObserved: String(terminalB?.state || ''),
+        reconciliationMode: restartReconciliationMode,
         receiptOutcome: survivingB ? 'manual-resolution' : 'retired-terminal',
-        supersededEvidencePreserved: Boolean(survivingB?.supersededByJournalReset || !survivingB),
+        supersededEvidencePreserved: Boolean(killedProfileWitness.supersededByJournalReset && (survivingB?.supersededByJournalReset || !survivingB)),
         journalResurrected: false
       },
       evidenceBoundary: {
         realChromeAutomaticDownload: true,
+        downloadObserver: 'companion-mv3-service-worker',
         realBrowserProcessSigkillRestart: true,
         realJournalReset: true,
         yandexExercised: false,
@@ -486,10 +921,29 @@ async function run() {
     result.resultSha256 = sha256Bytes(Buffer.from(stable, 'utf8'));
     console.log('P0_072_REAL_CHROME_RESULT=' + JSON.stringify(result));
     return result;
+  } catch (error) {
+    console.error('P0_072_FAILURE_STAGE=' + stage);
+    console.error('P0_072_BROWSER_PROCESS=' + JSON.stringify({
+      exitCode: browser?.proc?.exitCode ?? null,
+      signalCode: browser?.proc?.signalCode ?? null,
+      killed: Boolean(browser?.proc?.killed)
+    }));
+    const targets = await browser?.cdp?.send('Target.getTargets', {}, undefined, 5_000).catch(() => null);
+    if (targets?.targetInfos) {
+      console.error('P0_072_TARGETS=' + JSON.stringify(targets.targetInfos.map((item) => ({
+        targetId: item.targetId,
+        type: item.type,
+        url: item.url,
+        title: item.title,
+        attached: item.attached
+      }))));
+    }
+    throw error;
   } finally {
-    await removePauseObserver(options).catch(() => {});
+    await observer?.page?.close().catch(() => {});
     await browser?.stop({ preserveProfile: false }).catch(() => {});
     if (!browser && profile) await fsp.rm(profile, { recursive: true, force: true }).catch(() => {});
+    await observerExtension?.cleanup().catch(() => {});
     await testExtension?.cleanup().catch(() => {});
     await fixture.close().catch(() => {});
   }

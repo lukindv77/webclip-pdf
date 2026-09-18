@@ -278,8 +278,10 @@ async function launchChromium(extensionPath, { profilePath = '', preserveProfile
   const stderrPath = path.join(profile, 'chromium.stderr.log');
   const stdout = fs.createWriteStream(stdoutPath);
   const stderr = fs.createWriteStream(stderrPath);
+  const headed = process.env.WEBCLIP_CHROME_HEADED === '1';
   const args = [
-    '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
+    ...(!headed ? ['--headless=new'] : []),
+    '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
     '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
     '--remote-debugging-pipe', '--enable-unsafe-extension-debugging',
     `--user-data-dir=${profile}`, 'about:blank'
@@ -356,7 +358,13 @@ async function launchChromium(extensionPath, { profilePath = '', preserveProfile
 function js(value) { return JSON.stringify(value); }
 
 async function runBrowserIntegration() {
+  let stage = 'bootstrap';
+  const mark = (next) => {
+    stage = String(next || 'unknown');
+    console.log('P1_007_STAGE=' + stage);
+  };
   assert(fs.existsSync(chromium), `Chromium binary not found: ${chromium}`);
+  mark('fixture-start');
   const fixture = await startFixtureServer();
   let testExtension = null;
   let browser = null;
@@ -365,31 +373,75 @@ async function runBrowserIntegration() {
   let journal = null;
 
   try {
+    mark('extension-prepare');
     testExtension = await prepareTestExtension(fixture.origin, fixture.apiBase);
+    mark('browser-launch');
     browser = await launchChromium(testExtension.path);
+    mark('browser-launched');
     extensionId = browser.extensionId;
-    options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'options extension page');
+    mark('options-attach');
+    options = await browser.attachPage(`chrome-extension://${extensionId}/popup.html`, 'popup extension controller');
+    mark('options-attached');
 
     // Fresh profile already isolates data, but explicit reset makes retries in a
     // reused browser process deterministic and verifies extension storage APIs.
+    mark('storage-reset');
     await options.evaluate(`(async () => {
       await chrome.storage.local.clear();
       await chrome.storage.session.clear();
       return true;
     })()`);
 
-    // ---- selection integration ----
-    const selection = await options.evaluate(`(async () => {
-      const tab = await chrome.tabs.create({ url: ${js(fixture.articleUrl)}, active: true });
-      const tabId = tab.id;
-      for (let i = 0; i < 100; i += 1) {
-        const current = await chrome.tabs.get(tabId);
-        if (current.status === 'complete') break;
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-      await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-      const started = await chrome.tabs.sendMessage(tabId, { type: 'WEBCLIP_COMMAND', command: 'start' });
-      const clickResult = await chrome.scripting.executeScript({ target: { tabId }, func: () => {
+    mark('selection-create-tab');
+    const createdTab = await options.evaluate(`chrome.tabs.create({ url: ${js(fixture.articleUrl)}, active: true })`);
+    const articleTabId = Number(createdTab?.id);
+    assert(articleTabId > 0, 'article tab id required');
+
+    mark('selection-wait-tab');
+    await waitFor(async () => {
+      const current = await options.evaluate(`chrome.tabs.get(${articleTabId})`);
+      return current?.status === 'complete' ? current : null;
+    }, { timeoutMs: 10_000, intervalMs: 50, label: 'P1-007 article tab load' });
+
+    mark('selection-guard-state');
+    const guardState = await waitFor(async () => {
+      const state = await options.evaluate(`({
+        marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
+        api: Boolean(globalThis.WebClipContentInjectionGuard),
+        executeName: String(chrome.scripting.executeScript?.name || ''),
+        ensureTopContentScript: typeof globalThis.ensureTopContentScript
+      })`);
+      return state?.marker && state?.api && state?.ensureTopContentScript === 'function' ? state : null;
+    }, { timeoutMs: 5_000, intervalMs: 50, label: 'production popup content-injection guard ready' });
+
+    mark('selection-production-inject');
+    await options.evaluate(`ensureTopContentScript(${articleTabId})`);
+
+    mark('selection-generation-probe');
+    const generationProbe = await options.evaluate(`(async () => {
+      const rows = await chrome.scripting.executeScript({
+        target: { tabId: ${articleTabId} },
+        func: () => ({
+          marker: Boolean(globalThis.__webclipApplicationGenerationTrackerV3),
+          api: Boolean(globalThis.WebClipApplicationGeneration),
+          receipt: globalThis.WebClipApplicationGeneration?.receipt?.() || null,
+          sendName: String(chrome.runtime.sendMessage?.name || '')
+        })
+      });
+      return rows[0]?.result || null;
+    })()`);
+    assert(generationProbe?.marker && generationProbe?.api, 'application-generation guard must exist before selection');
+    assert(Number(generationProbe?.receipt?.generation) > 0, 'application-generation receipt required before selection');
+
+    mark('selection-send-start');
+    const started = await options.evaluate(
+      `chrome.tabs.sendMessage(${articleTabId}, { type: 'WEBCLIP_START_SELECTION' })`
+    );
+
+    mark('selection-click');
+    const clickResult = await options.evaluate(`chrome.scripting.executeScript({
+      target: { tabId: ${articleTabId} },
+      func: () => {
         const article = document.getElementById('article');
         if (!article) return { clicked: false };
         article.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
@@ -398,15 +450,15 @@ async function runBrowserIntegration() {
           included: Boolean(article.getAttribute('data-webclip-pdf-include')),
           root: Boolean(document.getElementById('webclip-pdf-extension-root'))
         };
-      }});
-      return { tabId, started, state: clickResult[0]?.result || null };
-    })()`);
+      }
+    })`);
+    const selection = { started, state: Array.isArray(clickResult) ? clickResult[0]?.result || null : null };
+    mark('selection-returned');
     assert(selection?.started?.ok, 'selection start command must succeed in real Chromium');
     assert(selection?.state?.clicked && selection.state.included && selection.state.root, 'click selection must mark article and create WebClip UI');
-    const articleTabId = Number(selection.tabId);
-    assert(articleTabId > 0, 'article tab id required');
 
     // ---- PDF integration (real chrome.debugger + Page.printToPDF + downloads) ----
+    mark('pdf-dialog-start');
     const pdfStart = await options.evaluate(`(async () => {
       const tabId = ${articleTabId};
       const command = await chrome.tabs.sendMessage(tabId, { type: 'WEBCLIP_COMMAND', command: 'download' });
@@ -425,6 +477,7 @@ async function runBrowserIntegration() {
     assert(pdfStart?.command?.ok, 'download command must open file-comment dialog');
     assert(pdfStart?.clicked?.ok, `PDF proceed button must be clickable: ${pdfStart?.clicked?.reason || ''}`);
 
+    mark('pdf-ui-wait');
     const pdfUi = await waitFor(async () => {
       const state = await options.evaluate(`(async () => {
         const result = await chrome.scripting.executeScript({ target: { tabId: ${articleTabId} }, func: () => {
@@ -439,6 +492,7 @@ async function runBrowserIntegration() {
     }, { timeoutMs: 60_000, intervalMs: 250, label: 'WebClip PDF UI completion' });
     assert(/PDF/.test(pdfUi.title), 'PDF modal must reach completion state');
 
+    mark('download-wait');
     const download = await waitFor(async () => {
       const items = await options.evaluate(`chrome.downloads.search({ orderBy: ['-startTime'], limit: 10 })`);
       const candidate = Array.isArray(items) ? items.find((item) => /\.pdf$/i.test(String(item.filename || ''))) : null;
@@ -455,6 +509,7 @@ async function runBrowserIntegration() {
     assert.strictEqual(pdfMagic.toString('ascii'), '%PDF-', 'downloaded file must be a real PDF');
 
     // ---- Journal integration: download completion -> durable entry -> rendered journal page ----
+    mark('journal-list-wait');
     const journalList = await waitFor(async () => {
       const response = await options.evaluate(`chrome.runtime.sendMessage({ type: 'WEBCLIP_JOURNAL_LIST', limit: 20 })`);
       if (!response?.ok) return null;
@@ -464,6 +519,7 @@ async function runBrowserIntegration() {
     assert.strictEqual(journalList.entry.destination, 'download', 'PDF browser integration must finalize a local-download journal entry');
     assert(Array.isArray(journalList.entry.selectionSnapshot?.includes) && journalList.entry.selectionSnapshot.includes.length >= 1, 'journal entry must retain selection snapshot');
 
+    mark('journal-tab-open');
     const journalTab = await options.evaluate(`chrome.tabs.create({ url: chrome.runtime.getURL('journal.html?mode=all'), active: true })`);
     assert(Number(journalTab?.id) > 0, 'journal tab must open');
     journal = await browser.attachPage(`chrome-extension://${extensionId}/journal.html?mode=all`, 'journal extension page');
@@ -475,6 +531,7 @@ async function runBrowserIntegration() {
     assert(rendered.text.includes('P1-007 Browser Article'), 'journal UI must render the durable browser-created entry');
 
     // ---- Yandex mock integration: session-only auth + real worker fetches + folder tree ----
+    mark('yandex-mock');
     const yandex = await options.evaluate(`(async () => {
       const auth = await chrome.runtime.sendMessage({ type: 'WEBCLIP_YANDEX_SET_MANUAL_TOKEN', token: 'p1-007-browser-token' });
       if (!auth?.ok) return { stage: 'auth', auth };
@@ -495,6 +552,7 @@ async function runBrowserIntegration() {
     assert(fixture.requests.some((item) => item.pathname === '/v1/disk' && item.authorization === 'OAuth p1-007-browser-token'), 'mock server must receive OAuth authorization from real worker fetch');
     assert(fixture.requests.some((item) => item.pathname === '/v1/disk/resources' && item.method === 'PUT'), 'mock server must receive real folder creation requests');
 
+    mark('complete');
     return {
       extensionId,
       articleTabId,
@@ -504,6 +562,24 @@ async function runBrowserIntegration() {
       yandexRequests: fixture.requests.length,
       yandexFolders: [...folderNames].sort()
     };
+  } catch (error) {
+    console.error('P1_007_FAILURE_STAGE=' + stage);
+    console.error('P1_007_BROWSER_PROCESS=' + JSON.stringify({
+      exitCode: browser?.proc?.exitCode ?? null,
+      signalCode: browser?.proc?.signalCode ?? null,
+      killed: Boolean(browser?.proc?.killed)
+    }));
+    const targets = await browser?.cdp?.send('Target.getTargets', {}, undefined, 5000).catch(() => null);
+    if (targets?.targetInfos) {
+      console.error('P1_007_TARGETS=' + JSON.stringify(targets.targetInfos.map((item) => ({
+        targetId: item.targetId,
+        type: item.type,
+        url: item.url,
+        title: item.title,
+        attached: item.attached
+      }))));
+    }
+    throw error;
   } finally {
     journal?.close();
     options?.close();

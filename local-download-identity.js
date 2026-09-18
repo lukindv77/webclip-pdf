@@ -35,6 +35,57 @@
     return String(intent?.downloadId || '');
   }
 
+  function matchesOwnExtensionBlobUrl(value, extensionId) {
+    const owner = String(extensionId || '').trim();
+    const url = String(value || '');
+    return Boolean(owner) && url.startsWith(`blob:chrome-extension://${owner}/`);
+  }
+
+  function proveBoundDownloadOwnership({ receipt, download, extensionId } = {}) {
+    const expectedId = Number(receipt?.downloadId);
+    const actualId = Number(download?.id);
+    if (!Number.isInteger(expectedId) || expectedId < 0
+      || !Number.isInteger(actualId) || actualId < 0
+      || actualId !== expectedId) {
+      return { owned: false, mode: 'download-id-mismatch' };
+    }
+
+    const owner = String(extensionId || '').trim();
+    if (!owner) return { owned: false, mode: 'extension-id-unavailable' };
+
+    const byExtensionId = String(download?.byExtensionId || '').trim();
+    if (byExtensionId) {
+      return byExtensionId === owner
+        ? { owned: true, mode: 'by-extension-id' }
+        : { owned: false, mode: 'foreign-extension' };
+    }
+
+    if (String(receipt?.kind || '') !== 'download'
+      || String(receipt?.downloadAdmissionPhase || '') !== 'admitted-unknown') {
+      return { owned: false, mode: 'receipt-not-admitted' };
+    }
+
+    const expectedBlobUrl = String(receipt?.blobUrl || '');
+    if (!matchesOwnExtensionBlobUrl(expectedBlobUrl, owner)) {
+      return { owned: false, mode: 'foreign-or-invalid-receipt-blob' };
+    }
+    if (!matchesExactBlobUrl(download, receipt)) {
+      return { owned: false, mode: 'blob-url-mismatch' };
+    }
+    return { owned: true, mode: 'bound-blob-url' };
+  }
+
+  function chooseUniqueBoundDownloadForReceipt({ receipt, downloads = [], extensionId } = {}) {
+    const candidates = Array.isArray(downloads) ? downloads.filter(Boolean) : [];
+    if (candidates.length !== 1) {
+      return { download: null, mode: candidates.length > 1 ? 'ambiguous-download' : 'none' };
+    }
+    const proof = proveBoundDownloadOwnership({ receipt, download: candidates[0], extensionId });
+    return proof.owned
+      ? { download: candidates[0], mode: proof.mode }
+      : { download: null, mode: proof.mode };
+  }
+
   function chooseUniqueDownloadForIntent({ intent, downloads = [], allIntents = [], now = Date.now(), maxAgeMs = DEFAULT_FALLBACK_MAX_AGE_MS } = {}) {
     const candidates = Array.isArray(downloads) ? downloads.filter(Boolean) : [];
     const exact = candidates.filter((candidate) => matchesExactBlobUrl(candidate, intent));
@@ -62,6 +113,9 @@
     normalizeFilename,
     matchesExactBlobUrl,
     matchesFallback,
-    chooseUniqueDownloadForIntent
+    matchesOwnExtensionBlobUrl,
+    proveBoundDownloadOwnership,
+    chooseUniqueDownloadForIntent,
+    chooseUniqueBoundDownloadForReceipt
   });
 })();
