@@ -217,5 +217,5 @@ console.log(
   'P0-072 read-move reset receipt: PASS; checks=' + checks +
   '; db=v8; detached_receipt=true; prepared_drop=true; admitted_survives=true;' +
   ' journal_finalize_atomic=true; same_id_replacement_safe=true;' +
-  ' p1_090_exact_object=false; p0_076_receipt_cursor=true; p0_076_full_cas=false; trash_move_composed=true; release_closed=false'
+  ' p1_090_exact_object=false; p0_076_receipt_cursor=true; p0_076_full_cas=true; trash_move_composed=true; release_closed=false'
 );
