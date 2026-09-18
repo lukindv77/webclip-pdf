@@ -110,7 +110,7 @@ This is the strongest blocker evidence: the current hosted runner cannot pass th
 
 The exploratory branch used a temporary GitHub Actions workflow only to probe whether the hosted runner could supply the required physical environment. That workflow is **not** part of the merge candidate.
 
-Repository Integrity run `35342695323` proved the canonical hygiene rule: only the approved permanent workflows `repository-integrity.yml` and `release-gate.yml` may remain in the mergeable tree. A third physical-evidence workflow is rejected as temporary/unapproved infrastructure. The temporary P0-072 workflow was therefore removed before merge review; Repository Integrity run `35342792966` subsequently passed repository growth hygiene.
+Repository Integrity run `35342695323` proved the canonical hygiene rule: only the approved permanent workflows `repository-integrity.yml` and `release-gate.yml` may remain in the mergeable tree. A third physical-evidence workflow is rejected as temporary/unapproved infrastructure. The temporary P0-072 workflow was therefore removed before merge review; Repository Integrity run `35342792966` subsequently passed repository growth hygiene. The merge candidate therefore contains no `.github/workflows` change.
 
 This means future P0-072 physical execution must use one of the existing authorized protocol paths without adding a permanent workflow merely for evidence collection:
 
