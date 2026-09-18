@@ -409,6 +409,15 @@
     return { installed: true };
   }
 
+  async function assertActiveWorkerSourceCurrent(host = globalThis, tabId) {
+    const workerGuard = host?.[WORKER_SOURCE_MARKER];
+    const controller = workerGuard?.controller;
+    const receipt = controller?.active?.(tabId);
+    if (!receipt) return true;
+    await controller.assertCurrent(receipt);
+    return true;
+  }
+
   function prepareWorkerSourceGenerationGuard(chromeApi = globalThis.chrome, host = globalThis) {
     if (typeof document !== 'undefined') return null;
     if (host?.[WORKER_SOURCE_MARKER]) return host[WORKER_SOURCE_MARKER];
@@ -520,6 +529,7 @@
     sourceGenerationProbe,
     createWorkerSourceGenerationController,
     installWorkerSourceGenerationWrappers,
+    assertActiveWorkerSourceCurrent,
     prepareWorkerSourceGenerationGuard,
     install
   });
