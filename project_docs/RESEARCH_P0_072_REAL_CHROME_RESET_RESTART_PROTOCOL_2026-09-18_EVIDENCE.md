@@ -10,6 +10,8 @@ Owner: `P0-072 ACTIVE` — bulk Journal clear/replace must not erase reconciliat
 
 This tranche adds **research tooling only**. It changes no production runtime, manifest, permissions, release gate, owner status, build, tag, deploy, Chrome user data or Yandex state.
 
+Research-change classification: **structural** — this document becomes new canonical evidence/protocol inventory for an existing ACTIVE owner; it does not change P0-072 owner status or acceptance semantics.
+
 ## Goal
 
 Prepare an exact-source physical Chrome protocol for the remaining local-download part of P0-072 closure without introducing production test hooks or altering the worker under test.
