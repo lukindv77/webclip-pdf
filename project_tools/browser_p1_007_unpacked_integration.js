@@ -278,8 +278,10 @@ async function launchChromium(extensionPath, { profilePath = '', preserveProfile
   const stderrPath = path.join(profile, 'chromium.stderr.log');
   const stdout = fs.createWriteStream(stdoutPath);
   const stderr = fs.createWriteStream(stderrPath);
+  const headed = process.env.WEBCLIP_CHROME_HEADED === '1';
   const args = [
-    '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
+    ...(!headed ? ['--headless=new'] : []),
+    '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
     '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
     '--remote-debugging-pipe', '--enable-unsafe-extension-debugging',
     `--user-data-dir=${profile}`, 'about:blank'
