@@ -4170,7 +4170,13 @@ async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, 
       journalCreatedAt: Math.max(0, Number(cached.createdAt) || 0) || Date.now(),
       sourceReceipt: cached.sourceReceipt,
       meta
-    }, { expectedPdfBytes, createPublicLinks: config.createPublicLinks, operationId });
+    }, {
+      expectedPdfBytes,
+      createPublicLinks: config.createPublicLinks,
+      operationId,
+      pdfCacheKey: String(cached.key || ''),
+      pdfCacheGeneration: String(cached.cacheGeneration || '')
+    });
     recordOperationStage(operationId, 'remote-checkpoint', 'Создан durable checkpoint удалённого сохранения до передачи/финализации файла.', 66, 'running', {
       journalEntryId: remoteCheckpoint.id, remotePath, expectedPdfBytes
     });
@@ -4195,6 +4201,7 @@ async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, 
     const uploadLink = await yandexApi('/resources/upload', { method: 'GET', query: { path: remotePath, overwrite: 'false' }, operationId });
     if (!uploadLink?.href) throw new Error('Яндекс Диск не вернул адрес для загрузки файла.');
     await ensureRemoteCheckpoint();
+    remoteCheckpoint = await markPendingRemoteSaveAdmitted(remoteCheckpoint.id);
     emitPageUploadProgress(tabId, operationId, 'upload', 'Передаём PDF на сервер загрузки Яндекс Диска…', 78, 'running', { remotePath });
     let uploadResponse;
     try {
@@ -4216,6 +4223,11 @@ async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, 
   // For a reused file no upload was necessary, but journal metadata must still
   // have a durable checkpoint before public-link/verification/final append.
   await ensureRemoteCheckpoint();
+  if (existingFileReused) {
+    // The external file already exists, so a crash before final verification
+    // must not downgrade the durable state to "prepared".
+    remoteCheckpoint = await markPendingRemoteSaveAdmitted(remoteCheckpoint.id);
+  }
 
   let publicUrl = '';
   if (config.createPublicLinks) {
@@ -4994,10 +5006,87 @@ async function recoverPendingJournalAppends(trigger = 'maintenance', maxItems = 
 }
 
 
-async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, createPublicLinks = false, operationId = '' } = {}) {
+function normalizePendingRemotePdfCacheReceipt(value = {}) {
+  const pdfCacheGeneration = String(value.pdfCacheGeneration || '').trim();
+  const pdfCacheKey = String(value.pdfCacheKey || '').trim();
+  const expectedPdfBytes = Math.max(0, Number(value.expectedPdfBytes) || 0);
+  if (
+    !pdfCacheGeneration ||
+    pdfCacheGeneration.length > 80 ||
+    pdfCacheKey !== `pdf:${pdfCacheGeneration}` ||
+    expectedPdfBytes <= 0
+  ) return null;
+  return Object.freeze({ pdfCacheKey, pdfCacheGeneration, expectedPdfBytes });
+}
+
+async function getPendingRemotePdfCacheRetentionSnapshot() {
+  const db = await openJournalDb(RECOVERY_IDB_TX_TIMEOUT_MS);
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_REMOTE_STORE,
+      'readonly',
+      'Чтение durable-защиты PDF cache из checkpoints удалённых сохранений',
+      ({ store, setResult, fail }) => {
+        const exactIdentities = [];
+        const legacyJournalEntryIds = [];
+        const request = store().openCursor();
+        request.onsuccess = () => {
+          try {
+            const cursor = request.result;
+            if (!cursor) {
+              setResult({ exactIdentities, legacyJournalEntryIds });
+              return;
+            }
+            const item = cursor.value || {};
+            const phase = String(item.phase || '');
+            const receipt = normalizePendingRemotePdfCacheReceipt(item);
+            if (phase === 'admitted-unknown') {
+              if (receipt) {
+                exactIdentities.push(`${receipt.pdfCacheKey}\u0000${receipt.pdfCacheGeneration}`);
+              } else {
+                const journalEntryId = String(item.id || item.data?.journalEntryId || '').trim();
+                if (journalEntryId) legacyJournalEntryIds.push(journalEntryId);
+              }
+            } else if (phase === 'prepared' && !receipt) {
+              // Upgrade safety: older builds persisted an upload checkpoint as
+              // "prepared" even after the signed transfer had started. Until
+              // recovery resolves that legacy row, preserve the matching
+              // journalEntryId generation rather than infer cancellation.
+              const journalEntryId = String(item.id || item.data?.journalEntryId || '').trim();
+              if (journalEntryId) legacyJournalEntryIds.push(journalEntryId);
+            }
+            cursor.continue();
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать durable-защиту PDF cache.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    ) || { exactIdentities: [], legacyJournalEntryIds: [] };
+  } finally { db.close(); }
+}
+
+async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, createPublicLinks = false, operationId = '', pdfCacheKey = '', pdfCacheGeneration = '' } = {}) {
   const prepared = normalizePendingJournalAppendData({ ...data, destination: 'yandex', operationId: String(operationId || data?.operationId || '').slice(0, MAX_OPERATION_ID_CHARS) });
+  const pdfCacheReceipt = normalizePendingRemotePdfCacheReceipt({ pdfCacheKey, pdfCacheGeneration, expectedPdfBytes });
+  if (!pdfCacheReceipt) {
+    const error = new Error('Checkpoint удалённого сохранения требует exact sealed PDF cache generation.');
+    error.code = 'WEBCLIP_REMOTE_PDF_CACHE_RECEIPT_REQUIRED';
+    throw error;
+  }
   const now = Date.now();
-  const item = { id: prepared.journalEntryId, phase: 'prepared', createdAt: now, updatedAt: now, attemptCount: 0, operationId: String(operationId || '').slice(0, 180), lastError: '', expectedPdfBytes: requirePositiveByteSize(expectedPdfBytes, 'Размер PDF в checkpoint удалённого сохранения'), createPublicLinks: Boolean(createPublicLinks), data: prepared };
+  const item = {
+    id: prepared.journalEntryId,
+    phase: 'prepared',
+    createdAt: now,
+    updatedAt: now,
+    attemptCount: 0,
+    operationId: String(operationId || '').slice(0, 180),
+    lastError: '',
+    ...pdfCacheReceipt,
+    createPublicLinks: Boolean(createPublicLinks),
+    data: prepared
+  };
   if (jsonSizeChars(item) > MAX_PENDING_JOURNAL_APPEND_JSON_CHARS) item.data.meta.selectionSnapshot = { includes: [], excludes: [] };
   if (jsonSizeChars(item) > MAX_PENDING_JOURNAL_APPEND_JSON_CHARS) throw new Error('Checkpoint удалённого сохранения превышает безопасный размер.');
   const db = await openJournalDb();
@@ -5017,6 +5106,48 @@ async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, c
     }, RECOVERY_IDB_TX_TIMEOUT_MS);
   } finally { db.close(); }
   return item;
+}
+
+async function markPendingRemoteSaveAdmitted(id) {
+  const key = String(id || '').trim();
+  if (!key) throw new Error('Некорректный checkpoint удалённого сохранения.');
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_REMOTE_STORE,
+      'readwrite',
+      'Фиксация admission удалённого PDF эффекта',
+      ({ store, setResult, fail }) => {
+        const pending = store();
+        const req = pending.get(key);
+        req.onsuccess = () => {
+          try {
+            const current = req.result;
+            if (!current?.data) {
+              fail(new Error('Durable checkpoint удалённого сохранения не найден перед admission.'));
+              return;
+            }
+            if (String(current.phase || '') === 'remote-verified') {
+              setResult(current);
+              return;
+            }
+            if (!normalizePendingRemotePdfCacheReceipt(current)) {
+              const error = new Error('Durable checkpoint не содержит exact PDF cache receipt перед admission.');
+              error.code = 'WEBCLIP_REMOTE_PDF_CACHE_RECEIPT_REQUIRED';
+              fail(error);
+              return;
+            }
+            const result = { ...current, phase: 'admitted-unknown', updatedAt: Date.now(), lastError: '' };
+            pending.put(result);
+            setResult(result);
+          } catch (error) { fail(error); }
+        };
+        req.onerror = () => fail(req.error || new Error('Не удалось прочитать checkpoint удалённого сохранения перед admission.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
 }
 
 async function markPendingRemoteSaveVerified(id, { publicUrl = '', resourceId = '' } = {}) {
@@ -10251,6 +10382,13 @@ async function getValidCachedPdfForTab(tabId, currentSourceReceipt) {
 
 async function cleanupExpiredPdfCache() {
   const cutoff = Date.now() - PDF_CACHE_TTL_MS;
+  // Read durable remote-effect ownership before opening the PDF-cache
+  // maintenance transaction. If this read fails, cleanup fails closed and
+  // ensureStorageBudget may reject new work rather than erase reconciliation
+  // bytes whose external outcome is still unknown.
+  const retentionSnapshot = await getPendingRemotePdfCacheRetentionSnapshot();
+  const protectedExactIdentities = new Set(retentionSnapshot.exactIdentities || []);
+  const protectedLegacyJournalEntryIds = new Set(retentionSnapshot.legacyJournalEntryIds || []);
   const db = await openPdfCacheDb();
   let deleted = 0;
   try {
@@ -10269,7 +10407,12 @@ async function cleanupExpiredPdfCache() {
           if (!cursor) return;
           const stale = cursor.value || {};
           const staleKey = String(cursor.primaryKey || '');
-          if (Number(stale.createdAt || 0) < cutoff) {
+          const exactIdentity = `${staleKey}\u0000${String(stale.cacheGeneration || '')}`;
+          const protectedByRemoteCheckpoint = isExactSealedPdfCacheIdentity(stale) && (
+            protectedExactIdentities.has(exactIdentity) ||
+            protectedLegacyJournalEntryIds.has(String(stale.journalEntryId || ''))
+          );
+          if (Number(stale.createdAt || 0) < cutoff && !protectedByRemoteCheckpoint) {
             pdfStore.delete(cursor.primaryKey);
             cursor.delete();
             if (isExactSealedPdfCacheIdentity(stale)) {
