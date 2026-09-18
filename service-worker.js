@@ -10031,30 +10031,48 @@ function createPdfRenderNavigationFence(debuggerApi, debuggee, maxBufferedEvents
   const buffered = [];
   const limit = Math.max(8, Math.min(256, Math.floor(Number(maxBufferedEvents) || 64)));
   let mainFrameId = '';
+  let mainLoaderId = '';
   let stale = false;
   let staleMethod = '';
   let installed = false;
   let disposed = false;
 
-  function frameIdFor(method, params) {
-    if (method === 'Page.frameNavigated') return String(params?.frame?.id || '');
-    if (method === 'Page.frameStartedNavigating' || method === 'Page.navigatedWithinDocument') {
-      return String(params?.frameId || '');
+  function eventIdentity(method, params) {
+    if (method === 'Page.frameNavigated') {
+      return {
+        frameId: String(params?.frame?.id || ''),
+        loaderId: String(params?.frame?.loaderId || '')
+      };
     }
-    return '';
+    if (method === 'Page.frameStartedNavigating' || method === 'Page.navigatedWithinDocument') {
+      return { frameId: String(params?.frameId || ''), loaderId: '' };
+    }
+    return { frameId: '', loaderId: '' };
   }
 
   function markIfMain(event) {
     if (!mainFrameId || !event?.frameId || event.frameId !== mainFrameId) return;
+    if (
+      event.method === 'Page.frameNavigated'
+      && mainLoaderId
+      && event.loaderId
+      && event.loaderId === mainLoaderId
+    ) {
+      return;
+    }
     stale = true;
     if (!staleMethod) staleMethod = event.method;
   }
 
   function listener(source, method, params) {
     if (Number(source?.tabId) !== tabId) return;
-    const frameId = frameIdFor(method, params);
-    if (!frameId) return;
-    const event = Object.freeze({ method: String(method || ''), frameId });
+    const identity = eventIdentity(method, params);
+    if (!identity.frameId) return;
+    const event = Object.freeze({
+      method: String(method || ''),
+      frameId: identity.frameId,
+      loaderId: identity.loaderId
+    });
     if (!mainFrameId) {
       // Page.enable may expose a baseline frameNavigated notification for the
       // already-current frame. A real navigation in this setup window is
@@ -10079,14 +10097,16 @@ function createPdfRenderNavigationFence(debuggerApi, debuggee, maxBufferedEvents
     return true;
   }
 
-  function arm(frameId) {
-    const next = String(frameId || '').trim();
+  function arm(frame) {
+    const next = String(frame?.id || frame || '').trim();
+    const nextLoaderId = String(frame?.loaderId || '').trim();
     if (!next) throw makePdfRenderNavigationError('WEBCLIP_PDF_MAIN_FRAME_REQUIRED', 'Chrome did not expose the exact main frame for the PDF render fence.');
     if (mainFrameId && mainFrameId !== next) {
       stale = true;
       if (!staleMethod) staleMethod = 'WEBCLIP_PDF_MAIN_FRAME_CHANGED';
     } else {
       mainFrameId = next;
+      if (nextLoaderId) mainLoaderId = nextLoaderId;
     }
     for (const event of buffered.splice(0)) markIfMain(event);
     return mainFrameId;
@@ -10111,6 +10131,7 @@ function createPdfRenderNavigationFence(debuggerApi, debuggee, maxBufferedEvents
     return Object.freeze({
       tabId,
       mainFrameId,
+      mainLoaderId,
       stale,
       staleMethod,
       bufferedEvents: buffered.length,
@@ -10146,8 +10167,8 @@ async function generatePdfBlob(tabId) {
       15_000,
       'Определение main frame для PDF'
     );
-    const mainFrameId = String(frameTreeResult?.frameTree?.frame?.id || '');
-    navigationFence.arm(mainFrameId);
+    const mainFrame = frameTreeResult?.frameTree?.frame || null;
+    navigationFence.arm(mainFrame);
     navigationFence.assertClean();
 
     // Сохраняем экранные CSS media-правила: @media print сайта не должен
