@@ -83,7 +83,8 @@ async function testLateDebuggerAttachIsReconciled() {
     DEBUGGER_COMMAND_TIMEOUT_MS: 60_000,
     MAX_PDF_BYTES: 48 * 1024 * 1024,
     PDF_STREAM_READ_CHUNK_BYTES: 1024 * 1024,
-    normalizeError: (error) => error?.message || String(error)
+    normalizeError: (error) => error?.message || String(error),
+    WebClipContentInjectionGuard: { assertActiveWorkerSourceCurrent: async () => true }
   });
   const code = section(swSource, 'function withOperationTimeout', 'async function readYandexAuthState');
   vm.runInContext(`${code}\nthis.generatePdfBlobForTest = generatePdfBlob;`, context);
