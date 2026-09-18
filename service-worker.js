@@ -5229,7 +5229,6 @@ async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, c
       existingReq.onerror = () => fail(existingReq.error || new Error('Не удалось проверить checkpoint удалённого сохранения.'));
     }, RECOVERY_IDB_TX_TIMEOUT_MS);
   } finally { db.close(); }
-  activeDestructiveMoveReceipts.add(item.id);
   return item;
 }
 
@@ -7280,7 +7279,7 @@ async function checkpointPendingReadMoveIntent(entry, {
   } finally { db.close(); }
   activeDestructiveMoveReceipts.add(item.id);
   return item;
-
+}
 
 async function checkpointPendingTrashMoveIntent(entry, {
   sourcePath = '',
@@ -7343,6 +7342,7 @@ async function checkpointPendingTrashMoveIntent(entry, {
       RECOVERY_IDB_TX_TIMEOUT_MS
     );
   } finally { db.close(); }
+  activeDestructiveMoveReceipts.add(item.id);
   return item;
 }
 
