@@ -55,6 +55,7 @@ vm.runInContext(`${helperSource}
 this.sanitizeForTest = sanitizePdfSourceReceipt;
 this.captureForTest = captureActivePdfSourceReceipt;`, context);
 
+(async () => {
 const captured = context.captureForTest(17, 'op-source-1');
 eq(captured.schema, 'webclip-pdf-source-receipt/v1', 'source receipt schema exact');
 eq(captured.operationId, 'op-source-1', 'operation identity preserved');
@@ -114,3 +115,7 @@ const journalEntrySection = section(swSource, 'async function appendJournalEntry
 ok(!journalEntrySection.includes('sourceReceipt:'), 'user Journal schema is deliberately unchanged in this tranche');
 
 console.log(`P0-070 PDF source receipt lineage: PASS; checks=${checks}; cache_key_unchanged=true; retry_authority_unchanged=true; journal_schema_unchanged=true`);
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
