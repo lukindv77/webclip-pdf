@@ -71,7 +71,8 @@ const sourceMatch = functionSource(worker, 'pendingDestructiveMoveEntryMatches')
 
 ok(matchSource.includes('pendingDestructiveMoveEntryMatches(receipt, entry)'), 'P0-072 source identity remains the first local-finalizer guard');
 ok(matchSource.includes('journalEntryAuthorityMatches(resetGeneration, entry, token)'), 'new receipts additionally require exact P0-076 CAS authority');
-ok(matchSource.includes('token ? journalEntryAuthorityMatches'), 'legacy receipt fallback is explicit and bounded');
+ok(matchSource.includes('Boolean(token && journalEntryAuthorityMatches'), 'local destructive mutation requires an exact P0-076 cursor');
+ok(!matchSource.includes(': true'), 'legacy no-cursor receipt has no permissive local fallback');
 ok(advanceSource.includes('journalEntryAuthorityToken(resetGeneration, entry)'), 'ReadLater checkpoint advances cursor from the committed row');
 
 const context = vm.createContext({ String, Number, Boolean, Object });
@@ -91,7 +92,7 @@ vm.runInContext(
 const api = context.api;
 const entry = { id: 'entry-A', createdAt: 100, destination: 'yandex', resourceId: 'rid-A', entryRevision: 4 };
 const legacy = { sourceJournalEntryId: 'entry-A', sourceJournalCreatedAt: 100, sourceResourceId: 'rid-A' };
-eq(api.pendingDestructiveMoveJournalAuthorityMatches(legacy, 9, entry), true, 'legacy receipt keeps reviewed P0-072 fallback');
+eq(api.pendingDestructiveMoveJournalAuthorityMatches(legacy, 9, entry), false, 'legacy receipt cannot automatically mutate local Journal state');
 const exact = { ...legacy, sourceJournalResetGeneration: 9, sourceJournalEntryRevision: 4 };
 eq(api.pendingDestructiveMoveJournalAuthorityMatches(exact, 9, entry), true, 'exact new receipt matches current generation+revision');
 eq(api.pendingDestructiveMoveJournalAuthorityMatches(exact, 10, entry), false, 'reset generation change invalidates new receipt local authority');
@@ -155,5 +156,5 @@ ok(/\*\*NOT READY\.\*\*/.test(readiness), 'release readiness remains NOT READY')
 console.log(
   'P0-076 destructive receipt CAS composition: PASS; checks=' + checks +
   '; receipt_cursor=true; create_atomic=true; admission_recheck=true; read_cursor_advance=true;' +
-  ' terminal_nonretarget=true; legacy_fallback=true; p0_072_remote_authority=true; release_closed=false'
+  ' terminal_nonretarget=true; legacy_fail_closed=true; p0_072_remote_authority=true; release_closed=false'
 );
