@@ -17,7 +17,8 @@ assert(unpacked.includes("cdp.send('Extensions.loadUnpacked'"), 'unpacked runner
 assert(unpacked.includes("cdp.send('Browser.setDownloadBehavior'"), 'unpacked runner must make browser downloads deterministic');
 assert(!unpacked.includes('extensionIdForPath'), 'runner must not guess unpacked extension ids');
 assert(!unpacked.includes('--remote-debugging-port'), 'runner must not depend on an externally exposed DevTools TCP port');
-assert(unpacked.includes("command: 'start'"), 'selection scenario missing from unpacked runner');
+assert(unpacked.includes("type: 'WEBCLIP_START_SELECTION'"), 'selection scenario missing from unpacked runner');
+assert(unpacked.includes('ensureTopContentScript'), 'selection scenario must use the production guarded injection path');
 assert(unpacked.includes("command: 'download'"), 'PDF scenario missing from unpacked runner');
 assert(unpacked.includes('WEBCLIP_JOURNAL_LIST'), 'Journal scenario missing from unpacked runner');
 assert(unpacked.includes('WEBCLIP_YANDEX_TEST'), 'Yandex mock scenario missing from unpacked runner');
