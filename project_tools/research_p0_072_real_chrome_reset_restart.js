@@ -137,7 +137,7 @@ async function installPauseObserver(options) {
     globalThis.__p0072ChromeDownloadEvidence = { created: [], pauseErrors: [] };
     const listener = async (item) => {
       const filename = String(item?.filename || '');
-      if (!/\\.pdf$/i.test(filename)) return;
+      if (!/\.pdf$/i.test(filename)) return;
       const record = {
         id: Number(item.id),
         filename,
@@ -301,7 +301,7 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
     const observed = rows.find((item) => !previousIds.has(Number(item.id))) || null;
     if (observed) return observed;
     const candidate = (Array.isArray(state?.downloads) ? state.downloads : []).find((item) =>
-      /\\.pdf$/i.test(String(item?.filename || ''))
+      /\.pdf$/i.test(String(item?.filename || ''))
       && !previousIds.has(Number(item?.id))
     );
     if (candidate) {
