@@ -403,12 +403,38 @@ async function runBrowserIntegration() {
       return current?.status === 'complete' ? current : null;
     }, { timeoutMs: 10_000, intervalMs: 50, label: 'P1-007 article tab load' });
 
-    mark('selection-inject-content');
-    await options.evaluate(`chrome.scripting.executeScript({ target: { tabId: ${articleTabId} }, files: ['content.js'] })`);
+    mark('selection-guard-state');
+    const guardState = await options.evaluate(`({
+      marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
+      api: Boolean(globalThis.WebClipContentInjectionGuard),
+      executeName: String(chrome.scripting.executeScript?.name || ''),
+      ensureTopContentScript: typeof globalThis.ensureTopContentScript
+    })`);
+    assert(guardState?.marker && guardState?.api, 'production popup content-injection guard must be installed');
+    assert.strictEqual(guardState?.ensureTopContentScript, 'function', 'production popup ensureTopContentScript must be available');
+
+    mark('selection-production-inject');
+    await options.evaluate(`ensureTopContentScript(${articleTabId})`);
+
+    mark('selection-generation-probe');
+    const generationProbe = await options.evaluate(`(async () => {
+      const rows = await chrome.scripting.executeScript({
+        target: { tabId: ${articleTabId} },
+        func: () => ({
+          marker: Boolean(globalThis.__webclipApplicationGenerationTrackerV3),
+          api: Boolean(globalThis.WebClipApplicationGeneration),
+          receipt: globalThis.WebClipApplicationGeneration?.receipt?.() || null,
+          sendName: String(chrome.runtime.sendMessage?.name || '')
+        })
+      });
+      return rows[0]?.result || null;
+    })()`);
+    assert(generationProbe?.marker && generationProbe?.api, 'application-generation guard must exist before selection');
+    assert(Number(generationProbe?.receipt?.generation) > 0, 'application-generation receipt required before selection');
 
     mark('selection-send-start');
     const started = await options.evaluate(
-      `chrome.tabs.sendMessage(${articleTabId}, { type: 'WEBCLIP_COMMAND', command: 'start' })`
+      `chrome.tabs.sendMessage(${articleTabId}, { type: 'WEBCLIP_START_SELECTION' })`
     );
 
     mark('selection-click');
