@@ -80,3 +80,11 @@ jobs:
         run: |
           set -euo pipefail
           xvfb-run -a env WEBCLIP_CHROME_HEADED=1             node project_tools/research_p0_072_real_chrome_reset_restart.js
+
+      - name: Witness exact P1-231 candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node project_tools/test_p1_231_s0e_identity_engine_source_spec_model.js
