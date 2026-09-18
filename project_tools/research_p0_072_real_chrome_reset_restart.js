@@ -132,58 +132,102 @@ async function snapshot(session) {
   return session.evaluate(dbSnapshotExpression());
 }
 
-async function installPauseObserver(options) {
-  const installed = await options.evaluate(`(async () => {
-    globalThis.__p0072ChromeDownloadEvidence = { created: [], pauseErrors: [] };
-    const listener = async (item) => {
-      const filename = String(item?.filename || '');
-      if (!/\.pdf$/i.test(filename)) return;
-      const record = {
-        id: Number(item.id),
-        filename,
-        state: String(item?.state || ''),
-        paused: Boolean(item?.paused),
-        canResume: Boolean(item?.canResume),
-        startTime: String(item?.startTime || ''),
-        observedAt: Date.now(),
-        pauseSettled: false
-      };
-      globalThis.__p0072ChromeDownloadEvidence.created.push(record);
-      try {
-        await Promise.race([
-          chrome.downloads.pause(item.id),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('pause settlement timed out after 5000 ms')), 5000))
-        ]);
-        record.pauseSettled = true;
-      } catch (error) {
-        globalThis.__p0072ChromeDownloadEvidence.pauseErrors.push({
-          id: item.id,
-          error: String(error?.message || error || '')
-        });
-      }
-      const current = (await chrome.downloads.search({ id: item.id }).catch(() => []))[0] || item;
-      Object.assign(record, {
-        filename: String(current.filename || filename),
-        state: String(current.state || ''),
-        paused: Boolean(current.paused),
-        canResume: Boolean(current.canResume),
-        startTime: String(current.startTime || '')
-      });
-    };
-    chrome.downloads.onCreated.addListener(listener);
-    globalThis.__p0072ChromeDownloadListener = listener;
-    return true;
-  })()`);
-  assert.strictEqual(installed, true, 'download pause observer must install');
+async function prepareDownloadObserverExtension() {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'webclip-p0-072-download-observer-'));
+  const manifest = {
+    manifest_version: 3,
+    name: 'WebClip P0-072 Download Observer',
+    version: '1.0.0',
+    permissions: ['downloads', 'storage'],
+    background: { service_worker: 'observer.js' }
+  };
+  const worker = [
+    "'use strict';",
+    "const STATE_KEY = 'p0072ObserverState';",
+    "const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));",
+    "const listener = (item) => {",
+    "  void (async () => {",
+    "    const before = await chrome.storage.local.get(STATE_KEY);",
+    "    const state = before[STATE_KEY] || { enabled: true, created: [], pauseErrors: [] };",
+    "    if (state.enabled === false) return;",
+    "    const record = {",
+    "      id: Number(item.id),",
+    "      filename: String(item.filename || ''),",
+    "      state: String(item.state || ''),",
+    "      paused: Boolean(item.paused),",
+    "      canResume: Boolean(item.canResume),",
+    "      startTime: String(item.startTime || ''),",
+    "      observedAt: Date.now(),",
+    "      pauseSettled: false",
+    "    };",
+    "    const created = [...(Array.isArray(state.created) ? state.created : []).slice(-7), record];",
+    "    await chrome.storage.local.set({ [STATE_KEY]: { ...state, created } });",
+    "    let pauseError = '';",
+    "    try {",
+    "      await Promise.race([",
+    "        chrome.downloads.pause(item.id),",
+    "        sleep(5000).then(() => { throw new Error('pause settlement timed out after 5000 ms'); })",
+    "      ]);",
+    "      record.pauseSettled = true;",
+    "    } catch (error) {",
+    "      pauseError = String(error?.message || error || '');",
+    "    }",
+    "    const current = (await chrome.downloads.search({ id: item.id }).catch(() => []))[0] || item;",
+    "    Object.assign(record, {",
+    "      filename: String(current.filename || record.filename || ''),",
+    "      state: String(current.state || record.state || ''),",
+    "      paused: Boolean(current.paused),",
+    "      canResume: Boolean(current.canResume),",
+    "      startTime: String(current.startTime || record.startTime || '')",
+    "    });",
+    "    const afterRaw = await chrome.storage.local.get(STATE_KEY);",
+    "    const after = afterRaw[STATE_KEY] || state;",
+    "    const rows = Array.isArray(after.created) ? after.created.slice() : [];",
+    "    const index = rows.findIndex((value) => Number(value?.id) === Number(item.id));",
+    "    if (index >= 0) rows[index] = record; else rows.push(record);",
+    "    const pauseErrors = Array.isArray(after.pauseErrors) ? after.pauseErrors.slice() : [];",
+    "    if (pauseError) pauseErrors.push({ id: Number(item.id), error: pauseError });",
+    "    await chrome.storage.local.set({ [STATE_KEY]: { ...after, created: rows.slice(-8), pauseErrors: pauseErrors.slice(-8) } });",
+    "  })().catch(async (error) => {",
+    "    const raw = await chrome.storage.local.get(STATE_KEY).catch(() => ({}));",
+    "    const state = raw[STATE_KEY] || { enabled: true, created: [], pauseErrors: [] };",
+    "    const pauseErrors = Array.isArray(state.pauseErrors) ? state.pauseErrors.slice() : [];",
+    "    pauseErrors.push({ id: Number(item?.id), error: String(error?.message || error || '') });",
+    "    await chrome.storage.local.set({ [STATE_KEY]: { ...state, pauseErrors: pauseErrors.slice(-8) } }).catch(() => {});",
+    "  });",
+    "};",
+    "chrome.downloads.onCreated.addListener(listener);"
+  ].join('\n');
+  await fsp.writeFile(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  await fsp.writeFile(path.join(dir, 'observer.js'), worker + '\n');
+  await fsp.writeFile(path.join(dir, 'observer.html'), '<!doctype html><meta charset="utf-8"><title>P0-072 Download Observer</title>\n');
+  return { path: dir, cleanup: () => fsp.rm(dir, { recursive: true, force: true }) };
 }
 
-async function removePauseObserver(options) {
-  await options.evaluate(`(() => {
-    const listener = globalThis.__p0072ChromeDownloadListener;
-    if (listener) chrome.downloads.onCreated.removeListener(listener);
-    globalThis.__p0072ChromeDownloadListener = null;
-    return true;
-  })()`).catch(() => {});
+async function loadDownloadObserver(browser, observerPath) {
+  const loaded = await browser.cdp.send('Extensions.loadUnpacked', { path: observerPath }, undefined, 20_000);
+  const extensionId = String(loaded?.id || '').trim();
+  assert(/^[a-p]{32}$/.test(extensionId), 'download observer extension id required');
+  await waitFor(async () => {
+    const targets = await browser.cdp.send('Target.getTargets', {}, undefined, 5_000);
+    return (targets?.targetInfos || []).find((item) =>
+      item?.type === 'service_worker'
+      && String(item?.url || '').startsWith('chrome-extension://' + extensionId + '/')
+    ) || null;
+  }, { timeoutMs: 10_000, intervalMs: 100, label: 'download observer service worker ready' });
+  const page = await browser.attachPage(
+    'chrome-extension://' + extensionId + '/observer.html',
+    'P0-072 download observer page'
+  );
+  await page.evaluate(`chrome.storage.local.set({
+    p0072ObserverState: { enabled: true, created: [], pauseErrors: [] }
+  })`);
+  return { extensionId, page };
+}
+
+async function downloadObserverState(observerPage) {
+  return observerPage.evaluate(`chrome.storage.local.get('p0072ObserverState')
+    .then((value) => value.p0072ObserverState || { enabled: true, created: [], pauseErrors: [] })`);
 }
 
 async function createSelectedFixtureTab(options, articleUrl, label) {
@@ -254,7 +298,7 @@ async function createSelectedFixtureTab(options, articleUrl, label) {
   return tabId;
 }
 
-async function triggerPdfDownload(options, tabId, previousIds, label) {
+async function triggerPdfDownload(options, observerPage, tabId, previousIds, label) {
   const start = await options.evaluate(`(async () => {
     const command = await chrome.tabs.sendMessage(${Number(tabId)}, { type: 'WEBCLIP_COMMAND', command: 'download' });
     const clicked = await chrome.scripting.executeScript({
@@ -277,8 +321,8 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
 
   let lastCreatedState = null;
   const created = await waitFor(async () => {
+    const evidence = await downloadObserverState(observerPage);
     const state = await options.evaluate(`(async () => {
-      const evidence = globalThis.__p0072ChromeDownloadEvidence || { created: [], pauseErrors: [] };
       const downloads = await chrome.downloads.search({ orderBy: ['-startTime'], limit: 10 });
       const modal = await chrome.scripting.executeScript({
         target: { tabId: ${Number(tabId)} },
@@ -291,11 +335,11 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
         }
       }).catch(() => []);
       return {
-        evidence,
         downloads,
         modal: modal[0]?.result || null
       };
     })()`);
+    state.evidence = evidence;
     lastCreatedState = state;
     const rows = Array.isArray(state?.evidence?.created) ? state.evidence.created : [];
     const observed = rows.find((item) => !previousIds.has(Number(item.id))) || null;
@@ -416,6 +460,8 @@ async function run() {
   const contract = sourceContract();
   const fixture = await startFixtureServer();
   let testExtension = null;
+  let observerExtension = null;
+  let observer = null;
   let browser = null;
   let options = null;
   let profile = '';
@@ -423,6 +469,7 @@ async function run() {
 
   try {
     testExtension = await prepareTestExtension(fixture.origin, fixture.apiBase, { mockYandex: false });
+    observerExtension = await prepareDownloadObserverExtension();
     const copiedWorker = await fsp.readFile(path.join(testExtension.path, 'service-worker.js'));
     assert.strictEqual(
       sha256Bytes(copiedWorker),
@@ -433,17 +480,16 @@ async function run() {
     browser = await launchChromium(testExtension.path, { preserveProfile: true });
     profile = browser.profile;
     const extensionId = browser.extensionId;
+    observer = await loadDownloadObserver(browser, observerExtension.path);
     options = await browser.attachPage(`chrome-extension://${extensionId}/popup.html`, 'P0-072 guarded popup controller');
     await options.evaluate(`(async () => {
       await chrome.storage.local.clear();
       await chrome.storage.session.clear();
       return true;
     })()`);
-    await installPauseObserver(options);
-
     // Case A: exact real Chrome late completion after Journal reset.
     const tabA = await createSelectedFixtureTab(options, fixture.articleUrl, 'late-complete');
-    const downloadA = await triggerPdfDownload(options, tabA, createdIds, 'late-complete');
+    const downloadA = await triggerPdfDownload(options, observer.page, tabA, createdIds, 'late-complete');
     const resetA = await clearJournalAndRequireSuperseded(options, downloadA.id, 'late-complete');
 
     await options.evaluate(`chrome.downloads.resume(${downloadA.id})`);
@@ -462,10 +508,19 @@ async function run() {
 
     // Case B: reset-superseded admitted effect survives an actual browser SIGKILL.
     const tabB = await createSelectedFixtureTab(options, fixture.articleUrl + '?restart=1', 'restart');
-    const downloadB = await triggerPdfDownload(options, tabB, createdIds, 'restart');
+    const downloadB = await triggerPdfDownload(options, observer.page, tabB, createdIds, 'restart');
     const resetB = await clearJournalAndRequireSuperseded(options, downloadB.id, 'restart');
 
-    await removePauseObserver(options);
+    await observer.page.evaluate(`chrome.storage.local.get('p0072ObserverState').then((value) =>
+      chrome.storage.local.set({
+        p0072ObserverState: {
+          ...(value.p0072ObserverState || {}),
+          enabled: false
+        }
+      })
+    )`).catch(() => {});
+    await observer.page.close().catch(() => {});
+    observer = null;
     await browser.stop({ preserveProfile: true, signal: 'SIGKILL' });
     browser = null;
     options = null;
@@ -570,6 +625,7 @@ async function run() {
       },
       evidenceBoundary: {
         realChromeAutomaticDownload: true,
+        downloadObserver: 'companion-mv3-service-worker',
         realBrowserProcessSigkillRestart: true,
         realJournalReset: true,
         yandexExercised: false,
@@ -582,9 +638,10 @@ async function run() {
     console.log('P0_072_REAL_CHROME_RESULT=' + JSON.stringify(result));
     return result;
   } finally {
-    await removePauseObserver(options).catch(() => {});
+    await observer?.page?.close().catch(() => {});
     await browser?.stop({ preserveProfile: false }).catch(() => {});
     if (!browser && profile) await fsp.rm(profile, { recursive: true, force: true }).catch(() => {});
+    await observerExtension?.cleanup().catch(() => {});
     await testExtension?.cleanup().catch(() => {});
     await fixture.close().catch(() => {});
   }
