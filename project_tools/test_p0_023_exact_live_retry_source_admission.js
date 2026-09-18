@@ -190,7 +190,7 @@ ok(retry.indexOf('getValidCachedPdfForTab(tabId, currentSourceReceipt)') < retry
 ok(!retry.includes('generatePdfBlob('), 'manual retry reuses exact P0-079 bytes and does not render a new PDF');
 ok(!retry.includes('printToPDF'), 'manual retry path does not invoke a new printToPDF');
 
-const download = section(worker, 'async function downloadCachedPdf', 'async function checkpointPendingRemoteSaveIntent');
+const download = section(worker, 'async function downloadCachedPdf', 'function normalizeJournalUrl');
 ok(download.indexOf('getValidCachedPdfForTab(tabId, currentSourceReceipt)') < download.indexOf('createPdfCacheBlobUrl(cached.key)'), 'cached download admission precedes payload Blob dereference');
 
 console.log('P0-023 exact live retry source admission: PASS; checks=' + checks + '; documentId=true; application_generation=true; retry_pointer=discovery_only; sealed_generation_preserved=true; release_closed=false');
