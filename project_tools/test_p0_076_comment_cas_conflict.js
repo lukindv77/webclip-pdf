@@ -106,7 +106,8 @@ ok(commentUi.includes('edit.disabled = false'), 'delete conflict restores edit c
 ok(commentUi.includes('remove.disabled = false'), 'delete conflict restores delete control');
 
 const trashFinalize = functionSource(worker, 'finalizeTrashDeleteFromReceipt');
-ok(trashFinalize.includes('pendingDestructiveMoveEntryMatches(receipt, current)'), 'P0-072 Trash receipt guard remains separate');
+ok(trashFinalize.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)'), 'P0-072 Trash receipt guard now composes a separate P0-076 local cursor');
+ok(functionSource(worker, 'checkpointPendingTrashMoveIntent').includes("makePendingDestructiveMoveId('trash-move')"), 'P0-072 worker-issued destructive identity remains separate from comment/local CAS');
 ok(!trashFinalize.includes('journalCommentConflictResult'), 'comment CAS does not leak into P0-072 Trash authority');
 
 ok(registry.includes('| P0-076 | ACTIVE |'), 'P0-076 remains ACTIVE');
