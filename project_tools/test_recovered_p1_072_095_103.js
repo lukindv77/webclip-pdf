@@ -67,9 +67,16 @@ async function testStorageEstimateDeadlineFailClosed() {
 async function testGlobalPdfGenerationBudget() {
   const chrome = {
     debugger: {
+      onEvent: {
+        addListener() {},
+        removeListener() {}
+      },
       attach: () => Promise.resolve(),
       detach: () => Promise.resolve(),
       sendCommand(_debuggee, method) {
+        if (method === 'Page.getFrameTree') {
+          return Promise.resolve({ frameTree: { frame: { id: `main-${_debuggee.tabId}`, loaderId: `loader-${_debuggee.tabId}` } } });
+        }
         if (method === 'Page.printToPDF') return new Promise(() => {});
         return Promise.resolve({});
       }

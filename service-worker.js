@@ -10016,10 +10016,139 @@ async function detachDebuggerBounded(debuggee, label = 'Отключение Chr
   await withOperationTimeout(rawDetach, 10_000, label);
 }
 
+function makePdfRenderNavigationError(code, message) {
+  const error = new Error(message || code);
+  error.code = code;
+  return error;
+}
+
+function createPdfRenderNavigationFence(debuggerApi, debuggee, maxBufferedEvents = 64) {
+  const eventApi = debuggerApi?.onEvent;
+  const tabId = Number(debuggee?.tabId);
+  if (!tabId || !eventApi || typeof eventApi.addListener !== 'function' || typeof eventApi.removeListener !== 'function') {
+    throw makePdfRenderNavigationError('WEBCLIP_PDF_NAVIGATION_FENCE_UNAVAILABLE', 'Chrome Debugger navigation events are unavailable for the PDF render fence.');
+  }
+  const buffered = [];
+  const limit = Math.max(8, Math.min(256, Math.floor(Number(maxBufferedEvents) || 64)));
+  let mainFrameId = '';
+  let mainLoaderId = '';
+  let stale = false;
+  let staleMethod = '';
+  let installed = false;
+  let disposed = false;
+
+  function eventIdentity(method, params) {
+    if (method === 'Page.frameNavigated') {
+      return {
+        frameId: String(params?.frame?.id || ''),
+        loaderId: String(params?.frame?.loaderId || '')
+      };
+    }
+    if (method === 'Page.frameStartedNavigating' || method === 'Page.navigatedWithinDocument') {
+      return { frameId: String(params?.frameId || ''), loaderId: '' };
+    }
+    return { frameId: '', loaderId: '' };
+  }
+
+  function markIfMain(event) {
+    if (!mainFrameId || !event?.frameId || event.frameId !== mainFrameId) return;
+    if (
+      event.method === 'Page.frameNavigated'
+      && mainLoaderId
+      && event.loaderId
+      && event.loaderId === mainLoaderId
+    ) {
+      return;
+    }
+    stale = true;
+    if (!staleMethod) staleMethod = event.method;
+  }
+
+  function listener(source, method, params) {
+    if (Number(source?.tabId) !== tabId) return;
+    const identity = eventIdentity(method, params);
+    if (!identity.frameId) return;
+    const event = Object.freeze({
+      method: String(method || ''),
+      frameId: identity.frameId,
+      loaderId: identity.loaderId
+    });
+    if (!mainFrameId) {
+      // Page.enable may expose a baseline frameNavigated notification for the
+      // already-current frame. A real navigation in this setup window is
+      // represented by frameStartedNavigating (or same-document navigation),
+      // so do not treat an unarmed frameNavigated snapshot as stale evidence.
+      if (method === 'Page.frameNavigated') return;
+      if (buffered.length >= limit) {
+        stale = true;
+        if (!staleMethod) staleMethod = 'WEBCLIP_PDF_NAVIGATION_EVENT_OVERFLOW';
+        return;
+      }
+      buffered.push(event);
+      return;
+    }
+    markIfMain(event);
+  }
+
+  function install() {
+    if (installed) return false;
+    eventApi.addListener(listener);
+    installed = true;
+    return true;
+  }
+
+  function arm(frame) {
+    const next = String(frame?.id || frame || '').trim();
+    const nextLoaderId = String(frame?.loaderId || '').trim();
+    if (!next) throw makePdfRenderNavigationError('WEBCLIP_PDF_MAIN_FRAME_REQUIRED', 'Chrome did not expose the exact main frame for the PDF render fence.');
+    if (mainFrameId && mainFrameId !== next) {
+      stale = true;
+      if (!staleMethod) staleMethod = 'WEBCLIP_PDF_MAIN_FRAME_CHANGED';
+    } else {
+      mainFrameId = next;
+      if (nextLoaderId) mainLoaderId = nextLoaderId;
+    }
+    for (const event of buffered.splice(0)) markIfMain(event);
+    return mainFrameId;
+  }
+
+  function assertClean() {
+    if (!stale) return true;
+    throw makePdfRenderNavigationError(
+      'WEBCLIP_PDF_SOURCE_NAVIGATED',
+      `The main document changed during PDF rendering (${staleMethod || 'navigation event'}).`
+    );
+  }
+
+  function dispose() {
+    if (!installed || disposed) return false;
+    eventApi.removeListener(listener);
+    disposed = true;
+    return true;
+  }
+
+  function snapshot() {
+    return Object.freeze({
+      tabId,
+      mainFrameId,
+      mainLoaderId,
+      stale,
+      staleMethod,
+      bufferedEvents: buffered.length,
+      installed,
+      disposed
+    });
+  }
+
+  return Object.freeze({ install, arm, assertClean, dispose, snapshot, listener });
+}
+
 async function generatePdfBlob(tabId) {
   const debuggee = { tabId };
   let attached = false;
   let streamHandle = '';
+  let navigationFence = null;
+  let navigationFenceCleanupError = null;
   let primaryError = null;
   if (debuggerLateAttachCleanupByTab.has(tabId) || debuggerPendingDetachByTab.has(tabId)) {
     throw makeDebuggerBusyError(tabId);
@@ -10030,13 +10159,25 @@ async function generatePdfBlob(tabId) {
   try {
     await attachDebuggerBounded(debuggee);
     attached = true;
+    navigationFence = createPdfRenderNavigationFence(chrome.debugger, debuggee);
+    navigationFence.install();
     await withOperationTimeout(chrome.debugger.sendCommand(debuggee, 'Page.enable'), 15_000, 'Инициализация Page');
+    const frameTreeResult = await withOperationTimeout(
+      chrome.debugger.sendCommand(debuggee, 'Page.getFrameTree'),
+      15_000,
+      'Определение main frame для PDF'
+    );
+    const mainFrame = frameTreeResult?.frameTree?.frame || null;
+    navigationFence.arm(mainFrame);
+    navigationFence.assertClean();
 
     // Сохраняем экранные CSS media-правила: @media print сайта не должен
     // самовольно скрывать элементы, которые пользователь выбрал в WebClip.
     await withOperationTimeout(chrome.debugger.sendCommand(debuggee, 'Emulation.setEmulatedMedia', {
       media: 'screen'
     }), 15_000, 'Настройка media для PDF');
+
+    navigationFence.assertClean();
 
     // ReturnAsStream avoids the full Base64 PDF copy in the MV3 worker heap.
     const result = await withOperationTimeout(chrome.debugger.sendCommand(debuggee, 'Page.printToPDF', {
@@ -10052,12 +10193,14 @@ async function generatePdfBlob(tabId) {
     if (!streamHandle || streamHandle.length > 512) {
       throw new Error('Chrome не вернул поток PDF.');
     }
+    navigationFence.assertClean();
 
     const deadlineAt = Date.now() + DEBUGGER_COMMAND_TIMEOUT_MS;
     const parts = [];
     let totalBytes = 0;
     let eof = false;
     while (!eof) {
+      navigationFence.assertClean();
       const remaining = deadlineAt - Date.now();
       if (remaining <= 0) {
         const error = new Error(`Чтение PDF-потока превысило безопасный предел ${Math.round(DEBUGGER_COMMAND_TIMEOUT_MS / 1000)} с.`);
@@ -10068,6 +10211,7 @@ async function generatePdfBlob(tabId) {
         handle: streamHandle,
         size: PDF_STREAM_READ_CHUNK_BYTES
       }), Math.min(15_000, remaining), 'Чтение PDF-потока Chromium');
+      navigationFence.assertClean();
       const data = String(chunk?.data || '');
       eof = Boolean(chunk?.eof);
       if (!data) {
@@ -10103,11 +10247,20 @@ async function generatePdfBlob(tabId) {
       parts.push(bytes);
     }
     if (!totalBytes) throw new Error('Chrome вернул пустой PDF.');
+    navigationFence.assertClean();
     return new Blob(parts, { type: 'application/pdf' });
   } catch (error) {
     primaryError = error;
     throw error;
   } finally {
+    if (navigationFence) {
+      try {
+        navigationFence.dispose();
+      } catch (fenceCleanupError) {
+        if (!primaryError) navigationFenceCleanupError = fenceCleanupError;
+        else console.warn('WebClip PDF navigation fence cleanup after error:', fenceCleanupError);
+      }
+    }
     if (streamHandle && attached) {
       try {
         await withOperationTimeout(chrome.debugger.sendCommand(debuggee, 'IO.close', { handle: streamHandle }), 10_000, 'Закрытие PDF-потока Chromium');
@@ -10131,6 +10284,7 @@ async function generatePdfBlob(tabId) {
       }
     }
     debuggerActiveTabs.delete(tabId);
+    if (navigationFenceCleanupError && !primaryError) throw navigationFenceCleanupError;
   }
 }
 
