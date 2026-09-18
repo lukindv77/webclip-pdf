@@ -182,13 +182,14 @@ async function createSelectedFixtureTab(options, articleUrl, label) {
     return current?.status === 'complete' ? current : null;
   }, { timeoutMs: 10_000, intervalMs: 50, label: label + ' fixture tab load' });
 
-  const guardState = await options.evaluate(`({
-    marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
-    api: Boolean(globalThis.WebClipContentInjectionGuard),
-    ensureTopContentScript: typeof globalThis.ensureTopContentScript
-  })`);
-  assert(guardState?.marker && guardState?.api, label + ': production popup content-injection guard missing');
-  assert.strictEqual(guardState?.ensureTopContentScript, 'function', label + ': production popup injector missing');
+  const guardState = await waitFor(async () => {
+    const state = await options.evaluate(`({
+      marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
+      api: Boolean(globalThis.WebClipContentInjectionGuard),
+      ensureTopContentScript: typeof globalThis.ensureTopContentScript
+    })`);
+    return state?.marker && state?.api && state?.ensureTopContentScript === 'function' ? state : null;
+  }, { timeoutMs: 5_000, intervalMs: 50, label: label + ' production popup content-injection guard ready' });
 
   await options.evaluate(`ensureTopContentScript(${tabId})`);
   const generationProbe = await options.evaluate(`(async () => {

@@ -404,14 +404,15 @@ async function runBrowserIntegration() {
     }, { timeoutMs: 10_000, intervalMs: 50, label: 'P1-007 article tab load' });
 
     mark('selection-guard-state');
-    const guardState = await options.evaluate(`({
-      marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
-      api: Boolean(globalThis.WebClipContentInjectionGuard),
-      executeName: String(chrome.scripting.executeScript?.name || ''),
-      ensureTopContentScript: typeof globalThis.ensureTopContentScript
-    })`);
-    assert(guardState?.marker && guardState?.api, 'production popup content-injection guard must be installed');
-    assert.strictEqual(guardState?.ensureTopContentScript, 'function', 'production popup ensureTopContentScript must be available');
+    const guardState = await waitFor(async () => {
+      const state = await options.evaluate(`({
+        marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
+        api: Boolean(globalThis.WebClipContentInjectionGuard),
+        executeName: String(chrome.scripting.executeScript?.name || ''),
+        ensureTopContentScript: typeof globalThis.ensureTopContentScript
+      })`);
+      return state?.marker && state?.api && state?.ensureTopContentScript === 'function' ? state : null;
+    }, { timeoutMs: 5_000, intervalMs: 50, label: 'production popup content-injection guard ready' });
 
     mark('selection-production-inject');
     await options.evaluate(`ensureTopContentScript(${articleTabId})`);
