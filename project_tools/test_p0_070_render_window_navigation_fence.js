@@ -77,7 +77,7 @@ const orderedMarkers = [
   'navigationFence.install()',
   "chrome.debugger.sendCommand(debuggee, 'Page.enable')",
   "chrome.debugger.sendCommand(debuggee, 'Page.getFrameTree')",
-  'navigationFence.arm(mainFrameId)',
+  'navigationFence.arm(mainFrame)',
   "chrome.debugger.sendCommand(debuggee, 'Emulation.setEmulatedMedia'",
   "chrome.debugger.sendCommand(debuggee, 'Page.printToPDF'",
   'navigationFence.assertClean();\n      const data = String(chunk?.data || \'\');',
@@ -108,6 +108,23 @@ check('stable main frame stays clean', () => {
   assert.equal(fence.snapshot().stale, false);
   assert.equal(fence.dispose(), true);
   assert.equal(onEvent.listeners.size, 0);
+});
+
+check('delayed baseline frameNavigated with the admitted loader stays clean', () => {
+  const onEvent = makeEventApi();
+  const fence = createFence({ onEvent }, { tabId: 10 });
+  fence.install();
+  fence.arm({ id: 'main-A', loaderId: 'loader-A' });
+  onEvent.emit({ tabId: 10 }, 'Page.frameNavigated', {
+    frame: { id: 'main-A', loaderId: 'loader-A', url: 'https://example.test/a' }
+  });
+  assert.equal(fence.assertClean(), true);
+  assert.equal(fence.snapshot().mainLoaderId, 'loader-A');
+  onEvent.emit({ tabId: 10 }, 'Page.frameNavigated', {
+    frame: { id: 'main-A', loaderId: 'loader-B', url: 'https://example.test/b' }
+  });
+  throwsCode(() => fence.assertClean(), 'WEBCLIP_PDF_SOURCE_NAVIGATED');
+  fence.dispose();
 });
 
 check('main navigation start is monotonic stale evidence', () => {
