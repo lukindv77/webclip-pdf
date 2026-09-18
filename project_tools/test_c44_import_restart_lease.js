@@ -50,7 +50,7 @@ const discard = sourceSlice(
 const cleanup = sourceSlice(
   worker,
   'async function cleanupTransferPayloads',
-  'function pdfCacheKey'
+  'function pdfRetryIndexKey'
 );
 const handlerStart = worker.indexOf('chrome.runtime.onMessage.addListener');
 assert(handlerStart >= 0);

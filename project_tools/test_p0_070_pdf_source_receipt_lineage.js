@@ -108,14 +108,16 @@ ok(swSource.includes("const pendingData = { destination: 'download', filename, m
 ok(swSource.includes("const pendingData = { destination: 'download', filename: cached.filename, meta, sourceReceipt: cached.sourceReceipt };"), 'cached-download checkpoint carries stored source receipt');
 ok(swSource.includes('sourceReceipt: cached.sourceReceipt,\n      meta'), 'remote-save checkpoint carries stored source receipt');
 
-eq((swSource.match(/function pdfCacheKey\(tabId\) \{\n  return `tab:\${tabId}`;\n\}/g) || []).length, 1, 'P0-079 tab cache key is deliberately unchanged');
+ok(swSource.includes('function pdfRetryIndexKey(tabId)'), 'P0-079 keeps tab identity only as retry discovery index');
+ok(!swSource.includes('function pdfCacheKey(tabId)'), 'P0-079 removes mutable tab alias from PDF byte-object identity');
+ok(swSource.includes('const cacheGeneration = issuePdfCacheGeneration();'), 'P0-070 source receipt composes with worker-issued P0-079 byte generation');
 ok(swSource.includes('async function getValidCachedPdfForTab(tabId)'), 'P0-023 retry authority remains a separate existing function');
 ok(!section(swSource, 'async function getValidCachedPdfForTab(tabId)', 'async function cleanupExpiredPdfCache').includes('sourceReceipt'), 'retry lookup does not pretend source receipt closes P0-023');
 const journalEntrySection = section(swSource, 'async function appendJournalEntry(', 'async function getJournalEntryById');
 ok(journalEntrySection.includes('sourceReceipt = null'), 'later P0-070 finalization may accept additive Journal source provenance');
 ok(journalEntrySection.includes("...(journalSourceReceipt ? { sourceReceipt: journalSourceReceipt } : {})"), 'Journal provenance remains optional and operation-bound');
 
-console.log(`P0-070 PDF source receipt lineage: PASS; checks=${checks}; cache_key_unchanged=true; retry_authority_unchanged=true; journal_schema_additive=true`);
+console.log(`P0-070 PDF source receipt lineage: PASS; checks=${checks}; p0_079_generation_composed=true; retry_authority_unchanged=true; journal_schema_additive=true`);
 })().catch((error) => {
   console.error(error);
   process.exit(1);

@@ -39,7 +39,7 @@ const pdfSections = [
   section(sw, 'async function putCachedPdf(record) {', 'async function getCachedPdfByKey(key) {'),
   section(sw, 'async function getCachedPdfByKey(key) {', 'async function getCachedPdfMetadataByKey(key) {'),
   section(sw, 'async function getCachedPdfMetadataByKey(key) {', 'async function getValidCachedPdfForTab(tabId) {'),
-  section(sw, 'async function deleteCachedPdfByKey(key) {', 'async function deleteCachedPdf(tabId) {')
+  section(sw, 'async function deleteCachedPdfByKey(key) {', 'async function deleteCachedPdfGeneration(record) {')
 ];
 for (const source of pdfSections) {
   assert(source.includes('runIndexedDbTransactionBounded'), 'ordinary PDF retry-cache transaction must use bounded helper');

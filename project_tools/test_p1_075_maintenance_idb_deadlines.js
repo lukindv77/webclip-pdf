@@ -20,7 +20,7 @@ function testMaintenanceCleanupsUseBoundedTransactions() {
     ['async function cleanupExpiredOperationLogs', 'async function runLoggedOperationLogCleanup', 2],
     ['async function cleanupStalePendingRemoteSaves', 'async function countPendingRemoteSavePhases', 2],
     ['async function cleanupExpiredJournalImportStaging', 'async function inspectStagedJournalImportStream', 1],
-    ['async function cleanupTransferPayloads', 'function pdfCacheKey', 1],
+    ['async function cleanupTransferPayloads', 'function pdfRetryIndexKey', 1],
     ['async function cleanupExpiredPdfCache', 'async function deleteCachedPdfByKey', 1]
   ];
 

@@ -29,7 +29,8 @@ const YANDEX_SCOPES = ['cloud_api:disk.read', 'cloud_api:disk.write', 'cloud_api
 const PDF_CACHE_DB_NAME = 'WebClipPdfRetryCache';
 const PDF_CACHE_STORE = 'pdfs';
 const PDF_CACHE_META_STORE = 'meta';
-const PDF_CACHE_DB_VERSION = 3;
+const PDF_CACHE_RETRY_INDEX_STORE = 'retryIndex';
+const PDF_CACHE_DB_VERSION = 4;
 const PDF_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_PDF_BASE64_CHARS = 64 * 1024 * 1024; // legacy cache compatibility only
 const MAX_PDF_BYTES = 48 * 1024 * 1024;
@@ -2836,7 +2837,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'WEBCLIP_INVALIDATE_PDF_CACHE': {
         const tabId = sender.tab?.id;
-        if (tabId) await deleteCachedPdf(tabId);
+        if (tabId) await invalidatePdfRetryForTab(tabId);
         return { ok: true };
       }
 
@@ -3213,14 +3214,14 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   frameAgentsByTab.delete(Number(tabId || 0));
   actionUpdateGenerationByTab.delete(Number(tabId || 0));
   actionRepairScheduledTabs.delete(Number(tabId || 0));
-  deleteCachedPdf(tabId).catch(() => {});
+  invalidatePdfRetryForTab(tabId).catch(() => {});
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo?.url) {
     clearScriptExecutionSettlementsForTab(tabId);
     frameAgentsByTab.delete(Number(tabId || 0));
-    deleteCachedPdf(tabId).catch(() => {});
+    invalidatePdfRetryForTab(tabId).catch(() => {});
   }
 });
 
@@ -3885,8 +3886,9 @@ async function generatePdfAndUploadToYandex(tabId, meta, operationId = '') {
     recordOperationStage(operationId, 'copy-save', `Chromium сформировал PDF-копию (${pdfBlob.size} байт). Фиксируем состояние структуры страницы перед сохранением на Яндекс Диск.`, 40, 'running', { pdfBytes: pdfBlob.size, pageAnalysis, printDiagnostics, destination: 'yandex' });
     filename = buildYandexFilename(meta);
     emitPageUploadProgress(tabId, operationId, 'cache', 'Сохраняем сформированный PDF во временный кэш для безопасного повтора…', 44);
+    const cacheGeneration = issuePdfCacheGeneration();
     const cached = {
-      key: pdfCacheKey(tabId), tabId, filename,
+      key: cacheGeneration.key, cacheGeneration: cacheGeneration.generation, sealed: true, tabId, filename,
       meta: {
         hostname: String(meta.hostname || 'site'),
         siteAddress: String(meta.siteAddress || ''),
@@ -3907,10 +3909,18 @@ async function generatePdfAndUploadToYandex(tabId, meta, operationId = '') {
     cached.pdfBlob = null;
     pdfBlob = null;
     Object.assign(cached, cachedMetadata);
+    try {
+      await publishPdfRetryIndex(tabId, cachedMetadata);
+    } catch (error) {
+      await deleteCachedPdfGeneration(cachedMetadata).catch(() => {});
+      throw error;
+    }
     cachedSaved = true;
 
     const result = await uploadCachedRecordToYandex(cached, { tabId, operationId });
-    await deleteCachedPdf(tabId);
+    await deleteCachedPdfGeneration(cached).catch((error) => {
+      console.warn('WebClip exact PDF cache cleanup after remote success:', error);
+    });
     emitPageUploadProgress(
       tabId,
       operationId,
@@ -3951,7 +3961,9 @@ async function retryCachedPdfUploadToYandex(tabId, operationId = '') {
   try {
     emitPageUploadProgress(tabId, operationId, 'cache', 'Используем ранее сформированный PDF из временного кэша…', 44);
     const result = await uploadCachedRecordToYandex(cached, { tabId, operationId, allowExisting: true });
-    await deleteCachedPdf(tabId);
+    await deleteCachedPdfGeneration(cached).catch((error) => {
+      console.warn('WebClip exact PDF cache cleanup after retry success:', error);
+    });
     emitPageUploadProgress(
       tabId,
       operationId,
@@ -3980,6 +3992,11 @@ async function retryCachedPdfUploadToYandex(tabId, operationId = '') {
 }
 
 async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, operationId = '', allowExisting = false } = {}) {
+  if (!isExactSealedPdfCacheIdentity(cached)) {
+    const error = new Error('Yandex upload требует exact sealed PDF cache generation.');
+    error.code = 'WEBCLIP_PDF_CACHE_GENERATION_REQUIRED';
+    throw error;
+  }
   const config = await getYandexConfig();
   if (!config.rootPath) throw new Error('Не выбрана корневая папка Яндекс Диска. Откройте настройки расширения.');
 
@@ -4049,7 +4066,9 @@ async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, 
         mode: 'pdf-cache-upload',
         url: uploadLink.href,
         method: uploadLink.method || 'PUT',
-        pdfCacheKey: String(cached.key || pdfCacheKey(tabId)),
+        pdfCacheKey: String(cached.key || ''),
+        pdfCacheGeneration: String(cached.cacheGeneration || ''),
+        expectedPdfBytes,
         contentType: 'application/pdf'
       }, { operationId, label: 'Загрузка PDF на Яндекс Диск', timeoutMs: 90_000 });
     } catch (error) { throw new Error(`Не удалось передать PDF на сервер загрузки Яндекс Диска: ${normalizeError(error)}`); }
@@ -9716,8 +9735,30 @@ async function cleanupTransferPayloads() {
 }
 
 
-function pdfCacheKey(tabId) {
-  return `tab:${tabId}`;
+function pdfRetryIndexKey(tabId) {
+  const id = Math.max(0, Math.floor(Number(tabId) || 0));
+  return id > 0 ? `tab:${id}` : '';
+}
+
+function issuePdfCacheGeneration() {
+  if (typeof crypto === 'undefined' || typeof crypto.randomUUID !== 'function') {
+    const error = new Error('Не удалось выдать внутреннюю generation PDF cache.');
+    error.code = 'WEBCLIP_PDF_CACHE_GENERATION_UNAVAILABLE';
+    throw error;
+  }
+  const generation = crypto.randomUUID();
+  return Object.freeze({ generation, key: `pdf:${generation}` });
+}
+
+function isExactSealedPdfCacheIdentity(record = {}) {
+  const generation = String(record.cacheGeneration || '').trim();
+  const key = String(record.key || '').trim();
+  return Boolean(
+    generation &&
+    generation.length <= 80 &&
+    key === `pdf:${generation}` &&
+    record.sealed === true
+  );
 }
 
 function pdfCacheMetadataFromRecord(record = {}) {
@@ -9726,6 +9767,8 @@ function pdfCacheMetadataFromRecord(record = {}) {
   const pdfByteLength = Math.max(0, Number(record.pdfByteLength) || (pdfBlob ? pdfBlob.size : 0) || (pdfBase64 ? base64DecodedByteLength(pdfBase64) : 0));
   return {
     key: String(record.key || ''),
+    cacheGeneration: String(record.cacheGeneration || '').slice(0, 80),
+    sealed: Boolean(record.sealed),
     tabId: Math.max(0, Number(record.tabId) || 0),
     filename: String(record.filename || '').slice(0, 512),
     meta: record.meta && typeof record.meta === 'object' ? record.meta : {},
@@ -9739,6 +9782,7 @@ function pdfCacheMetadataFromRecord(record = {}) {
     sourceReceipt: sanitizePdfSourceReceipt(record.sourceReceipt)
   };
 }
+
 
 function pdfBase64ToBlob(base64) {
   const text = String(base64 || '');
@@ -9778,6 +9822,9 @@ function openPdfCacheDb() {
       } else {
         metaStore = tx.objectStore(PDF_CACHE_META_STORE);
       }
+      if (!db.objectStoreNames.contains(PDF_CACHE_RETRY_INDEX_STORE)) {
+        db.createObjectStore(PDF_CACHE_RETRY_INDEX_STORE, { keyPath: 'key' });
+      }
       if (Number(event?.oldVersion || 0) < 2 && pdfStore && metaStore) {
         const request = pdfStore.openCursor();
         request.onsuccess = () => {
@@ -9795,6 +9842,18 @@ function openPdfCacheDb() {
 async function putCachedPdf(record) {
   if (!record?.key) throw new Error('Не указан ключ PDF cache.');
   const normalizedRecord = { ...record };
+  const wantsSealedGeneration = normalizedRecord.sealed === true;
+  if (wantsSealedGeneration && !isExactSealedPdfCacheIdentity(normalizedRecord)) {
+    const error = new Error('Некорректная immutable generation PDF cache.');
+    error.code = 'WEBCLIP_PDF_CACHE_GENERATION_INVALID';
+    throw error;
+  }
+  if (!wantsSealedGeneration && String(normalizedRecord.key || '').startsWith('pdf:')) {
+    const error = new Error('Пространство pdf:* разрешено только sealed PDF cache generations.');
+    error.code = 'WEBCLIP_PDF_CACHE_GENERATION_INVALID';
+    throw error;
+  }
+
   const sourceBase64 = typeof normalizedRecord.pdfBase64 === 'string' ? normalizedRecord.pdfBase64 : '';
   const anticipatedPdfBytes = sourceBase64
     ? base64DecodedByteLength(sourceBase64)
@@ -9814,25 +9873,40 @@ async function putCachedPdf(record) {
   normalizedRecord.pdfByteLength = metadata.pdfByteLength;
   normalizedRecord.pdfBase64Chars = metadata.pdfBase64Chars;
   normalizedRecord.cacheFormat = metadata.cacheFormat;
+  normalizedRecord.cacheGeneration = metadata.cacheGeneration;
+  normalizedRecord.sealed = metadata.sealed;
   normalizedRecord.sourceReceipt = metadata.sourceReceipt;
+
   const db = await openPdfCacheDb();
   try {
     await runIndexedDbTransactionBounded(
       db,
       [PDF_CACHE_STORE, PDF_CACHE_META_STORE],
       'readwrite',
-      'Сохранение PDF retry-cache',
+      wantsSealedGeneration ? 'Создание sealed PDF retry-cache generation' : 'Сохранение PDF retry-cache',
       ({ tx, fail }) => {
-        const pdfRequest = tx.objectStore(PDF_CACHE_STORE).put(normalizedRecord);
-        const metaRequest = tx.objectStore(PDF_CACHE_META_STORE).put(metadata);
-        pdfRequest.onerror = () => fail(pdfRequest.error || new Error('Не удалось сохранить PDF для повторной отправки.'));
-        metaRequest.onerror = () => fail(metaRequest.error || new Error('Не удалось сохранить metadata PDF для повторной отправки.'));
+        const pdfStore = tx.objectStore(PDF_CACHE_STORE);
+        const metaStore = tx.objectStore(PDF_CACHE_META_STORE);
+        const pdfRequest = wantsSealedGeneration ? pdfStore.add(normalizedRecord) : pdfStore.put(normalizedRecord);
+        const metaRequest = wantsSealedGeneration ? metaStore.add(metadata) : metaStore.put(metadata);
+        const handleWriteError = (request, fallback) => {
+          if (wantsSealedGeneration && request.error?.name === 'ConstraintError') {
+            const error = new Error('Immutable PDF cache generation уже существует.');
+            error.code = 'WEBCLIP_PDF_CACHE_GENERATION_EXISTS';
+            fail(error);
+            return;
+          }
+          fail(request.error || new Error(fallback));
+        };
+        pdfRequest.onerror = () => handleWriteError(pdfRequest, 'Не удалось сохранить PDF для повторной отправки.');
+        metaRequest.onerror = () => handleWriteError(metaRequest, 'Не удалось сохранить metadata PDF для повторной отправки.');
       },
       PDF_CACHE_CRUD_IDB_TX_TIMEOUT_MS
     );
   } finally { db.close(); }
   return metadata;
 }
+
 
 async function getCachedPdfByKey(key) {
   const cacheKey = String(key || '');
@@ -9874,7 +9948,8 @@ async function getCachedPdfMetadataByKey(key) {
     if (metadata) return metadata;
   } finally { db.close(); }
 
-  // Compatibility fallback for a cache record left by a pre-v2 build.
+  if (cacheKey.startsWith('pdf:')) return null;
+
   const legacy = await getCachedPdfByKey(cacheKey);
   if (!legacy) return null;
   const metadata = pdfCacheMetadataFromRecord(legacy);
@@ -9895,29 +9970,144 @@ async function getCachedPdfMetadataByKey(key) {
   return metadata;
 }
 
+function normalizePdfRetryIndexPointer(raw = {}) {
+  const tabId = Math.max(0, Math.floor(Number(raw.tabId) || 0));
+  const key = pdfRetryIndexKey(tabId);
+  const cacheKey = String(raw.cacheKey || '');
+  const cacheGeneration = String(raw.cacheGeneration || '');
+  if (!key || String(raw.key || '') !== key || !cacheGeneration || cacheKey !== `pdf:${cacheGeneration}`) return null;
+  return {
+    key,
+    tabId,
+    cacheKey,
+    cacheGeneration,
+    createdAt: Math.max(0, Number(raw.createdAt) || 0)
+  };
+}
+
+async function publishPdfRetryIndex(tabId, metadata) {
+  const normalizedTabId = Math.max(0, Math.floor(Number(tabId) || 0));
+  if (!normalizedTabId || !isExactSealedPdfCacheIdentity(metadata) || Number(metadata.tabId || 0) !== normalizedTabId) {
+    const error = new Error('Нельзя опубликовать retry pointer без exact sealed PDF generation.');
+    error.code = 'WEBCLIP_PDF_RETRY_INDEX_INVALID';
+    throw error;
+  }
+  const pointer = {
+    key: pdfRetryIndexKey(normalizedTabId),
+    tabId: normalizedTabId,
+    cacheKey: String(metadata.key),
+    cacheGeneration: String(metadata.cacheGeneration),
+    createdAt: Math.max(0, Number(metadata.createdAt) || Date.now())
+  };
+  const db = await openPdfCacheDb();
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      PDF_CACHE_RETRY_INDEX_STORE,
+      'readwrite',
+      'Публикация PDF retry index',
+      ({ store, fail }) => {
+        const request = store().put(pointer);
+        request.onerror = () => fail(request.error || new Error('Не удалось обновить PDF retry index.'));
+      },
+      PDF_CACHE_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  return pointer;
+}
+
+async function getPdfRetryIndexForTab(tabId) {
+  const key = pdfRetryIndexKey(tabId);
+  if (!key) return null;
+  const db = await openPdfCacheDb();
+  try {
+    const raw = await runIndexedDbTransactionBounded(
+      db,
+      PDF_CACHE_RETRY_INDEX_STORE,
+      'readonly',
+      'Чтение PDF retry index',
+      ({ store, setResult, fail }) => {
+        const request = store().get(key);
+        request.onsuccess = () => setResult(request.result || null);
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать PDF retry index.'));
+      },
+      PDF_CACHE_CRUD_IDB_TX_TIMEOUT_MS
+    );
+    return normalizePdfRetryIndexPointer(raw);
+  } finally { db.close(); }
+}
+
+async function clearPdfRetryIndexIfMatches(tabId, expectedCacheKey, expectedGeneration) {
+  const key = pdfRetryIndexKey(tabId);
+  if (!key) return false;
+  const cacheKey = String(expectedCacheKey || '');
+  const cacheGeneration = String(expectedGeneration || '');
+  const db = await openPdfCacheDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      PDF_CACHE_RETRY_INDEX_STORE,
+      'readwrite',
+      'CAS-очистка PDF retry index',
+      ({ store, setResult, fail }) => {
+        const retryStore = store();
+        const request = retryStore.get(key);
+        request.onsuccess = () => {
+          const current = normalizePdfRetryIndexPointer(request.result);
+          if (!current || current.cacheKey !== cacheKey || current.cacheGeneration !== cacheGeneration) {
+            setResult(false);
+            return;
+          }
+          const remove = retryStore.delete(key);
+          remove.onsuccess = () => setResult(true);
+          remove.onerror = () => fail(remove.error || new Error('Не удалось очистить PDF retry index.'));
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось сверить PDF retry index.'));
+      },
+      PDF_CACHE_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function invalidatePdfRetryForTab(tabId) {
+  const current = await getPdfRetryIndexForTab(tabId);
+  if (!current) return false;
+  return clearPdfRetryIndexIfMatches(tabId, current.cacheKey, current.cacheGeneration);
+}
+
 async function getValidCachedPdfForTab(tabId) {
-  const key = pdfCacheKey(tabId);
-  const cached = await getCachedPdfMetadataByKey(key);
-  if (!cached) return null;
+  const pointer = await getPdfRetryIndexForTab(tabId);
+  if (!pointer) return null;
+  const cached = await getCachedPdfMetadataByKey(pointer.cacheKey);
+  if (
+    !cached ||
+    !isExactSealedPdfCacheIdentity(cached) ||
+    String(cached.cacheGeneration || '') !== pointer.cacheGeneration ||
+    Number(cached.tabId || 0) !== Number(tabId || 0)
+  ) {
+    await clearPdfRetryIndexIfMatches(tabId, pointer.cacheKey, pointer.cacheGeneration).catch(() => {});
+    return null;
+  }
   const createdAt = Number(cached.createdAt || 0);
   if (!createdAt || Date.now() - createdAt > PDF_CACHE_TTL_MS) {
-    await deleteCachedPdfByKey(key).catch(() => {});
+    await deleteCachedPdfGeneration(cached).catch(() => {});
     return null;
   }
   let currentUrl = '';
   try {
     currentUrl = normalizeJournalUrl((await getChromeTabBounded(tabId, 'Проверка текущего URL PDF retry cache'))?.url || '');
   } catch (_) {
-    await deleteCachedPdfByKey(key).catch(() => {});
+    await clearPdfRetryIndexIfMatches(tabId, pointer.cacheKey, pointer.cacheGeneration).catch(() => {});
     return null;
   }
   const cachedUrl = normalizeJournalUrl(cached.sourceUrl || cached?.meta?.url || '');
   if (!currentUrl || !cachedUrl || currentUrl !== cachedUrl) {
-    await deleteCachedPdfByKey(key).catch(() => {});
+    await clearPdfRetryIndexIfMatches(tabId, pointer.cacheKey, pointer.cacheGeneration).catch(() => {});
     return null;
   }
   return cached;
 }
+
 
 async function cleanupExpiredPdfCache() {
   const cutoff = Date.now() - PDF_CACHE_TTL_MS;
@@ -9926,19 +10116,35 @@ async function cleanupExpiredPdfCache() {
   try {
     await runIndexedDbTransactionBounded(
       db,
-      [PDF_CACHE_STORE, PDF_CACHE_META_STORE],
+      [PDF_CACHE_STORE, PDF_CACHE_META_STORE, PDF_CACHE_RETRY_INDEX_STORE],
       'readwrite',
       'Очистка устаревшего временного кэша PDF',
       ({ tx, fail }) => {
         const pdfStore = tx.objectStore(PDF_CACHE_STORE);
         const metaStore = tx.objectStore(PDF_CACHE_META_STORE);
+        const retryStore = tx.objectStore(PDF_CACHE_RETRY_INDEX_STORE);
         const request = metaStore.openCursor();
         request.onsuccess = () => {
           const cursor = request.result;
           if (!cursor) return;
-          if (Number(cursor.value?.createdAt || 0) < cutoff) {
+          const stale = cursor.value || {};
+          const staleKey = String(cursor.primaryKey || '');
+          if (Number(stale.createdAt || 0) < cutoff) {
             pdfStore.delete(cursor.primaryKey);
             cursor.delete();
+            if (isExactSealedPdfCacheIdentity(stale)) {
+              const retryKey = pdfRetryIndexKey(stale.tabId);
+              if (retryKey) {
+                const retryGet = retryStore.get(retryKey);
+                retryGet.onsuccess = () => {
+                  const current = normalizePdfRetryIndexPointer(retryGet.result);
+                  if (current && current.cacheKey === staleKey && current.cacheGeneration === String(stale.cacheGeneration || '')) {
+                    retryStore.delete(retryKey);
+                  }
+                };
+                retryGet.onerror = () => fail(retryGet.error || new Error('Не удалось сверить PDF retry index при cleanup.'));
+              }
+            }
             deleted += 1;
           }
           cursor.continue();
@@ -9972,9 +10178,64 @@ async function deleteCachedPdfByKey(key) {
   } finally { db.close(); }
 }
 
-async function deleteCachedPdf(tabId) {
-  return deleteCachedPdfByKey(pdfCacheKey(tabId));
+async function deleteCachedPdfGeneration(record) {
+  if (!isExactSealedPdfCacheIdentity(record)) {
+    const error = new Error('Exact PDF cache generation не подтверждена для удаления.');
+    error.code = 'WEBCLIP_PDF_CACHE_GENERATION_INVALID';
+    throw error;
+  }
+  const cacheKey = String(record.key);
+  const generation = String(record.cacheGeneration);
+  const expectedTabId = Math.max(0, Number(record.tabId) || 0);
+  const db = await openPdfCacheDb();
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      [PDF_CACHE_STORE, PDF_CACHE_META_STORE, PDF_CACHE_RETRY_INDEX_STORE],
+      'readwrite',
+      'Удаление exact PDF cache generation',
+      ({ tx, fail }) => {
+        const pdfStore = tx.objectStore(PDF_CACHE_STORE);
+        const metaStore = tx.objectStore(PDF_CACHE_META_STORE);
+        const retryStore = tx.objectStore(PDF_CACHE_RETRY_INDEX_STORE);
+        const metaGet = metaStore.get(cacheKey);
+        metaGet.onsuccess = () => {
+          const current = metaGet.result || null;
+          if (
+            !isExactSealedPdfCacheIdentity(current) ||
+            String(current.cacheGeneration || '') !== generation ||
+            Number(current.tabId || 0) !== expectedTabId
+          ) {
+            const error = new Error('Stored PDF cache generation не совпадает с exact cleanup receipt.');
+            error.code = 'WEBCLIP_PDF_CACHE_GENERATION_MISMATCH';
+            fail(error);
+            return;
+          }
+          const pdfDelete = pdfStore.delete(cacheKey);
+          const metaDelete = metaStore.delete(cacheKey);
+          pdfDelete.onerror = () => fail(pdfDelete.error || new Error('Не удалось удалить exact PDF cache bytes.'));
+          metaDelete.onerror = () => fail(metaDelete.error || new Error('Не удалось удалить exact PDF cache metadata.'));
+
+          const retryKey = pdfRetryIndexKey(expectedTabId);
+          if (retryKey) {
+            const retryGet = retryStore.get(retryKey);
+            retryGet.onsuccess = () => {
+              const pointer = normalizePdfRetryIndexPointer(retryGet.result);
+              if (pointer && pointer.cacheKey === cacheKey && pointer.cacheGeneration === generation) {
+                const retryDelete = retryStore.delete(retryKey);
+                retryDelete.onerror = () => fail(retryDelete.error || new Error('Не удалось CAS-очистить PDF retry index.'));
+              }
+            };
+            retryGet.onerror = () => fail(retryGet.error || new Error('Не удалось сверить PDF retry index.'));
+          }
+        };
+        metaGet.onerror = () => fail(metaGet.error || new Error('Не удалось сверить exact PDF cache metadata.'));
+      },
+      PDF_CACHE_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
 }
+
 
 function withOperationTimeout(promise, timeoutMs, label) {
   let timer = null;
@@ -10967,6 +11228,8 @@ async function runOffscreenSignedTransfer(spec = {}, { operationId = '', label =
         url: signedUrl,
         method,
         pdfCacheKey: String(spec.pdfCacheKey || ''),
+        pdfCacheGeneration: String(spec.pdfCacheGeneration || ''),
+        expectedPdfBytes: Math.max(0, Number(spec.expectedPdfBytes) || 0),
         payloadKey: String(spec.payloadKey || ''),
         contentType: String(spec.contentType || ''),
         maxChars: Number(spec.maxChars || 0)
