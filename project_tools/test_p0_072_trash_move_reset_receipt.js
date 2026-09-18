@@ -124,7 +124,8 @@ ok(moveCall >= 0 && finalizeCall > moveCall, 'Yandex Trash verification precedes
 ok(del.includes("if (isYandex && action === 'trash')"), 'only Yandex Trash enters detached destructive finalization');
 ok(del.includes('journalSuperseded = Boolean(finalized?.cancelled)'), 'reset/replacement cancellation is surfaced');
 ok(del.includes('if (!journalSuperseded) notifyJournalChanged(\'delete\')'), 'old operation does not announce deletion of replacement Journal state');
-ok(del.includes('await deleteJournalEntryRecordOnly(id);'), 'keep/local-only delete retains existing non-remote behavior');
+ok(del.includes('deleteJournalEntryRecordOnlyCas(deleteAuthority)'), 'keep/local-only delete remains local while composing P0-076 CAS authority');
+ok(!del.includes('moveJournalYandexFileToTrash(entry, operationId, deleteAuthority)'), 'P0-076 local delete token is not reused as Trash external-effect authority');
 ok(del.includes('journalSuperseded,'), 'caller receives no-resurrection outcome');
 ok(del.includes('statsWarning'), 'caller receives deferred stats repair warning if needed');
 
