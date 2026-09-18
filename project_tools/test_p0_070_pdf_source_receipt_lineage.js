@@ -112,9 +112,10 @@ eq((swSource.match(/function pdfCacheKey\(tabId\) \{\n  return `tab:\${tabId}`;\
 ok(swSource.includes('async function getValidCachedPdfForTab(tabId)'), 'P0-023 retry authority remains a separate existing function');
 ok(!section(swSource, 'async function getValidCachedPdfForTab(tabId)', 'async function cleanupExpiredPdfCache').includes('sourceReceipt'), 'retry lookup does not pretend source receipt closes P0-023');
 const journalEntrySection = section(swSource, 'async function appendJournalEntry(', 'async function getJournalEntryById');
-ok(!journalEntrySection.includes('sourceReceipt:'), 'user Journal schema is deliberately unchanged in this tranche');
+ok(journalEntrySection.includes('sourceReceipt = null'), 'later P0-070 finalization may accept additive Journal source provenance');
+ok(journalEntrySection.includes("...(journalSourceReceipt ? { sourceReceipt: journalSourceReceipt } : {})"), 'Journal provenance remains optional and operation-bound');
 
-console.log(`P0-070 PDF source receipt lineage: PASS; checks=${checks}; cache_key_unchanged=true; retry_authority_unchanged=true; journal_schema_unchanged=true`);
+console.log(`P0-070 PDF source receipt lineage: PASS; checks=${checks}; cache_key_unchanged=true; retry_authority_unchanged=true; journal_schema_additive=true`);
 })().catch((error) => {
   console.error(error);
   process.exit(1);
