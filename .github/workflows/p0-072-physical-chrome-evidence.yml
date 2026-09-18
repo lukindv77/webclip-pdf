@@ -10,11 +10,12 @@ permissions:
 
 concurrency:
   group: p0-072-physical-chrome-fd77d7e7
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   real-chrome-reset-restart:
     name: real-chrome-reset-restart
+    if: ${{ contains(github.event.head_commit.message, '[authorized-p0-072-physical]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     env:
@@ -26,18 +27,28 @@ jobs:
           ref: fd77d7e7785c54aae4dcffd5798a2b0ad46537ba
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '22.23.2'
-
-      - name: Verify exact source and browser
+      - name: Overlay reviewed research harness from authorized branch head
         shell: bash
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
           echo "P0_072_CANONICAL_SHA=$actual"
           test "$actual" = "$WEBCLIP_CANONICAL_SHA"
+          test "$GITHUB_REF_NAME" = "research/p0-072-physical-run-fd77d7e7"
+          git cat-file -e "$GITHUB_SHA^{commit}"
+          for path in             project_tools/research_p0_072_real_chrome_reset_restart.js             project_tools/test_p0_072_real_chrome_reset_restart_harness.js
+          do
+            git show "$GITHUB_SHA:$path" > "$path"
+          done
+          changed="$(git diff --name-only)"
+          test "$changed" = "$(printf '%s\n'             project_tools/research_p0_072_real_chrome_reset_restart.js             project_tools/test_p0_072_real_chrome_reset_restart_harness.js)"
+          sha256sum             project_tools/research_p0_072_real_chrome_reset_restart.js             project_tools/test_p0_072_real_chrome_reset_restart_harness.js
+
+      - name: Verify exact source and browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          node project_tools/test_p0_072_real_chrome_reset_restart_harness.js
           browser="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
           if [ -z "$browser" ]; then
             echo "No Chrome/Chromium binary available on runner" >&2
