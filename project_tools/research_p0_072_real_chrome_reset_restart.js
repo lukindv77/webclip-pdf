@@ -182,9 +182,32 @@ async function createSelectedFixtureTab(options, articleUrl, label) {
     return current?.status === 'complete' ? current : null;
   }, { timeoutMs: 10_000, intervalMs: 50, label: label + ' fixture tab load' });
 
-  await options.evaluate(`chrome.scripting.executeScript({ target: { tabId: ${tabId} }, files: ['content.js'] })`);
+  const guardState = await options.evaluate(`({
+    marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
+    api: Boolean(globalThis.WebClipContentInjectionGuard),
+    ensureTopContentScript: typeof globalThis.ensureTopContentScript
+  })`);
+  assert(guardState?.marker && guardState?.api, label + ': production popup content-injection guard missing');
+  assert.strictEqual(guardState?.ensureTopContentScript, 'function', label + ': production popup injector missing');
+
+  await options.evaluate(`ensureTopContentScript(${tabId})`);
+  const generationProbe = await options.evaluate(`(async () => {
+    const rows = await chrome.scripting.executeScript({
+      target: { tabId: ${tabId} },
+      func: () => ({
+        marker: Boolean(globalThis.__webclipApplicationGenerationTrackerV3),
+        api: Boolean(globalThis.WebClipApplicationGeneration),
+        receipt: globalThis.WebClipApplicationGeneration?.receipt?.() || null,
+        sendName: String(chrome.runtime.sendMessage?.name || '')
+      })
+    });
+    return rows[0]?.result || null;
+  })()`);
+  assert(generationProbe?.marker && generationProbe?.api, label + ': application-generation guard missing before selection');
+  assert(Number(generationProbe?.receipt?.generation) > 0, label + ': application-generation receipt missing before selection');
+
   const started = await options.evaluate(
-    `chrome.tabs.sendMessage(${tabId}, { type: 'WEBCLIP_COMMAND', command: 'start' })`
+    `chrome.tabs.sendMessage(${tabId}, { type: 'WEBCLIP_START_SELECTION' })`
   );
   const selected = await options.evaluate(`chrome.scripting.executeScript({
     target: { tabId: ${tabId} },
