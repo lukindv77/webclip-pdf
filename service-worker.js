@@ -7507,6 +7507,8 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
   });
 
   let checkpointWritten = false;
+  let detachedReceiptId = '';
+  let moveAdmitted = false;
   let checkpointTargetPath = String(entry.readMoveTargetPath || '');
   try {
     if (entry.readMovePendingAt || entry.readMoveTargetPath) {
@@ -7536,28 +7538,44 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
         : await chooseAvailableTargetPath(targetFolder, current?.name ? normalizeYandexItemNameFromApi(current.name) : String(entry.filename || 'WebClip.pdf'), operationId);
     checkpointTargetPath = targetPath;
 
-    // Важный recovery checkpoint: локальная запись фиксирует план перемещения ДО
-    // destructive remote action. Если MV3 worker остановится после move, повторный
-    // запуск сможет сначала проверить этот targetPath и завершить локальную часть.
-    const checkpoint = await updateJournalEntryRecord(id, {
+    // P0-072: destructive external authority lives outside the replaceable
+    // Journal generation. The detached receipt is prepared first; Journal
+    // checkpoint mutation is then guarded by that exact receipt in the same DB.
+    const detachedReceipt = await checkpointPendingReadMoveIntent(entry, {
+      sourcePath: normalizedSource,
+      targetPath,
+      sourceResourceId: current?.resource_id ? normalizeYandexResourceIdFromApi(current.resource_id) : String(entry.resourceId || ''),
+      sourcePublicUrl: current?.public_url ? normalizeYandexPublicUrlFromApi(current.public_url) : String(entry.publicUrl || ''),
+      operationId
+    });
+    detachedReceiptId = detachedReceipt.id;
+    const checkpoint = await updateReadMoveJournalCheckpointFromReceipt(detachedReceiptId, {
       readMovePendingAt: Number(entry.readMovePendingAt || 0) || Date.now(),
       readMoveSourcePath: normalizedSource,
       readMoveTargetPath: targetPath,
       readMoveOperationId: operationId,
       readMoveLastError: ''
     });
-    if (!checkpoint) throw new Error('Не удалось сохранить checkpoint переноса перед изменением файла на Яндекс Диске.');
+    if (!checkpoint) {
+      await removePendingDestructiveMove(detachedReceiptId).catch(() => {});
+      detachedReceiptId = '';
+      const error = new Error('Journal reset superseded read-move authority до remote admission.');
+      error.code = 'WEBCLIP_READ_MOVE_SUPERSEDED_BEFORE_ADMISSION';
+      throw error;
+    }
     checkpointWritten = true;
     appendOperationLogEvent(operationId, {
       category: 'checkpoint',
       level: 'info',
       stage: 'move-checkpoint',
-      message: 'Сохранён recovery checkpoint перед перемещением файла на Яндекс Диске.',
-      data: { sourcePath: normalizedSource, targetPath }
+      message: 'Сохранён detached recovery receipt перед перемещением файла на Яндекс Диске.',
+      data: { sourcePath: normalizedSource, targetPath, detachedReceipt: true }
     });
 
     emitJournalOperationProgress(operationId, 'move', alreadyInUploadFolder ? 'Файл уже находится в нужной папке Upload. Повторное перемещение не требуется…' : 'Перемещаем файл из ReadmeLater в Upload…', 58);
     if (!alreadyInUploadFolder) {
+      await markPendingDestructiveMoveAdmitted(detachedReceiptId);
+      moveAdmitted = true;
       await yandexApi('/resources/move', {
         method: 'POST',
         query: { from: sourcePath, path: targetPath, overwrite: 'false', force_async: 'false' },
@@ -7596,13 +7614,19 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
       throw error;
     }
 
-    const updated = await updateJournalEntryRecord(id, {
+    const verifiedPath = moved.path ? normalizeYandexDiskPathFromApi(moved.path) : targetPath;
+    const verifiedResourceId = moved.resource_id ? normalizeYandexResourceIdFromApi(moved.resource_id) : String(entry.resourceId || '');
+    await markPendingDestructiveMoveVerified(detachedReceiptId, {
+      remotePath: verifiedPath,
+      resourceId: verifiedResourceId
+    });
+    const finalized = await finalizeReadMoveJournalFromReceipt(detachedReceiptId, {
       readingMode: 'read',
-      remotePath: moved.path ? normalizeYandexDiskPathFromApi(moved.path) : targetPath,
+      remotePath: verifiedPath,
       folder: targetFolder,
       filename: moved.name ? normalizeYandexItemNameFromApi(moved.name) : String(entry.filename || ''),
       publicUrl: moved.public_url ? normalizeYandexPublicUrlFromApi(moved.public_url) : String(entry.publicUrl || ''),
-      resourceId: moved.resource_id ? normalizeYandexResourceIdFromApi(moved.resource_id) : String(entry.resourceId || ''),
+      resourceId: verifiedResourceId,
       movedToReadAt: Date.now(),
       readMovePendingAt: 0,
       readMoveSourcePath: '',
@@ -7610,28 +7634,45 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
       readMoveOperationId: '',
       readMoveLastError: ''
     });
-    if (!updated) throw new Error('Не удалось обновить запись журнала после перемещения.');
+    if (finalized?.cancelled) {
+      emitJournalOperationProgress(
+        operationId,
+        'complete',
+        'Файл подтверждён в Upload; исходная запись журнала была очищена/заменена и не восстановлена.',
+        100,
+        'partial',
+        { remotePath: verifiedPath, journalSuperseded: true }
+      );
+      return { ok: true, entry: null, remotePath: verifiedPath, operationId, journalSuperseded: true };
+    }
+    const updated = finalized?.entry || null;
+    if (!updated) throw new Error('Не удалось атомарно финализировать запись журнала после перемещения.');
     notifyJournalChanged('mark-read');
     emitJournalOperationProgress(operationId, 'complete', 'Запись переведена в «Прочитано», файл находится в Upload.', 100, 'success', { remotePath: updated.remotePath });
     return { ok: true, entry: updated, remotePath: updated.remotePath, operationId };
   } catch (error) {
-    if (checkpointWritten) {
-      await updateJournalEntryRecord(id, {
-        readMovePendingAt: Number(entry.readMovePendingAt || 0) || Date.now(),
-        readMoveTargetPath: checkpointTargetPath,
-        readMoveOperationId: operationId,
-        readMoveLastError: normalizeError(error).slice(0, 2000)
-      }).catch(() => {});
+    if (checkpointWritten && detachedReceiptId) {
+      if (moveAdmitted) {
+        await markPendingDestructiveMoveFailure(detachedReceiptId, error).catch(() => {});
+        await updateReadMoveJournalCheckpointFromReceipt(detachedReceiptId, {
+          readMovePendingAt: Number(entry.readMovePendingAt || 0) || Date.now(),
+          readMoveTargetPath: checkpointTargetPath,
+          readMoveOperationId: operationId,
+          readMoveLastError: normalizeError(error).slice(0, 2000)
+        }).catch(() => {});
+      } else {
+        await removePendingDestructiveMove(detachedReceiptId).catch(() => {});
+      }
     }
     emitJournalOperationProgress(
       operationId,
       'error',
       checkpointWritten
-        ? `Ошибка: ${normalizeError(error)} Recovery checkpoint сохранён; повтор операции сначала проверит фактическое состояние файла.`
+        ? `Ошибка: ${normalizeError(error)} Detached recovery receipt сохранён после remote admission либо безопасно снят до admission.`
         : `Ошибка: ${normalizeError(error)}`,
       100,
       'error',
-      { recoveryCheckpoint: checkpointWritten, pendingTargetPath: checkpointTargetPath }
+      { recoveryCheckpoint: checkpointWritten, detachedReceipt: Boolean(detachedReceiptId), pendingTargetPath: checkpointTargetPath }
     );
     throw error;
   }
@@ -7657,7 +7698,7 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
     db = await openJournalDb();
     await runIndexedDbTransactionBounded(
       db,
-      [JOURNAL_STORE, JOURNAL_META_STORE, JOURNAL_PENDING_STORE, JOURNAL_PENDING_DOWNLOAD_STORE, JOURNAL_PENDING_REMOTE_STORE],
+      [JOURNAL_STORE, JOURNAL_META_STORE, JOURNAL_PENDING_STORE, JOURNAL_PENDING_DOWNLOAD_STORE, JOURNAL_PENDING_REMOTE_STORE, JOURNAL_PENDING_DESTRUCTIVE_STORE],
       'readwrite',
       `Очистка журнала (${scope})`,
       ({ tx, fail }) => {
@@ -7665,6 +7706,7 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
         const pendingStore = tx.objectStore(JOURNAL_PENDING_STORE);
         const pendingDownloadStore = tx.objectStore(JOURNAL_PENDING_DOWNLOAD_STORE);
         const pendingRemoteStore = tx.objectStore(JOURNAL_PENDING_REMOTE_STORE);
+        const destructiveStore = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
         touchJournalDbRevision(tx, `clear-${scope}`);
         if (!urlKey && !siteKey) {
           store.clear();
@@ -7675,6 +7717,11 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
             fail
           });
           reconcilePendingRemoteStoreForJournalReset(pendingRemoteStore, {
+            scope,
+            resetAt: Date.now(),
+            fail
+          });
+          reconcilePendingDestructiveMoveStoreForJournalReset(destructiveStore, {
             scope,
             resetAt: Date.now(),
             fail
@@ -7728,6 +7775,13 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
           fail
         });
         reconcilePendingRemoteStoreForJournalReset(pendingRemoteStore, {
+          urlKey,
+          siteKey,
+          scope,
+          resetAt: Date.now(),
+          fail
+        });
+        reconcilePendingDestructiveMoveStoreForJournalReset(destructiveStore, {
           urlKey,
           siteKey,
           scope,
@@ -9113,6 +9167,7 @@ async function commitStagedJournalImport(prepared, operationId, expectedJournalR
         JOURNAL_PENDING_STORE,
         JOURNAL_PENDING_DOWNLOAD_STORE,
         JOURNAL_PENDING_REMOTE_STORE,
+        JOURNAL_PENDING_DESTRUCTIVE_STORE,
         JOURNAL_IMPORT_STAGING_STORE
       ], 'readwrite');
       const journalStore = tx.objectStore(JOURNAL_STORE);
@@ -9137,6 +9192,11 @@ async function commitStagedJournalImport(prepared, operationId, expectedJournalR
           fail: abort
         });
         reconcilePendingRemoteStoreForJournalReset(tx.objectStore(JOURNAL_PENDING_REMOTE_STORE), {
+          scope: 'import-replace',
+          resetAt: Date.now(),
+          fail: abort
+        });
+        reconcilePendingDestructiveMoveStoreForJournalReset(tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE), {
           scope: 'import-replace',
           resetAt: Date.now(),
           fail: abort
