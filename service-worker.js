@@ -10056,6 +10056,11 @@ function createPdfRenderNavigationFence(debuggerApi, debuggee, maxBufferedEvents
     if (!frameId) return;
     const event = Object.freeze({ method: String(method || ''), frameId });
     if (!mainFrameId) {
+      // Page.enable may expose a baseline frameNavigated notification for the
+      // already-current frame. A real navigation in this setup window is
+      // represented by frameStartedNavigating (or same-document navigation),
+      // so do not treat an unarmed frameNavigated snapshot as stale evidence.
+      if (method === 'Page.frameNavigated') return;
       if (buffered.length >= limit) {
         stale = true;
         if (!staleMethod) staleMethod = 'WEBCLIP_PDF_NAVIGATION_EVENT_OVERFLOW';
