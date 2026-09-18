@@ -5458,6 +5458,66 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
   return { trigger, pending: phaseCounts.active, stalePending: phaseCounts.stale, recovered, verified, deferred, failed, stale, cancelled, authRequired: !authAvailable };
 }
 
+function pendingLocalDownloadResetDisposition(item = {}) {
+  const kind = String(item.kind || '');
+  const admissionPhase = String(item.downloadAdmissionPhase || '');
+  if (kind === PENDING_LOCAL_UNKNOWN_KIND) return 'preserve';
+  if (kind === 'download') return 'preserve';
+  if (kind === 'intent' && admissionPhase === 'admitted-unknown') return 'preserve';
+  if (kind === 'intent' && !admissionPhase) {
+    // Upgrade safety: older builds could call chrome.downloads.download while
+    // the only durable row still looked like an unbound intent. Preserve that
+    // ambiguity instead of treating Journal reset as Chrome cancellation.
+    return 'preserve';
+  }
+  return 'drop';
+}
+
+function pendingLocalDownloadMatchesJournalResetScope(item = {}, { urlKey = '', siteKey = '' } = {}) {
+  if (!urlKey && !siteKey) return true;
+  const meta = item?.data?.meta || {};
+  const pendingUrlKey = normalizeJournalUrl(meta.url || '');
+  const pendingSiteKey = getJournalSiteKey(meta.url || meta.hostname || '');
+  return Boolean(
+    (urlKey && pendingUrlKey === urlKey) ||
+    (siteKey && pendingSiteKey === siteKey)
+  );
+}
+
+function markPendingLocalDownloadSupersededByJournalReset(item = {}, { scope = 'all', resetAt = Date.now() } = {}) {
+  return {
+    ...item,
+    supersededByJournalReset: true,
+    journalResetAt: Math.max(0, Number(resetAt) || Date.now()),
+    journalResetScope: String(scope || 'all').slice(0, 24),
+    updatedAt: Math.max(0, Number(resetAt) || Date.now())
+  };
+}
+
+function reconcilePendingLocalDownloadStoreForJournalReset(
+  pendingDownloadStore,
+  { urlKey = '', siteKey = '', scope = 'all', resetAt = Date.now(), fail = () => {} } = {}
+) {
+  const request = pendingDownloadStore.openCursor();
+  request.onsuccess = () => {
+    try {
+      const cursor = request.result;
+      if (!cursor) return;
+      const item = cursor.value || {};
+      if (pendingLocalDownloadMatchesJournalResetScope(item, { urlKey, siteKey })) {
+        if (pendingLocalDownloadResetDisposition(item) === 'preserve') {
+          cursor.update(markPendingLocalDownloadSupersededByJournalReset(item, { scope, resetAt }));
+        } else {
+          cursor.delete();
+        }
+      }
+      cursor.continue();
+    } catch (error) { fail(error); }
+  };
+  request.onerror = () => fail(request.error || new Error('Не удалось reconcile pending local-download checkpoints при сбросе журнала.'));
+  return request;
+}
+
 function normalizePendingLocalDownloadKey(value) {
   if (typeof value === 'string' && value.startsWith('intent:') && value.length <= 220) return value;
   const id = Number(value);
@@ -5479,7 +5539,17 @@ async function checkpointPendingLocalDownloadIntent(data, operationId = '', blob
   const key = makePendingLocalDownloadIntentKey(operationId);
   const prepared = normalizePendingJournalAppendData({ ...data, operationId: String(operationId || data?.operationId || '').slice(0, MAX_OPERATION_ID_CHARS) });
   const now = Date.now();
-  const item = { downloadId: key, kind: 'intent', blobUrl: String(blobUrl || '').slice(0, 4096), createdAt: now, updatedAt: now, operationId: String(operationId || '').slice(0, 180), expectedBytes: Math.max(0, Math.floor(Number(expectedBytes) || 0)), data: prepared };
+  const item = {
+    downloadId: key,
+    kind: 'intent',
+    downloadAdmissionPhase: 'prepared',
+    blobUrl: String(blobUrl || '').slice(0, 4096),
+    createdAt: now,
+    updatedAt: now,
+    operationId: String(operationId || '').slice(0, 180),
+    expectedBytes: Math.max(0, Math.floor(Number(expectedBytes) || 0)),
+    data: prepared
+  };
   const db = await openJournalDb();
   try {
     await runIndexedDbTransactionBounded(db, JOURNAL_PENDING_DOWNLOAD_STORE, 'readwrite', 'Сохранение intent локальной загрузки', ({ store, fail }) => {
@@ -5507,6 +5577,60 @@ async function checkpointPendingLocalDownloadIntent(data, operationId = '', blob
   return key;
 }
 
+async function markPendingLocalDownloadAdmitted(intentKey) {
+  const key = normalizePendingLocalDownloadKey(intentKey);
+  if (typeof key !== 'string') throw new Error('Некорректный durable intent локальной загрузки.');
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DOWNLOAD_STORE,
+      'readwrite',
+      'Фиксация admission локальной загрузки Chrome',
+      ({ store, setResult, fail }) => {
+        const pending = store();
+        const request = pending.get(key);
+        request.onsuccess = () => {
+          try {
+            const current = request.result;
+            if (!current || String(current.kind || '') !== 'intent') {
+              const error = new Error('Durable intent локальной загрузки исчез до admission Chrome.');
+              error.code = 'WEBCLIP_DOWNLOAD_INTENT_MISSING_BEFORE_ADMISSION';
+              fail(error);
+              return;
+            }
+            if (current.supersededByJournalReset === true) {
+              const error = new Error('Durable intent локальной загрузки уже superseded сбросом журнала.');
+              error.code = 'WEBCLIP_DOWNLOAD_INTENT_SUPERSEDED_BEFORE_ADMISSION';
+              fail(error);
+              return;
+            }
+            if (String(current.downloadAdmissionPhase || '') === 'admitted-unknown') {
+              setResult(current);
+              return;
+            }
+            if (String(current.downloadAdmissionPhase || '') !== 'prepared') {
+              const error = new Error('Durable intent локальной загрузки имеет неизвестную admission phase.');
+              error.code = 'WEBCLIP_DOWNLOAD_INTENT_ADMISSION_INVALID';
+              fail(error);
+              return;
+            }
+            const admitted = {
+              ...current,
+              downloadAdmissionPhase: 'admitted-unknown',
+              updatedAt: Date.now()
+            };
+            pending.put(admitted);
+            setResult(admitted);
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать durable intent перед admission Chrome.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
 async function bindPendingLocalDownloadIntent(intentKey, downloadId) {
   const key = normalizePendingLocalDownloadKey(intentKey); const id = Number(downloadId);
   if (typeof key !== 'string' || !Number.isInteger(id) || id < 0) throw new Error('Некорректная привязка локальной загрузки Chrome.');
@@ -5525,8 +5649,18 @@ async function bindPendingLocalDownloadIntent(intentKey, downloadId) {
               if (existing) {
                 const sameOperation = String(existing.operationId || '') && String(existing.operationId || '') === String(intent.operationId || '');
                 if (sameOperation) {
+                  const rebound = intent.supersededByJournalReset === true
+                    ? {
+                      ...existing,
+                      supersededByJournalReset: true,
+                      journalResetAt: Math.max(0, Number(intent.journalResetAt) || 0),
+                      journalResetScope: String(intent.journalResetScope || '').slice(0, 24),
+                      updatedAt: Date.now()
+                    }
+                    : existing;
+                  if (rebound !== existing) pending.put(rebound);
                   pending.delete(key);
-                  setResult(existing);
+                  setResult(rebound);
                   return;
                 }
                 const error = new Error(`DownloadItem #${id} уже принадлежит другому durable intent WebClip.`);
@@ -5636,6 +5770,13 @@ async function startAutomaticBlobDownloadBounded({ intentKey, blobUrl, filename,
     throw error;
   }
 
+  try {
+    await markPendingLocalDownloadAdmitted(key);
+  } catch (error) {
+    await revokeBlobUrl(sourceUrl).catch(() => {});
+    throw error;
+  }
+
   let timedOut = false;
   let rawStart;
   try {
@@ -5739,11 +5880,12 @@ async function finalizePendingLocalDownload(downloadId, state = '', downloadErro
       label: 'checkpoint локальной загрузки'
     });
     const journalWarning = String(journalAppend?.warning || '');
-    // Keep pendingDownloads whenever append fails. If clear/import removed the
-    // checkpoint concurrently, appendJournalEntry returns cancelled and no
-    // stale journal metadata is resurrected.
+    // Keep pendingDownloads on ordinary append failure. A reset-superseded
+    // checkpoint remains only reconciliation authority; once Chrome reports
+    // complete, the physical outcome is terminal and the checkpoint can be
+    // retired without resurrecting old Journal metadata.
     if (journalAppend?.cancelled) {
-      // Intentional concurrent journal reset; nothing to remove.
+      await removePendingLocalDownload(downloadId);
     } else if (!journalWarning) {
       await removePendingLocalDownload(downloadId);
     }
@@ -5752,7 +5894,7 @@ async function finalizePendingLocalDownload(downloadId, state = '', downloadErro
     if (tabId > 0) await updateActionForTab(tabId).catch(() => {});
     recordOperationStage(operationId, 'complete', journalWarning
       ? (journalAppend?.cancelled
-        ? 'Локальный PDF скачан, но запись журнала не добавлена: параллельная очистка/замена журнала отменила durable checkpoint.'
+        ? 'Локальный PDF скачан, но запись журнала не добавлена: durable checkpoint был superseded параллельной очисткой/заменой журнала.'
         : (journalAppend?.recoveryGuaranteed
           ? 'Локальный PDF скачан, но запись журнала ожидает автоматического восстановления.'
           : 'Локальный PDF скачан; метаданные журнала не удалось сохранить.'))
@@ -7167,7 +7309,11 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
         if (!urlKey && !siteKey) {
           store.clear();
           pendingStore.clear();
-          pendingDownloadStore.clear();
+          reconcilePendingLocalDownloadStoreForJournalReset(pendingDownloadStore, {
+            scope,
+            resetAt: Date.now(),
+            fail
+          });
           reconcilePendingRemoteStoreForJournalReset(pendingRemoteStore, {
             scope,
             resetAt: Date.now(),
@@ -7214,7 +7360,13 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
           handleCursorError(request, `Не удалось очистить ${label}.`);
         };
         prunePending(pendingStore, 'pending journal checkpoints');
-        prunePending(pendingDownloadStore, 'pending local-download checkpoints');
+        reconcilePendingLocalDownloadStoreForJournalReset(pendingDownloadStore, {
+          urlKey,
+          siteKey,
+          scope,
+          resetAt: Date.now(),
+          fail
+        });
         reconcilePendingRemoteStoreForJournalReset(pendingRemoteStore, {
           urlKey,
           siteKey,
@@ -8619,7 +8771,11 @@ async function commitStagedJournalImport(prepared, operationId, expectedJournalR
       };
       const beginReplace = () => {
         tx.objectStore(JOURNAL_PENDING_STORE).clear();
-        tx.objectStore(JOURNAL_PENDING_DOWNLOAD_STORE).clear();
+        reconcilePendingLocalDownloadStoreForJournalReset(tx.objectStore(JOURNAL_PENDING_DOWNLOAD_STORE), {
+          scope: 'import-replace',
+          resetAt: Date.now(),
+          fail: abort
+        });
         reconcilePendingRemoteStoreForJournalReset(tx.objectStore(JOURNAL_PENDING_REMOTE_STORE), {
           scope: 'import-replace',
           resetAt: Date.now(),

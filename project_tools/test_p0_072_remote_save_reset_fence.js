@@ -155,7 +155,7 @@ ok(clearSection.includes('reconcilePendingRemoteStoreForJournalReset(pendingRemo
 ok(!clearSection.includes('pendingRemoteStore.clear()'), 'clear(all) no longer blind-clears remote checkpoints');
 ok(!clearSection.includes("prunePending(pendingRemoteStore, 'pending Yandex checkpoints')"), 'scoped clear no longer blind-prunes matching remote checkpoints');
 ok(clearSection.includes('urlKey,\n          siteKey,\n          scope'), 'scoped clear forwards exact reset scope to remote fence');
-ok(clearSection.includes('pendingDownloadStore.clear()'), 'local-download reset semantics remain separate and unchanged in this tranche');
+ok(clearSection.includes('reconcilePendingLocalDownloadStoreForJournalReset(pendingDownloadStore'), 'remote reset fence composes with the later local-download reset fence');
 
 const importSection = section(
   worker,
@@ -165,7 +165,7 @@ const importSection = section(
 ok(importSection.includes('reconcilePendingRemoteStoreForJournalReset(tx.objectStore(JOURNAL_PENDING_REMOTE_STORE)'), 'import replace routes remote checkpoints through reset fence');
 ok(!importSection.includes('tx.objectStore(JOURNAL_PENDING_REMOTE_STORE).clear()'), 'import replace no longer blind-clears remote checkpoints');
 ok(importSection.includes("scope: 'import-replace'"), 'import reset provenance is explicit');
-ok(importSection.includes('tx.objectStore(JOURNAL_PENDING_DOWNLOAD_STORE).clear()'), 'local-download import semantics remain a separate P0-072 tranche');
+ok(importSection.includes('reconcilePendingLocalDownloadStoreForJournalReset(tx.objectStore(JOURNAL_PENDING_DOWNLOAD_STORE)'), 'import composes remote and local reset fences in one Journal transaction');
 
 const appendSection = section(
   worker,
