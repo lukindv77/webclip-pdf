@@ -34,6 +34,10 @@ async function testLateDebuggerAttachIsReconciled() {
   let firstAttempt = true;
   const chrome = {
     debugger: {
+      onEvent: {
+        addListener() {},
+        removeListener() {}
+      },
       attach() {
         attachCount += 1;
         if (firstAttempt) {
@@ -51,6 +55,9 @@ async function testLateDebuggerAttachIsReconciled() {
         return Promise.resolve();
       },
       sendCommand(_debuggee, method) {
+        if (method === 'Page.getFrameTree') {
+          return Promise.resolve({ frameTree: { frame: { id: 'main-77', loaderId: 'loader-77' } } });
+        }
         if (method === 'Page.printToPDF') return Promise.resolve({ stream: 'pdf-stream' });
         if (method === 'IO.read') return Promise.resolve({ data: 'YQ==', base64Encoded: true, eof: true });
         if (method === 'IO.close') { events.push('io-close'); return Promise.resolve({}); }
