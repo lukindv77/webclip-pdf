@@ -5019,6 +5019,43 @@ function normalizePendingRemotePdfCacheReceipt(value = {}) {
   return Object.freeze({ pdfCacheKey, pdfCacheGeneration, expectedPdfBytes });
 }
 
+function pendingRemotePdfCacheRetentionIdentity(item = {}) {
+  const phase = String(item.phase || '');
+  const receipt = normalizePendingRemotePdfCacheReceipt(item);
+  if (phase === 'admitted-unknown') {
+    if (receipt) {
+      return Object.freeze({
+        exactIdentity: `${receipt.pdfCacheKey}\u0000${receipt.pdfCacheGeneration}`,
+        legacyJournalEntryId: ''
+      });
+    }
+    const journalEntryId = String(item.id || item.data?.journalEntryId || '').trim();
+    return journalEntryId
+      ? Object.freeze({ exactIdentity: '', legacyJournalEntryId: journalEntryId })
+      : null;
+  }
+  if (phase === 'prepared' && !receipt) {
+    // Older builds did not persist an admission phase or exact local-cache
+    // receipt. Treat a legacy active row as ambiguous until recovery resolves
+    // it; new exact "prepared" rows remain disposable before admission.
+    const journalEntryId = String(item.id || item.data?.journalEntryId || '').trim();
+    return journalEntryId
+      ? Object.freeze({ exactIdentity: '', legacyJournalEntryId: journalEntryId })
+      : null;
+  }
+  return null;
+}
+
+function pdfCacheGenerationMatchesRemoteRetention(record = {}, snapshot = {}) {
+  if (!isExactSealedPdfCacheIdentity(record)) return false;
+  const exactIdentity = `${String(record.key || '')}\u0000${String(record.cacheGeneration || '')}`;
+  const journalEntryId = String(record.journalEntryId || '');
+  return Boolean(
+    (snapshot.exactIdentities || []).includes(exactIdentity) ||
+    (journalEntryId && (snapshot.legacyJournalEntryIds || []).includes(journalEntryId))
+  );
+}
+
 async function getPendingRemotePdfCacheRetentionSnapshot() {
   const db = await openJournalDb(RECOVERY_IDB_TX_TIMEOUT_MS);
   try {
@@ -5038,24 +5075,9 @@ async function getPendingRemotePdfCacheRetentionSnapshot() {
               setResult({ exactIdentities, legacyJournalEntryIds });
               return;
             }
-            const item = cursor.value || {};
-            const phase = String(item.phase || '');
-            const receipt = normalizePendingRemotePdfCacheReceipt(item);
-            if (phase === 'admitted-unknown') {
-              if (receipt) {
-                exactIdentities.push(`${receipt.pdfCacheKey}\u0000${receipt.pdfCacheGeneration}`);
-              } else {
-                const journalEntryId = String(item.id || item.data?.journalEntryId || '').trim();
-                if (journalEntryId) legacyJournalEntryIds.push(journalEntryId);
-              }
-            } else if (phase === 'prepared' && !receipt) {
-              // Upgrade safety: older builds persisted an upload checkpoint as
-              // "prepared" even after the signed transfer had started. Until
-              // recovery resolves that legacy row, preserve the matching
-              // journalEntryId generation rather than infer cancellation.
-              const journalEntryId = String(item.id || item.data?.journalEntryId || '').trim();
-              if (journalEntryId) legacyJournalEntryIds.push(journalEntryId);
-            }
+            const retention = pendingRemotePdfCacheRetentionIdentity(cursor.value || {});
+            if (retention?.exactIdentity) exactIdentities.push(retention.exactIdentity);
+            if (retention?.legacyJournalEntryId) legacyJournalEntryIds.push(retention.legacyJournalEntryId);
             cursor.continue();
           } catch (error) { fail(error); }
         };
@@ -10387,8 +10409,6 @@ async function cleanupExpiredPdfCache() {
   // ensureStorageBudget may reject new work rather than erase reconciliation
   // bytes whose external outcome is still unknown.
   const retentionSnapshot = await getPendingRemotePdfCacheRetentionSnapshot();
-  const protectedExactIdentities = new Set(retentionSnapshot.exactIdentities || []);
-  const protectedLegacyJournalEntryIds = new Set(retentionSnapshot.legacyJournalEntryIds || []);
   const db = await openPdfCacheDb();
   let deleted = 0;
   try {
@@ -10407,11 +10427,7 @@ async function cleanupExpiredPdfCache() {
           if (!cursor) return;
           const stale = cursor.value || {};
           const staleKey = String(cursor.primaryKey || '');
-          const exactIdentity = `${staleKey}\u0000${String(stale.cacheGeneration || '')}`;
-          const protectedByRemoteCheckpoint = isExactSealedPdfCacheIdentity(stale) && (
-            protectedExactIdentities.has(exactIdentity) ||
-            protectedLegacyJournalEntryIds.has(String(stale.journalEntryId || ''))
-          );
+          const protectedByRemoteCheckpoint = pdfCacheGenerationMatchesRemoteRetention(stale, retentionSnapshot);
           if (Number(stale.createdAt || 0) < cutoff && !protectedByRemoteCheckpoint) {
             pdfStore.delete(cursor.primaryKey);
             cursor.delete();
