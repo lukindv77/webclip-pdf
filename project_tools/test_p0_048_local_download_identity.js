@@ -98,7 +98,7 @@ function boundReceipt(id, blobUrl = 'blob:chrome-extension://webclip-id/exact-bo
   assert.equal(result.mode, 'ambiguous-exact');
 }
 
-// P0-072 restart recovery controls for the P0-048 exact local-download identity authority.
+// P0-072 restart recovery controls for the P0-048 identity authority; P1-231 binds the resulting runtime bytes.
 {
   const receipt = boundReceipt(21, '');
   const result = guard.chooseUniqueBoundDownloadForReceipt({
