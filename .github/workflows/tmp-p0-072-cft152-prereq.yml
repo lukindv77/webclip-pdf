@@ -25,15 +25,18 @@ jobs:
           ref: e6cb567b44eeff28a89fc90cc82294bf064bad23
           fetch-depth: 0
 
-      - name: Overlay research-only headed launcher
+      - name: Overlay research-only physical harness diagnostics
         shell: bash
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$WEBCLIP_CANONICAL_SHA"
           git cat-file -e "$GITHUB_SHA^{commit}"
-          git show "$GITHUB_SHA:project_tools/browser_p1_007_unpacked_integration.js"             > project_tools/browser_p1_007_unpacked_integration.js
-          test "$(git diff --name-only)" = "project_tools/browser_p1_007_unpacked_integration.js"
+          for path in             project_tools/browser_p1_007_unpacked_integration.js             project_tools/research_p0_072_real_chrome_reset_restart.js
+          do
+            git show "$GITHUB_SHA:$path" > "$path"
+          done
+          test "$(git diff --name-only)" = "$(printf '%s\n'             project_tools/browser_p1_007_unpacked_integration.js             project_tools/research_p0_072_real_chrome_reset_restart.js)"
           node project_tools/test_p0_072_real_chrome_reset_restart_harness.js
 
       - name: Install historically proven pinned Chrome for Testing
