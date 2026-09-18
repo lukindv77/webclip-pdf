@@ -106,28 +106,18 @@ Run `35342277067`, job `105590684074`:
 
 This is the strongest blocker evidence: the current hosted runner cannot pass the repository's existing generic real-Chrome extension integration control, so it is not a valid environment from which to claim P0-072 reset/restart physical evidence.
 
-## Final workflow contract
+## Workflow / repository-hygiene result
 
-The durable workflow is intentionally manual-only:
+The exploratory branch used a temporary GitHub Actions workflow only to probe whether the hosted runner could supply the required physical environment. That workflow is **not** part of the merge candidate.
 
-`.github/workflows/p0-072-physical-chrome-evidence.yml`
+Repository Integrity run `35342695323` proved the canonical hygiene rule: only the approved permanent workflows `repository-integrity.yml` and `release-gate.yml` may remain in the mergeable tree. A third physical-evidence workflow is rejected as temporary/unapproved infrastructure. The temporary P0-072 workflow was therefore removed before merge review; Repository Integrity run `35342792966` subsequently passed repository growth hygiene.
 
-It uses `workflow_dispatch` and requires both:
+This means future P0-072 physical execution must use one of the existing authorized protocol paths without adding a permanent workflow merely for evidence collection:
 
-- an exact `canonical_sha`;
-- the explicit authorization token `P0-072-LOCAL-DOWNLOAD-ONLY`.
+- execute `project_tools/research_p0_072_real_chrome_reset_restart.js` in an authorized local/self-hosted environment against one exact canonical `main` SHA; or
+- use a transient research-only execution mechanism that is fully removed before any merge candidate is reviewed.
 
-The job additionally requires:
-
-- dispatch from `refs/heads/main`;
-- `inputs.canonical_sha == github.sha`;
-- exact checkout HEAD equal to both values;
-- a clean checkout;
-- deterministic P0-072 harness contract PASS;
-- a real Chrome/Chromium binary;
-- the existing P1-007 real-Chrome prerequisite control to PASS before the P0-072 physical harness runs.
-
-The workflow has only `contents: read` permission and contains no package, release, tag, deploy or Yandex-destructive step.
+In either case, the evidence run must first pass the unchanged existing P1-007 real-Chrome integration prerequisite, then the deterministic P0-072 harness contract, and only then the P0-072 physical reset/restart harness. No permanent workflow, package, release, tag, deploy or Yandex-destructive path is introduced by this tranche.
 
 ## Required next evidence
 
