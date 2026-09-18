@@ -4164,6 +4164,10 @@ async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, 
   let remoteCheckpoint = null;
   const ensureRemoteCheckpoint = async () => {
     if (remoteCheckpoint) return remoteCheckpoint;
+    // This helper is reached only after either an upload URL was issued or
+    // an existing remote file was observed. Persist admitted-unknown directly:
+    // a separate prepared -> admitted write would leave a cross-DB race where
+    // PDF TTL cleanup could consume a stale pre-admission snapshot.
     remoteCheckpoint = await checkpointPendingRemoteSaveIntent({
       destination: 'yandex', filename, remotePath, folder: targetFolder, publicUrl: '', resourceId: '', accountUid, rootPath,
       journalEntryId: remoteJournalEntryId,
@@ -4201,7 +4205,6 @@ async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, 
     const uploadLink = await yandexApi('/resources/upload', { method: 'GET', query: { path: remotePath, overwrite: 'false' }, operationId });
     if (!uploadLink?.href) throw new Error('Яндекс Диск не вернул адрес для загрузки файла.');
     await ensureRemoteCheckpoint();
-    remoteCheckpoint = await markPendingRemoteSaveAdmitted(remoteCheckpoint.id);
     emitPageUploadProgress(tabId, operationId, 'upload', 'Передаём PDF на сервер загрузки Яндекс Диска…', 78, 'running', { remotePath });
     let uploadResponse;
     try {
@@ -4223,11 +4226,6 @@ async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, 
   // For a reused file no upload was necessary, but journal metadata must still
   // have a durable checkpoint before public-link/verification/final append.
   await ensureRemoteCheckpoint();
-  if (existingFileReused) {
-    // The external file already exists, so a crash before final verification
-    // must not downgrade the durable state to "prepared".
-    remoteCheckpoint = await markPendingRemoteSaveAdmitted(remoteCheckpoint.id);
-  }
 
   let publicUrl = '';
   if (config.createPublicLinks) {
@@ -5099,7 +5097,7 @@ async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, c
   const now = Date.now();
   const item = {
     id: prepared.journalEntryId,
-    phase: 'prepared',
+    phase: 'admitted-unknown',
     createdAt: now,
     updatedAt: now,
     attemptCount: 0,
@@ -5128,48 +5126,6 @@ async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, c
     }, RECOVERY_IDB_TX_TIMEOUT_MS);
   } finally { db.close(); }
   return item;
-}
-
-async function markPendingRemoteSaveAdmitted(id) {
-  const key = String(id || '').trim();
-  if (!key) throw new Error('Некорректный checkpoint удалённого сохранения.');
-  const db = await openJournalDb();
-  try {
-    return await runIndexedDbTransactionBounded(
-      db,
-      JOURNAL_PENDING_REMOTE_STORE,
-      'readwrite',
-      'Фиксация admission удалённого PDF эффекта',
-      ({ store, setResult, fail }) => {
-        const pending = store();
-        const req = pending.get(key);
-        req.onsuccess = () => {
-          try {
-            const current = req.result;
-            if (!current?.data) {
-              fail(new Error('Durable checkpoint удалённого сохранения не найден перед admission.'));
-              return;
-            }
-            if (String(current.phase || '') === 'remote-verified') {
-              setResult(current);
-              return;
-            }
-            if (!normalizePendingRemotePdfCacheReceipt(current)) {
-              const error = new Error('Durable checkpoint не содержит exact PDF cache receipt перед admission.');
-              error.code = 'WEBCLIP_REMOTE_PDF_CACHE_RECEIPT_REQUIRED';
-              fail(error);
-              return;
-            }
-            const result = { ...current, phase: 'admitted-unknown', updatedAt: Date.now(), lastError: '' };
-            pending.put(result);
-            setResult(result);
-          } catch (error) { fail(error); }
-        };
-        req.onerror = () => fail(req.error || new Error('Не удалось прочитать checkpoint удалённого сохранения перед admission.'));
-      },
-      RECOVERY_IDB_TX_TIMEOUT_MS
-    );
-  } finally { db.close(); }
 }
 
 async function markPendingRemoteSaveVerified(id, { publicUrl = '', resourceId = '' } = {}) {
