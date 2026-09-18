@@ -65,6 +65,7 @@ function functionSource(source, name) {
 
 ok(worker.includes('const MAX_PENDING_DESTRUCTIVE_MOVES = 100;'), 'manual/restart destructive ledger remains cardinality bounded');
 ok(worker.includes('const PENDING_DESTRUCTIVE_RECONCILE_BATCH = 12;'), 'one maintenance wake processes a bounded destructive batch');
+ok(worker.includes('const activeDestructiveMoveReceipts = new Set();'), 'same-worker live destructive operations have an in-memory maintenance fence');
 
 const dispositionSource = functionSource(worker, 'pendingDestructiveMoveRecoveryDisposition');
 const context = vm.createContext({ String });
@@ -84,9 +85,17 @@ ok(manual.includes('manualResolutionAt'), 'manual state has durable timestamp');
 ok(manual.includes('manualResolutionTrigger'), 'manual state records restart/maintenance trigger');
 ok(manual.includes('lastError:'), 'manual state retains diagnostic reason');
 
+const remoteCreator = functionSource(worker, 'checkpointPendingRemoteSaveIntent');
+const readCreator = functionSource(worker, 'checkpointPendingReadMoveIntent');
+const trashCreator = functionSource(worker, 'checkpointPendingTrashMoveIntent');
+ok(!remoteCreator.includes('activeDestructiveMoveReceipts.add'), 'live destructive fence is not accidentally attached to remote-save checkpoints');
+ok(readCreator.includes('activeDestructiveMoveReceipts.add(item.id)'), 'ReadLater receipt becomes same-worker active only after durable creation commits');
+ok(trashCreator.includes('activeDestructiveMoveReceipts.add(item.id)'), 'Trash receipt becomes same-worker active only after durable creation commits');
+
 const list = functionSource(worker, 'listPendingDestructiveMovesForRecovery');
 ok(list.includes("store().index('updatedAt').openCursor(null, 'next')"), 'restart recovery processes oldest receipts first');
 ok(list.includes('out.length >= cap'), 'restart recovery respects batch cap');
+ok(list.includes("activeDestructiveMoveReceipts.has(String(item.id || ''))"), 'maintenance skips receipts still owned by a live operation in this worker');
 ok(list.includes("item.phase === 'manual-resolution' || item.manualResolutionRequired === true"), 'already-manual rows do not starve active work');
 ok(list.includes('cursor.continue()'), 'manual rows are skipped without deletion');
 
@@ -103,6 +112,11 @@ ok(verified.includes('verifiedFilename'), 'terminal ReadLater metadata survives 
 ok(verified.includes('verifiedFolder'), 'terminal ReadLater folder survives worker death');
 ok(verified.includes('verifiedPublicUrl'), 'terminal ReadLater public metadata survives worker death');
 ok(verified.includes('manualResolutionRequired: false'), 'fresh terminal receipt clears manual flag');
+
+const readFinalize = functionSource(worker, 'finalizeReadMoveJournalFromReceipt');
+const trashFinalize = functionSource(worker, 'finalizeTrashDeleteFromReceipt');
+ok(readFinalize.includes('activeDestructiveMoveReceipts.delete(key)'), 'ReadLater terminal local finalize releases same-worker ownership');
+ok(trashFinalize.includes('activeDestructiveMoveReceipts.delete(key)'), 'Trash terminal local finalize releases same-worker ownership');
 
 const reconcile = functionSource(worker, 'reconcilePendingDestructiveMoves');
 ok(reconcile.includes('listPendingDestructiveMovesForRecovery(maxItems)'), 'reconcile uses bounded durable queue');
@@ -130,10 +144,12 @@ const readMove = functionSource(worker, 'moveReadLaterEntryToRead');
 ok(readMove.includes('filename: moved.name ? normalizeYandexItemNameFromApi(moved.name)'), 'live ReadLater verification persists terminal filename');
 ok(readMove.includes('folder: targetFolder'), 'live ReadLater verification persists terminal folder');
 ok(readMove.includes('publicUrl: moved.public_url ? normalizeYandexPublicUrlFromApi(moved.public_url)'), 'live ReadLater verification persists terminal public URL');
+ok(readMove.includes('activeDestructiveMoveReceipts.delete(detachedReceiptId)'), 'ReadLater admitted error releases live ownership while preserving durable receipt');
 
 const trashMove = functionSource(worker, 'moveJournalYandexFileToTrash');
 ok(trashMove.includes('filename: moved?.name ? normalizeYandexItemNameFromApi(moved.name) : currentName'), 'live Trash verification persists terminal filename metadata');
 ok(trashMove.includes('folder: monthFolder'), 'live Trash verification persists terminal folder metadata');
+ok(trashMove.includes('activeDestructiveMoveReceipts.delete(detachedReceiptId)'), 'Trash admitted error releases live ownership while preserving durable receipt');
 
 const maintenance = functionSource(worker, 'runLoggedOperationLogCleanup');
 ok(maintenance.includes("runStage('destructive-move-recovery', () => reconcilePendingDestructiveMoves(trigger)"), 'hourly/startup maintenance owns restart reconciliation');
