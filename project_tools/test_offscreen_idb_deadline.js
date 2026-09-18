@@ -47,7 +47,7 @@ async function main() {
   }
 
   for (const expected of [
-    "getPdfCacheRecord(String(spec.pdfCacheKey || ''), deadlineAt)",
+    "Number(spec.expectedPdfBytes || 0),\n        deadlineAt\n      )",
     "getTransferPayload(String(spec.payloadKey || ''), deadlineAt)",
     "getTransferChunkedBlob(String(spec.payloadKey || ''), fetchOptions.headers['Content-Type'], deadlineAt)",
     "stageResponseBodyAsJournalImport(response, payloadKey, maxBytes, deadlineAt)"
