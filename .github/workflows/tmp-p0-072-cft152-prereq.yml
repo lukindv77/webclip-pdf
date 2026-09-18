@@ -32,11 +32,17 @@ jobs:
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$WEBCLIP_CANONICAL_SHA"
           git cat-file -e "$GITHUB_SHA^{commit}"
-          for path in             project_tools/browser_p1_007_unpacked_integration.js             project_tools/research_p0_072_real_chrome_reset_restart.js
+          for path in \
+            project_tools/browser_p1_007_unpacked_integration.js \
+            project_tools/research_p0_072_real_chrome_reset_restart.js \
+            project_tools/test_p0_072_real_chrome_reset_restart_harness.js
           do
             git show "$GITHUB_SHA:$path" > "$path"
           done
-          test "$(git diff --name-only)" = "$(printf '%s\n'             project_tools/browser_p1_007_unpacked_integration.js             project_tools/research_p0_072_real_chrome_reset_restart.js)"
+          test "$(git diff --name-only)" = "$(printf '%s\n' \
+            project_tools/browser_p1_007_unpacked_integration.js \
+            project_tools/research_p0_072_real_chrome_reset_restart.js \
+            project_tools/test_p0_072_real_chrome_reset_restart_harness.js)"
           node project_tools/test_p0_072_real_chrome_reset_restart_harness.js
 
       - name: Install historically proven pinned Chrome for Testing
