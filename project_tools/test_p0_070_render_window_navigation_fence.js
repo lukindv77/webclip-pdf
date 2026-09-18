@@ -143,6 +143,17 @@ check('committed main navigation is stale', () => {
   fence.dispose();
 });
 
+check('unarmed baseline frameNavigated snapshot is not navigation evidence', () => {
+  const onEvent = makeEventApi();
+  const fence = createFence({ onEvent }, { tabId: 141 });
+  fence.install();
+  onEvent.emit({ tabId: 141 }, 'Page.frameNavigated', { frame: { id: 'main-A', url: 'https://example.test/a' } });
+  assert.equal(fence.snapshot().bufferedEvents, 0);
+  fence.arm('main-A');
+  assert.equal(fence.assertClean(), true);
+  fence.dispose();
+});
+
 check('event buffered before main-frame arm is replayed', () => {
   const onEvent = makeEventApi();
   const fence = createFence({ onEvent }, { tabId: 14 });
