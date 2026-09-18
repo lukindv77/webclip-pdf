@@ -235,15 +235,15 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
   assert(start?.command?.ok, label + ': download command failed');
   assert(start?.clicked?.ok, label + ': PDF proceed button missing: ' + String(start?.clicked?.reason || ''));
 
-  const created = await waitFor(async () => {
-    const evidence = await options.evaluate('globalThis.__p0072ChromeDownloadEvidence');
-    const rows = Array.isArray(evidence?.created) ? evidence.created : [];
-    const createdRow = rows.find((item) => !previousIds.has(Number(item.id))) || null;
-    if (createdRow) return createdRow;
-    const pauseErrors = Array.isArray(evidence?.pauseErrors) ? evidence.pauseErrors : [];
-    if (pauseErrors.length) {
-      throw new Error(label + ': chrome.downloads.pause failed before evidence capture: ' + JSON.stringify(pauseErrors.slice(-3)));
-    }
+  let created = null;
+  try {
+    created = await waitFor(async () => {
+      const evidence = await options.evaluate('globalThis.__p0072ChromeDownloadEvidence');
+      const rows = Array.isArray(evidence?.created) ? evidence.created : [];
+      return rows.find((item) => !previousIds.has(Number(item.id))) || null;
+    }, { timeoutMs: 70_000, intervalMs: 100, label: label + ' download onCreated+pause' });
+  } catch (error) {
+    const evidence = await options.evaluate('globalThis.__p0072ChromeDownloadEvidence').catch(() => null);
     const ui = await options.evaluate(`(async () => {
       const result = await chrome.scripting.executeScript({
         target: { tabId: ${Number(tabId)} },
@@ -256,15 +256,14 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
         }
       });
       return result[0]?.result || null;
-    })()`);
-    if (/Не удалось сформировать PDF/.test(ui?.title || '')) {
-      throw new Error(label + ': production PDF UI failed before DownloadItem creation: ' + ui.title + ': ' + String(ui.text || ''));
-    }
-    if (/PDF передан в загрузки|PDF скачан/.test(ui?.title || '')) {
-      throw new Error(label + ': production UI reached download completion but chrome.downloads.onCreated was not observed');
-    }
-    return null;
-  }, { timeoutMs: 70_000, intervalMs: 100, label: label + ' download onCreated+pause' });
+    })()`).catch(() => null);
+    const detail = {
+      pauseErrors: Array.isArray(evidence?.pauseErrors) ? evidence.pauseErrors.slice(-3) : [],
+      createdCount: Array.isArray(evidence?.created) ? evidence.created.length : 0,
+      ui
+    };
+    throw new Error(error.message + '; diagnostics=' + JSON.stringify(detail));
+  }
 
   assert(Number.isInteger(Number(created.id)), label + ': download id missing');
   const id = Number(created.id);
