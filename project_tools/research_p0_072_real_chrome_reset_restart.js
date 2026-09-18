@@ -145,11 +145,23 @@ async function prepareDownloadObserverExtension() {
     "'use strict';",
     "const STATE_KEY = 'p0072ObserverState';",
     "const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));",
+    "let enabled = true;",
+    "const keepAlivePorts = new Set();",
+    "chrome.runtime.onConnect.addListener((port) => {",
+    "  keepAlivePorts.add(port);",
+    "  port.onDisconnect.addListener(() => keepAlivePorts.delete(port));",
+    "  port.onMessage.addListener((message) => {",
+    "    if (message?.type === 'set-enabled') enabled = message.enabled !== false;",
+    "  });",
+    "});",
     "const listener = (item) => {",
+    "  if (!enabled) return;",
+    "  let pausePromise;",
+    "  try { pausePromise = Promise.resolve(chrome.downloads.pause(item.id)); }",
+    "  catch (error) { pausePromise = Promise.reject(error); }",
     "  void (async () => {",
     "    const before = await chrome.storage.local.get(STATE_KEY);",
     "    const state = before[STATE_KEY] || { enabled: true, created: [], pauseErrors: [] };",
-    "    if (state.enabled === false) return;",
     "    const record = {",
     "      id: Number(item.id),",
     "      filename: String(item.filename || ''),",
@@ -165,7 +177,7 @@ async function prepareDownloadObserverExtension() {
     "    let pauseError = '';",
     "    try {",
     "      await Promise.race([",
-    "        chrome.downloads.pause(item.id),",
+    "        pausePromise,",
     "        sleep(5000).then(() => { throw new Error('pause settlement timed out after 5000 ms'); })",
     "      ]);",
     "      record.pauseSettled = true;",
@@ -219,9 +231,14 @@ async function loadDownloadObserver(browser, observerPath) {
     'chrome-extension://' + extensionId + '/observer.html',
     'P0-072 download observer page'
   );
-  await page.evaluate(`chrome.storage.local.set({
-    p0072ObserverState: { enabled: true, created: [], pauseErrors: [] }
-  })`);
+  await page.evaluate(`(async () => {
+    globalThis.__p0072ObserverPort = chrome.runtime.connect({ name: 'p0-072-observer' });
+    globalThis.__p0072ObserverPort.postMessage({ type: 'set-enabled', enabled: true });
+    await chrome.storage.local.set({
+      p0072ObserverState: { enabled: true, created: [], pauseErrors: [] }
+    });
+    return true;
+  })()`);
   return { extensionId, page };
 }
 
@@ -511,14 +528,16 @@ async function run() {
     const downloadB = await triggerPdfDownload(options, observer.page, tabB, createdIds, 'restart');
     const resetB = await clearJournalAndRequireSuperseded(options, downloadB.id, 'restart');
 
-    await observer.page.evaluate(`chrome.storage.local.get('p0072ObserverState').then((value) =>
-      chrome.storage.local.set({
+    await observer.page.evaluate(`chrome.storage.local.get('p0072ObserverState').then(async (value) => {
+      globalThis.__p0072ObserverPort?.postMessage({ type: 'set-enabled', enabled: false });
+      await chrome.storage.local.set({
         p0072ObserverState: {
           ...(value.p0072ObserverState || {}),
           enabled: false
         }
-      })
-    )`).catch(() => {});
+      });
+      return true;
+    })`).catch(() => {});
     await observer.page.close().catch(() => {});
     observer = null;
     await browser.stop({ preserveProfile: true, signal: 'SIGKILL' });
