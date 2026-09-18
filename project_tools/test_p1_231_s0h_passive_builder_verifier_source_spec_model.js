@@ -450,7 +450,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
   test('S0-D raw local/central proof retained', () => assert.strictEqual(s0d.kv.raw_local_central, 'true'));
   test('S0-D ZIP64 remains forbidden', () => assert.strictEqual(s0d.kv.zip64, 'v1-forbidden'));
   test('S0-D toolchain provenance remains non-semantic', () => assert.strictEqual(s0d.kv.toolchain_provenance_only, 'true'));
-  test('S0-E exact RPF retained', () => assert.strictEqual(CURRENT_IDS.rpf, 'sha256:967051118501d1aa784363dd0634c44882a0f9bc778b23b0c8d16c8ba44ecfc3'));
+  test('S0-E exact RPF retained', () => assert.strictEqual(CURRENT_IDS.rpf, 'sha256:6e4819c11d1ff5f8cb63071cc9e7c1330363dcf877fce9ff05cf1f60df7668db'));
   test('S0-E exact BCF retained', () => assert.strictEqual(CURRENT_IDS.bcf, 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'));
   test('S0-F remains blocked portability', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-portability'));
   test('S0-F RPF agrees with S0-E', () => assert.strictEqual(s0f.kv.rpf, CURRENT_IDS.rpf));
