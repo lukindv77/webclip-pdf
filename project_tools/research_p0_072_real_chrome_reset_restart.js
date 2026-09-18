@@ -91,7 +91,10 @@ function sourceContract() {
       && finalize.includes('await removePendingLocalDownload(downloadId);'),
     restartRecoveryReadsChrome:
       recovery.includes('chrome.downloads.search({ id })')
-      && recovery.includes('finalizePendingLocalDownload(id, current.state, current.error ||'),
+      && recovery.includes("const finalizeForMaintenance = async (checkpoint, id, state, downloadError = '') =>")
+      && recovery.includes('const result = await finalizePendingLocalDownload(id, state, downloadError);')
+      && recovery.includes("finalizeForMaintenance(item, id, 'complete')")
+      && recovery.includes("finalizeForMaintenance(item, id, 'interrupted', download.error || '')"),
     startupSchedulesDurableMaintenance:
       worker.includes("chrome.runtime.onStartup.addListener(() =>")
       && worker.includes("chrome.alarms.create(OPERATION_LOG_CLEANUP_ALARM, { delayInMinutes: 1, periodInMinutes: 60 })")
