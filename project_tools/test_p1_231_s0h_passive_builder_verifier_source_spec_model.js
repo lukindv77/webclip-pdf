@@ -106,6 +106,7 @@ const CURRENT_IDS = Object.freeze({
   rcf: s0e.kv.rcf,
 });
 
+// Minimal portable-ascii-v1 validator used by the passive builder implementation.
 function validatePortablePath(name) {
   if (typeof name !== 'string' || !name || !/^[\x20-\x7e]+$/.test(name)) fail('PACKAGE_PROJECTION_INVALID');
   if (name.startsWith('/') || name.endsWith('/') || name.includes('\\') || name.includes('//')) fail('PACKAGE_PROJECTION_INVALID');
@@ -143,6 +144,7 @@ function normalizedEntries(projection) {
     .sort((a, b) => asciiCompare(a.name, b.name));
 }
 
+// Synthetic identity adapter for orchestration tests only. Production S0-H must call canonical S0-E.
 function syntheticRpf(projection) {
   const h = crypto.createHash('sha256');
   h.update(Buffer.from('S0H_SYNTHETIC_RPF_ADAPTER_V1\0', 'ascii'));
@@ -391,7 +393,7 @@ function projectionFromVerifiedEntries(entries) {
 }
 
 function passiveBuild({ candidateSha, admission, loadPackageProjection, identityEngine, buildFn = buildClassicStoredZip, toolchain = null }) {
-  validateAdmission(candidateSha, admission);
+  validateAdmission(candidateSha, admission); // MUST happen before package load.
   const expectedBcf = identityEngine.bcf();
   if (!validDigest(expectedBcf) || admission.identities.bcf !== expectedBcf) fail('BUILDER_CONTRACT_IDENTITY_MISMATCH');
 
@@ -439,6 +441,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
 }
 
 (function main() {
+  // Predecessor composition / exact current facts.
   test('DAG predecessor remains 19 nodes', () => assert.strictEqual(dag.kv.nodes, '19'));
   test('DAG S0 count remains 9', () => assert.strictEqual(dag.kv.s0, '9'));
   test('S0-A package count remains 33', () => assert.strictEqual(s0a.kv.package_files, '33'));
@@ -454,6 +457,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
   test('S0-F retains no CGF axis', () => assert.strictEqual(s0f.kv.no_cgf, 'true'));
   test('current head is exact SHA', () => assert(validSha(currentHead)));
 
+  // Current real candidate MUST be blocked before package load/build.
   test('current blocked candidate stops before package loader and builder', () => {
     let loads = 0;
     let builds = 0;
@@ -517,6 +521,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
     assert.strictEqual(loads, 0);
   });
 
+  // Independent Node writer must match S0-D Python golden vector.
   const fixtureEntries = normalizedEntries(fixture);
   const raw = buildClassicStoredZip(fixtureEntries);
   test('Node raw builder fixture is exactly 510 bytes', () => assert.strictEqual(raw.length, GOLDEN_ZIP_BYTES));
@@ -557,6 +562,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
     });
   }
 
+  // Positive passive composition on synthetic admitted candidate only.
   let positiveLoads = 0;
   let positiveBuilds = 0;
   const positive = passiveBuild({
@@ -599,6 +605,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
     assert(other.raw.equals(positive.raw));
   });
 
+  // Staging/package failures.
   test('staged byte change causes RPF mismatch before build', () => {
     let builds = 0;
     throwsCode(() => passiveBuild({
@@ -630,6 +637,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
     throwsCode(() => passiveBuild({ candidateSha: syntheticSha, admission: fixtureAdmission, loadPackageProjection: () => bad, identityEngine: { rpf: syntheticRpf, bcf: () => CURRENT_IDS.bcf } }), 'PACKAGE_PROJECTION_INVALID');
   });
 
+  // Post-build extracted RPF fence.
   test('archive extracted RPF mismatch blocks verified result', () => {
     let rpfCalls = 0;
     const engine = {
@@ -643,6 +651,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
     assert.strictEqual(rpfCalls, 2);
   });
 
+  // Raw archive mutation negative controls.
   test('trailing byte rejected', () => throwsCode(() => verifyClassicStoredZip(Buffer.concat([raw, Buffer.from([0])]), fixtureEntries), 'ZIP_STRUCTURE_INVALID'));
   test('preamble byte rejected', () => throwsCode(() => verifyClassicStoredZip(Buffer.concat([Buffer.from([0]), raw]), fixtureEntries), 'ZIP_STRUCTURE_INVALID'));
   test('multi-disk declaration rejected', () => {
@@ -677,6 +686,8 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
   });
   test('central duplicate-name mutation rejected', () => {
     const x = Buffer.from(raw); const e = x.length - 22; const central = x.readUInt32LE(e + 16);
+    // Make second central member name equal prefix bytes of first only when equal length is impossible;
+    // instead violate canonical strict ordering by copying first name into a same-length synthetic two-entry archive below.
     const two = buildClassicStoredZip([
       { name: 'a.js', bytes: Buffer.from('a') },
       { name: 'b.js', bytes: Buffer.from('b') },
@@ -691,7 +702,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
       { name: 'a.js', bytes: Buffer.from('a') },
       { name: 'b.js', bytes: Buffer.from('b') },
     ]), 'ZIP_MEMBER_SET_MISMATCH');
-    assert(central > 0);
+    assert(central > 0); // keep current fixture central boundary exercised too.
   });
   test('missing expected archive member rejected', () => {
     throwsCode(() => verifyClassicStoredZip(raw, fixtureEntries.slice(1)), 'ZIP_MEMBER_SET_MISMATCH');
@@ -715,6 +726,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
     assert.notStrictEqual(digest(changed), GOLDEN_ZIP_SHA256);
   });
 
+  // No product ZIP path exists in this model; product build remained blocked before loading.
   const forbiddenProductPaths = ['WebClip.zip', 'webclip.zip', 'dist/WebClip.zip', 'release/WebClip.zip'];
   test('model has no official product archive output path', () => {
     for (const p of forbiddenProductPaths) assert(!Object.values(positive.result).includes(p));
