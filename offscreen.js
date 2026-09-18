@@ -535,6 +535,29 @@ async function getExactSealedPdfCacheRecord(key, generation, expectedBytes, dead
 }
 
 
+async function getPdfCacheRecord(key, deadlineAt = 0) {
+  const cacheKey = String(key || '');
+  if (!cacheKey || cacheKey.length > 240) throw new Error('Некорректный ключ PDF retry-cache.');
+  const openTimeoutMs = boundedIdbPhaseTimeout(deadlineAt, 10_000, 'Открытие PDF retry-cache');
+  const db = await openDbBounded(PDF_CACHE_DB_NAME, PDF_CACHE_DB_VERSION, (database) => {
+    if (!database.objectStoreNames.contains(PDF_CACHE_STORE)) database.createObjectStore(PDF_CACHE_STORE, { keyPath: 'key' });
+    if (!database.objectStoreNames.contains(PDF_CACHE_META_STORE)) database.createObjectStore(PDF_CACHE_META_STORE, { keyPath: 'key' });
+    if (!database.objectStoreNames.contains(PDF_CACHE_RETRY_INDEX_STORE)) database.createObjectStore(PDF_CACHE_RETRY_INDEX_STORE, { keyPath: 'key' });
+  }, openTimeoutMs);
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(PDF_CACHE_STORE, 'readonly');
+      const guard = timeoutIdbTransaction(tx, reject, boundedIdbPhaseTimeout(deadlineAt, 20_000, 'Чтение PDF retry-cache'), 'Чтение PDF retry-cache');
+      const req = tx.objectStore(PDF_CACHE_STORE).get(cacheKey);
+      req.onsuccess = () => guard.resolve(resolve, req.result || null);
+      req.onerror = () => guard.reject(req.error || new Error('Не удалось прочитать PDF retry-cache.'));
+      tx.onabort = () => guard.reject(tx.error || new Error('Чтение PDF retry-cache прервано.'));
+      tx.onerror = () => guard.reject(tx.error || new Error('Ошибка чтения PDF retry-cache.'));
+    });
+  } finally { db.close(); }
+}
+
+
 async function openTransferDb(timeoutMs = 10_000) {
   return openDbBounded(TRANSFER_DB_NAME, TRANSFER_DB_VERSION, (database) => {
     if (!database.objectStoreNames.contains(TRANSFER_STORE)) database.createObjectStore(TRANSFER_STORE, { keyPath: 'id' });
