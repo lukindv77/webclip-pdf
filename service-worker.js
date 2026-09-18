@@ -186,6 +186,7 @@ const tabCreateSettlements = new Map();
 const actionUpdateGenerationByTab = new Map();
 const actionPendingActualSettlements = new Set();
 const actionRepairScheduledTabs = new Set();
+const activeDestructiveMoveReceipts = new Set();
 
 function makeActionPendingLimitError() {
   const error = new Error('Слишком много незавершённых Chrome Action операций WebClip.');
@@ -5228,6 +5229,7 @@ async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, c
       existingReq.onerror = () => fail(existingReq.error || new Error('Не удалось проверить checkpoint удалённого сохранения.'));
     }, RECOVERY_IDB_TX_TIMEOUT_MS);
   } finally { db.close(); }
+  activeDestructiveMoveReceipts.add(item.id);
   return item;
 }
 
@@ -7142,8 +7144,12 @@ async function moveJournalYandexFileToTrash(entry, operationId = '') {
     };
   } catch (error) {
     if (detachedReceiptId) {
-      if (moveAdmitted) await markPendingDestructiveMoveFailure(detachedReceiptId, error).catch(() => {});
-      else await removePendingDestructiveMove(detachedReceiptId).catch(() => {});
+      if (moveAdmitted) {
+        await markPendingDestructiveMoveFailure(detachedReceiptId, error).catch(() => {});
+        activeDestructiveMoveReceipts.delete(detachedReceiptId);
+      } else {
+        await removePendingDestructiveMove(detachedReceiptId).catch(() => {});
+      }
     }
     throw error;
   }
@@ -7272,8 +7278,9 @@ async function checkpointPendingReadMoveIntent(entry, {
       RECOVERY_IDB_TX_TIMEOUT_MS
     );
   } finally { db.close(); }
+  activeDestructiveMoveReceipts.add(item.id);
   return item;
-}
+
 
 async function checkpointPendingTrashMoveIntent(entry, {
   sourcePath = '',
@@ -7563,6 +7570,10 @@ async function listPendingDestructiveMovesForRecovery(maxItems = PENDING_DESTRUC
             const cursor = request.result;
             if (!cursor || out.length >= cap) { setResult(out); return; }
             const item = cursor.value || {};
+            if (activeDestructiveMoveReceipts.has(String(item.id || ''))) {
+              cursor.continue();
+              return;
+            }
             if (item.phase === 'manual-resolution' || item.manualResolutionRequired === true) {
               cursor.continue();
               return;
@@ -7746,13 +7757,15 @@ async function removePendingDestructiveMove(id) {
       RECOVERY_IDB_TX_TIMEOUT_MS
     );
   } finally { db.close(); }
+  activeDestructiveMoveReceipts.delete(key);
 }
 
 async function finalizeReadMoveJournalFromReceipt(receiptId, patch = {}) {
   const key = String(receiptId || '');
   const db = await openJournalDb();
+  let result = null;
   try {
-    return await runIndexedDbTransactionBounded(
+    result = await runIndexedDbTransactionBounded(
       db,
       [JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE],
       'readwrite',
@@ -7800,6 +7813,8 @@ async function finalizeReadMoveJournalFromReceipt(receiptId, patch = {}) {
       JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
     );
   } finally { db.close(); }
+  activeDestructiveMoveReceipts.delete(key);
+  return result;
 }
 
 async function finalizeTrashDeleteFromReceipt(receiptId) {
@@ -7863,6 +7878,7 @@ async function finalizeTrashDeleteFromReceipt(receiptId) {
   } finally {
     db.close();
   }
+  activeDestructiveMoveReceipts.delete(key);
 
   const deletedEntry = result?.deletedEntry || null;
   if (!deletedEntry) {
@@ -8119,6 +8135,7 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
     if (checkpointWritten && detachedReceiptId) {
       if (moveAdmitted) {
         await markPendingDestructiveMoveFailure(detachedReceiptId, error).catch(() => {});
+        activeDestructiveMoveReceipts.delete(detachedReceiptId);
         await updateReadMoveJournalCheckpointFromReceipt(detachedReceiptId, {
           readMovePendingAt: Number(entry.readMovePendingAt || 0) || Date.now(),
           readMoveTargetPath: checkpointTargetPath,
