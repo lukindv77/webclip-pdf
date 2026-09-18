@@ -130,7 +130,7 @@ Focused deterministic production witness:
 - `project_tools/test_p0_076_legacy_destructive_receipt_fail_closed.js` — legacy no-cursor rejection, sticky manual-resolution disposition, reset-superseded history-only retirement and preservation of verified remote evidence.
 - `project_tools/test_p0_076_single_entry_generation_cas_model.js` remains the broader acceptance model for same-id import replacement, concurrent Mark Read, comment lost-update, scoped reset and P0-072 composition.
 
-This is **not yet P0-076 closure**. Local/keep delete and comments use generic CAS; new ReadLater/Trash receipts carry an exact cursor; and verified legacy no-cursor receipts can no longer automatically mutate current Journal state. The remaining work is now a dedicated closure audit: enumerate every production single-entry write/delete/finalizer, prove zero blind or legacy-authority mutation paths, and verify the P0-072/P1-090/P1-198 boundaries before changing the owner status. P0-076 remains **ACTIVE** in this implementation tranche and release readiness remains **NOT READY**.
+This is **not yet P0-076 closure**. Local/keep delete and comments use generic CAS; new ReadLater/Trash receipts carry an exact cursor; and verified legacy no-cursor receipts can no longer automatically mutate current Journal state. The remaining work is now a dedicated closure review: enumerate every production single-entry write/delete/finalizer, prove zero blind or legacy-authority mutation paths, and verify the P0-072/P1-090/P1-198 boundaries before changing the owner status. P0-076 remains **ACTIVE** in this implementation tranche and release readiness remains **NOT READY**.
 
 ## Current P0-023 implementation boundary
 
