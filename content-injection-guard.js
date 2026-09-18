@@ -409,6 +409,12 @@
     return { installed: true };
   }
 
+  function getActiveWorkerSourceReceipt(host = globalThis, tabId) {
+    const workerGuard = host?.[WORKER_SOURCE_MARKER];
+    const controller = workerGuard?.controller;
+    return controller?.active?.(tabId) || null;
+  }
+
   async function assertActiveWorkerSourceCurrent(host = globalThis, tabId) {
     const workerGuard = host?.[WORKER_SOURCE_MARKER];
     const controller = workerGuard?.controller;
@@ -529,6 +535,7 @@
     sourceGenerationProbe,
     createWorkerSourceGenerationController,
     installWorkerSourceGenerationWrappers,
+    getActiveWorkerSourceReceipt,
     assertActiveWorkerSourceCurrent,
     prepareWorkerSourceGenerationGuard,
     install
