@@ -495,8 +495,6 @@ async function run() {
   }
 }
 
-module.exports = Object.freeze({ sourceContract });
-
 if (require.main === module) {
   const timer = setTimeout(() => {
     console.error('P0-072 real Chrome reset/restart harness exceeded ' + MAX_RUN_MS + ' ms');
