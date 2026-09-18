@@ -66,10 +66,12 @@ check(worker.includes('generatePdfAndDownload(tabId, sanitizeContentSaveMeta(mes
   'PDF message no longer forwards normalized caller operationId; refresh research');
 check(worker.includes('generatePdfAndUploadToYandex(tabId, sanitizeContentSaveMeta(message.meta, sender), normalizeOperationIdInput(message.operationId))'),
   'Yandex PDF message no longer forwards normalized caller operationId; refresh research');
-check(worker.includes('retryCachedPdfUploadToYandex(tabId, normalizeOperationIdInput(message.operationId))'),
-  'Yandex retry message no longer forwards normalized caller operationId; refresh research');
-check(worker.includes('downloadCachedPdf(tabId, normalizeOperationIdInput(message.operationId))'),
-  'cached download message no longer forwards normalized caller operationId; refresh research');
+check(worker.includes('retryCachedPdfUploadToYandex(tabId, normalizeOperationIdInput(message.operationId), currentSourceReceipt)'),
+  'Yandex retry message no longer forwards normalized caller operationId as correlation alongside separate source authority; refresh research');
+check(worker.includes('downloadCachedPdf(tabId, normalizeOperationIdInput(message.operationId), currentSourceReceipt)'),
+  'cached download message no longer forwards normalized caller operationId as correlation alongside separate source authority; refresh research');
+check(worker.includes('const currentSourceReceipt = await captureCurrentPdfRetrySourceReceipt(sender);'),
+  'P0-023 current source authority is no longer kept separate from caller operationId; refresh research');
 
 // Positive controls that must survive P1-198 implementation.
 check(Boolean(saveAsId), 'makePreparedSaveAsSessionId() missing');
