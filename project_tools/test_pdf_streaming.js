@@ -28,7 +28,7 @@ function createContext({ maxBytes = 48 * 1024 * 1024, reads }) {
       sendCommand(_debuggee, method, params) {
         events.push(method);
         if (method === 'Page.getFrameTree') {
-          return Promise.resolve({ frameTree: { frame: { id: `main-${_debuggee.tabId}` } } });
+          return Promise.resolve({ frameTree: { frame: { id: `main-${_debuggee.tabId}`, loaderId: `loader-${_debuggee.tabId}` } } });
         }
         if (method === 'Page.printToPDF') {
           assert.strictEqual(params.transferMode, 'ReturnAsStream');
