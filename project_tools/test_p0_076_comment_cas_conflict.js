@@ -110,7 +110,7 @@ ok(trashFinalize.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt
 ok(functionSource(worker, 'checkpointPendingTrashMoveIntent').includes("makePendingDestructiveMoveId('trash-move')"), 'P0-072 worker-issued destructive identity remains separate from comment/local CAS');
 ok(!trashFinalize.includes('journalCommentConflictResult'), 'comment CAS does not leak into P0-072 Trash authority');
 
-ok(registry.includes('| P0-076 | ACTIVE |'), 'P0-076 remains ACTIVE');
+ok(registry.includes('| P0-076 | DONE |'), 'P0-076 closure is durable in Registry');
 ok(registry.includes('| P0-072 | ACTIVE |'), 'P0-072 remains separate ACTIVE owner');
 ok(registry.includes('| P1-090 | ACTIVE |'), 'P1-090 remains separate ACTIVE owner');
 ok(registry.includes('| P1-198 | ACTIVE |'), 'P1-198 remains separate ACTIVE owner');
