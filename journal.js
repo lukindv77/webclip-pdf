@@ -163,7 +163,7 @@ function createReconnectableProgressPort(name, onMessage, isActive = () => false
 // не зависит от service worker: запись выполняет service worker, но просмотр
 // всегда читает один и тот же persistent store WebClipJournal.
 const JOURNAL_DB_NAME = 'WebClipJournal';
-const JOURNAL_DB_VERSION = 7;
+const JOURNAL_DB_VERSION = 8;
 const JOURNAL_STORE = 'entries';
 const JOURNAL_META_STORE = 'meta';
 const TRANSFER_DB_NAME = 'WebClipOffscreenTransfers';
@@ -1027,6 +1027,15 @@ function openJournalDbForView() {
       } else {
         const pendingRemoteStore = request.transaction.objectStore('pendingRemoteSaves');
         if (!pendingRemoteStore.indexNames.contains('updatedAt')) pendingRemoteStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('pendingDestructiveMoves')) {
+        const destructiveStore = db.createObjectStore('pendingDestructiveMoves', { keyPath: 'id' });
+        destructiveStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+        destructiveStore.createIndex('sourceJournalEntryId', 'sourceJournalEntryId', { unique: false });
+      } else {
+        const destructiveStore = request.transaction.objectStore('pendingDestructiveMoves');
+        if (!destructiveStore.indexNames.contains('updatedAt')) destructiveStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+        if (!destructiveStore.indexNames.contains('sourceJournalEntryId')) destructiveStore.createIndex('sourceJournalEntryId', 'sourceJournalEntryId', { unique: false });
       }
       if (!db.objectStoreNames.contains('importStaging')) {
         const importStore = db.createObjectStore('importStaging', { keyPath: 'key' });
