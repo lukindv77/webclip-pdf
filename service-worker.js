@@ -88,6 +88,7 @@ const PENDING_REMOTE_STALE_MIN_ATTEMPTS = 6;
 const PENDING_REMOTE_STALE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_PENDING_REMOTE_STALE_SAVES = 100;
 const MAX_PENDING_DESTRUCTIVE_MOVES = 100;
+const PENDING_DESTRUCTIVE_RECONCILE_BATCH = 12;
 const MAX_IMPORTED_URL_CHARS = 8192;
 const MAX_IMPORTED_PATH_CHARS = 4096;
 const MAX_IMPORTED_COMMENT_CHARS = 100000;
@@ -185,6 +186,7 @@ const tabCreateSettlements = new Map();
 const actionUpdateGenerationByTab = new Map();
 const actionPendingActualSettlements = new Set();
 const actionRepairScheduledTabs = new Set();
+const activeDestructiveMoveReceipts = new Set();
 
 function makeActionPendingLimitError() {
   const error = new Error('Слишком много незавершённых Chrome Action операций WebClip.');
@@ -1749,10 +1751,18 @@ async function runLoggedOperationLogCleanup(trigger = 'scheduled') {
     const journalRecovery = await runStage('journal-recovery', () => recoverPendingJournalAppends(trigger), { pending: 0, recovered: 0, cancelled: 0, failed: 1 });
     const remoteSaves = await runStage('remote-save-recovery', () => recoverPendingRemoteSaves(trigger), { pending: 0, recovered: 0, failed: 1 });
     const localDownloads = await runStage('local-download-recovery', () => reconcilePendingLocalDownloads(trigger), { checked: 0, completed: 0, interrupted: 0, pending: 0, failed: 1 });
+    const destructiveMoves = await runStage('destructive-move-recovery', () => reconcilePendingDestructiveMoves(trigger), { checked: 0, finalized: 0, cancelled: 0, preparedDropped: 0, manualResolution: 0, pending: 0, manualPending: 0, failed: 1 });
     recordOperationStage(operationId, 'stats-repair', 'Проверяем необходимость восстановления агрегированной статистики URL…', 94, 'running');
     const statsRepair = await runStage('stats-repair', () => ensureJournalStatsHealthy(`background-${trigger}`), { repaired: false, error: 'Ошибка восстановления статистики.' });
-    const maintenancePartial = Boolean(maintenanceErrors.length || journalRecovery.failed || remoteSaves?.failed || remoteSaves?.error || localDownloads?.failed || localDownloads?.error || statsRepair?.error);
-    recordOperationStage(operationId, 'complete', `Фоновое обслуживание завершено. Удалено логов: ${result.deleted}, transfer-записей: ${transferPayloadsDeleted}, PDF-cache: ${pdfCacheDeleted}; import-staging: ${importStagingDeleted}; архивных remote-checkpoint: ${staleRemoteCheckpointsDeleted}; восстановлено записей журнала: ${journalRecovery.recovered}; удалённых сохранений: ${remoteSaves?.recovered || 0}; локальных загрузок подтверждено: ${localDownloads?.completed || 0}; прервано: ${localDownloads?.interrupted || 0}; отменено устаревших recovery: ${journalRecovery.cancelled || 0}.`, 100, maintenancePartial ? 'partial' : 'success', {
+    const maintenancePartial = Boolean(
+      maintenanceErrors.length
+      || journalRecovery.failed
+      || remoteSaves?.failed || remoteSaves?.error
+      || localDownloads?.failed || localDownloads?.error
+      || destructiveMoves?.failed || destructiveMoves?.error || destructiveMoves?.manualPending
+      || statsRepair?.error
+    );
+    recordOperationStage(operationId, 'complete', `Фоновое обслуживание завершено. Удалено логов: ${result.deleted}, transfer-записей: ${transferPayloadsDeleted}, PDF-cache: ${pdfCacheDeleted}; import-staging: ${importStagingDeleted}; архивных remote-checkpoint: ${staleRemoteCheckpointsDeleted}; восстановлено записей журнала: ${journalRecovery.recovered}; удалённых сохранений: ${remoteSaves?.recovered || 0}; локальных загрузок подтверждено: ${localDownloads?.completed || 0}; destructive receipts локально финализировано: ${destructiveMoves?.finalized || 0}; manual-resolution: ${destructiveMoves?.manualPending || 0}; отменено устаревших recovery: ${journalRecovery.cancelled || 0}.`, 100, maintenancePartial ? 'partial' : 'success', {
       deleted: result.deleted,
       transferPayloadsDeleted,
       pdfCacheDeleted,
@@ -1761,12 +1771,13 @@ async function runLoggedOperationLogCleanup(trigger = 'scheduled') {
       journalRecovery,
       remoteSaves,
       localDownloads,
+      destructiveMoves,
       statsRepair,
       retentionHours: settings.retentionHours,
       trigger,
       maintenanceErrors
     });
-    return { ...result, transferPayloadsDeleted, pdfCacheDeleted, staleRemoteCheckpointsDeleted, importStagingDeleted, journalRecovery, remoteSaves, localDownloads, statsRepair, maintenanceErrors, operationId };
+    return { ...result, transferPayloadsDeleted, pdfCacheDeleted, staleRemoteCheckpointsDeleted, importStagingDeleted, journalRecovery, remoteSaves, localDownloads, destructiveMoves, statsRepair, maintenanceErrors, operationId };
   } catch (error) {
     recordOperationStage(operationId, 'error', `Ошибка фонового обслуживания WebClip: ${normalizeError(error)}`, 100, 'error', { trigger });
     throw error;
@@ -7118,7 +7129,10 @@ async function moveJournalYandexFileToTrash(entry, operationId = '') {
       : (current?.resource_id ? normalizeYandexResourceIdFromApi(current.resource_id) : String(entry?.resourceId || ''));
     await markPendingDestructiveMoveVerified(detachedReceiptId, {
       remotePath: trashPath,
-      resourceId
+      resourceId,
+      filename: moved?.name ? normalizeYandexItemNameFromApi(moved.name) : currentName,
+      folder: monthFolder,
+      publicUrl: moved?.public_url ? normalizeYandexPublicUrlFromApi(moved.public_url) : String(entry?.publicUrl || '')
     });
     return {
       sourcePath,
@@ -7129,8 +7143,12 @@ async function moveJournalYandexFileToTrash(entry, operationId = '') {
     };
   } catch (error) {
     if (detachedReceiptId) {
-      if (moveAdmitted) await markPendingDestructiveMoveFailure(detachedReceiptId, error).catch(() => {});
-      else await removePendingDestructiveMove(detachedReceiptId).catch(() => {});
+      if (moveAdmitted) {
+        await markPendingDestructiveMoveFailure(detachedReceiptId, error).catch(() => {});
+        activeDestructiveMoveReceipts.delete(detachedReceiptId);
+      } else {
+        await removePendingDestructiveMove(detachedReceiptId).catch(() => {});
+      }
     }
     throw error;
   }
@@ -7259,6 +7277,7 @@ async function checkpointPendingReadMoveIntent(entry, {
       RECOVERY_IDB_TX_TIMEOUT_MS
     );
   } finally { db.close(); }
+  activeDestructiveMoveReceipts.add(item.id);
   return item;
 }
 
@@ -7323,6 +7342,7 @@ async function checkpointPendingTrashMoveIntent(entry, {
       RECOVERY_IDB_TX_TIMEOUT_MS
     );
   } finally { db.close(); }
+  activeDestructiveMoveReceipts.add(item.id);
   return item;
 }
 
@@ -7431,12 +7451,18 @@ async function markPendingDestructiveMoveVerified(id, outcome = {}) {
               fail(error);
               return;
             }
+            const verifiedAt = Date.now();
             const next = {
               ...current,
               phase: 'remote-verified',
-              updatedAt: Date.now(),
+              updatedAt: verifiedAt,
+              verifiedAt,
               verifiedPath: normalizeDiskPath(outcome.remotePath || current.targetPath || ''),
               verifiedResourceId: String(outcome.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
+              verifiedFilename: String(outcome.filename || '').slice(0, MAX_YANDEX_ITEM_NAME_CHARS),
+              verifiedFolder: normalizeDiskPath(outcome.folder || ''),
+              verifiedPublicUrl: String(outcome.publicUrl || '').slice(0, MAX_YANDEX_PUBLIC_URL_CHARS),
+              manualResolutionRequired: false,
               lastError: ''
             };
             pending.put(next);
@@ -7479,6 +7505,244 @@ async function markPendingDestructiveMoveFailure(id, error) {
   } finally { db.close(); }
 }
 
+function pendingDestructiveMoveRecoveryDisposition(item = {}) {
+  const phase = String(item.phase || '');
+  if (phase === 'prepared') return 'drop-prepared';
+  if (phase === 'admitted-unknown') return 'manual-resolution';
+  if (phase === 'remote-verified') return 'finalize-local';
+  if (phase === 'manual-resolution') return 'retain-manual';
+  return 'manual-resolution';
+}
+
+async function markPendingDestructiveMoveManualResolution(id, reason = '', trigger = 'maintenance') {
+  const key = String(id || '');
+  if (!key) return null;
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      'readwrite',
+      'Фиксация manual-resolution destructive move',
+      ({ store, setResult, fail }) => {
+        const pending = store();
+        const request = pending.get(key);
+        request.onsuccess = () => {
+          try {
+            const current = request.result;
+            if (!current) { setResult(null); return; }
+            const terminalVerified = current.phase === 'remote-verified';
+            const now = Date.now();
+            const next = {
+              ...current,
+              phase: terminalVerified ? 'remote-verified' : 'manual-resolution',
+              manualResolutionRequired: true,
+              manualResolutionAt: Math.max(0, Number(current.manualResolutionAt) || 0) || now,
+              manualResolutionTrigger: String(trigger || 'maintenance').slice(0, 80),
+              updatedAt: now,
+              lastError: String(reason || current.lastError || 'Destructive move requires manual resolution.').slice(0, 2000)
+            };
+            pending.put(next);
+            setResult(next);
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось сохранить manual-resolution destructive-move receipt.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function listPendingDestructiveMovesForRecovery(maxItems = PENDING_DESTRUCTIVE_RECONCILE_BATCH) {
+  const cap = Math.max(1, Math.min(PENDING_DESTRUCTIVE_RECONCILE_BATCH, Number(maxItems) || PENDING_DESTRUCTIVE_RECONCILE_BATCH));
+  const db = await openJournalDb();
+  try {
+    return (await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      'readonly',
+      'Чтение destructive-move receipts для restart reconciliation',
+      ({ store, setResult, fail }) => {
+        const out = [];
+        const request = store().index('updatedAt').openCursor(null, 'next');
+        request.onsuccess = () => {
+          try {
+            const cursor = request.result;
+            if (!cursor || out.length >= cap) { setResult(out); return; }
+            const item = cursor.value || {};
+            if (activeDestructiveMoveReceipts.has(String(item.id || ''))) {
+              cursor.continue();
+              return;
+            }
+            if (item.phase === 'manual-resolution' || item.manualResolutionRequired === true) {
+              cursor.continue();
+              return;
+            }
+            out.push(item);
+            cursor.continue();
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать destructive-move receipts для restart reconciliation.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    )) || [];
+  } finally { db.close(); }
+}
+
+async function countPendingDestructiveMovePhases() {
+  const db = await openJournalDb();
+  try {
+    return (await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      'readonly',
+      'Подсчёт destructive-move recovery states',
+      ({ store, setResult, fail }) => {
+        const counts = { total: 0, active: 0, manual: 0, prepared: 0, admitted: 0, verified: 0, unknown: 0 };
+        const request = store().openCursor();
+        request.onsuccess = () => {
+          try {
+            const cursor = request.result;
+            if (!cursor) { setResult(counts); return; }
+            const item = cursor.value || {};
+            const phase = String(item.phase || '');
+            counts.total += 1;
+            if (phase === 'manual-resolution' || item.manualResolutionRequired === true) counts.manual += 1;
+            else if (phase === 'prepared') { counts.prepared += 1; counts.active += 1; }
+            else if (phase === 'admitted-unknown') { counts.admitted += 1; counts.active += 1; }
+            else if (phase === 'remote-verified') { counts.verified += 1; counts.active += 1; }
+            else { counts.unknown += 1; counts.active += 1; }
+            cursor.continue();
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось подсчитать destructive-move recovery states.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    )) || { total: 0, active: 0, manual: 0, prepared: 0, admitted: 0, verified: 0, unknown: 0 };
+  } finally { db.close(); }
+}
+
+async function reconcilePendingDestructiveMoves(trigger = 'maintenance', maxItems = PENDING_DESTRUCTIVE_RECONCILE_BATCH) {
+  const queue = await listPendingDestructiveMovesForRecovery(maxItems);
+  let preparedDropped = 0;
+  let finalized = 0;
+  let cancelled = 0;
+  let manualResolution = 0;
+  let failed = 0;
+
+  for (const raw of queue) {
+    const item = raw && typeof raw === 'object' ? raw : {};
+    const id = String(item.id || '').trim();
+    const kind = String(item.kind || '');
+    const operationId = String(item.operationId || '');
+    if (!id) continue;
+    const disposition = pendingDestructiveMoveRecoveryDisposition(item);
+    try {
+      if (disposition === 'drop-prepared') {
+        await removePendingDestructiveMove(id);
+        preparedDropped += 1;
+        recordOperationStage(operationId, 'recovery-pre-admission', 'После restart удалён prepared destructive receipt: durable remote admission не был зафиксирован.', 100, 'partial', { trigger, kind });
+        await flushOperationLogWrites(operationId).catch(() => {});
+        continue;
+      }
+
+      if (disposition === 'manual-resolution' || (kind !== 'read-move' && kind !== 'trash-move')) {
+        const reason = kind !== 'read-move' && kind !== 'trash-move'
+          ? `Неизвестный destructive-move kind «${kind || 'empty'}»; automatic recovery запрещён.`
+          : 'Destructive move был durably admitted, но terminal exact remote outcome не был записан до restart. Automatic Yandex retry/verification запрещён; требуется manual resolution под P1-090.';
+        await markPendingDestructiveMoveManualResolution(id, reason, trigger);
+        manualResolution += 1;
+        recordOperationStage(operationId, 'recovery-manual', reason, 100, 'partial', { trigger, kind, recoveryState: 'manual-resolution' });
+        await flushOperationLogWrites(operationId).catch(() => {});
+        continue;
+      }
+
+      if (disposition !== 'finalize-local') continue;
+
+      if (kind === 'trash-move') {
+        const result = await finalizeTrashDeleteFromReceipt(id);
+        if (result?.cancelled) cancelled += 1;
+        else {
+          finalized += 1;
+          notifyJournalChanged('delete');
+          refreshActionForAllTabs().catch(() => {});
+        }
+        recordOperationStage(operationId, 'recovery-finalize', result?.cancelled
+          ? 'Verified Trash receipt после restart завершён как superseded/history-only без удаления replacement Journal state.'
+          : 'Verified Trash receipt после restart завершил локальное удаление исходной Journal записи.', 100, result?.statsWarning ? 'partial' : 'success', {
+          trigger, kind, cancelled: Boolean(result?.cancelled), statsWarning: String(result?.statsWarning || '')
+        });
+        await flushOperationLogWrites(operationId).catch(() => {});
+        continue;
+      }
+
+      if (item.supersededByJournalReset === true) {
+        const result = await finalizeReadMoveJournalFromReceipt(id, {});
+        cancelled += result?.cancelled ? 1 : 0;
+        recordOperationStage(operationId, 'recovery-finalize', 'Verified ReadLater receipt после restart завершён как superseded/history-only без восстановления старой Journal записи.', 100, 'partial', { trigger, kind, cancelled: true });
+        await flushOperationLogWrites(operationId).catch(() => {});
+        continue;
+      }
+
+      const verifiedPath = normalizeDiskPath(item.verifiedPath || '');
+      const verifiedFolder = normalizeDiskPath(item.verifiedFolder || '');
+      const verifiedFilename = String(item.verifiedFilename || '').slice(0, MAX_YANDEX_ITEM_NAME_CHARS);
+      if (!verifiedPath || !verifiedFolder || !verifiedFilename) {
+        const reason = 'Verified ReadLater receipt не содержит полного terminal local-finalization metadata из текущего receipt schema; automatic Journal patch после restart запрещён.';
+        await markPendingDestructiveMoveManualResolution(id, reason, trigger);
+        manualResolution += 1;
+        recordOperationStage(operationId, 'recovery-manual', reason, 100, 'partial', { trigger, kind, recoveryState: 'manual-resolution' });
+        await flushOperationLogWrites(operationId).catch(() => {});
+        continue;
+      }
+
+      const result = await finalizeReadMoveJournalFromReceipt(id, {
+        readingMode: 'read',
+        remotePath: verifiedPath,
+        folder: verifiedFolder,
+        filename: verifiedFilename,
+        publicUrl: String(item.verifiedPublicUrl || item.sourcePublicUrl || '').slice(0, MAX_YANDEX_PUBLIC_URL_CHARS),
+        resourceId: String(item.verifiedResourceId || item.sourceResourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
+        movedToReadAt: Math.max(0, Number(item.verifiedAt) || 0) || Date.now(),
+        readMovePendingAt: 0,
+        readMoveSourcePath: '',
+        readMoveTargetPath: '',
+        readMoveOperationId: '',
+        readMoveLastError: ''
+      });
+      if (result?.cancelled) cancelled += 1;
+      else {
+        finalized += 1;
+        notifyJournalChanged('mark-read');
+        refreshActionForAllTabs().catch(() => {});
+      }
+      recordOperationStage(operationId, 'recovery-finalize', result?.cancelled
+        ? 'Verified ReadLater receipt после restart не получил authority над replacement Journal state.'
+        : 'Verified ReadLater receipt после restart завершил локальную Journal финализацию.', 100, result?.cancelled ? 'partial' : 'success', { trigger, kind, cancelled: Boolean(result?.cancelled) });
+      await flushOperationLogWrites(operationId).catch(() => {});
+    } catch (error) {
+      failed += 1;
+      await markPendingDestructiveMoveFailure(id, error).catch(() => {});
+      recordOperationStage(operationId, 'recovery-error', `Restart reconciliation destructive move не завершён: ${normalizeError(error)} Receipt сохранён.`, 100, 'partial', { trigger, kind, error: normalizeError(error) });
+      await flushOperationLogWrites(operationId).catch(() => {});
+    }
+  }
+
+  const counts = await countPendingDestructiveMovePhases().catch(() => ({ total: 0, active: 0, manual: 0, prepared: 0, admitted: 0, verified: 0, unknown: 0 }));
+  return {
+    trigger,
+    checked: queue.length,
+    preparedDropped,
+    finalized,
+    cancelled,
+    manualResolution,
+    failed,
+    pending: counts.active,
+    manualPending: counts.manual,
+    phaseCounts: counts
+  };
+}
+
 async function removePendingDestructiveMove(id) {
   const key = String(id || '');
   if (!key) return;
@@ -7493,13 +7757,15 @@ async function removePendingDestructiveMove(id) {
       RECOVERY_IDB_TX_TIMEOUT_MS
     );
   } finally { db.close(); }
+  activeDestructiveMoveReceipts.delete(key);
 }
 
 async function finalizeReadMoveJournalFromReceipt(receiptId, patch = {}) {
   const key = String(receiptId || '');
   const db = await openJournalDb();
+  let result = null;
   try {
-    return await runIndexedDbTransactionBounded(
+    result = await runIndexedDbTransactionBounded(
       db,
       [JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE],
       'readwrite',
@@ -7547,6 +7813,8 @@ async function finalizeReadMoveJournalFromReceipt(receiptId, patch = {}) {
       JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
     );
   } finally { db.close(); }
+  activeDestructiveMoveReceipts.delete(key);
+  return result;
 }
 
 async function finalizeTrashDeleteFromReceipt(receiptId) {
@@ -7610,6 +7878,7 @@ async function finalizeTrashDeleteFromReceipt(receiptId) {
   } finally {
     db.close();
   }
+  activeDestructiveMoveReceipts.delete(key);
 
   const deletedEntry = result?.deletedEntry || null;
   if (!deletedEntry) {
@@ -7827,7 +8096,10 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
     const verifiedResourceId = moved.resource_id ? normalizeYandexResourceIdFromApi(moved.resource_id) : String(entry.resourceId || '');
     await markPendingDestructiveMoveVerified(detachedReceiptId, {
       remotePath: verifiedPath,
-      resourceId: verifiedResourceId
+      resourceId: verifiedResourceId,
+      filename: moved.name ? normalizeYandexItemNameFromApi(moved.name) : String(entry.filename || ''),
+      folder: targetFolder,
+      publicUrl: moved.public_url ? normalizeYandexPublicUrlFromApi(moved.public_url) : String(entry.publicUrl || '')
     });
     const finalized = await finalizeReadMoveJournalFromReceipt(detachedReceiptId, {
       readingMode: 'read',
@@ -7863,6 +8135,7 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
     if (checkpointWritten && detachedReceiptId) {
       if (moveAdmitted) {
         await markPendingDestructiveMoveFailure(detachedReceiptId, error).catch(() => {});
+        activeDestructiveMoveReceipts.delete(detachedReceiptId);
         await updateReadMoveJournalCheckpointFromReceipt(detachedReceiptId, {
           readMovePendingAt: Number(entry.readMovePendingAt || 0) || Date.now(),
           readMoveTargetPath: checkpointTargetPath,
