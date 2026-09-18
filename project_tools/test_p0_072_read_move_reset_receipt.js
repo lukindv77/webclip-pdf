@@ -7,6 +7,7 @@ const vm = require('node:vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const worker = fs.readFileSync(path.join(ROOT, 'service-worker.js'), 'utf8');
+const journal = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
 
 let checks = 0;
 function ok(value, message) { assert.ok(value, message); checks += 1; }
@@ -70,7 +71,9 @@ function functionSource(source, name) {
   throw new Error('function boundary not found: ' + name);
 }
 
-ok(worker.includes("const JOURNAL_DB_VERSION = 8;"), 'Journal DB version advances for detached destructive receipts');
+ok(worker.includes("const JOURNAL_DB_VERSION = 8;"), 'service worker Journal DB advances for detached destructive receipts');
+ok(journal.includes("const JOURNAL_DB_VERSION = 8;"), 'Journal page opener stays on the same DB v8');
+ok(journal.includes("db.createObjectStore('pendingDestructiveMoves'"), 'Journal page upgrade path creates detached destructive store');
 ok(worker.includes("const JOURNAL_PENDING_DESTRUCTIVE_STORE = 'pendingDestructiveMoves';"), 'detached destructive store has explicit name');
 ok(worker.includes('const MAX_PENDING_DESTRUCTIVE_MOVES = 100;'), 'detached receipt queue is bounded');
 
