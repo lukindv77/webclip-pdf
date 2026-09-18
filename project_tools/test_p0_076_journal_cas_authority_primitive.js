@@ -202,8 +202,8 @@ for (const [name, source] of [['add', addComment], ['edit', editComment], ['dele
   ok(source.includes('updateJournalEntryRecordCas(authority,'), `comment ${name} uses CAS point writer`);
   ok(!source.includes('updateJournalEntryRecord(id,'), `comment ${name} no longer uses blind point writer`);
 }
-ok((worker.match(/updateJournalEntryRecord\\(/g) || []).length === 1, 'legacy blind point writer has no production caller after comment migration');
-ok((worker.match(/deleteJournalEntryRecordOnly\\(/g) || []).length === 1, 'legacy blind delete helper has no production caller after local-delete migration');
+ok((worker.match(/updateJournalEntryRecord\(/g) || []).length === 1, 'legacy blind point writer has no production caller after comment migration');
+ok((worker.match(/deleteJournalEntryRecordOnly\(/g) || []).length === 1, 'legacy blind delete helper has no production caller after local-delete migration');
 
 console.log(
   'P0-076 Journal CAS authority primitive: PASS; checks=' + checks +
