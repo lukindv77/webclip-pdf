@@ -8212,8 +8212,10 @@ async function finalizeTrashDeleteFromReceipt(receiptId) {
 async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } = {}) {
   operationId = String(operationId || '') || makeOperationLogId('journal-delete');
   if (!id) return { ok: false, error: 'Не указан идентификатор записи журнала.' };
-  const entry = await getJournalEntryById(id);
-  if (!entry) return { ok: false, error: 'Запись журнала уже отсутствует.' };
+  const authoritySnapshot = await readJournalEntryWithAuthority(id);
+  const entry = authoritySnapshot?.entry || null;
+  const deleteAuthority = authoritySnapshot?.token || null;
+  if (!entry || !deleteAuthority) return { ok: false, error: 'Запись журнала уже отсутствует.' };
 
   const isYandex = entry.destination === 'yandex';
   const action = String(diskAction || 'keep');
@@ -8235,7 +8237,8 @@ async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } 
       statsWarning = String(finalized?.statsWarning || '');
     } else {
       emitJournalOperationProgress(operationId, 'journal', 'Удаляем запись из локального журнала…', 92);
-      await deleteJournalEntryRecordOnly(id);
+      const finalized = await deleteJournalEntryRecordOnlyCas(deleteAuthority);
+      journalSuperseded = Boolean(!finalized?.ok && finalized?.stale);
     }
     refreshActionForAllTabs().catch(() => {});
     if (!journalSuperseded) notifyJournalChanged('delete');
@@ -8243,7 +8246,9 @@ async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } 
       operationId,
       'complete',
       journalSuperseded
-        ? 'Файл подтверждён в Trash; исходная запись журнала уже очищена/заменена и не была затронута старой операцией.'
+        ? (moved
+          ? 'Файл подтверждён в Trash; исходная запись журнала уже очищена/заменена и не была затронута старой операцией.'
+          : 'Исходная запись журнала была изменена, очищена или заменена; поздняя операция удаления не затронула более новую версию.')
         : 'Удаление завершено.',
       100,
       journalSuperseded || statsWarning ? 'partial' : 'success',
