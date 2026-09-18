@@ -145,3 +145,27 @@ No owner status changes:
 - `P1-198 ACTIVE` — physical live operation identity remains worker-issued.
 
 Release readiness remains **NOT READY** and the manifest remains `0.9.8`.
+
+
+## Superseding execution update
+
+This document remains the historical record of the original hosted-run blocker. It is no longer the controlling current execution status.
+
+Subsequent work pinned Chrome for Testing `152.0.7977.64`, corrected controller/injection drift and popup readiness handling, and made the unchanged P1-007 real-Chrome prerequisite pass on the GitHub-hosted runner. The hosted environment then executed the complete P0-072 Case A/Case B protocol against the bounded restart-identity runtime candidate.
+
+Authoritative combined run `35368715503` / job `105677309270` on exact head `5baa40f4d342ed9e05f401fbb08edef41efc2ff4` completed **SUCCESS**, including:
+
+- deterministic local-download identity controls;
+- P1-007 real-Chrome prerequisite;
+- real automatic PDF late completion;
+- full Chromium `SIGKILL` and killed-profile receipt witness;
+- same-profile restart with exact `interrupted/CRASH` DownloadItem;
+- production maintenance retirement of the reset-superseded receipt;
+- zero old-generation Journal resurrection;
+- exact-head P1-231 S0-E candidate identity witness.
+
+The controlling detailed evidence and remaining owner boundary are recorded in `RESEARCH_P0_072_REAL_CHROME_RESET_RESTART_PROTOCOL_2026-09-18_EVIDENCE.md`.
+
+The original blocker conclusion is therefore superseded as follows:
+
+**GITHUB-HOSTED PINNED CFT EXECUTION PROVEN / LOCAL CASE A+B PHYSICAL PASS / YANDEX AND P1-090 BOUNDARY STILL OPEN / RELEASE NOT READY.**

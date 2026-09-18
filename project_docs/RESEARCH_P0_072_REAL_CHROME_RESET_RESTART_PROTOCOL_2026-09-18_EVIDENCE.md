@@ -191,3 +191,105 @@ Still separately required:
 - final closure review showing all P0-072 acceptance rows are covered by durable source + deterministic + physical evidence.
 
 P0-076 remains DONE. P1-090 and P1-198 remain ACTIVE. `RELEASE_READINESS.md` remains **NOT READY**.
+
+
+## Controlling physical execution update — restart identity recovery
+
+This later section supersedes the earlier `CURRENT GITHUB-HOSTED EXECUTION BLOCKED` status above. The earlier chronology remains historical evidence for the runner/controller failure that was subsequently isolated and removed.
+
+### Production recovery gap and bounded invariant
+
+Pinned Chrome for Testing `152.0.7977.64` and the stabilized production-popup controller made the existing P1-007 prerequisite repeatably pass on the GitHub-hosted runner. The P0-072 harness then reached the real restart boundary and exposed a production defect:
+
+- the durable receipt was already bound to exact numeric `downloadId`;
+- the same DownloadItem survived full Chromium `SIGKILL` and same-profile restart as `state=interrupted`, `error=CRASH`;
+- Chrome retained the exact WebClip `blob:chrome-extension://<runtime-id>/...` URL, filename and size;
+- Chrome omitted `byExtensionId` after restart;
+- the old unconditional `isOwnExtensionDownload()` filter therefore rejected the exact item and left the receipt pending.
+
+The bounded fix does not remove ownership checking. `WebClipLocalDownloadIdentity` now applies this fail-closed order for a bound receipt:
+
+1. receipt and DownloadItem must have the same valid numeric `downloadId`;
+2. if `byExtensionId` is present, only exact equality with `chrome.runtime.id` is accepted and a foreign value is terminally rejected;
+3. if `byExtensionId` is absent, fallback requires one unique candidate, `kind=download`, `downloadAdmissionPhase=admitted-unknown`, an exact receipt Blob URL under the current extension origin, and exact equality with DownloadItem `url` or `finalUrl`;
+4. missing, foreign, mismatched, prepared-only or ambiguous evidence fails closed.
+
+Deterministic positive/negative controls are in `project_tools/test_p0_048_local_download_identity.js`. They cover correct and foreign `byExtensionId`, absent `byExtensionId` with exact WebClip Blob identity, foreign/different Blob identity, exact numeric binding, admitted receipt state and ambiguity rejection.
+
+### Authoritative exact-candidate run
+
+Transient workflow run:
+
+- run: `35368715503`;
+- job: `105677309270`;
+- execution head: `5baa40f4d342ed9e05f401fbb08edef41efc2ff4`;
+- canonical baseline: `e6cb567b44eeff28a89fc90cc82294bf064bad23`;
+- Chrome for Testing: `152.0.7977.64`;
+- result: **SUCCESS**.
+
+The transient workflow first overlaid exact candidate runtime/harness files from `GITHUB_SHA` onto the guarded canonical baseline, verified the candidate file hashes, ran syntax and deterministic identity controls, passed the existing P1-007 real-Chrome prerequisite, and then executed the full P0-072 physical protocol.
+
+Exact package/runtime source witnesses emitted by the harness:
+
+- `service-worker.js` SHA-256: `98b9c216a42be23619d04c8ac13bc73e0ff76f57bd431cf48bb29b682f20c0f1`;
+- `content.js` SHA-256: `9bc3b42db86d522a05cd261da420771eab721f1767bc13fc28d6b0c32f0ff47a`;
+- `manifest.json` SHA-256: `183f1ffa9fc60910c2a0b6122d4c4e71d62c5f097f6954aec9eff4e2b2a1e2fc`;
+- copied worker exact: `true`;
+- manifest version: `0.9.8`.
+
+Case A proved:
+
+- real automatic Chrome PDF download;
+- reset-superseded admitted receipt;
+- resume of the same DownloadItem;
+- terminal `complete`;
+- physical PDF bytes: `38,930,306`;
+- receipt retired;
+- old Journal generation not resurrected.
+
+Case B proved:
+
+- a second real automatic PDF download and exact numeric receipt;
+- reset supersession;
+- full Chromium `SIGKILL`;
+- independent killed-profile IndexedDB witness before relaunch;
+- same-profile/same-extension restart;
+- exact DownloadItem restored as `interrupted/CRASH`, `canResume=false`;
+- existing production maintenance reconciliation;
+- `receiptOutcome=retired-terminal`;
+- superseded evidence preserved;
+- old Journal generation not resurrected.
+
+Machine-readable result digest:
+
+`sha256:272d85296c3274dab973bca237089e2cc6a31684648e62bee45a179c3a0807df`
+
+### P1-231 candidate identity sync
+
+The same successful job then checked out exact execution head `5baa40f4...` and ran the cross-language S0-E identity engine:
+
+- cases: `201`;
+- RPF: `sha256:f53635e2c04222f3cb72c99b5c3673f8f7981f573ab942769efd8de2885ec405`;
+- Chrome QCF: `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`;
+- Yandex QCF: `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`;
+- full RCF: `sha256:4d4d22be60b3f2e94fc24282207889c124c2d726e4070bcab482163f58102f50`;
+- BCF: `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`;
+- cross-language result: `node-python`.
+
+The new RPF binds the physical proof to the changed package/runtime bytes. Evidence-only documentation and removal of the transient workflow do not alter the 33-member package RPF.
+
+### Controlling boundary after PASS
+
+This run closes the local Chrome Case A/Case B physical-evidence gap described by this protocol. It does **not** close P0-072 as a whole and does not authorize release:
+
+- `P0-072 ACTIVE`;
+- `P0-076 DONE`;
+- `P0-080 ACTIVE`;
+- `P1-090 ACTIVE`;
+- `P1-146 ACTIVE`;
+- `P1-198 ACTIVE`;
+- Yandex was not exercised;
+- `P1-090` exact-object destructive settlement remains separate;
+- manifest remains `0.9.8`;
+- release remains **NOT READY**;
+- no package, version bump, tag, deploy or GitHub Release was created.
