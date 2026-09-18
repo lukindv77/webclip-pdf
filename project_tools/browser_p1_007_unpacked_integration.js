@@ -392,19 +392,29 @@ async function runBrowserIntegration() {
       return true;
     })()`);
 
-    mark('selection-start');
-    // ---- selection integration ----
-    const selection = await options.evaluate(`(async () => {
-      const tab = await chrome.tabs.create({ url: ${js(fixture.articleUrl)}, active: true });
-      const tabId = tab.id;
-      for (let i = 0; i < 100; i += 1) {
-        const current = await chrome.tabs.get(tabId);
-        if (current.status === 'complete') break;
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-      await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-      const started = await chrome.tabs.sendMessage(tabId, { type: 'WEBCLIP_COMMAND', command: 'start' });
-      const clickResult = await chrome.scripting.executeScript({ target: { tabId }, func: () => {
+    mark('selection-create-tab');
+    const createdTab = await options.evaluate(`chrome.tabs.create({ url: ${js(fixture.articleUrl)}, active: true })`);
+    const articleTabId = Number(createdTab?.id);
+    assert(articleTabId > 0, 'article tab id required');
+
+    mark('selection-wait-tab');
+    await waitFor(async () => {
+      const current = await options.evaluate(`chrome.tabs.get(${articleTabId})`);
+      return current?.status === 'complete' ? current : null;
+    }, { timeoutMs: 10_000, intervalMs: 50, label: 'P1-007 article tab load' });
+
+    mark('selection-inject-content');
+    await options.evaluate(`chrome.scripting.executeScript({ target: { tabId: ${articleTabId} }, files: ['content.js'] })`);
+
+    mark('selection-send-start');
+    const started = await options.evaluate(
+      `chrome.tabs.sendMessage(${articleTabId}, { type: 'WEBCLIP_COMMAND', command: 'start' })`
+    );
+
+    mark('selection-click');
+    const clickResult = await options.evaluate(`chrome.scripting.executeScript({
+      target: { tabId: ${articleTabId} },
+      func: () => {
         const article = document.getElementById('article');
         if (!article) return { clicked: false };
         article.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
@@ -413,14 +423,12 @@ async function runBrowserIntegration() {
           included: Boolean(article.getAttribute('data-webclip-pdf-include')),
           root: Boolean(document.getElementById('webclip-pdf-extension-root'))
         };
-      }});
-      return { tabId, started, state: clickResult[0]?.result || null };
-    })()`);
+      }
+    })`);
+    const selection = { started, state: Array.isArray(clickResult) ? clickResult[0]?.result || null : null };
     mark('selection-returned');
     assert(selection?.started?.ok, 'selection start command must succeed in real Chromium');
     assert(selection?.state?.clicked && selection.state.included && selection.state.root, 'click selection must mark article and create WebClip UI');
-    const articleTabId = Number(selection.tabId);
-    assert(articleTabId > 0, 'article tab id required');
 
     // ---- PDF integration (real chrome.debugger + Page.printToPDF + downloads) ----
     mark('pdf-dialog-start');
