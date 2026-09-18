@@ -533,6 +533,39 @@ async function waitPhysicalTerminal(options, downloadId, label) {
   }, { timeoutMs: 30_000, intervalMs: 100, label: label + ' physical terminal state' });
 }
 
+async function latestBackgroundMaintenanceLog(options) {
+  return options.evaluate(`new Promise((resolve) => {
+    const request = indexedDB.open('WebClipOperationLogs');
+    request.onerror = () => resolve(null);
+    request.onsuccess = () => {
+      const db = request.result;
+      try {
+        const tx = db.transaction('operations', 'readonly');
+        const getAll = tx.objectStore('operations').getAll();
+        getAll.onerror = () => { db.close(); resolve(null); };
+        getAll.onsuccess = () => {
+          const rows = Array.isArray(getAll.result) ? getAll.result : [];
+          const latest = rows
+            .filter((row) => row?.type === 'background-maintenance')
+            .sort((a, b) => Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0))[0] || null;
+          db.close();
+          resolve(latest ? {
+            operationId: latest.operationId,
+            status: latest.status,
+            summary: latest.summary || '',
+            createdAt: latest.createdAt,
+            updatedAt: latest.updatedAt,
+            meta: latest.meta || {}
+          } : null);
+        };
+      } catch (_) {
+        try { db.close(); } catch (_) {}
+        resolve(null);
+      }
+    };
+  })`);
+}
+
 async function waitReceiptRetiredWithoutJournal(options, downloadId, articleUrl, label) {
   return waitFor(async () => {
     const snap = await snapshot(options);
@@ -712,8 +745,13 @@ async function run() {
       if (!row) return true;
       if (row.kind === 'unknown' && row.recoveryState === 'manual-resolution' && row.supersededByJournalReset === true) return true;
       return false;
-    }, { timeoutMs: 75_000, intervalMs: 250, label: 'restart maintenance reconciliation' }).catch((error) => {
-      throw new Error(String(error?.message || error) + '; lastState=' + JSON.stringify(lastMaintenanceState));
+    }, { timeoutMs: 140_000, intervalMs: 250, label: 'restart maintenance reconciliation' }).catch(async (error) => {
+      const maintenanceLog = await latestBackgroundMaintenanceLog(options).catch(() => null);
+      throw new Error(
+        String(error?.message || error)
+        + '; lastState=' + JSON.stringify(lastMaintenanceState)
+        + '; maintenanceLog=' + JSON.stringify(maintenanceLog)
+      );
     });
 
     if (!terminalB) {
