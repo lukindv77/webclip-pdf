@@ -2826,13 +2826,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case 'WEBCLIP_RETRY_PDF_TO_YANDEX': {
         const tabId = sender.tab?.id;
         if (!tabId) throw new Error('Не удалось определить вкладку для повторной отправки PDF.');
-        return retryCachedPdfUploadToYandex(tabId, normalizeOperationIdInput(message.operationId));
+        const currentSourceReceipt = await captureCurrentPdfRetrySourceReceipt(sender);
+        return retryCachedPdfUploadToYandex(tabId, normalizeOperationIdInput(message.operationId), currentSourceReceipt);
       }
 
       case 'WEBCLIP_DOWNLOAD_CACHED_PDF': {
         const tabId = sender.tab?.id;
         if (!tabId) throw new Error('Не удалось определить вкладку для скачивания PDF.');
-        return downloadCachedPdf(tabId, normalizeOperationIdInput(message.operationId));
+        const currentSourceReceipt = await captureCurrentPdfRetrySourceReceipt(sender);
+        return downloadCachedPdf(tabId, normalizeOperationIdInput(message.operationId), currentSourceReceipt);
       }
 
       case 'WEBCLIP_INVALIDATE_PDF_CACHE': {
@@ -3764,6 +3766,136 @@ function captureActivePdfSourceReceipt(tabId, operationId) {
   return sanitizePdfSourceReceipt(active, { tabId, operationId, required: true });
 }
 
+function currentPdfRetrySourceProbe() {
+  try {
+    const admitted = globalThis.WebClipApplicationGeneration?.admitSelection?.();
+    if (!admitted?.ok || !admitted?.receipt) {
+      return {
+        ok: false,
+        code: String(admitted?.code || 'WEBCLIP_RETRY_SOURCE_APPLICATION_REQUIRED'),
+        reason: String(admitted?.reason || 'Current application/selection generation is not admitted for retry.')
+      };
+    }
+    const application = admitted.receipt.applicationGeneration;
+    return {
+      ok: true,
+      receipt: {
+        applicationGeneration: {
+          generation: Math.floor(Number(application?.generation) || 0),
+          href: String(application?.href || '')
+        },
+        selectionRevision: Math.floor(Number(admitted.receipt.selectionRevision) || 0),
+        selectedCount: Math.max(0, Math.floor(Number(admitted.receipt.selectedCount) || 0))
+      }
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'WEBCLIP_RETRY_SOURCE_APPLICATION_REQUIRED',
+      reason: String(error?.message || error || 'Current application-generation probe failed.').slice(0, 500)
+    };
+  }
+}
+
+function normalizeCurrentPdfRetrySourceReceipt(value, { tabId = 0, sourceDocumentId = '' } = {}) {
+  const receipt = value && typeof value === 'object' ? value : null;
+  const application = receipt?.applicationGeneration;
+  const generation = Math.floor(Number(application?.generation) || 0);
+  let href = '';
+  try { href = new URL(String(application?.href || '')).href; }
+  catch (_) { href = String(application?.href || '').slice(0, MAX_IMPORTED_URL_CHARS); }
+  const selectionRevision = Math.floor(Number(receipt?.selectionRevision) || 0);
+  const selectedCount = Math.max(0, Math.floor(Number(receipt?.selectedCount) || 0));
+  const normalizedTabId = Math.max(0, Math.floor(Number(tabId) || 0));
+  const documentId = String(sourceDocumentId || '').trim().slice(0, 256);
+  if (!normalizedTabId || !documentId || !generation || !href || !selectionRevision) {
+    const error = new Error('Current retry source receipt is incomplete.');
+    error.code = 'WEBCLIP_RETRY_SOURCE_RECEIPT_INVALID';
+    throw error;
+  }
+  return Object.freeze({
+    schema: 'webclip-pdf-live-retry-source/v1',
+    tabId: normalizedTabId,
+    sourceDocumentId: documentId,
+    applicationGeneration: Object.freeze({ generation, href }),
+    selectionRevision,
+    selectedCount
+  });
+}
+
+async function captureCurrentPdfRetrySourceReceipt(sender) {
+  const tabId = Math.max(0, Math.floor(Number(sender?.tab?.id) || 0));
+  const frameId = Math.floor(Number(sender?.frameId) || 0);
+  const sourceDocumentId = String(sender?.documentId || '').trim().slice(0, 256);
+  if (!tabId) {
+    const error = new Error('Retry admission has no source tab.');
+    error.code = 'WEBCLIP_RETRY_SOURCE_TAB_REQUIRED';
+    throw error;
+  }
+  if (frameId !== 0) {
+    const error = new Error('Only the top document may claim a live PDF retry generation.');
+    error.code = 'WEBCLIP_RETRY_SOURCE_TOP_DOCUMENT_REQUIRED';
+    throw error;
+  }
+  if (!sourceDocumentId) {
+    const error = new Error('Retry admission has no exact browser document identity.');
+    error.code = 'WEBCLIP_RETRY_SOURCE_DOCUMENT_REQUIRED';
+    throw error;
+  }
+
+  let rows;
+  try {
+    rows = await chrome.scripting.executeScript({
+      target: { tabId, documentIds: [sourceDocumentId] },
+      world: 'ISOLATED',
+      func: currentPdfRetrySourceProbe
+    });
+  } catch (_) {
+    const error = new Error('The requesting source document is no longer available for PDF retry.');
+    error.code = 'WEBCLIP_RETRY_SOURCE_DOCUMENT_CHANGED';
+    throw error;
+  }
+  if (!Array.isArray(rows) || rows.length !== 1) {
+    const error = new Error('Exact retry source-document probe did not resolve uniquely.');
+    error.code = 'WEBCLIP_RETRY_SOURCE_DOCUMENT_CHANGED';
+    throw error;
+  }
+  const row = rows[0];
+  if (row?.documentId && String(row.documentId) !== sourceDocumentId) {
+    const error = new Error('Exact retry source-document probe resolved a different document.');
+    error.code = 'WEBCLIP_RETRY_SOURCE_DOCUMENT_CHANGED';
+    throw error;
+  }
+  const result = row?.result;
+  if (!result?.ok) {
+    const error = new Error(String(result?.reason || 'Current application/selection generation is not admitted for retry.'));
+    error.code = String(result?.code || 'WEBCLIP_RETRY_SOURCE_APPLICATION_REQUIRED');
+    throw error;
+  }
+  return normalizeCurrentPdfRetrySourceReceipt(result.receipt, { tabId, sourceDocumentId });
+}
+
+function liveRetrySourceReceiptMatches(cachedSourceReceipt, currentSourceReceipt) {
+  let cached;
+  try {
+    cached = sanitizePdfSourceReceipt(cachedSourceReceipt, {
+      tabId: currentSourceReceipt?.tabId,
+      required: true
+    });
+  } catch (_) {
+    return false;
+  }
+  const current = currentSourceReceipt && typeof currentSourceReceipt === 'object' ? currentSourceReceipt : null;
+  if (!current) return false;
+  return Boolean(
+    cached.sourceDocumentId === String(current.sourceDocumentId || '')
+    && Number(cached.applicationGeneration?.generation || 0) === Number(current.applicationGeneration?.generation || 0)
+    && String(cached.applicationGeneration?.href || '') === String(current.applicationGeneration?.href || '')
+    && Number(cached.selectionRevision || 0) === Number(current.selectionRevision || 0)
+    && Number(cached.selectedCount || 0) === Number(current.selectedCount || 0)
+  );
+}
+
 async function generatePdfAndDownload(tabId, meta, operationId = '') {
   operationId = String(operationId || '') || makeOperationLogId('local-pdf');
   meta = { ...meta, readingMode: 'read' };
@@ -3942,9 +4074,9 @@ async function generatePdfAndUploadToYandex(tabId, meta, operationId = '') {
   }
 }
 
-async function retryCachedPdfUploadToYandex(tabId, operationId = '') {
+async function retryCachedPdfUploadToYandex(tabId, operationId = '', currentSourceReceipt = null) {
   operationId = String(operationId || '') || makeOperationLogId('yandex-retry');
-  const cached = await getValidCachedPdfForTab(tabId);
+  const cached = await getValidCachedPdfForTab(tabId, currentSourceReceipt);
   await startOperationLog(operationId, 'yandex-pdf-retry', 'Повторная отправка PDF на Яндекс Диск', {
     tabId, filename: String(cached?.filename || ''), url: String(cached?.meta?.url || ''), readingMode: cached?.meta?.readingMode === 'later' ? 'later' : 'read', retry: true, retryKind: 'manual-cached-upload'
   });
@@ -4121,9 +4253,9 @@ async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, 
   };
 }
 
-async function downloadCachedPdf(tabId, operationId = '') {
+async function downloadCachedPdf(tabId, operationId = '', currentSourceReceipt = null) {
   operationId = String(operationId || '') || makeOperationLogId('cached-pdf-download');
-  const cached = await getValidCachedPdfForTab(tabId);
+  const cached = await getValidCachedPdfForTab(tabId, currentSourceReceipt);
   await startOperationLog(operationId, 'cached-pdf-download', 'Скачивание ранее сформированного PDF', {
     tabId, filename: cached?.filename || '', url: cached?.meta?.url || ''
   });
@@ -10075,7 +10207,7 @@ async function invalidatePdfRetryForTab(tabId) {
   return clearPdfRetryIndexIfMatches(tabId, current.cacheKey, current.cacheGeneration);
 }
 
-async function getValidCachedPdfForTab(tabId) {
+async function getValidCachedPdfForTab(tabId, currentSourceReceipt) {
   const pointer = await getPdfRetryIndexForTab(tabId);
   if (!pointer) return null;
   const cached = await getCachedPdfMetadataByKey(pointer.cacheKey);
@@ -10091,6 +10223,10 @@ async function getValidCachedPdfForTab(tabId) {
   const createdAt = Number(cached.createdAt || 0);
   if (!createdAt || Date.now() - createdAt > PDF_CACHE_TTL_MS) {
     await deleteCachedPdfGeneration(cached).catch(() => {});
+    return null;
+  }
+  if (!liveRetrySourceReceiptMatches(cached.sourceReceipt, currentSourceReceipt)) {
+    await clearPdfRetryIndexIfMatches(tabId, pointer.cacheKey, pointer.cacheGeneration).catch(() => {});
     return null;
   }
   let currentUrl = '';
