@@ -7550,13 +7550,41 @@ function pendingDestructiveMoveEntryMatches(receipt = {}, entry = {}) {
   return entry.destination === 'yandex';
 }
 
+function pendingDestructiveMoveJournalAuthorityToken(receipt = {}) {
+  return normalizeJournalEntryAuthorityToken({
+    entryId: receipt.sourceJournalEntryId,
+    resetGeneration: receipt.sourceJournalResetGeneration,
+    entryRevision: receipt.sourceJournalEntryRevision
+  });
+}
+
+function pendingDestructiveMoveJournalAuthorityMatches(receipt = {}, resetGeneration, entry = {}) {
+  if (!pendingDestructiveMoveEntryMatches(receipt, entry)) return false;
+  const token = pendingDestructiveMoveJournalAuthorityToken(receipt);
+  // Legacy receipts predate P0-076 composition. They retain the reviewed
+  // P0-072 createdAt/resource identity fallback for restart reconciliation.
+  return token ? journalEntryAuthorityMatches(resetGeneration, entry, token) : true;
+}
+
+function pendingDestructiveMoveAdvanceJournalAuthority(receipt = {}, resetGeneration, entry = {}) {
+  const token = journalEntryAuthorityToken(resetGeneration, entry);
+  if (!token) return receipt;
+  return {
+    ...receipt,
+    sourceJournalResetGeneration: token.resetGeneration,
+    sourceJournalEntryRevision: token.entryRevision
+  };
+}
+
 async function checkpointPendingReadMoveIntent(entry, {
   sourcePath = '',
   targetPath = '',
   sourceResourceId = '',
   sourcePublicUrl = '',
-  operationId = ''
+  operationId = '',
+  journalAuthority = null
 } = {}) {
+  const sourceJournalAuthority = normalizeJournalEntryAuthorityToken(journalAuthority);
   const now = Date.now();
   const item = {
     id: makePendingDestructiveMoveId('read-move'),
@@ -7567,6 +7595,8 @@ async function checkpointPendingReadMoveIntent(entry, {
     operationId: String(operationId || '').slice(0, 180),
     sourceJournalEntryId: String(entry?.id || '').slice(0, MAX_IMPORTED_ENTRY_ID_CHARS),
     sourceJournalCreatedAt: Math.max(0, Number(entry?.createdAt) || 0),
+    sourceJournalResetGeneration: sourceJournalAuthority?.resetGeneration || 0,
+    sourceJournalEntryRevision: sourceJournalAuthority?.entryRevision || 0,
     sourceUrlKey: normalizeJournalUrl(entry?.url || ''),
     sourceSiteKey: getJournalSiteKey(entry?.url || entry?.hostname || ''),
     sourcePath: normalizeDiskPath(sourcePath || ''),
@@ -7580,15 +7610,39 @@ async function checkpointPendingReadMoveIntent(entry, {
   if (!item.sourceJournalEntryId || !item.sourcePath || !item.targetPath) {
     throw new Error('Destructive read-move receipt требует exact source Journal id/source/target.');
   }
+  if (!sourceJournalAuthority || sourceJournalAuthority.entryId !== item.sourceJournalEntryId) {
+    const error = new Error('Destructive read-move receipt требует exact P0-076 Journal authority.');
+    error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_JOURNAL_AUTHORITY_INVALID';
+    throw error;
+  }
   const db = await openJournalDb();
   try {
     await runIndexedDbTransactionBounded(
       db,
-      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      [JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE],
       'readwrite',
       'Создание destructive-move receipt',
-      ({ store, fail }) => {
-        const pending = store();
+      ({ tx, fail }) => {
+        const pending = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
+        let queueReady = false;
+        let entryReady = false;
+        let generationReady = false;
+        let current = null;
+        let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+        let added = false;
+        const maybeAdd = () => {
+          if (added || !queueReady || !entryReady || !generationReady) return;
+          if (!pendingDestructiveMoveJournalAuthorityMatches(item, resetGeneration, current)) {
+            const error = new Error('Journal authority устарела до создания destructive read-move receipt.');
+            error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_JOURNAL_AUTHORITY_STALE_BEFORE_RECEIPT';
+            fail(error);
+            return;
+          }
+          added = true;
+          pending.add(item);
+        };
         let count = 0;
         const cursorReq = pending.openCursor();
         cursorReq.onsuccess = () => {
@@ -7603,10 +7657,17 @@ async function checkpointPendingReadMoveIntent(entry, {
               cursor.continue();
               return;
             }
-            pending.add(item);
+            queueReady = true;
+            maybeAdd();
           } catch (error) { fail(error); }
         };
         cursorReq.onerror = () => fail(cursorReq.error || new Error('Не удалось проверить очередь destructive-move receipts.'));
+        const entryReq = entries.get(item.sourceJournalEntryId);
+        entryReq.onsuccess = () => { current = entryReq.result || null; entryReady = true; maybeAdd(); };
+        entryReq.onerror = () => fail(entryReq.error || new Error('Не удалось проверить Journal row перед destructive read-move receipt.'));
+        const generationReq = meta.get(JOURNAL_RESET_GENERATION_KEY);
+        generationReq.onsuccess = () => { resetGeneration = normalizeJournalResetGeneration(generationReq.result?.value); generationReady = true; maybeAdd(); };
+        generationReq.onerror = () => fail(generationReq.error || new Error('Не удалось проверить Journal generation перед destructive read-move receipt.'));
       },
       RECOVERY_IDB_TX_TIMEOUT_MS
     );
@@ -7620,8 +7681,10 @@ async function checkpointPendingTrashMoveIntent(entry, {
   targetPath = '',
   sourceResourceId = '',
   sourcePublicUrl = '',
-  operationId = ''
+  operationId = '',
+  journalAuthority = null
 } = {}) {
+  const sourceJournalAuthority = normalizeJournalEntryAuthorityToken(journalAuthority);
   const now = Date.now();
   const item = {
     id: makePendingDestructiveMoveId('trash-move'),
@@ -7632,6 +7695,8 @@ async function checkpointPendingTrashMoveIntent(entry, {
     operationId: String(operationId || '').slice(0, 180),
     sourceJournalEntryId: String(entry?.id || '').slice(0, MAX_IMPORTED_ENTRY_ID_CHARS),
     sourceJournalCreatedAt: Math.max(0, Number(entry?.createdAt) || 0),
+    sourceJournalResetGeneration: sourceJournalAuthority?.resetGeneration || 0,
+    sourceJournalEntryRevision: sourceJournalAuthority?.entryRevision || 0,
     sourceUrlKey: normalizeJournalUrl(entry?.url || ''),
     sourceSiteKey: getJournalSiteKey(entry?.url || entry?.hostname || ''),
     sourcePath: normalizeDiskPath(sourcePath || ''),
@@ -7645,15 +7710,39 @@ async function checkpointPendingTrashMoveIntent(entry, {
   if (!item.sourceJournalEntryId || !item.sourcePath || !item.targetPath) {
     throw new Error('Destructive trash-move receipt требует exact source Journal id/source/target.');
   }
+  if (!sourceJournalAuthority || sourceJournalAuthority.entryId !== item.sourceJournalEntryId) {
+    const error = new Error('Destructive trash-move receipt требует exact P0-076 Journal authority.');
+    error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_JOURNAL_AUTHORITY_INVALID';
+    throw error;
+  }
   const db = await openJournalDb();
   try {
     await runIndexedDbTransactionBounded(
       db,
-      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      [JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE],
       'readwrite',
       'Создание Trash destructive-move receipt',
-      ({ store, fail }) => {
-        const pending = store();
+      ({ tx, fail }) => {
+        const pending = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
+        let queueReady = false;
+        let entryReady = false;
+        let generationReady = false;
+        let current = null;
+        let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+        let added = false;
+        const maybeAdd = () => {
+          if (added || !queueReady || !entryReady || !generationReady) return;
+          if (!pendingDestructiveMoveJournalAuthorityMatches(item, resetGeneration, current)) {
+            const error = new Error('Journal authority устарела до создания destructive Trash receipt.');
+            error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_JOURNAL_AUTHORITY_STALE_BEFORE_RECEIPT';
+            fail(error);
+            return;
+          }
+          added = true;
+          pending.add(item);
+        };
         let count = 0;
         const cursorReq = pending.openCursor();
         cursorReq.onsuccess = () => {
@@ -7668,10 +7757,17 @@ async function checkpointPendingTrashMoveIntent(entry, {
               cursor.continue();
               return;
             }
-            pending.add(item);
+            queueReady = true;
+            maybeAdd();
           } catch (error) { fail(error); }
         };
         cursorReq.onerror = () => fail(cursorReq.error || new Error('Не удалось проверить очередь Trash destructive-move receipts.'));
+        const entryReq = entries.get(item.sourceJournalEntryId);
+        entryReq.onsuccess = () => { current = entryReq.result || null; entryReady = true; maybeAdd(); };
+        entryReq.onerror = () => fail(entryReq.error || new Error('Не удалось проверить Journal row перед destructive Trash receipt.'));
+        const generationReq = meta.get(JOURNAL_RESET_GENERATION_KEY);
+        generationReq.onsuccess = () => { resetGeneration = normalizeJournalResetGeneration(generationReq.result?.value); generationReady = true; maybeAdd(); };
+        generationReq.onerror = () => fail(generationReq.error || new Error('Не удалось проверить Journal generation перед destructive Trash receipt.'));
       },
       RECOVERY_IDB_TX_TIMEOUT_MS
     );
