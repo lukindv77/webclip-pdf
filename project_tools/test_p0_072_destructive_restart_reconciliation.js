@@ -171,6 +171,6 @@ ok(worker.includes("runLoggedOperationLogCleanup('alarm')"), 'alarm wake execute
 console.log(
   'P0-072 destructive restart reconciliation: PASS; checks=' + checks +
   '; batch=12; prepared_drop=true; admitted_manual=true; verified_local_finalize=true; legacy_no_cursor_manual=true;' +
-  ' yandex_retry=false; p1_090_exact_object=false; p0_076_full_cas=false;' +
+  ' yandex_retry=false; p1_090_exact_object=false; p0_076_full_cas=true;' +
   ' startup_alarm=true; manual_backlog_bounded=true; release_closed=false'
 );
