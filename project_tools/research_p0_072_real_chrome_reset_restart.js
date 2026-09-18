@@ -290,14 +290,36 @@ async function createSelectedFixtureTab(options, articleUrl, label) {
     func: () => {
       const article = document.getElementById('article');
       if (!article) return { ok: false, reason: 'article-missing' };
-      // Make the real PDF non-trivial so chrome.downloads.onCreated has a
-      // reliable opportunity to pause the physical write before completion.
+      // Make the real PDF physically large enough that the downloads API
+      // exposes an observable in-progress window. Deterministic noisy canvases
+      // resist PDF compression without changing production extension bytes.
       const bulk = document.createElement('div');
       bulk.id = 'p0-072-physical-bulk';
-      for (let i = 0; i < 48; i += 1) {
+      let seed = 0x720072;
+      const nextByte = () => {
+        seed ^= seed << 13;
+        seed ^= seed >>> 17;
+        seed ^= seed << 5;
+        return seed & 0xff;
+      };
+      for (let pageIndex = 0; pageIndex < 6; pageIndex += 1) {
         const page = document.createElement('section');
         page.style.breakAfter = 'page';
-        page.textContent = 'P0-072 physical Chrome reset/restart synthetic page ' + i + ' '.repeat(32);
+        const canvas = document.createElement('canvas');
+        canvas.width = 1800;
+        canvas.height = 1800;
+        canvas.style.width = '7.5in';
+        canvas.style.height = '7.5in';
+        const context = canvas.getContext('2d', { alpha: false });
+        const image = context.createImageData(canvas.width, canvas.height);
+        for (let offset = 0; offset < image.data.length; offset += 4) {
+          image.data[offset] = nextByte();
+          image.data[offset + 1] = nextByte();
+          image.data[offset + 2] = nextByte();
+          image.data[offset + 3] = 255;
+        }
+        context.putImageData(image, 0, 0);
+        page.append(canvas);
         bulk.append(page);
       }
       article.append(bulk);
