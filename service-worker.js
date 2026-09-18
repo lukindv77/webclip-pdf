@@ -6721,6 +6721,240 @@ async function getJournalEntryById(id) {
   } finally { db.close(); }
 }
 
+function journalEntryAuthorityMatches(resetGeneration, entry, tokenValue) {
+  const token = normalizeJournalEntryAuthorityToken(tokenValue);
+  if (!token || !entry || typeof entry !== 'object') return false;
+  return (
+    String(entry.id || '') === token.entryId
+    && normalizeJournalResetGeneration(resetGeneration) === token.resetGeneration
+    && normalizeJournalEntryRevision(entry.entryRevision) === token.entryRevision
+  );
+}
+
+async function journalResetGenerationSnapshot() {
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_META_STORE,
+      'readonly',
+      'Чтение generation журнала',
+      ({ store, setResult, fail }) => {
+        const request = store().get(JOURNAL_RESET_GENERATION_KEY);
+        request.onsuccess = () => setResult(normalizeJournalResetGeneration(request.result?.value));
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать generation журнала.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function readJournalEntryWithAuthority(id) {
+  const entryId = String(id || '').trim();
+  if (!entryId) return null;
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_STORE, JOURNAL_META_STORE],
+      'readonly',
+      'Чтение записи журнала с CAS authority',
+      ({ tx, setResult, fail }) => {
+        let entryReady = false;
+        let generationReady = false;
+        let entry = null;
+        let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+        const publish = () => {
+          if (!entryReady || !generationReady) return;
+          if (!entry) { setResult(null); return; }
+          const normalizedEntry = {
+            ...entry,
+            entryRevision: normalizeJournalEntryRevision(entry.entryRevision)
+          };
+          setResult({
+            entry: normalizedEntry,
+            token: journalEntryAuthorityToken(resetGeneration, normalizedEntry)
+          });
+        };
+
+        const entryRequest = tx.objectStore(JOURNAL_STORE).get(entryId);
+        entryRequest.onsuccess = () => {
+          entry = entryRequest.result || null;
+          entryReady = true;
+          publish();
+        };
+        entryRequest.onerror = () => fail(entryRequest.error || new Error('Не удалось прочитать запись журнала для CAS authority.'));
+
+        const generationRequest = tx.objectStore(JOURNAL_META_STORE).get(JOURNAL_RESET_GENERATION_KEY);
+        generationRequest.onsuccess = () => {
+          resetGeneration = normalizeJournalResetGeneration(generationRequest.result?.value);
+          generationReady = true;
+          publish();
+        };
+        generationRequest.onerror = () => fail(generationRequest.error || new Error('Не удалось прочитать generation журнала для CAS authority.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function captureJournalEntryAuthority(id) {
+  const snapshot = await readJournalEntryWithAuthority(id);
+  return snapshot?.token || null;
+}
+
+async function updateJournalEntryRecordCas(tokenValue, patch = {}) {
+  const token = normalizeJournalEntryAuthorityToken(tokenValue);
+  if (!token) {
+    const error = new Error('Некорректный CAS token записи журнала.');
+    error.code = 'JOURNAL_ENTRY_AUTHORITY_TOKEN_INVALID';
+    throw error;
+  }
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_STORE, JOURNAL_META_STORE],
+      'readwrite',
+      'CAS обновление записи журнала',
+      ({ tx, setResult, fail }) => {
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
+        let entryReady = false;
+        let generationReady = false;
+        let current = null;
+        let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+        let compared = false;
+        const compareAndWrite = () => {
+          if (compared || !entryReady || !generationReady) return;
+          compared = true;
+          if (!journalEntryAuthorityMatches(resetGeneration, current, token)) {
+            setResult({ ok: false, stale: true, entry: null, token: null });
+            return;
+          }
+          try {
+            const updated = {
+              ...current,
+              ...patch,
+              id: current.id,
+              entryRevision: nextJournalEntryRevision(current.entryRevision)
+            };
+            const put = entries.put(updated);
+            put.onsuccess = () => {
+              touchJournalDbRevision(tx, 'cas-update-entry');
+              setResult({
+                ok: true,
+                stale: false,
+                entry: updated,
+                token: journalEntryAuthorityToken(resetGeneration, updated)
+              });
+            };
+            put.onerror = () => fail(put.error || new Error('Не удалось CAS-обновить запись журнала.'));
+          } catch (error) { fail(error); }
+        };
+
+        const entryRequest = entries.get(token.entryId);
+        entryRequest.onsuccess = () => {
+          current = entryRequest.result || null;
+          entryReady = true;
+          compareAndWrite();
+        };
+        entryRequest.onerror = () => fail(entryRequest.error || new Error('Не удалось прочитать запись журнала для CAS-обновления.'));
+
+        const generationRequest = meta.get(JOURNAL_RESET_GENERATION_KEY);
+        generationRequest.onsuccess = () => {
+          resetGeneration = normalizeJournalResetGeneration(generationRequest.result?.value);
+          generationReady = true;
+          compareAndWrite();
+        };
+        generationRequest.onerror = () => fail(generationRequest.error || new Error('Не удалось прочитать generation журнала для CAS-обновления.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function deleteJournalEntryRecordOnlyCas(tokenValue) {
+  const token = normalizeJournalEntryAuthorityToken(tokenValue);
+  if (!token) {
+    const error = new Error('Некорректный CAS token записи журнала.');
+    error.code = 'JOURNAL_ENTRY_AUTHORITY_TOKEN_INVALID';
+    throw error;
+  }
+  const statsToken = await beginJournalStatsMutation('delete');
+  const db = await openJournalDb();
+  let result = null;
+  try {
+    result = await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_STORE, JOURNAL_META_STORE],
+      'readwrite',
+      'CAS удаление записи журнала',
+      ({ tx, setResult, fail }) => {
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
+        let entryReady = false;
+        let generationReady = false;
+        let current = null;
+        let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+        let compared = false;
+        const compareAndDelete = () => {
+          if (compared || !entryReady || !generationReady) return;
+          compared = true;
+          if (!journalEntryAuthorityMatches(resetGeneration, current, token)) {
+            setResult({ ok: false, stale: true, entry: null });
+            return;
+          }
+          const del = entries.delete(token.entryId);
+          del.onsuccess = () => {
+            touchJournalDbRevision(tx, 'cas-delete-entry');
+            setResult({ ok: true, stale: false, entry: current });
+          };
+          del.onerror = () => fail(del.error || new Error('Не удалось CAS-удалить запись журнала.'));
+        };
+
+        const entryRequest = entries.get(token.entryId);
+        entryRequest.onsuccess = () => {
+          current = entryRequest.result || null;
+          entryReady = true;
+          compareAndDelete();
+        };
+        entryRequest.onerror = () => fail(entryRequest.error || new Error('Не удалось прочитать запись журнала для CAS-удаления.'));
+
+        const generationRequest = meta.get(JOURNAL_RESET_GENERATION_KEY);
+        generationRequest.onsuccess = () => {
+          resetGeneration = normalizeJournalResetGeneration(generationRequest.result?.value);
+          generationReady = true;
+          compareAndDelete();
+        };
+        generationRequest.onerror = () => fail(generationRequest.error || new Error('Не удалось прочитать generation журнала для CAS-удаления.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } catch (error) {
+    await completeJournalStatsMutation(statsToken).catch(() => {});
+    throw error;
+  } finally { db.close(); }
+
+  if (!result?.ok) {
+    await completeJournalStatsMutation(statsToken).catch(() => {});
+    return result || { ok: false, stale: true, entry: null };
+  }
+
+  const entry = result.entry;
+  if (entry?.urlKey) {
+    try {
+      await rebuildUrlStatsForUrl(entry.urlKey);
+      await completeJournalStatsMutation(statsToken);
+    } catch (error) {
+      console.warn('WebClip urlStats CAS delete deferred repair:', error);
+    }
+  } else {
+    await completeJournalStatsMutation(statsToken);
+  }
+  return result;
+}
+
 async function updateJournalEntryRecord(id, patch = {}) {
   const db = await openJournalDb();
   try {
