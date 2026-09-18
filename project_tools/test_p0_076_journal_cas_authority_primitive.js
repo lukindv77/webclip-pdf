@@ -159,8 +159,13 @@ ok(!legacyUpdate.includes('advanceJournalResetGeneration'), 'ordinary point upda
 
 const guardedCheckpoint = functionSource(worker, 'updateReadMoveJournalCheckpointFromReceipt');
 ok(guardedCheckpoint.includes('entryRevision: nextJournalEntryRevision(current.entryRevision)'), 'receipt-guarded ReadLater checkpoint advances entry revision');
+ok(guardedCheckpoint.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)'), 'ReadLater checkpoint consumes exact receipt-local P0-076 authority');
+ok(guardedCheckpoint.includes('pendingDestructiveMoveAdvanceJournalAuthority(receipt, resetGeneration, updated)'), 'ReadLater checkpoint advances receipt cursor with its own row write');
 const guardedFinalize = functionSource(worker, 'finalizeReadMoveJournalFromReceipt');
 ok(guardedFinalize.includes('entryRevision: nextJournalEntryRevision(current.entryRevision)'), 'receipt-guarded ReadLater terminal patch advances entry revision');
+ok(guardedFinalize.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)'), 'ReadLater finalizer refuses stale receipt-local P0-076 authority');
+const trashFinalize = functionSource(worker, 'finalizeTrashDeleteFromReceipt');
+ok(trashFinalize.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)'), 'Trash finalizer refuses stale receipt-local P0-076 authority');
 
 const snapshot = functionSource(worker, 'readJournalEntryWithAuthority');
 ok(snapshot.includes('[JOURNAL_STORE, JOURNAL_META_STORE]'), 'authority snapshot reads row and generation in one transaction');
@@ -209,5 +214,5 @@ console.log(
   'P0-076 Journal CAS authority primitive: PASS; checks=' + checks +
   '; reset_generation=true; entry_revision=true; import_fresh=true; export_strips_authority=true;' +
   ' capture_atomic=true; cas_patch=true; cas_delete=true; point_writes_increment=true;' +
-  ' callers_migrated=false; comments_cas=true; release_closed=false'
+  ' callers_migrated=false; comments_cas=true; destructive_receipt_cas=true; release_closed=false'
 );
