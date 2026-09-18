@@ -218,7 +218,7 @@ async function createSelectedFixtureTab(options, articleUrl, label) {
       // reliable opportunity to pause the physical write before completion.
       const bulk = document.createElement('div');
       bulk.id = 'p0-072-physical-bulk';
-      for (let i = 0; i < 240; i += 1) {
+      for (let i = 0; i < 48; i += 1) {
         const page = document.createElement('section');
         page.style.breakAfter = 'page';
         page.textContent = 'P0-072 physical Chrome reset/restart synthetic page ' + i + ' '.repeat(32);
@@ -261,10 +261,49 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
   assert(start?.clicked?.ok, label + ': PDF proceed button missing: ' + String(start?.clicked?.reason || ''));
 
   const created = await waitFor(async () => {
-    const evidence = await options.evaluate('globalThis.__p0072ChromeDownloadEvidence');
-    const rows = Array.isArray(evidence?.created) ? evidence.created : [];
-    return rows.find((item) => !previousIds.has(Number(item.id))) || null;
-  }, { timeoutMs: 70_000, intervalMs: 100, label: label + ' download onCreated+pause' });
+    const state = await options.evaluate(`(async () => {
+      const evidence = globalThis.__p0072ChromeDownloadEvidence || { created: [], pauseErrors: [] };
+      const downloads = await chrome.downloads.search({ orderBy: ['-startTime'], limit: 10 });
+      const modal = await chrome.scripting.executeScript({
+        target: { tabId: ${Number(tabId)} },
+        func: () => {
+          const shadow = document.getElementById('webclip-pdf-extension-root')?.shadowRoot;
+          return {
+            title: String(shadow?.querySelector('.modal h2')?.textContent || ''),
+            text: String(shadow?.querySelector('.modal p')?.textContent || '')
+          };
+        }
+      }).catch(() => []);
+      return {
+        evidence,
+        downloads,
+        modal: modal[0]?.result || null
+      };
+    })()`);
+    const rows = Array.isArray(state?.evidence?.created) ? state.evidence.created : [];
+    const observed = rows.find((item) => !previousIds.has(Number(item.id))) || null;
+    if (observed) return observed;
+    const candidate = (Array.isArray(state?.downloads) ? state.downloads : []).find((item) =>
+      /\\.pdf$/i.test(String(item?.filename || ''))
+      && !previousIds.has(Number(item?.id))
+    );
+    if (candidate) {
+      throw new Error(
+        label + ': PDF DownloadItem exists but extension-page onCreated observer has no evidence; '
+        + JSON.stringify({
+          id: candidate.id,
+          state: candidate.state,
+          paused: candidate.paused,
+          canResume: candidate.canResume,
+          pauseErrors: state?.evidence?.pauseErrors || []
+        })
+      );
+    }
+    if (/Не удалось сформировать PDF/.test(String(state?.modal?.title || ''))) {
+      throw new Error(label + ': PDF UI failure: ' + String(state?.modal?.text || state?.modal?.title || ''));
+    }
+    return null;
+  }, { timeoutMs: 70_000, intervalMs: 150, label: label + ' download onCreated+pause' });
 
   assert(Number.isInteger(Number(created.id)), label + ': download id missing');
   const id = Number(created.id);
