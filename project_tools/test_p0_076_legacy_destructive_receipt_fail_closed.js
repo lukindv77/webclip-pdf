@@ -131,7 +131,7 @@ ok(verified.includes('verifiedResourceId'), 'P1-090 remote-object evidence remai
 ok(verified.includes('verifiedPath'), 'terminal remote path remains durable');
 ok(verified.includes("phase: 'remote-verified'"), 'remote terminal truth remains P0-072 state, not CAS state');
 
-ok(registry.includes('| P0-076 | ACTIVE |'), 'P0-076 remains ACTIVE pending closure review');
+ok(registry.includes('| P0-076 | DONE |'), 'P0-076 closure follows the completed closure review');
 ok(registry.includes('| P0-072 | ACTIVE |'), 'P0-072 remains separate ACTIVE owner');
 ok(registry.includes('| P1-090 | ACTIVE |'), 'P1-090 remains separate ACTIVE owner');
 ok(/\*\*NOT READY\.\*\*/.test(readiness), 'release readiness remains NOT READY');

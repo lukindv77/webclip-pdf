@@ -97,7 +97,7 @@ ok(editComment.includes('updateJournalEntryRecordCas(authority,'), 'comment edit
 ok(deleteComment.includes('updateJournalEntryRecordCas(authority,'), 'comment delete now composes the same P0-076 CAS primitive');
 ok(!addComment.includes('updateJournalEntryRecord(id,'), 'comment migration does not reintroduce blind point writes');
 
-ok(registry.includes('| P0-076 | ACTIVE |'), 'P0-076 remains ACTIVE');
+ok(registry.includes('| P0-076 | DONE |'), 'P0-076 closure is durable in Registry');
 ok(registry.includes('| P0-072 | ACTIVE |'), 'P0-072 remains separate ACTIVE owner');
 ok(registry.includes('| P1-090 | ACTIVE |'), 'P1-090 remains separate ACTIVE owner');
 ok(registry.includes('| P1-198 | ACTIVE |'), 'P1-198 remains separate ACTIVE owner');

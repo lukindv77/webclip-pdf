@@ -147,7 +147,7 @@ const verified = functionSource(worker, 'markPendingDestructiveMoveVerified');
 ok(verified.includes('verifiedResourceId'), 'P1-090/P0-072 remote-object evidence remains in terminal receipt');
 ok(verified.includes("phase: 'remote-verified'"), 'remote terminal truth is not replaced by CAS');
 
-ok(registry.includes('| P0-076 | ACTIVE |'), 'P0-076 remains ACTIVE');
+ok(registry.includes('| P0-076 | DONE |'), 'P0-076 closure is durable in Registry');
 ok(registry.includes('| P0-072 | ACTIVE |'), 'P0-072 remains separate ACTIVE owner');
 ok(registry.includes('| P1-090 | ACTIVE |'), 'P1-090 remains separate ACTIVE owner');
 ok(registry.includes('| P1-198 | ACTIVE |'), 'P1-198 remains separate ACTIVE owner');

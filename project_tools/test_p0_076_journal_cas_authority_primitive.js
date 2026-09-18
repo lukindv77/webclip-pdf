@@ -78,7 +78,7 @@ ok(worker.includes("const JOURNAL_DB_VERSION = 8;"), 'authority primitive reuses
 ok(worker.includes("const JOURNAL_RESET_GENERATION_KEY = 'resetGeneration';"), 'dedicated reset-generation metadata key exists');
 ok(worker.includes('const JOURNAL_INITIAL_RESET_GENERATION = 1;'), 'legacy DB has deterministic reset-generation baseline');
 ok(worker.includes('const JOURNAL_INITIAL_ENTRY_REVISION = 1;'), 'legacy/new row has deterministic entry-revision baseline');
-ok(registry.includes('| P0-076 | ACTIVE |'), 'P0-076 remains ACTIVE');
+ok(registry.includes('| P0-076 | DONE |'), 'P0-076 closure is durable in Registry');
 ok(registry.includes('| P0-072 | ACTIVE |'), 'P0-072 remains separate ACTIVE owner');
 ok(registry.includes('| P1-090 | ACTIVE |'), 'P1-090 remains separate ACTIVE owner');
 
@@ -214,5 +214,5 @@ console.log(
   'P0-076 Journal CAS authority primitive: PASS; checks=' + checks +
   '; reset_generation=true; entry_revision=true; import_fresh=true; export_strips_authority=true;' +
   ' capture_atomic=true; cas_patch=true; cas_delete=true; point_writes_increment=true;' +
-  ' callers_migrated=false; comments_cas=true; destructive_receipt_cas=true; release_closed=false'
+  ' callers_migrated=true; comments_cas=true; destructive_receipt_cas=true; release_closed=false'
 );

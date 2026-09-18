@@ -100,9 +100,9 @@ Focused deterministic production witnesses:
 
 P0-072 remains **ACTIVE**, not DONE. Production reset-survival and local restart handling are implemented for the known external-effect classes, but closure still requires real browser-process restart/crash evidence, authorized real Chrome automatic-download reset/late-terminal evidence, authorized isolated Yandex destructive unknown/late-settlement evidence, and a reviewed operator/manual-resolution path for permanently unknown destructive receipts. P1-090/P0-076/P1-198 remain separate ACTIVE owners. Release readiness remains **NOT READY**.
 
-## Current P0-076 implementation boundary
+## Current P0-076 closure boundary
 
-P0-076 owns local Journal authority for delayed single-entry mutations. The first production tranche introduces the **authority primitive** only: a dedicated Journal/reset generation plus per-entry revision accounting and generic atomic CAS patch/delete helpers. Caller migration is intentionally separate, so P0-076 remains **ACTIVE**.
+P0-076 is **DONE** for local Journal authority over delayed single-entry mutations. The implementation uses a dedicated Journal/reset generation plus per-entry revision accounting, atomic CAS patch/delete, receipt-carried restart authority for destructive flows, and fail-closed handling for legacy no-cursor receipts. The closure review on canonical implementation baseline `a439c2b5c782c9c0fe9e7960375d39842c17fd3b` enumerated every production Journal row mutation/finalizer class and mapped all 12 acceptance requirements from the 2026-09-12 revalidation evidence.
 
 `JOURNAL_RESET_GENERATION_KEY = resetGeneration` lives in the existing Journal meta store and is distinct from `JOURNAL_META_REVISION_KEY`. Missing legacy metadata deterministically means generation 1. Every scoped/full `clearJournalEntries()` and every staged import-replace schedules exactly one generation increment inside the same IndexedDB readwrite transaction as the authority-replacing Journal transition. Ordinary append/point update/delete do not advance this dedicated reset generation. The older all-mutations revision remains unchanged for export/import preview and view invalidation semantics.
 
@@ -129,8 +129,9 @@ Focused deterministic production witness:
 - `project_tools/test_p0_076_destructive_receipt_cas_composition.js` — new-receipt CAS cursor binding, atomic creation/admission checks, ReadLater cursor advance, terminal non-retargeting, preserved P0-072/P1-090 remote authority and strict no-cursor local fail-closed behavior.
 - `project_tools/test_p0_076_legacy_destructive_receipt_fail_closed.js` — legacy no-cursor rejection, sticky manual-resolution disposition, reset-superseded history-only retirement and preservation of verified remote evidence.
 - `project_tools/test_p0_076_single_entry_generation_cas_model.js` remains the broader acceptance model for same-id import replacement, concurrent Mark Read, comment lost-update, scoped reset and P0-072 composition.
+- `project_tools/test_p0_076_single_entry_generation_cas_closure.js` — closure source-spec binding for the complete mutation surface: atomic authority capture/commit, reset-generation transitions, callers/finalizers, legacy restart policy, blind-helper zero-callers, append non-overwrite, backup authority stripping and adjacent-owner separation.
 
-This is **not yet P0-076 closure**. Local/keep delete and comments use generic CAS; new ReadLater/Trash receipts carry an exact cursor; and verified legacy no-cursor receipts can no longer automatically mutate current Journal state. The remaining work is now a dedicated closure review: enumerate every production single-entry write/delete/finalizer, prove zero blind or legacy-authority mutation paths, and verify the P0-072/P1-090/P1-198 boundaries before changing the owner status. P0-076 remains **ACTIVE** in this implementation tranche and release readiness remains **NOT READY**.
+Closure result: no production delayed single-entry mutation can acquire authority over a newer same-id Journal row merely because the textual id is reused. The historical blind update/delete helpers have zero production callers; delayed append/recovery cannot overwrite an existing same-id replacement; clear/import establish fresh authority atomically; destructive restart finalization either carries exact CAS authority or fails closed. P0-072, P1-090 and P1-198 remain separate **ACTIVE** owners. P0-076 is **DONE**; release readiness remains **NOT READY**.
 
 ## Current P0-023 implementation boundary
 
