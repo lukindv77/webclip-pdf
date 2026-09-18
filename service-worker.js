@@ -92,6 +92,7 @@ const PENDING_REMOTE_STALE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_PENDING_REMOTE_STALE_SAVES = 100;
 const MAX_PENDING_DESTRUCTIVE_MOVES = 100;
 const PENDING_DESTRUCTIVE_RECONCILE_BATCH = 12;
+const PENDING_DESTRUCTIVE_MANUAL_LIST_MAX = 50;
 const MAX_IMPORTED_URL_CHARS = 8192;
 const MAX_IMPORTED_PATH_CHARS = 4096;
 const MAX_IMPORTED_COMMENT_CHARS = 100000;
@@ -2919,6 +2920,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const ids = Array.isArray(message.ids) ? message.ids : [];
         return { ok: true, entries: await getJournalEntriesByIds(ids) };
       }
+
+      case 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_LIST':
+        if (senderKind !== 'extension') throw new Error('Manual destructive recovery доступен только странице журнала WebClip.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return listPendingDestructiveManualReceipts(message.limit);
+
+      case 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_DISMISS':
+        if (senderKind !== 'extension') throw new Error('Списание manual destructive recovery доступно только странице журнала WebClip.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return dismissPendingDestructiveManualReceipt(String(message.id || ''), message.updatedAt);
 
       case 'WEBCLIP_OPEN_JOURNAL_SAVED_FILE': {
         if (senderKind !== 'content' && senderKind !== 'extension') throw new Error('Команда недоступна из этого контекста.');
@@ -8032,6 +8043,154 @@ async function markPendingDestructiveMoveManualResolution(id, reason = '', trigg
       RECOVERY_IDB_TX_TIMEOUT_MS
     );
   } finally { db.close(); }
+}
+
+function pendingDestructiveMoveIsManual(item = {}) {
+  return Boolean(
+    item
+    && typeof item === 'object'
+    && (String(item.phase || '') === 'manual-resolution' || item.manualResolutionRequired === true)
+  );
+}
+
+function pendingDestructiveMoveManualReceiptForUi(item = {}) {
+  if (!pendingDestructiveMoveIsManual(item)) return null;
+  const kind = String(item.kind || '');
+  return Object.freeze({
+    id: String(item.id || '').slice(0, MAX_IMPORTED_ENTRY_ID_CHARS),
+    kind: kind === 'read-move' || kind === 'trash-move' ? kind : 'unknown',
+    phase: String(item.phase || '').slice(0, 40),
+    operationId: String(item.operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
+    sourceJournalEntryId: String(item.sourceJournalEntryId || '').slice(0, MAX_IMPORTED_ENTRY_ID_CHARS),
+    sourceJournalCreatedAt: Math.max(0, Number(item.sourceJournalCreatedAt) || 0),
+    sourceSiteKey: String(item.sourceSiteKey || '').slice(0, 512),
+    sourcePath: normalizeDiskPath(String(item.sourcePath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
+    targetPath: normalizeDiskPath(String(item.targetPath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
+    verifiedPath: normalizeDiskPath(String(item.verifiedPath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
+    sourceResourceId: String(item.sourceResourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
+    verifiedResourceId: String(item.verifiedResourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
+    rootPath: normalizeDiskPath(String(item.rootPath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
+    hasAccountBinding: Boolean(String(item.accountUid || '').trim()),
+    updatedAt: Math.max(0, Number(item.updatedAt) || 0),
+    manualResolutionAt: Math.max(0, Number(item.manualResolutionAt) || 0),
+    manualResolutionTrigger: String(item.manualResolutionTrigger || '').slice(0, 80),
+    lastError: String(item.lastError || '').slice(0, 2000),
+    supersededByJournalReset: item.supersededByJournalReset === true
+  });
+}
+
+async function listPendingDestructiveManualReceipts(maxItems = PENDING_DESTRUCTIVE_MANUAL_LIST_MAX) {
+  const cap = Math.max(1, Math.min(PENDING_DESTRUCTIVE_MANUAL_LIST_MAX, Number(maxItems) || PENDING_DESTRUCTIVE_MANUAL_LIST_MAX));
+  const db = await openJournalDb();
+  try {
+    return (await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      'readonly',
+      'Чтение destructive receipts для ручного решения',
+      ({ store, setResult, fail }) => {
+        const receipts = [];
+        let totalManual = 0;
+        const request = store().index('updatedAt').openCursor(null, 'next');
+        request.onsuccess = () => {
+          try {
+            const cursor = request.result;
+            if (!cursor) {
+              setResult({ ok: true, receipts, totalManual, truncated: totalManual > receipts.length });
+              return;
+            }
+            const item = cursor.value || {};
+            if (pendingDestructiveMoveIsManual(item)) {
+              totalManual += 1;
+              if (receipts.length < cap) {
+                const safe = pendingDestructiveMoveManualReceiptForUi(item);
+                if (safe?.id && safe.updatedAt > 0) receipts.push(safe);
+              }
+            }
+            cursor.continue();
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать destructive receipts для ручного решения.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    )) || { ok: true, receipts: [], totalManual: 0, truncated: false };
+  } finally { db.close(); }
+}
+
+async function dismissPendingDestructiveManualReceipt(id, expectedUpdatedAt) {
+  const key = String(id || '').trim();
+  const expected = Number(expectedUpdatedAt);
+  if (!key || key.length > MAX_IMPORTED_ENTRY_ID_CHARS || !Number.isSafeInteger(expected) || expected <= 0) {
+    const error = new Error('Некорректная authority ручного destructive receipt.');
+    error.code = 'WEBCLIP_DESTRUCTIVE_MANUAL_AUTHORITY_INVALID';
+    throw error;
+  }
+  const db = await openJournalDb();
+  let result = null;
+  try {
+    result = await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      'readwrite',
+      'Списание destructive receipt после ручной проверки',
+      ({ store, setResult, fail }) => {
+        const pending = store();
+        const request = pending.get(key);
+        request.onsuccess = () => {
+          try {
+            const current = request.result;
+            if (!current) {
+              setResult({ ok: false, stale: true, missing: true, error: 'Recovery receipt уже отсутствует. Обновите список.' });
+              return;
+            }
+            if (!pendingDestructiveMoveIsManual(current)) {
+              setResult({ ok: false, stale: true, notManual: true, error: 'Recovery receipt больше не находится в manual-resolution. Обновите список.' });
+              return;
+            }
+            const currentUpdatedAt = Math.max(0, Number(current.updatedAt) || 0);
+            if (currentUpdatedAt !== expected) {
+              setResult({ ok: false, stale: true, updatedAt: currentUpdatedAt, error: 'Recovery receipt изменился после отображения. Обновите список и проверьте его заново.' });
+              return;
+            }
+            if (activeDestructiveMoveReceipts.has(key)) {
+              setResult({ ok: false, stale: true, busy: true, error: 'Recovery receipt снова принадлежит активной операции и не может быть списан.' });
+              return;
+            }
+            const safe = pendingDestructiveMoveManualReceiptForUi(current);
+            const del = pending.delete(key);
+            del.onsuccess = () => setResult({ ok: true, stale: false, receipt: safe });
+            del.onerror = () => fail(del.error || new Error('Не удалось списать manual-resolution destructive receipt.'));
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось перечитать manual-resolution destructive receipt.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+
+  if (!result?.ok) return result || { ok: false, stale: true, error: 'Recovery receipt не был списан.' };
+  activeDestructiveMoveReceipts.delete(key);
+  const receipt = result.receipt || {};
+  const operationId = String(receipt.operationId || '');
+  recordOperationStage(
+    operationId,
+    'manual-resolution-dismissed',
+    'Пользователь списал destructive recovery receipt после внешней ручной проверки. WebClip удалил только recovery receipt и не изменял Journal или Яндекс Диск.',
+    100,
+    'partial',
+    {
+      receiptId: key,
+      kind: String(receipt.kind || ''),
+      sourcePath: String(receipt.sourcePath || ''),
+      targetPath: String(receipt.targetPath || ''),
+      verifiedPath: String(receipt.verifiedPath || ''),
+      sourceResourceId: String(receipt.sourceResourceId || ''),
+      verifiedResourceId: String(receipt.verifiedResourceId || ''),
+      receiptUpdatedAt: expected
+    }
+  );
+  await flushOperationLogWrites(operationId).catch(() => {});
+  return result;
 }
 
 async function listPendingDestructiveMovesForRecovery(maxItems = PENDING_DESTRUCTIVE_RECONCILE_BATCH) {

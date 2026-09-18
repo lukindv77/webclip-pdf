@@ -51,6 +51,8 @@ const MAX_DOMAIN_FILTER_CHILDREN = 1500;
 let renderGeneration = 0;
 let journalLoadGeneration = 0;
 let backupInfoRefreshInFlight = null;
+let destructiveRecoveryRefreshInFlight = null;
+let manualDestructiveReceipts = new Map();
 const expandedUrlGroups = new Set();
 let journalReloadTimer = 0;
 let journalRevisionCheckTimer = 0;
@@ -185,6 +187,10 @@ const statusEl = document.getElementById('status');
 const lastOperationIdRow = document.getElementById('lastOperationIdRow');
 const lastOperationIdEl = document.getElementById('lastOperationId');
 const backupInfoEl = document.getElementById('backupInfo');
+const destructiveRecoveryPanel = document.getElementById('destructiveRecoveryPanel');
+const destructiveRecoveryCount = document.getElementById('destructiveRecoveryCount');
+const destructiveRecoveryList = document.getElementById('destructiveRecoveryList');
+const refreshDestructiveRecoveryButton = document.getElementById('refreshDestructiveRecovery');
 const entriesEl = document.getElementById('entries');
 const domainFilterPanel = document.getElementById('domainFilterPanel');
 const domainFilterTree = document.getElementById('domainFilterTree');
@@ -337,6 +343,13 @@ exportYandexButton.addEventListener('click', exportJournalToYandex);
 importYandexButton.addEventListener('click', importJournalFromYandex);
 clearSiteButton.addEventListener('click', clearDomainJournal);
 clearAllButton.addEventListener('click', clearEntireJournal);
+refreshDestructiveRecoveryButton.addEventListener('click', () => void refreshDestructiveRecovery());
+destructiveRecoveryList.addEventListener('click', (event) => {
+  const target = event.target instanceof Element ? event.target.closest('button[data-manual-receipt-id]') : null;
+  if (!target) return;
+  const receipt = manualDestructiveReceipts.get(String(target.dataset.manualReceiptId || ''));
+  if (receipt) void dismissManualDestructiveReceipt(receipt, target);
+});
 document.getElementById('copyLastOperationId').addEventListener('click', () => copyOperationId(lastOperationIdEl.textContent));
 confirmCancel.addEventListener('click', () => finishConfirmation(false));
 confirmProceed.addEventListener('click', verifyConfirmationCode);
@@ -1507,7 +1520,10 @@ async function loadJournal({ preserveScroll = true, clearStatus = false, refresh
   if (clearStatus) setStatus('', '');
   updateModeButtons();
   try {
-    if (refreshBackup) void refreshBackupInfo();
+    if (refreshBackup) {
+      void refreshBackupInfo();
+      void refreshDestructiveRecovery();
+    }
     const meta = await readJournalViewMetaWithFallback({
       source: requestedSourceUrl,
       reading: requestedReadingFilter,
@@ -1564,6 +1580,157 @@ function refreshBackupInfo() {
   return tracked;
 }
 
+
+function manualDestructiveReceiptKindLabel(kind) {
+  if (kind === 'read-move') return 'ReadLater → Upload';
+  if (kind === 'trash-move') return 'Удаление → Trash';
+  return 'Неизвестная destructive-операция';
+}
+
+function appendDestructiveRecoveryMeta(container, label, value, { code = false } = {}) {
+  const text = String(value || '').trim();
+  if (!text) return;
+  const row = document.createElement('div');
+  const strong = document.createElement('strong');
+  strong.textContent = `${label}: `;
+  row.append(strong);
+  const node = code ? document.createElement('code') : document.createElement('span');
+  node.textContent = text;
+  row.append(node);
+  container.append(row);
+}
+
+function renderDestructiveRecovery(result) {
+  const receipts = Array.isArray(result?.receipts) ? result.receipts : [];
+  const totalManual = Math.max(receipts.length, Math.max(0, Number(result?.totalManual) || 0));
+  const wasHidden = destructiveRecoveryPanel.classList.contains('hidden');
+  manualDestructiveReceipts = new Map(receipts.map((item) => [String(item?.id || ''), item]).filter(([id]) => id));
+  destructiveRecoveryCount.textContent = String(totalManual);
+  destructiveRecoveryPanel.classList.toggle('hidden', totalManual <= 0);
+  destructiveRecoveryList.replaceChildren();
+  if (totalManual <= 0) return;
+  if (wasHidden) destructiveRecoveryPanel.open = true;
+
+  const fragment = document.createDocumentFragment();
+  for (const receipt of receipts) {
+    const card = document.createElement('article');
+    card.className = 'destructive-recovery-card';
+
+    const title = document.createElement('div');
+    title.className = 'destructive-recovery-card-title';
+    title.textContent = manualDestructiveReceiptKindLabel(receipt.kind);
+    card.append(title);
+
+    const meta = document.createElement('div');
+    meta.className = 'destructive-recovery-card-meta';
+    appendDestructiveRecoveryMeta(meta, 'operationId', receipt.operationId, { code: true });
+    appendDestructiveRecoveryMeta(meta, 'Источник', receipt.sourcePath, { code: true });
+    appendDestructiveRecoveryMeta(meta, 'Ожидаемая цель', receipt.targetPath, { code: true });
+    appendDestructiveRecoveryMeta(meta, 'Подтверждённый путь', receipt.verifiedPath, { code: true });
+    appendDestructiveRecoveryMeta(meta, 'source resourceId', receipt.sourceResourceId, { code: true });
+    appendDestructiveRecoveryMeta(meta, 'verified resourceId', receipt.verifiedResourceId, { code: true });
+    appendDestructiveRecoveryMeta(meta, 'Корень', receipt.rootPath, { code: true });
+    appendDestructiveRecoveryMeta(meta, 'Сайт', receipt.sourceSiteKey);
+    appendDestructiveRecoveryMeta(meta, 'Ручная проверка требуется с', formatDate(receipt.manualResolutionAt || receipt.updatedAt));
+    appendDestructiveRecoveryMeta(meta, 'Последнее изменение receipt', formatDate(receipt.updatedAt));
+    if (receipt.supersededByJournalReset) {
+      appendDestructiveRecoveryMeta(meta, 'Журнал', 'исходное состояние уже superseded очисткой/импортом');
+    }
+    card.append(meta);
+
+    if (receipt.lastError) {
+      const error = document.createElement('div');
+      error.className = 'destructive-recovery-card-error';
+      error.textContent = receipt.lastError;
+      card.append(error);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'destructive-recovery-card-actions';
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'destructive-recovery-dismiss';
+    dismiss.dataset.manualReceiptId = String(receipt.id || '');
+    dismiss.textContent = 'Списать receipt после ручной проверки';
+    actions.append(dismiss);
+    card.append(actions);
+    fragment.append(card);
+  }
+
+  if (result?.truncated) {
+    const note = document.createElement('div');
+    note.className = 'destructive-recovery-card-error';
+    note.textContent = `Показаны первые ${receipts.length} из ${totalManual} manual receipts. После списания обновите список.`;
+    fragment.append(note);
+  }
+  destructiveRecoveryList.append(fragment);
+}
+
+function refreshDestructiveRecovery() {
+  if (destructiveRecoveryRefreshInFlight) return destructiveRecoveryRefreshInFlight;
+  const run = (async () => {
+    refreshDestructiveRecoveryButton.disabled = true;
+    try {
+      const result = await sendReadOnlyRuntimeMessage(
+        { type: 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_LIST', limit: 50 },
+        20_000,
+        'Чтение destructive receipts для ручной проверки'
+      );
+      requireOk(result);
+      renderDestructiveRecovery(result);
+    } catch (error) {
+      manualDestructiveReceipts = new Map();
+      destructiveRecoveryPanel.classList.remove('hidden');
+      destructiveRecoveryPanel.open = true;
+      destructiveRecoveryCount.textContent = '?';
+      destructiveRecoveryList.textContent = `Не удалось прочитать manual-resolution receipts: ${error?.message || String(error)}`;
+    } finally {
+      refreshDestructiveRecoveryButton.disabled = false;
+    }
+  })();
+  const tracked = run.finally(() => {
+    if (destructiveRecoveryRefreshInFlight === tracked) destructiveRecoveryRefreshInFlight = null;
+  });
+  destructiveRecoveryRefreshInFlight = tracked;
+  return tracked;
+}
+
+async function dismissManualDestructiveReceipt(receipt, button) {
+  const id = String(receipt?.id || '');
+  const updatedAt = Number(receipt?.updatedAt || 0);
+  if (!id || !Number.isSafeInteger(updatedAt) || updatedAt <= 0) {
+    setStatus('Recovery receipt устарел или повреждён. Обновите список.', 'error');
+    return;
+  }
+  const pathHint = receipt.targetPath || receipt.verifiedPath || receipt.sourcePath || 'путь не записан';
+  const resourceHint = receipt.verifiedResourceId || receipt.sourceResourceId || 'resourceId не записан';
+  const confirmed = await requestDangerousConfirmation({
+    title: 'Списать destructive recovery receipt',
+    text: `Сначала вручную проверьте Яндекс Диск и убедитесь в фактическом состоянии файла. Ориентир: ${pathHint}; resourceId: ${resourceHint}. После подтверждения WebClip удалит ТОЛЬКО recovery receipt. WebClip не будет обращаться к Яндекс Диску, перемещать/удалять файл или менять запись Журнала. Если есть сомнения — нажмите «Отмена» и оставьте receipt.`
+  });
+  if (!confirmed) return;
+
+  button.disabled = true;
+  try {
+    const result = await readJournalExtensionApiBounded(
+      () => chrome.runtime.sendMessage({
+        type: 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_DISMISS',
+        id,
+        updatedAt
+      }),
+      'Списание destructive recovery receipt',
+      20_000
+    );
+    requireOk(result);
+    setStatus('Recovery receipt списан после ручной проверки. WebClip не изменял Яндекс Диск и Журнал.', 'ok');
+    await refreshDestructiveRecovery();
+  } catch (error) {
+    setStatus(error?.message || String(error), 'error');
+    await refreshDestructiveRecovery().catch(() => {});
+  } finally {
+    button.disabled = false;
+  }
+}
 
 function updateJournalModeCounts() {
   currentButton.textContent = `Текущего URL (${selectedReadingCount(journalModeCounts.current)})`;
