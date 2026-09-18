@@ -10122,6 +10122,7 @@ async function generatePdfBlob(tabId) {
   let attached = false;
   let streamHandle = '';
   let navigationFence = null;
+  let navigationFenceCleanupError = null;
   let primaryError = null;
   if (debuggerLateAttachCleanupByTab.has(tabId) || debuggerPendingDetachByTab.has(tabId)) {
     throw makeDebuggerBusyError(tabId);
@@ -10230,8 +10231,8 @@ async function generatePdfBlob(tabId) {
       try {
         navigationFence.dispose();
       } catch (fenceCleanupError) {
-        if (!primaryError) throw fenceCleanupError;
-        console.warn('WebClip PDF navigation fence cleanup after error:', fenceCleanupError);
+        if (!primaryError) navigationFenceCleanupError = fenceCleanupError;
+        else console.warn('WebClip PDF navigation fence cleanup after error:', fenceCleanupError);
       }
     }
     if (streamHandle && attached) {
@@ -10257,6 +10258,7 @@ async function generatePdfBlob(tabId) {
       }
     }
     debuggerActiveTabs.delete(tabId);
+    if (navigationFenceCleanupError && !primaryError) throw navigationFenceCleanupError;
   }
 }
 
