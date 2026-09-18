@@ -3845,11 +3845,15 @@ async function captureCurrentPdfRetrySourceReceipt(sender) {
 
   let rows;
   try {
-    rows = await chrome.scripting.executeScript({
-      target: { tabId, documentIds: [sourceDocumentId] },
-      world: 'ISOLATED',
-      func: currentPdfRetrySourceProbe
-    });
+    rows = await withOperationTimeout(
+      Promise.resolve(chrome.scripting.executeScript({
+        target: { tabId, documentIds: [sourceDocumentId] },
+        world: 'ISOLATED',
+        func: currentPdfRetrySourceProbe
+      })),
+      SCRIPT_EXECUTION_TIMEOUT_MS,
+      'Проверка exact source-document generation перед PDF retry'
+    );
   } catch (_) {
     const error = new Error('The requesting source document is no longer available for PDF retry.');
     error.code = 'WEBCLIP_RETRY_SOURCE_DOCUMENT_CHANGED';
