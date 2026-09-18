@@ -39,6 +39,7 @@ function deferred() {
       return d.promise;
     },
     refreshBackupInfo() { return backupRefresh.promise; },
+    refreshDestructiveRecovery() { return Promise.resolve(); },
     makeEmptyJournalModeCounts() { return { all: {}, current: {}, site: {} }; },
     updateModeButtons() {},
     updateReadingFilterButtons() {},
