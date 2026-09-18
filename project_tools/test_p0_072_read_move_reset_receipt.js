@@ -204,13 +204,13 @@ ok(moveSection.includes('markPendingDestructiveMoveFailure(detachedReceiptId, er
 ok(moveSection.includes('removePendingDestructiveMove(detachedReceiptId)'), 'pre-admission failure retires disposable receipt');
 
 const trashSection = functionSource(worker, 'deleteJournalEntry');
-ok(trashSection.includes('moveJournalYandexFileToTrash(entry, operationId)'), 'Delete-to-Trash remains the next separate destructive class');
-ok(!trashSection.includes('checkpointPendingReadMoveIntent'), 'read-move tranche does not pretend to cover Trash');
-ok(!trashSection.includes('JOURNAL_PENDING_DESTRUCTIVE_STORE'), 'Trash has not silently acquired unreviewed receipt semantics');
+ok(trashSection.includes('moveJournalYandexFileToTrash(entry, operationId)'), 'Delete-to-Trash remains a separate destructive call-site class');
+ok(!trashSection.includes('checkpointPendingReadMoveIntent'), 'Trash never borrows the ReadLater receipt creator');
+ok(trashSection.includes('finalizeTrashDeleteFromReceipt(moved.detachedReceiptId)'), 'later Trash tranche composes the shared detached store through its own terminal finalizer');
 
 console.log(
   'P0-072 read-move reset receipt: PASS; checks=' + checks +
   '; db=v8; detached_receipt=true; prepared_drop=true; admitted_survives=true;' +
   ' journal_finalize_atomic=true; same_id_replacement_safe=true;' +
-  ' p1_090_exact_object=false; p0_076_full_cas=false; trash_move_pending=true; release_closed=false'
+  ' p1_090_exact_object=false; p0_076_full_cas=false; trash_move_composed=true; release_closed=false'
 );
