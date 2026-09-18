@@ -5606,18 +5606,22 @@ async function reconcilePendingLocalDownloads(trigger = 'maintenance', maxItems 
   return { trigger, checked: items.length, completed, interrupted, rebound, pending: pendingCount, unknown, expired, failed };
 }
 
-async function appendJournalEntry({ destination, filename, remotePath = '', folder = '', publicUrl = '', resourceId = '', accountUid = '', rootPath = '', meta = {}, journalEntryId = '', journalCreatedAt = 0, operationId = '' }, options = {}) {
+async function appendJournalEntry({ destination, filename, remotePath = '', folder = '', publicUrl = '', resourceId = '', accountUid = '', rootPath = '', meta = {}, journalEntryId = '', journalCreatedAt = 0, operationId = '', sourceReceipt = null }, options = {}) {
   const selectionSnapshot = sanitizeSelectionSnapshot(meta.selectionSnapshot);
   const createdAt = Number(journalCreatedAt || 0) > 0 ? Number(journalCreatedAt) : Date.now();
   const id = String(journalEntryId || '').trim()
     || (crypto.randomUUID ? crypto.randomUUID() : `${createdAt}-${Math.random().toString(16).slice(2)}`);
   const readingMode = meta.readingMode === 'later' && destination === 'yandex' ? 'later' : 'read';
+  const journalSourceReceipt = sanitizePdfSourceReceipt(sourceReceipt, {
+    operationId: String(operationId || '').slice(0, MAX_OPERATION_ID_CHARS)
+  });
   const entry = {
     id,
     createdAt,
     localDayKey: localDayKey(createdAt),
     operationDateTime: String(meta.localDateTime || ''),
     operationId: String(operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
+    ...(journalSourceReceipt ? { sourceReceipt: journalSourceReceipt } : {}),
     destination: destination === 'yandex' ? 'yandex' : 'download',
     readingMode,
     filename: String(filename || ''),
@@ -7249,12 +7253,16 @@ function normalizeImportedJournalEntry(raw, index, seenIds = null, forcedId = ''
   const importedDayKey = boundedImportString(raw.localDayKey || '', 32).trim();
   const importedOperationIdRaw = String(raw.operationId || '').trim();
   const importedOperationId = importedOperationIdRaw.length <= MAX_OPERATION_ID_CHARS && /^[A-Za-z0-9._:-]+$/.test(importedOperationIdRaw) ? importedOperationIdRaw : '';
+  const importedSourceReceipt = importedOperationId
+    ? sanitizePdfSourceReceipt(raw.sourceReceipt, { operationId: importedOperationId })
+    : null;
   return {
     id,
     createdAt,
     localDayKey: /^\d{4}-\d{2}-\d{2}$/.test(importedDayKey) ? importedDayKey : localDayKey(createdAt),
     operationDateTime: boundedImportString(raw.operationDateTime || '', MAX_IMPORTED_DATETIME_CHARS),
     operationId: importedOperationId,
+    ...(importedSourceReceipt ? { sourceReceipt: importedSourceReceipt } : {}),
     destination: raw.destination === 'yandex' ? 'yandex' : 'download',
     readingMode: raw.destination === 'yandex' && raw.readingMode === 'later' ? 'later' : 'read',
     filename: boundedImportString(raw.filename || '', 512),
