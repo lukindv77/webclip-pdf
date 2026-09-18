@@ -173,45 +173,47 @@ async function removePauseObserver(options) {
 }
 
 async function createSelectedFixtureTab(options, articleUrl, label) {
-  const result = await options.evaluate(`(async () => {
-    const tab = await chrome.tabs.create({ url: ${js(articleUrl)}, active: true });
-    const tabId = tab.id;
-    for (let i = 0; i < 120; i += 1) {
-      const current = await chrome.tabs.get(tabId);
-      if (current.status === 'complete') break;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-    const started = await chrome.tabs.sendMessage(tabId, { type: 'WEBCLIP_COMMAND', command: 'start' });
-    const selected = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: () => {
-        const article = document.getElementById('article');
-        if (!article) return { ok: false, reason: 'article-missing' };
-        // Make the real PDF non-trivial so chrome.downloads.onCreated has a
-        // reliable opportunity to pause the physical write before completion.
-        const bulk = document.createElement('div');
-        bulk.id = 'p0-072-physical-bulk';
-        for (let i = 0; i < 240; i += 1) {
-          const page = document.createElement('section');
-          page.style.breakAfter = 'page';
-          page.textContent = 'P0-072 physical Chrome reset/restart synthetic page ' + i + ' '.repeat(32);
-          bulk.append(page);
-        }
-        article.append(bulk);
-        article.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-        return {
-          ok: true,
-          included: Boolean(article.getAttribute('data-webclip-pdf-include')),
-          root: Boolean(document.getElementById('webclip-pdf-extension-root'))
-        };
+  const tab = await options.evaluate(`chrome.tabs.create({ url: ${js(articleUrl)}, active: true })`);
+  const tabId = Number(tab?.id);
+  assert(tabId > 0, label + ': fixture tab id missing');
+
+  await waitFor(async () => {
+    const current = await options.evaluate(`chrome.tabs.get(${tabId})`);
+    return current?.status === 'complete' ? current : null;
+  }, { timeoutMs: 10_000, intervalMs: 50, label: label + ' fixture tab load' });
+
+  await options.evaluate(`chrome.scripting.executeScript({ target: { tabId: ${tabId} }, files: ['content.js'] })`);
+  const started = await options.evaluate(
+    `chrome.tabs.sendMessage(${tabId}, { type: 'WEBCLIP_COMMAND', command: 'start' })`
+  );
+  const selected = await options.evaluate(`chrome.scripting.executeScript({
+    target: { tabId: ${tabId} },
+    func: () => {
+      const article = document.getElementById('article');
+      if (!article) return { ok: false, reason: 'article-missing' };
+      // Make the real PDF non-trivial so chrome.downloads.onCreated has a
+      // reliable opportunity to pause the physical write before completion.
+      const bulk = document.createElement('div');
+      bulk.id = 'p0-072-physical-bulk';
+      for (let i = 0; i < 240; i += 1) {
+        const page = document.createElement('section');
+        page.style.breakAfter = 'page';
+        page.textContent = 'P0-072 physical Chrome reset/restart synthetic page ' + i + ' '.repeat(32);
+        bulk.append(page);
       }
-    });
-    return { tabId, started, selected: selected[0]?.result || null };
-  })()`);
-  assert(result?.started?.ok, label + ': selection start failed');
-  assert(result?.selected?.ok && result.selected.included && result.selected.root, label + ': fixture selection failed');
-  return Number(result.tabId);
+      article.append(bulk);
+      article.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      return {
+        ok: true,
+        included: Boolean(article.getAttribute('data-webclip-pdf-include')),
+        root: Boolean(document.getElementById('webclip-pdf-extension-root'))
+      };
+    }
+  })`);
+  const selectedResult = Array.isArray(selected) ? selected[0]?.result || null : null;
+  assert(started?.ok, label + ': selection start failed');
+  assert(selectedResult?.ok && selectedResult.included && selectedResult.root, label + ': fixture selection failed');
+  return tabId;
 }
 
 async function triggerPdfDownload(options, tabId, previousIds, label) {
@@ -338,7 +340,7 @@ async function run() {
     browser = await launchChromium(testExtension.path, { preserveProfile: true });
     profile = browser.profile;
     const extensionId = browser.extensionId;
-    options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'P0-072 options page');
+    options = await browser.attachPage(`chrome-extension://${extensionId}/popup.html`, 'P0-072 guarded popup controller');
     await options.evaluate(`(async () => {
       await chrome.storage.local.clear();
       await chrome.storage.session.clear();
@@ -380,7 +382,7 @@ async function run() {
       preserveProfile: true
     });
     assert.strictEqual(browser.extensionId, extensionId, 'same profile/path must retain exact unpacked extension identity');
-    options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'P0-072 options page after restart');
+    options = await browser.attachPage(`chrome-extension://${extensionId}/popup.html`, 'P0-072 guarded popup controller after restart');
 
     const postRestartReceipt = await waitFor(async () => {
       const snap = await snapshot(options);
