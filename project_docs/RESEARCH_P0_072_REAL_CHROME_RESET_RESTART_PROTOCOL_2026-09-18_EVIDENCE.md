@@ -158,13 +158,27 @@ A closure-quality evidence record must retain, at minimum:
 
 No user document, OAuth token, signed URL or Yandex object is involved.
 
+## Hosted execution attempt on 2026-09-18
+
+The GitHub-hosted execution campaign did **not** produce a physical P0-072 PASS.
+
+The decisive controlled run is `35342277067` / job `105590684074` on exact canonical source `fd77d7e7785c54aae4dcffd5798a2b0ad46537ba`. The runner exposed `Google Chrome 152.0.7977.82`, the updated deterministic P0-072 harness contract passed 59 checks, and then the unchanged existing `project_tools/browser_p1_007_unpacked_integration.js` real-Chrome prerequisite failed with `Runtime.evaluate: Inspected target navigated or closed`. The P0-072 physical step was therefore skipped.
+
+Earlier exploratory runs localized the same Chrome/CDP instability before the reset/restart schedule while the Chromium process itself remained alive. No real Yandex API was used in any attempt.
+
+The full chronology and exact next-evidence requirement are recorded in:
+
+`RESEARCH_P0_072_GITHUB_HOSTED_CHROME_EXECUTION_BLOCKER_2026-09-18_EVIDENCE.md`
+
+This hosted-run blocker is not a product failure verdict and is not physical PASS evidence. A suitable authorized Chrome/Chromium environment must first pass the existing baseline real-Chrome integration control.
+
 ## Evidence state after this tranche
 
 Repository state after merging this research tooling can be described only as:
 
-**HARNESS-READY / PHYSICAL EXECUTION STILL REQUIRED.**
+**HARNESS-READY / CURRENT GITHUB-HOSTED EXECUTION BLOCKED / PHYSICAL EXECUTION STILL REQUIRED.**
 
-It must **not** be described as real-Chrome P0-072 PASS until the harness has actually executed against the exact reviewed commit and the resulting physical evidence is recorded.
+It must **not** be described as real-Chrome P0-072 PASS until the harness has actually executed against the exact reviewed canonical commit in an environment that first passes the baseline real-Chrome integration control and the resulting physical evidence is recorded.
 
 ## Remaining P0-072 boundary
 
