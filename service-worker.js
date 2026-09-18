@@ -52,7 +52,7 @@ const TRANSFER_TEXT_CHUNK_CHARS = 1024 * 1024;
 const DEBUGGER_COMMAND_TIMEOUT_MS = 60 * 1000;
 const JOURNAL_DB_NAME = 'WebClipJournal';
 const JOURNAL_STORE = 'entries';
-const JOURNAL_DB_VERSION = 7;
+const JOURNAL_DB_VERSION = 8;
 const JOURNAL_VIEW_QUERY_DEADLINE_MS = 20 * 1000;
 const MAX_DOMAIN_FILTER_BASES = 500;
 const MAX_DOMAIN_FILTER_CHILDREN = 1500;
@@ -67,6 +67,7 @@ const JOURNAL_META_STORE = 'meta';
 const JOURNAL_PENDING_STORE = 'pendingAppends';
 const JOURNAL_PENDING_DOWNLOAD_STORE = 'pendingDownloads';
 const JOURNAL_PENDING_REMOTE_STORE = 'pendingRemoteSaves';
+const JOURNAL_PENDING_DESTRUCTIVE_STORE = 'pendingDestructiveMoves';
 const JOURNAL_IMPORT_STAGING_STORE = 'importStaging';
 const JOURNAL_META_REVISION_KEY = 'revision';
 const JOURNAL_EXPORT_SCHEMA = 'webclip-journal';
@@ -86,6 +87,7 @@ const PENDING_REMOTE_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 const PENDING_REMOTE_STALE_MIN_ATTEMPTS = 6;
 const PENDING_REMOTE_STALE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_PENDING_REMOTE_STALE_SAVES = 100;
+const MAX_PENDING_DESTRUCTIVE_MOVES = 100;
 const MAX_IMPORTED_URL_CHARS = 8192;
 const MAX_IMPORTED_PATH_CHARS = 4096;
 const MAX_IMPORTED_COMMENT_CHARS = 100000;
@@ -4650,6 +4652,15 @@ function openJournalDb(timeoutMs = 10_000) {
         const pendingRemoteStore = tx.objectStore(JOURNAL_PENDING_REMOTE_STORE);
         if (!pendingRemoteStore.indexNames.contains('updatedAt')) pendingRemoteStore.createIndex('updatedAt', 'updatedAt', { unique: false });
       }
+      if (!db.objectStoreNames.contains(JOURNAL_PENDING_DESTRUCTIVE_STORE)) {
+        const destructiveStore = db.createObjectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE, { keyPath: 'id' });
+        destructiveStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+        destructiveStore.createIndex('sourceJournalEntryId', 'sourceJournalEntryId', { unique: false });
+      } else {
+        const destructiveStore = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        if (!destructiveStore.indexNames.contains('updatedAt')) destructiveStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+        if (!destructiveStore.indexNames.contains('sourceJournalEntryId')) destructiveStore.createIndex('sourceJournalEntryId', 'sourceJournalEntryId', { unique: false });
+      }
       if (!db.objectStoreNames.contains(JOURNAL_IMPORT_STAGING_STORE)) {
         const importStore = db.createObjectStore(JOURNAL_IMPORT_STAGING_STORE, { keyPath: 'key' });
         importStore.createIndex('importId', 'importId', { unique: false });
@@ -7084,6 +7095,355 @@ async function moveJournalYandexFileToTrash(entry, operationId = '') {
     trashMonth: monthName,
     resourceId: moved?.resource_id ? normalizeYandexResourceIdFromApi(moved.resource_id) : (current?.resource_id ? normalizeYandexResourceIdFromApi(current.resource_id) : String(entry?.resourceId || ''))
   };
+}
+
+function makePendingDestructiveMoveId(kind = 'move') {
+  const suffix = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `destructive:${String(kind || 'move').slice(0, 32)}:${suffix}`.slice(0, 220);
+}
+
+function pendingDestructiveMoveResetDisposition(item = {}) {
+  const phase = String(item.phase || '');
+  return phase === 'admitted-unknown' || phase === 'manual-resolution' ? 'preserve' : 'drop';
+}
+
+function pendingDestructiveMoveMatchesJournalResetScope(item = {}, { urlKey = '', siteKey = '' } = {}) {
+  if (!urlKey && !siteKey) return true;
+  return Boolean(
+    (urlKey && String(item.sourceUrlKey || '') === urlKey) ||
+    (siteKey && String(item.sourceSiteKey || '') === siteKey)
+  );
+}
+
+function markPendingDestructiveMoveSupersededByJournalReset(item = {}, { scope = 'all', resetAt = Date.now() } = {}) {
+  return {
+    ...item,
+    supersededByJournalReset: true,
+    journalResetAt: Math.max(0, Number(resetAt) || Date.now()),
+    journalResetScope: String(scope || 'all').slice(0, 24),
+    updatedAt: Math.max(0, Number(resetAt) || Date.now())
+  };
+}
+
+function reconcilePendingDestructiveMoveStoreForJournalReset(
+  destructiveStore,
+  { urlKey = '', siteKey = '', scope = 'all', resetAt = Date.now(), fail = () => {} } = {}
+) {
+  const request = destructiveStore.openCursor();
+  request.onsuccess = () => {
+    try {
+      const cursor = request.result;
+      if (!cursor) return;
+      const item = cursor.value || {};
+      if (pendingDestructiveMoveMatchesJournalResetScope(item, { urlKey, siteKey })) {
+        if (pendingDestructiveMoveResetDisposition(item) === 'preserve') {
+          cursor.update(markPendingDestructiveMoveSupersededByJournalReset(item, { scope, resetAt }));
+        } else {
+          cursor.delete();
+        }
+      }
+      cursor.continue();
+    } catch (error) { fail(error); }
+  };
+  request.onerror = () => fail(request.error || new Error('Не удалось reconcile destructive-move receipts при сбросе журнала.'));
+  return request;
+}
+
+function pendingDestructiveMoveEntryMatches(receipt = {}, entry = {}) {
+  if (!receipt || !entry) return false;
+  if (String(entry.id || '') !== String(receipt.sourceJournalEntryId || '')) return false;
+  const sourceCreatedAt = Math.max(0, Number(receipt.sourceJournalCreatedAt) || 0);
+  if (sourceCreatedAt && Number(entry.createdAt || 0) !== sourceCreatedAt) return false;
+  const sourceResourceId = String(receipt.sourceResourceId || '');
+  if (sourceResourceId && String(entry.resourceId || '') && String(entry.resourceId || '') !== sourceResourceId) return false;
+  return entry.destination === 'yandex';
+}
+
+async function checkpointPendingReadMoveIntent(entry, {
+  sourcePath = '',
+  targetPath = '',
+  sourceResourceId = '',
+  sourcePublicUrl = '',
+  operationId = ''
+} = {}) {
+  const now = Date.now();
+  const item = {
+    id: makePendingDestructiveMoveId('read-move'),
+    kind: 'read-move',
+    phase: 'prepared',
+    createdAt: now,
+    updatedAt: now,
+    operationId: String(operationId || '').slice(0, 180),
+    sourceJournalEntryId: String(entry?.id || '').slice(0, MAX_IMPORTED_ENTRY_ID_CHARS),
+    sourceJournalCreatedAt: Math.max(0, Number(entry?.createdAt) || 0),
+    sourceUrlKey: normalizeJournalUrl(entry?.url || ''),
+    sourceSiteKey: getJournalSiteKey(entry?.url || entry?.hostname || ''),
+    sourcePath: normalizeDiskPath(sourcePath || ''),
+    targetPath: normalizeDiskPath(targetPath || ''),
+    sourceResourceId: String(sourceResourceId || entry?.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
+    sourcePublicUrl: String(sourcePublicUrl || entry?.publicUrl || '').slice(0, MAX_YANDEX_PUBLIC_URL_CHARS),
+    accountUid: String(entry?.accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
+    rootPath: normalizeDiskPath(entry?.rootPath || ''),
+    lastError: ''
+  };
+  if (!item.sourceJournalEntryId || !item.sourcePath || !item.targetPath) {
+    throw new Error('Destructive read-move receipt требует exact source Journal id/source/target.');
+  }
+  const db = await openJournalDb();
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      'readwrite',
+      'Создание destructive-move receipt',
+      ({ store, fail }) => {
+        const pending = store();
+        let count = 0;
+        const cursorReq = pending.openCursor();
+        cursorReq.onsuccess = () => {
+          try {
+            const cursor = cursorReq.result;
+            if (cursor) {
+              count += 1;
+              if (count >= MAX_PENDING_DESTRUCTIVE_MOVES) {
+                fail(new Error('Слишком много незавершённых destructive-move receipts. Требуется reconciliation/manual resolution.'));
+                return;
+              }
+              cursor.continue();
+              return;
+            }
+            pending.add(item);
+          } catch (error) { fail(error); }
+        };
+        cursorReq.onerror = () => fail(cursorReq.error || new Error('Не удалось проверить очередь destructive-move receipts.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  return item;
+}
+
+async function markPendingDestructiveMoveAdmitted(id) {
+  const key = String(id || '');
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      'readwrite',
+      'Фиксация admission destructive move',
+      ({ store, setResult, fail }) => {
+        const pending = store();
+        const request = pending.get(key);
+        request.onsuccess = () => {
+          try {
+            const current = request.result;
+            if (!current || current.kind !== 'read-move') {
+              const error = new Error('Destructive-move receipt исчез до admission.');
+              error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_MISSING_BEFORE_ADMISSION';
+              fail(error);
+              return;
+            }
+            if (current.supersededByJournalReset === true) {
+              const error = new Error('Destructive-move receipt superseded сбросом журнала до admission.');
+              error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_SUPERSEDED_BEFORE_ADMISSION';
+              fail(error);
+              return;
+            }
+            if (current.phase === 'admitted-unknown') { setResult(current); return; }
+            if (current.phase !== 'prepared') {
+              const error = new Error('Destructive-move receipt имеет неизвестную admission phase.');
+              error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_PHASE_INVALID';
+              fail(error);
+              return;
+            }
+            const next = { ...current, phase: 'admitted-unknown', updatedAt: Date.now() };
+            pending.put(next);
+            setResult(next);
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать destructive-move receipt перед admission.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function updateReadMoveJournalCheckpointFromReceipt(receiptId, patch = {}) {
+  const key = String(receiptId || '');
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE],
+      'readwrite',
+      'Обновление read-move checkpoint по detached receipt',
+      ({ tx, setResult, fail }) => {
+        const receipts = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        const request = receipts.get(key);
+        request.onsuccess = () => {
+          try {
+            const receipt = request.result;
+            if (!receipt || receipt.supersededByJournalReset === true) { setResult(null); return; }
+            const entries = tx.objectStore(JOURNAL_STORE);
+            const entryReq = entries.get(receipt.sourceJournalEntryId);
+            entryReq.onsuccess = () => {
+              try {
+                const current = entryReq.result;
+                if (!pendingDestructiveMoveEntryMatches(receipt, current)) { setResult(null); return; }
+                const updated = { ...current, ...patch, id: current.id };
+                entries.put(updated);
+                touchJournalDbRevision(tx, 'read-move-checkpoint');
+                setResult(updated);
+              } catch (error) { fail(error); }
+            };
+            entryReq.onerror = () => fail(entryReq.error || new Error('Не удалось проверить Journal authority для read-move checkpoint.'));
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать detached read-move receipt.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function markPendingDestructiveMoveVerified(id, outcome = {}) {
+  const key = String(id || '');
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      'readwrite',
+      'Фиксация verified destructive move',
+      ({ store, setResult, fail }) => {
+        const pending = store();
+        const request = pending.get(key);
+        request.onsuccess = () => {
+          try {
+            const current = request.result;
+            if (!current) {
+              const error = new Error('Destructive-move receipt отсутствует при terminal verification.');
+              error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_MISSING_AT_VERIFY';
+              fail(error);
+              return;
+            }
+            const next = {
+              ...current,
+              phase: 'remote-verified',
+              updatedAt: Date.now(),
+              verifiedPath: normalizeDiskPath(outcome.remotePath || current.targetPath || ''),
+              verifiedResourceId: String(outcome.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
+              lastError: ''
+            };
+            pending.put(next);
+            setResult(next);
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать destructive-move receipt при verification.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function markPendingDestructiveMoveFailure(id, error) {
+  const key = String(id || '');
+  if (!key) return null;
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      'readwrite',
+      'Фиксация ошибки destructive move',
+      ({ store, setResult, fail }) => {
+        const pending = store();
+        const request = pending.get(key);
+        request.onsuccess = () => {
+          try {
+            const current = request.result;
+            if (!current) { setResult(null); return; }
+            const next = { ...current, updatedAt: Date.now(), lastError: normalizeError(error).slice(0, 2000) };
+            pending.put(next);
+            setResult(next);
+          } catch (e) { fail(e); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось обновить destructive-move receipt после ошибки.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function removePendingDestructiveMove(id) {
+  const key = String(id || '');
+  if (!key) return;
+  const db = await openJournalDb();
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      'readwrite',
+      'Удаление terminal destructive-move receipt',
+      ({ store }) => store().delete(key),
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+}
+
+async function finalizeReadMoveJournalFromReceipt(receiptId, patch = {}) {
+  const key = String(receiptId || '');
+  const db = await openJournalDb();
+  try {
+    return await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE],
+      'readwrite',
+      'Финализация read-move Journal по detached receipt',
+      ({ tx, setResult, fail }) => {
+        const receipts = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        const request = receipts.get(key);
+        request.onsuccess = () => {
+          try {
+            const receipt = request.result;
+            if (!receipt) { setResult({ cancelled: true, entry: null, receiptMissing: true }); return; }
+            if (receipt.phase !== 'remote-verified') {
+              const error = new Error('Destructive-move receipt не имеет terminal remote verification.');
+              error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_NOT_VERIFIED';
+              fail(error);
+              return;
+            }
+            if (receipt.supersededByJournalReset === true) {
+              receipts.delete(key);
+              setResult({ cancelled: true, entry: null, supersededByJournalReset: true });
+              return;
+            }
+            const entries = tx.objectStore(JOURNAL_STORE);
+            const entryReq = entries.get(receipt.sourceJournalEntryId);
+            entryReq.onsuccess = () => {
+              try {
+                const current = entryReq.result;
+                if (!pendingDestructiveMoveEntryMatches(receipt, current)) {
+                  receipts.delete(key);
+                  setResult({ cancelled: true, entry: null, sourceAuthorityLost: true });
+                  return;
+                }
+                const updated = { ...current, ...patch, id: current.id };
+                entries.put(updated);
+                receipts.delete(key);
+                touchJournalDbRevision(tx, 'read-move-finalize');
+                setResult({ cancelled: false, entry: updated });
+              } catch (error) { fail(error); }
+            };
+            entryReq.onerror = () => fail(entryReq.error || new Error('Не удалось проверить Journal authority при terminal read-move finalize.'));
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать terminal destructive-move receipt.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
 }
 
 async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } = {}) {
