@@ -103,7 +103,7 @@ ok(putSection.includes('wantsSealedGeneration ? metaStore.add(metadata) : metaSt
 ok(putSection.includes("request.error?.name === 'ConstraintError'"), 'duplicate immutable generation fails closed');
 ok(putSection.includes("WEBCLIP_PDF_CACHE_GENERATION_EXISTS"), 'duplicate generation has explicit failure code');
 
-const lookupSection = section(worker, 'async function getValidCachedPdfForTab(tabId)', 'async function cleanupExpiredPdfCache');
+const lookupSection = section(worker, 'async function getValidCachedPdfForTab(tabId, currentSourceReceipt)', 'async function cleanupExpiredPdfCache');
 ok(lookupSection.includes('const pointer = await getPdfRetryIndexForTab(tabId);'), 'live retry lookup resolves index first');
 ok(lookupSection.includes('const cached = await getCachedPdfMetadataByKey(pointer.cacheKey);'), 'retry lookup reads exact pointed generation');
 ok(lookupSection.includes('clearPdfRetryIndexIfMatches(tabId, pointer.cacheKey, pointer.cacheGeneration)'), 'source/index mismatch clears only exact pointer');
@@ -153,4 +153,4 @@ ok(signedTransfer.includes("String(spec.pdfCacheGeneration || '')"), 'offscreen 
 ok(signedTransfer.includes('Number(spec.expectedPdfBytes || 0)'), 'offscreen upload consumes expected byte size');
 ok(!signedTransfer.includes('getPdfCacheRecord(String(spec.pdfCacheKey'), 'legacy key-only dereference removed from upload');
 
-console.log(`P0-079 operation-owned PDF cache production: PASS; checks=${checks}; db=v4; sealed_add=true; retry_index=true; offscreen_exact=true; p0_023_source_match_pending=true`);
+console.log(`P0-079 operation-owned PDF cache production: PASS; checks=${checks}; db=v4; sealed_add=true; retry_index=true; offscreen_exact=true; p0_023_live_source_admission=true`);
