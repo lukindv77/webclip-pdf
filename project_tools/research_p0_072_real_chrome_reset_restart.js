@@ -644,19 +644,27 @@ async function run() {
 
     let terminalB = await waitPhysicalTerminal(options, downloadB.id, 'restart').catch(() => null);
 
-    // Force the existing durable maintenance boundary now instead of waiting
-    // one minute for the production startup alarm. This invokes the unmodified
-    // production alarm handler and reconciliation code.
+    // Exercise the real production alarm boundary at Chrome's supported
+    // minimum timing rather than assuming a 100 ms alarm delivery.
     mark('case-b-maintenance');
-    await options.evaluate(`chrome.alarms.create('webclip-operation-log-cleanup', { when: Date.now() + 100 })`);
-    await sleep(500);
+    await options.evaluate(`chrome.alarms.create('webclip-operation-log-cleanup', { delayInMinutes: 0.5 })`);
+    let lastMaintenanceState = null;
     await waitFor(async () => {
       const snap = await snapshot(options);
-      const row = (snap.pendingDownloads || []).find((item) => Number(item?.downloadId) === downloadB.id);
+      const rows = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`).catch(() => []);
+      const alarm = await options.evaluate(`chrome.alarms.get('webclip-operation-log-cleanup')`).catch(() => null);
+      const row = (snap.pendingDownloads || []).find((item) => Number(item?.downloadId) === downloadB.id) || null;
+      lastMaintenanceState = {
+        row,
+        download: Array.isArray(rows) ? rows[0] || null : null,
+        alarm: alarm || null
+      };
       if (!row) return true;
       if (row.kind === 'unknown' && row.recoveryState === 'manual-resolution' && row.supersededByJournalReset === true) return true;
       return false;
-    }, { timeoutMs: 30_000, intervalMs: 200, label: 'restart maintenance reconciliation' });
+    }, { timeoutMs: 75_000, intervalMs: 250, label: 'restart maintenance reconciliation' }).catch((error) => {
+      throw new Error(String(error?.message || error) + '; lastState=' + JSON.stringify(lastMaintenanceState));
+    });
 
     if (!terminalB) {
       const rows = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`);
