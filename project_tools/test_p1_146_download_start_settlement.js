@@ -47,6 +47,10 @@ function createContext(downloadPromise, events) {
     normalizePendingLocalDownloadKey(value) {
       return typeof value === 'string' && value.startsWith('intent:') ? value : null;
     },
+    markPendingLocalDownloadAdmitted(key) {
+      events.push(`admit:${key}`);
+      return Promise.resolve({ downloadId: key, kind: 'intent', downloadAdmissionPhase: 'admitted-unknown' });
+    },
     removePendingLocalDownload(key) {
       events.push(`remove:${key}`);
       return Promise.resolve();
@@ -100,6 +104,7 @@ async function testTimeoutPreservesIntentUntilLateSuccess() {
 
   assert.strictEqual(result.pending, true, 'local deadline must return a pending/unknown-settlement result');
   assert.strictEqual(context.getDownloadCalls(), 1, 'timeout must not auto-retry chrome.downloads.download');
+  assert(events.indexOf('admit:intent:late-success') >= 0 && events.indexOf('admit:intent:late-success') < events.indexOf('download-start'), 'durable admitted-unknown phase must commit before Chrome side effect starts');
   assert.strictEqual(events.some((event) => event.startsWith('remove:')), false, 'timeout must not delete durable intent');
   assert.strictEqual(events.some((event) => event.startsWith('revoke:')), false, 'timeout must not revoke Blob before actual settlement');
   assert.strictEqual(context.automaticDownloadStartSettlements.size, 1, 'late Chrome settlement must keep occupying the in-flight budget');
@@ -152,6 +157,7 @@ async function testGlobalUnknownSettlementBudgetBlocksNewSideEffect() {
     (error) => error?.code === 'WEBCLIP_DOWNLOAD_START_BUSY'
   );
   assert.strictEqual(context.getDownloadCalls(), 0, 'budget exhaustion must fail before starting another Chrome side effect');
+  assert.strictEqual(events.includes('admit:intent:new'), false, 'budget rejection stays pre-admission');
   assert(events.includes('remove:intent:new'), 'new not-started intent must be cleaned safely');
   assert(events.includes('revoke:blob:new'), 'new not-started Blob must be released safely');
 }
@@ -167,6 +173,7 @@ function testAutomaticPdfCallSitesUseSettlementAwareHelper() {
 
   const helper = section(sw, 'async function startAutomaticBlobDownloadBounded', 'async function finalizePendingLocalDownload');
   assert(helper.includes('automaticDownloadStartSettlements.size >= MAX_PENDING_AUTOMATIC_DOWNLOAD_STARTS'), 'P1-146 must bound actually unresolved download starts');
+  assert(helper.indexOf('await markPendingLocalDownloadAdmitted(key)') < helper.indexOf('chrome.downloads.download({'), 'durable P0-072 admission phase must precede Chrome start without replacing P1-146 settlement handling');
   assert(helper.includes("error?.code !== 'WEBCLIP_TIMEOUT'"), 'local timeout must be distinguished from actual Chrome rejection');
   assert(helper.includes('return { pending: true'), 'local timeout must become explicit pending/unknown-settlement state');
 
