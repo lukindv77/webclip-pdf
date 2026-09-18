@@ -1,4 +1,4 @@
-importScripts('public-suffix.js', 'journal-import-stream.js', 'journal-text-filter.js', 'local-download-identity.js');
+importScripts('public-suffix.js', 'journal-import-stream.js', 'journal-text-filter.js', 'local-download-identity.js', 'yandex-recovery-namespace.js');
 importScripts('journal-import-digest.js');
 
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
@@ -5001,11 +5001,11 @@ function normalizePendingJournalAppendData(data = {}) {
   const prepared = {
     destination: data.destination === 'yandex' ? 'yandex' : 'download',
     filename: String(data.filename || '').slice(0, 512),
-    remotePath: String(data.remotePath || '').slice(0, MAX_IMPORTED_PATH_CHARS),
+    remotePath: normalizeDiskPath(String(data.remotePath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
     folder: String(data.folder || '').slice(0, MAX_IMPORTED_PATH_CHARS),
     publicUrl: String(data.publicUrl || '').slice(0, MAX_IMPORTED_URL_CHARS),
     resourceId: String(data.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
-    accountUid: String(data.accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
+    accountUid: String(data.accountUid || '').trim().slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
     rootPath: normalizeDiskPath(String(data.rootPath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
     journalEntryId,
     journalCreatedAt: createdAt,
@@ -5270,6 +5270,7 @@ async function getPendingRemotePdfCacheRetentionSnapshot() {
 
 async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, createPublicLinks = false, operationId = '', pdfCacheKey = '', pdfCacheGeneration = '' } = {}) {
   const prepared = normalizePendingJournalAppendData({ ...data, destination: 'yandex', operationId: String(operationId || data?.operationId || '').slice(0, MAX_OPERATION_ID_CHARS) });
+  globalThis.WebClipYandexRecoveryNamespace.validateBoundRecoveryReceipt(prepared);
   const pdfCacheReceipt = normalizePendingRemotePdfCacheReceipt({ pdfCacheKey, pdfCacheGeneration, expectedPdfBytes });
   if (!pdfCacheReceipt) {
     const error = new Error('Checkpoint удалённого сохранения требует exact sealed PDF cache generation.');
@@ -5474,7 +5475,13 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
   let stale = 0;
   let cancelled = 0;
   let authAvailable = true;
-  try { await getValidYandexAccessToken(); } catch (_) { authAvailable = false; }
+  let currentAccountUid = '';
+  try {
+    await getValidYandexAccessToken();
+    currentAccountUid = await getCurrentYandexAccountUid();
+  } catch (_) {
+    authAvailable = false;
+  }
 
   for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
     if (Date.now() >= deadline - 2_000) {
@@ -5494,13 +5501,17 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
       }
 
       let current = item;
+      globalThis.WebClipYandexRecoveryNamespace.validateBoundRecoveryReceipt(current);
       if (current.phase !== 'remote-verified') {
         if (!authAvailable) {
           deferred += 1;
           continue;
         }
-        const remotePath = normalizeDiskPath(current.data.remotePath || '');
-        if (!remotePath) throw new Error('Checkpoint удалённого сохранения не содержит корректный remotePath.');
+        const namespace = globalThis.WebClipYandexRecoveryNamespace.proveRecoveryNamespace({
+          receipt: current,
+          currentAccountUid
+        });
+        const remotePath = namespace.remotePath;
         const remainingBeforeRead = deadline - Date.now();
         if (remainingBeforeRead <= 2_000) {
           deferred += 1;
