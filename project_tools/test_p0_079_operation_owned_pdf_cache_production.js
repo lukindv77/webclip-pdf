@@ -138,7 +138,8 @@ ok(uploadSection.includes('expectedPdfBytes,'), 'offscreen receipt binds expecte
 ok(!uploadSection.includes('pdfCacheKey(tabId)'), 'remote upload cannot silently fall back to mutable tab alias');
 ok(uploadSection.includes("pdfCacheKey: String(cached.key || '')"), 'durable remote checkpoint links exact local cache key');
 ok(uploadSection.includes("pdfCacheGeneration: String(cached.cacheGeneration || '')"), 'durable remote checkpoint links exact local cache generation');
-ok(uploadSection.indexOf('markPendingRemoteSaveAdmitted(remoteCheckpoint.id)') < uploadSection.indexOf('runOffscreenSignedTransfer({'), 'admitted-unknown checkpoint commits before signed transfer');
+ok(uploadSection.indexOf('checkpointPendingRemoteSaveIntent({') < uploadSection.indexOf('runOffscreenSignedTransfer({'), 'admitted-unknown checkpoint commits before signed transfer');
+ok(!uploadSection.includes('markPendingRemoteSaveAdmitted'), 'no separate prepared-to-admitted transition can race TTL cleanup');
 
 const transportSection = section(worker, 'async function runOffscreenSignedTransfer', 'async function ensureYandexFolderTree');
 ok(transportSection.includes("pdfCacheGeneration: String(spec.pdfCacheGeneration || '')"), 'worker transport preserves cache generation');
