@@ -3711,6 +3711,58 @@ async function sendWebClipPageCommand(tabId, command, extra = {}) {
   return chrome.tabs.sendMessage(tabId, { type: 'WEBCLIP_COMMAND', command, ...extra });
 }
 
+function sanitizePdfSourceReceipt(value, { operationId = '', tabId = 0, required = false } = {}) {
+  const receipt = value && typeof value === 'object' ? value : null;
+  const fail = (code, message) => {
+    if (!required) return null;
+    const error = new Error(message || code);
+    error.code = code;
+    throw error;
+  };
+  if (!receipt) return fail('WEBCLIP_PDF_SOURCE_RECEIPT_REQUIRED', 'PDF lineage has no exact source receipt.');
+  const sourceOperationId = String(receipt.operationId || '').trim().slice(0, MAX_OPERATION_ID_CHARS);
+  const sourceTabId = Math.max(0, Math.floor(Number(receipt.tabId) || 0));
+  const sourceDocumentId = String(receipt.sourceDocumentId || '').trim().slice(0, 256);
+  const generation = Math.floor(Number(receipt.applicationGeneration?.generation) || 0);
+  let href = '';
+  try { href = new URL(String(receipt.applicationGeneration?.href || '')).href; }
+  catch (_) { href = String(receipt.applicationGeneration?.href || '').slice(0, MAX_IMPORTED_URL_CHARS); }
+  const selectionRevision = Math.floor(Number(receipt.selectionRevision) || 0);
+  const selectedCount = Math.max(0, Math.floor(Number(receipt.selectedCount) || 0));
+  const confirmedSelectionRevision = Math.floor(Number(receipt.confirmedSelectionRevision) || 0) || null;
+  if (!sourceOperationId || !sourceTabId || !sourceDocumentId || !generation || !href || !selectionRevision) {
+    return fail('WEBCLIP_PDF_SOURCE_RECEIPT_INVALID', 'PDF lineage source receipt is incomplete.');
+  }
+  const expectedOperationId = String(operationId || '').trim().slice(0, MAX_OPERATION_ID_CHARS);
+  const expectedTabId = Math.max(0, Math.floor(Number(tabId) || 0));
+  if (expectedOperationId && sourceOperationId !== expectedOperationId) {
+    return fail('WEBCLIP_PDF_SOURCE_OPERATION_CHANGED', 'PDF lineage source receipt belongs to a different save operation.');
+  }
+  if (expectedTabId && sourceTabId !== expectedTabId) {
+    return fail('WEBCLIP_PDF_SOURCE_TAB_CHANGED', 'PDF lineage source receipt belongs to a different source tab.');
+  }
+  return {
+    schema: 'webclip-pdf-source-receipt/v1',
+    operationId: sourceOperationId,
+    tabId: sourceTabId,
+    sourceDocumentId,
+    sourceDocumentLifecycle: String(receipt.sourceDocumentLifecycle || '').slice(0, 64),
+    applicationGeneration: { generation, href },
+    selectionRevision,
+    selectedCount,
+    confirmedSelectionRevision,
+    capturedAt: Math.max(0, Math.floor(Number(receipt.capturedAt) || 0))
+  };
+}
+
+function captureActivePdfSourceReceipt(tabId, operationId) {
+  const guard = globalThis.WebClipContentInjectionGuard;
+  const active = typeof guard?.getActiveWorkerSourceReceipt === 'function'
+    ? guard.getActiveWorkerSourceReceipt(globalThis, tabId)
+    : null;
+  return sanitizePdfSourceReceipt(active, { tabId, operationId, required: true });
+}
+
 async function generatePdfAndDownload(tabId, meta, operationId = '') {
   operationId = String(operationId || '') || makeOperationLogId('local-pdf');
   meta = { ...meta, readingMode: 'read' };
@@ -3735,6 +3787,7 @@ async function generatePdfAndDownload(tabId, meta, operationId = '') {
     recordOperationStage(operationId, 'pdf', 'Формируем PDF средствами Chromium…', 20);
     let pdfBlob = await generatePdfBlob(tabId);
     const printDiagnostics = await collectPrintDiagnosticsForTab(tabId);
+    const sourceReceipt = captureActivePdfSourceReceipt(tabId, operationId);
     const expectedPdfBytes = pdfBlob.size;
     recordOperationStage(operationId, 'copy-save', `Chromium сформировал PDF-копию (${expectedPdfBytes} байт). Фиксируем состояние структуры страницы и передаём копию в Chrome Downloads.`, 52, 'running', { pdfBytes: expectedPdfBytes, pageAnalysis, printDiagnostics, destination: 'download' });
     const filename = buildFilename(meta);
@@ -3749,6 +3802,7 @@ async function generatePdfAndDownload(tabId, meta, operationId = '') {
         resourceReport: sanitizePdfResourceReport(meta.resourceReport)
       },
       pdfBlob,
+      sourceReceipt,
       createdAt: Date.now(),
       sourceUrl: normalizeJournalUrl(meta.url || ''),
       temporary: true
@@ -3762,7 +3816,7 @@ async function generatePdfAndDownload(tabId, meta, operationId = '') {
       await deleteCachedPdfByKey(temporaryCacheKey).catch(() => {});
     }
 
-    const pendingData = { destination: 'download', filename, meta: { ...meta, tabId } };
+    const pendingData = { destination: 'download', filename, meta: { ...meta, tabId }, sourceReceipt };
     // Persist the intent BEFORE starting the irreversible Chrome download. If
     // the MV3 worker is stopped immediately after downloads.download(), the
     // intent can still be matched to the DownloadItem by its exact blob URL.
@@ -3827,6 +3881,7 @@ async function generatePdfAndUploadToYandex(tabId, meta, operationId = '') {
     emitPageUploadProgress(tabId, operationId, 'pdf', 'Формируем PDF из подготовленных областей страницы…', 32);
     let pdfBlob = await generatePdfBlob(tabId);
     const printDiagnostics = await collectPrintDiagnosticsForTab(tabId);
+    const sourceReceipt = captureActivePdfSourceReceipt(tabId, operationId);
     recordOperationStage(operationId, 'copy-save', `Chromium сформировал PDF-копию (${pdfBlob.size} байт). Фиксируем состояние структуры страницы перед сохранением на Яндекс Диск.`, 40, 'running', { pdfBytes: pdfBlob.size, pageAnalysis, printDiagnostics, destination: 'yandex' });
     filename = buildYandexFilename(meta);
     emitPageUploadProgress(tabId, operationId, 'cache', 'Сохраняем сформированный PDF во временный кэш для безопасного повтора…', 44);
@@ -3845,6 +3900,7 @@ async function generatePdfAndUploadToYandex(tabId, meta, operationId = '') {
         resourceReport: sanitizePdfResourceReport(meta.resourceReport)
       },
       journalEntryId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      sourceReceipt,
       pdfBlob, createdAt: Date.now(), sourceUrl: normalizeJournalUrl(meta.url || '')
     };
     const cachedMetadata = await putCachedPdf(cached);
@@ -3959,6 +4015,7 @@ async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, 
       destination: 'yandex', filename, remotePath, folder: targetFolder, publicUrl: '', resourceId: '', accountUid, rootPath,
       journalEntryId: remoteJournalEntryId,
       journalCreatedAt: Math.max(0, Number(cached.createdAt) || 0) || Date.now(),
+      sourceReceipt: cached.sourceReceipt,
       meta
     }, { expectedPdfBytes, createPublicLinks: config.createPublicLinks, operationId });
     recordOperationStage(operationId, 'remote-checkpoint', 'Создан durable checkpoint удалённого сохранения до передачи/финализации файла.', 66, 'running', {
@@ -4061,7 +4118,7 @@ async function downloadCachedPdf(tabId, operationId = '') {
     recordOperationStage(operationId, 'download', 'Передаём готовый PDF в менеджер загрузок Chrome…', 55, 'running', { filename: cached.filename || '' });
     blobUrl = await createPdfCacheBlobUrl(cached.key);
     const meta = { ...(cached.meta || {}), readingMode: 'read', tabId };
-    const pendingData = { destination: 'download', filename: cached.filename, meta };
+    const pendingData = { destination: 'download', filename: cached.filename, meta, sourceReceipt: cached.sourceReceipt };
     let intentKey = '';
     try {
       intentKey = await checkpointPendingLocalDownloadIntent(pendingData, operationId, blobUrl, cached.pdfByteLength);
@@ -4673,6 +4730,7 @@ function normalizePendingJournalAppendData(data = {}) {
     journalEntryId,
     journalCreatedAt: createdAt,
     operationId: String(data.operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
+    sourceReceipt: sanitizePdfSourceReceipt(data.sourceReceipt),
     meta: {
       hostname: String(meta.hostname || '').slice(0, 255),
       siteAddress: String(meta.siteAddress || '').slice(0, MAX_IMPORTED_URL_CHARS),
@@ -9669,7 +9727,8 @@ function pdfCacheMetadataFromRecord(record = {}) {
     pdfBase64Chars: pdfBase64 ? pdfBase64.length : Math.max(0, Number(record.pdfBase64Chars) || 0),
     cacheFormat: pdfBlob ? 'blob-v3' : pdfBase64 ? 'base64-legacy' : String(record.cacheFormat || ''),
     temporary: Boolean(record.temporary),
-    journalEntryId: String(record.journalEntryId || '').slice(0, 220)
+    journalEntryId: String(record.journalEntryId || '').slice(0, 220),
+    sourceReceipt: sanitizePdfSourceReceipt(record.sourceReceipt)
   };
 }
 
@@ -9747,6 +9806,7 @@ async function putCachedPdf(record) {
   normalizedRecord.pdfByteLength = metadata.pdfByteLength;
   normalizedRecord.pdfBase64Chars = metadata.pdfBase64Chars;
   normalizedRecord.cacheFormat = metadata.cacheFormat;
+  normalizedRecord.sourceReceipt = metadata.sourceReceipt;
   const db = await openPdfCacheDb();
   try {
     await runIndexedDbTransactionBounded(
