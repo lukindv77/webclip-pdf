@@ -197,15 +197,17 @@ ok(resetSnapshot.includes('JOURNAL_RESET_GENERATION_KEY'), 'dedicated reset gene
 const addComment = functionSource(worker, 'addJournalComment');
 const editComment = functionSource(worker, 'editJournalComment');
 const deleteComment = functionSource(worker, 'deleteJournalComment');
-ok(addComment.includes('updateJournalEntryRecord(id,'), 'comment add is intentionally still on legacy point writer in this primitive tranche');
-ok(editComment.includes('updateJournalEntryRecord(id,'), 'comment edit is intentionally still on legacy point writer');
-ok(deleteComment.includes('updateJournalEntryRecord(id,'), 'comment delete is intentionally still on legacy point writer');
-ok(!addComment.includes('updateJournalEntryRecordCas'), 'comment caller migration is not falsely claimed');
-ok(functionSource(worker, 'deleteJournalEntryRecordOnly').includes('tx.objectStore(JOURNAL_STORE).delete(id)'), 'legacy blind delete still exists for later caller migration');
+for (const [name, source] of [['add', addComment], ['edit', editComment], ['delete', deleteComment]]) {
+  ok(source.includes('readJournalEntryWithAuthority(id)'), `comment ${name} captures CAS authority`);
+  ok(source.includes('updateJournalEntryRecordCas(authority,'), `comment ${name} uses CAS point writer`);
+  ok(!source.includes('updateJournalEntryRecord(id,'), `comment ${name} no longer uses blind point writer`);
+}
+ok((worker.match(/updateJournalEntryRecord\(/g) || []).length === 1, 'legacy blind point writer has no production caller after comment migration');
+ok((worker.match(/deleteJournalEntryRecordOnly\(/g) || []).length === 1, 'legacy blind delete helper has no production caller after local-delete migration');
 
 console.log(
   'P0-076 Journal CAS authority primitive: PASS; checks=' + checks +
   '; reset_generation=true; entry_revision=true; import_fresh=true; export_strips_authority=true;' +
   ' capture_atomic=true; cas_patch=true; cas_delete=true; point_writes_increment=true;' +
-  ' callers_migrated=false; comments_cas=false; release_closed=false'
+  ' callers_migrated=false; comments_cas=true; release_closed=false'
 );
