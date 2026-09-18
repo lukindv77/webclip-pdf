@@ -341,8 +341,15 @@ async function waitReceiptRetiredWithoutJournal(options, downloadId, articleUrl,
 }
 
 async function run() {
+  let stage = 'bootstrap';
+  const setStage = (next) => {
+    stage = String(next || 'unknown');
+    console.log('P0_072_STAGE=' + stage);
+  };
   assert(fs.existsSync(CHROMIUM), 'Chromium binary not found: ' + CHROMIUM);
+  setStage('source-contract');
   const contract = sourceContract();
+  setStage('fixture-start');
   const fixture = await startFixtureServer();
   let testExtension = null;
   let browser = null;
@@ -351,6 +358,7 @@ async function run() {
   const createdIds = new Set();
 
   try {
+    setStage('extension-prepare');
     testExtension = await prepareTestExtension(fixture.origin, fixture.apiBase, { mockYandex: false });
     const copiedWorker = await fsp.readFile(path.join(testExtension.path, 'service-worker.js'));
     assert.strictEqual(
@@ -359,26 +367,42 @@ async function run() {
       'physical harness must preserve exact production service-worker.js bytes'
     );
 
+    setStage('browser-launch-initial');
     browser = await launchChromium(testExtension.path, { preserveProfile: true });
+    setStage('browser-launched-initial');
     profile = browser.profile;
     const extensionId = browser.extensionId;
+    setStage('options-attach-initial');
     options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'P0-072 options page');
+    setStage('options-attached-initial');
     await options.evaluate(`(async () => {
       await chrome.storage.local.clear();
       await chrome.storage.session.clear();
       return true;
     })()`);
+    setStage('pause-observer-install');
     await installPauseObserver(options);
+    setStage('pause-observer-installed');
 
     // Case A: exact real Chrome late completion after Journal reset.
+    setStage('case-a-create-tab');
     const tabA = await createSelectedFixtureTab(options, fixture.articleUrl, 'late-complete');
+    setStage('case-a-trigger-download');
     const downloadA = await triggerPdfDownload(options, tabA, createdIds, 'late-complete');
+    setStage('case-a-download-paused');
+    setStage('case-a-clear-journal');
     const resetA = await clearJournalAndRequireSuperseded(options, downloadA.id, 'late-complete');
+    setStage('case-a-reset-superseded');
 
+    setStage('case-a-resume-download');
     await options.evaluate(`chrome.downloads.resume(${downloadA.id})`);
+    setStage('case-a-wait-terminal');
     const terminalA = await waitPhysicalTerminal(options, downloadA.id, 'late-complete');
+    setStage('case-a-terminal');
     assert.strictEqual(terminalA.state, 'complete', 'late-complete: resumed real Chrome download must complete');
+    setStage('case-a-wait-receipt-retire');
     await waitReceiptRetiredWithoutJournal(options, downloadA.id, fixture.articleUrl, 'late-complete');
+    setStage('case-a-complete');
 
     assert(terminalA.filename && fs.existsSync(terminalA.filename), 'late-complete: physical PDF file must exist');
     const statA = fs.statSync(terminalA.filename);
@@ -390,22 +414,35 @@ async function run() {
     assert.strictEqual(magic.toString('ascii'), '%PDF-', 'late-complete: physical file must be a PDF');
 
     // Case B: reset-superseded admitted effect survives an actual browser SIGKILL.
+    setStage('case-b-create-tab');
     const tabB = await createSelectedFixtureTab(options, fixture.articleUrl + '?restart=1', 'restart');
+    setStage('case-b-trigger-download');
     const downloadB = await triggerPdfDownload(options, tabB, createdIds, 'restart');
+    setStage('case-b-download-paused');
+    setStage('case-b-clear-journal');
     const resetB = await clearJournalAndRequireSuperseded(options, downloadB.id, 'restart');
+    setStage('case-b-reset-superseded');
 
+    setStage('case-b-remove-observer');
     await removePauseObserver(options);
+    setStage('case-b-sigkill');
     await browser.stop({ preserveProfile: true, signal: 'SIGKILL' });
+    setStage('case-b-killed');
     browser = null;
     options = null;
 
+    setStage('case-b-relaunch');
     browser = await launchChromium(testExtension.path, {
       profilePath: profile,
       preserveProfile: true
     });
+    setStage('case-b-relaunched');
     assert.strictEqual(browser.extensionId, extensionId, 'same profile/path must retain exact unpacked extension identity');
+    setStage('case-b-options-attach');
     options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'P0-072 options page after restart');
+    setStage('case-b-options-attached');
 
+    setStage('case-b-wait-receipt');
     const postRestartReceipt = await waitFor(async () => {
       const snap = await snapshot(options);
       return (snap.pendingDownloads || []).find((item) =>
@@ -414,6 +451,7 @@ async function run() {
       ) || null;
     }, { timeoutMs: 15_000, intervalMs: 100, label: 'durable superseded receipt after SIGKILL restart' });
 
+    setStage('case-b-read-downloaditem');
     const restartItems = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`);
     const restartItem = Array.isArray(restartItems) ? restartItems[0] : null;
     assert(restartItem, 'restart: exact Chrome DownloadItem must remain discoverable after browser restart');
@@ -434,6 +472,7 @@ async function run() {
     // Force the existing durable maintenance boundary now instead of waiting
     // one minute for the production startup alarm. This invokes the unmodified
     // production alarm handler and reconciliation code.
+    setStage('case-b-trigger-maintenance');
     await options.evaluate(`chrome.alarms.create('webclip-operation-log-cleanup', { when: Date.now() + 100 })`);
     await sleep(500);
     await waitFor(async () => {
@@ -449,6 +488,7 @@ async function run() {
       terminalB = Array.isArray(rows) ? rows[0] || null : null;
     }
 
+    setStage('case-b-final-snapshot');
     const finalB = await snapshot(options);
     const survivingB = (finalB.pendingDownloads || []).find((item) => Number(item?.downloadId) === downloadB.id) || null;
     assert(
@@ -465,6 +505,7 @@ async function run() {
       'restart: old-generation Journal entry must not be resurrected'
     );
 
+    setStage('result-build');
     const result = {
       browser: await options.evaluate('navigator.userAgent'),
       extensionId,
@@ -509,7 +550,22 @@ async function run() {
     const stable = JSON.stringify(result, Object.keys(result).sort());
     result.resultSha256 = sha256Bytes(Buffer.from(stable, 'utf8'));
     console.log('P0_072_REAL_CHROME_RESULT=' + JSON.stringify(result));
+    setStage('complete');
     return result;
+  } catch (error) {
+    console.error('P0_072_FAILURE_STAGE=' + stage);
+    const proc = browser?.proc || null;
+    console.error('P0_072_BROWSER_PROCESS=' + JSON.stringify({
+      exitCode: proc?.exitCode ?? null,
+      signalCode: proc?.signalCode ?? null,
+      killed: Boolean(proc?.killed)
+    }));
+    const stderrPath = String(browser?.stderrPath || '');
+    if (stderrPath) {
+      const stderrText = await fsp.readFile(stderrPath, 'utf8').catch(() => '');
+      if (stderrText) console.error('P0_072_BROWSER_STDERR_TAIL=' + JSON.stringify(stderrText.slice(-8000)));
+    }
+    throw error;
   } finally {
     await removePauseObserver(options).catch(() => {});
     await browser?.stop({ preserveProfile: false }).catch(() => {});
