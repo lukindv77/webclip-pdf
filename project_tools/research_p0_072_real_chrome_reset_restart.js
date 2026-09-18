@@ -525,7 +525,6 @@ async function run() {
     );
 
     mark('browser-launch');
-    mark('case-b-restart-browser');
     browser = await launchChromium(testExtension.path, { preserveProfile: true });
     mark('browser-launched');
     profile = browser.profile;
@@ -594,6 +593,7 @@ async function run() {
     browser = null;
     options = null;
 
+    mark('case-b-restart-browser');
     browser = await launchChromium(testExtension.path, {
       profilePath: profile,
       preserveProfile: true
@@ -615,6 +615,21 @@ async function run() {
     const restartItems = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`);
     const restartItem = Array.isArray(restartItems) ? restartItems[0] : null;
     assert(restartItem, 'restart: exact Chrome DownloadItem must remain discoverable after browser restart');
+    console.log('P0_072_RESTART_ITEM=' + JSON.stringify({
+      id: restartItem.id,
+      state: restartItem.state,
+      paused: restartItem.paused,
+      canResume: restartItem.canResume,
+      error: restartItem.error || '',
+      filename: restartItem.filename || ''
+    }));
+    console.log('P0_072_RESTART_RECEIPT=' + JSON.stringify({
+      downloadId: postRestartReceipt.downloadId,
+      kind: postRestartReceipt.kind,
+      downloadAdmissionPhase: postRestartReceipt.downloadAdmissionPhase,
+      supersededByJournalReset: postRestartReceipt.supersededByJournalReset,
+      recoveryState: postRestartReceipt.recoveryState || ''
+    }));
 
     // If Chrome kept it resumable, allow it to continue. If Chrome already
     // reached a terminal state during restart, maintenance will settle that
