@@ -1,0 +1,58 @@
+name: TEMP P0-072 pinned CfT prerequisite
+
+on:
+  push:
+    branches:
+      - research/p0-072-cft152-prereq-e6cb567b
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temp-p0-072-cft152-e6cb567b
+  cancel-in-progress: false
+
+jobs:
+  pinned-cft:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      WEBCLIP_CANONICAL_SHA: e6cb567b44eeff28a89fc90cc82294bf064bad23
+    steps:
+      - name: Checkout exact canonical main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: e6cb567b44eeff28a89fc90cc82294bf064bad23
+          fetch-depth: 0
+
+      - name: Verify exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$WEBCLIP_CANONICAL_SHA"
+          git diff --exit-code
+          node project_tools/test_p0_072_real_chrome_reset_restart_harness.js
+
+      - name: Install historically proven pinned Chrome for Testing
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error             https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.64/linux64/chrome-linux64.zip             -o "$RUNNER_TEMP/chrome-152.zip"
+          unzip -q "$RUNNER_TEMP/chrome-152.zip" -d "$RUNNER_TEMP/chrome-152"
+          chrome="$RUNNER_TEMP/chrome-152/chrome-linux64/chrome"
+          test -x "$chrome"
+          "$chrome" --version
+          echo "WEBCLIP_CHROME_FOR_TESTING=$chrome" >> "$GITHUB_ENV"
+
+      - name: Run existing P1-007 real Chrome prerequisite
+        shell: bash
+        run: |
+          set -euo pipefail
+          node project_tools/browser_p1_007_unpacked_integration.js
+
+      - name: Run P0-072 physical reset restart harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node project_tools/research_p0_072_real_chrome_reset_restart.js
