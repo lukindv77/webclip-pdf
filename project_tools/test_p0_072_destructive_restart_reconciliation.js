@@ -74,7 +74,8 @@ const disposition = context.fn;
 
 eq(disposition({ phase: 'prepared' }), 'drop-prepared', 'prepared restart receipt is provably pre-admission');
 eq(disposition({ phase: 'admitted-unknown' }), 'manual-resolution', 'admitted unknown never auto-retries after restart');
-eq(disposition({ phase: 'remote-verified' }), 'finalize-local', 'terminal remote truth may resume local-only finalization');
+eq(disposition({ phase: 'remote-verified' }), 'finalize-local', 'terminal remote truth with exact local authority may resume local-only finalization');
+eq(disposition({ phase: 'remote-verified', manualResolutionRequired: true }), 'retain-manual', 'terminal remote truth marked manual does not loop into auto-finalize');
 eq(disposition({ phase: 'manual-resolution' }), 'retain-manual', 'manual receipt remains durable');
 eq(disposition({ phase: 'future-phase' }), 'manual-resolution', 'unknown phase fails closed into manual resolution');
 
@@ -123,6 +124,9 @@ ok(reconcile.includes('listPendingDestructiveMovesForRecovery(maxItems)'), 'reco
 ok(reconcile.includes("disposition === 'drop-prepared'"), 'prepared path is explicit');
 ok(reconcile.includes('removePendingDestructiveMove(id)'), 'prepared receipt is retired without remote work');
 ok(reconcile.includes("disposition === 'manual-resolution'"), 'unknown/admitted path is explicit');
+ok(reconcile.includes("item.supersededByJournalReset !== true && !pendingDestructiveMoveJournalAuthorityToken(item)"), 'verified legacy no-cursor receipt is fenced before local finalize');
+ok(reconcile.includes('Verified legacy destructive receipt не содержит exact P0-076 Journal authority'), 'legacy no-cursor reason is explicit');
+ok(reconcile.includes('legacyJournalAuthority: true'), 'legacy authority backlog is visible in operation evidence');
 ok(reconcile.includes('markPendingDestructiveMoveManualResolution(id, reason, trigger)'), 'admitted unknown becomes durable manual-resolution');
 ok(reconcile.includes("kind === 'trash-move'"), 'Trash terminal local finalization is kind-specific');
 ok(reconcile.includes('finalizeTrashDeleteFromReceipt(id)'), 'verified Trash resumes local delete only');
@@ -166,7 +170,7 @@ ok(worker.includes("runLoggedOperationLogCleanup('alarm')"), 'alarm wake execute
 
 console.log(
   'P0-072 destructive restart reconciliation: PASS; checks=' + checks +
-  '; batch=12; prepared_drop=true; admitted_manual=true; verified_local_finalize=true;' +
+  '; batch=12; prepared_drop=true; admitted_manual=true; verified_local_finalize=true; legacy_no_cursor_manual=true;' +
   ' yandex_retry=false; p1_090_exact_object=false; p0_076_full_cas=false;' +
   ' startup_alarm=true; manual_backlog_bounded=true; release_closed=false'
 );
