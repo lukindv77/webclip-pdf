@@ -173,57 +173,45 @@ async function removePauseObserver(options) {
 }
 
 async function createSelectedFixtureTab(options, articleUrl, label) {
-  console.log('P0_072_TAB_STAGE=' + label + ':create');
-  const tab = await options.evaluate(`chrome.tabs.create({ url: ${js(articleUrl)}, active: false })`);
-  const tabId = Number(tab?.id);
-  assert(tabId > 0, label + ': fixture tab id missing');
-
-  console.log('P0_072_TAB_STAGE=' + label + ':wait-load');
-  await waitFor(async () => {
-    const current = await options.evaluate(`chrome.tabs.get(${tabId})`);
-    return current?.status === 'complete' ? current : null;
-  }, { timeoutMs: 10_000, intervalMs: 50, label: label + ' fixture tab load' });
-
-  console.log('P0_072_TAB_STAGE=' + label + ':inject-content');
-  await options.evaluate(`chrome.scripting.executeScript({ target: { tabId: ${tabId} }, files: ['content.js'] })`);
-
-  console.log('P0_072_TAB_STAGE=' + label + ':start-selection');
-  const started = await options.evaluate(
-    `chrome.tabs.sendMessage(${tabId}, { type: 'WEBCLIP_COMMAND', command: 'start' })`
-  );
-
-  console.log('P0_072_TAB_STAGE=' + label + ':select-fixture');
-  const selected = await options.evaluate(`chrome.scripting.executeScript({
-    target: { tabId: ${tabId} },
-    func: () => {
-      const article = document.getElementById('article');
-      if (!article) return { ok: false, reason: 'article-missing' };
-      // Keep the controller extension page active while the synthetic article is
-      // prepared. The localhost host permission, not activeTab, authorizes this
-      // research-only injection. This avoids coupling the evidence controller
-      // lifetime to headless tab activation behavior.
-      const bulk = document.createElement('div');
-      bulk.id = 'p0-072-physical-bulk';
-      for (let i = 0; i < 96; i += 1) {
-        const page = document.createElement('section');
-        page.style.breakAfter = 'page';
-        page.textContent = 'P0-072 physical Chrome reset/restart synthetic page ' + i + ' '.repeat(32);
-        bulk.append(page);
-      }
-      article.append(bulk);
-      article.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-      return {
-        ok: true,
-        included: Boolean(article.getAttribute('data-webclip-pdf-include')),
-        root: Boolean(document.getElementById('webclip-pdf-extension-root'))
-      };
+  const result = await options.evaluate(`(async () => {
+    const tab = await chrome.tabs.create({ url: ${js(articleUrl)}, active: true });
+    const tabId = tab.id;
+    for (let i = 0; i < 120; i += 1) {
+      const current = await chrome.tabs.get(tabId);
+      if (current.status === 'complete') break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
-  })`);
-  const selectedResult = Array.isArray(selected) ? selected[0]?.result || null : null;
-  assert(started?.ok, label + ': selection start failed');
-  assert(selectedResult?.ok && selectedResult.included && selectedResult.root, label + ': fixture selection failed');
-  console.log('P0_072_TAB_STAGE=' + label + ':ready');
-  return tabId;
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+    const started = await chrome.tabs.sendMessage(tabId, { type: 'WEBCLIP_COMMAND', command: 'start' });
+    const selected = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const article = document.getElementById('article');
+        if (!article) return { ok: false, reason: 'article-missing' };
+        // Make the real PDF non-trivial so chrome.downloads.onCreated has a
+        // reliable opportunity to pause the physical write before completion.
+        const bulk = document.createElement('div');
+        bulk.id = 'p0-072-physical-bulk';
+        for (let i = 0; i < 240; i += 1) {
+          const page = document.createElement('section');
+          page.style.breakAfter = 'page';
+          page.textContent = 'P0-072 physical Chrome reset/restart synthetic page ' + i + ' '.repeat(32);
+          bulk.append(page);
+        }
+        article.append(bulk);
+        article.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        return {
+          ok: true,
+          included: Boolean(article.getAttribute('data-webclip-pdf-include')),
+          root: Boolean(document.getElementById('webclip-pdf-extension-root'))
+        };
+      }
+    });
+    return { tabId, started, selected: selected[0]?.result || null };
+  })()`);
+  assert(result?.started?.ok, label + ': selection start failed');
+  assert(result?.selected?.ok && result.selected.included && result.selected.root, label + ': fixture selection failed');
+  return Number(result.tabId);
 }
 
 async function triggerPdfDownload(options, tabId, previousIds, label) {
@@ -247,35 +235,11 @@ async function triggerPdfDownload(options, tabId, previousIds, label) {
   assert(start?.command?.ok, label + ': download command failed');
   assert(start?.clicked?.ok, label + ': PDF proceed button missing: ' + String(start?.clicked?.reason || ''));
 
-  let created = null;
-  try {
-    created = await waitFor(async () => {
-      const evidence = await options.evaluate('globalThis.__p0072ChromeDownloadEvidence');
-      const rows = Array.isArray(evidence?.created) ? evidence.created : [];
-      return rows.find((item) => !previousIds.has(Number(item.id))) || null;
-    }, { timeoutMs: 70_000, intervalMs: 100, label: label + ' download onCreated+pause' });
-  } catch (error) {
-    const evidence = await options.evaluate('globalThis.__p0072ChromeDownloadEvidence').catch(() => null);
-    const ui = await options.evaluate(`(async () => {
-      const result = await chrome.scripting.executeScript({
-        target: { tabId: ${Number(tabId)} },
-        func: () => {
-          const shadow = document.getElementById('webclip-pdf-extension-root')?.shadowRoot;
-          return {
-            title: String(shadow?.querySelector('.modal h2')?.textContent || ''),
-            text: String(shadow?.querySelector('.modal p')?.textContent || '')
-          };
-        }
-      });
-      return result[0]?.result || null;
-    })()`).catch(() => null);
-    const detail = {
-      pauseErrors: Array.isArray(evidence?.pauseErrors) ? evidence.pauseErrors.slice(-3) : [],
-      createdCount: Array.isArray(evidence?.created) ? evidence.created.length : 0,
-      ui
-    };
-    throw new Error(error.message + '; diagnostics=' + JSON.stringify(detail));
-  }
+  const created = await waitFor(async () => {
+    const evidence = await options.evaluate('globalThis.__p0072ChromeDownloadEvidence');
+    const rows = Array.isArray(evidence?.created) ? evidence.created : [];
+    return rows.find((item) => !previousIds.has(Number(item.id))) || null;
+  }, { timeoutMs: 70_000, intervalMs: 100, label: label + ' download onCreated+pause' });
 
   assert(Number.isInteger(Number(created.id)), label + ': download id missing');
   const id = Number(created.id);
@@ -353,15 +317,8 @@ async function waitReceiptRetiredWithoutJournal(options, downloadId, articleUrl,
 }
 
 async function run() {
-  let stage = 'bootstrap';
-  const setStage = (next) => {
-    stage = String(next || 'unknown');
-    console.log('P0_072_STAGE=' + stage);
-  };
   assert(fs.existsSync(CHROMIUM), 'Chromium binary not found: ' + CHROMIUM);
-  setStage('source-contract');
   const contract = sourceContract();
-  setStage('fixture-start');
   const fixture = await startFixtureServer();
   let testExtension = null;
   let browser = null;
@@ -370,14 +327,7 @@ async function run() {
   const createdIds = new Set();
 
   try {
-    setStage('extension-prepare');
     testExtension = await prepareTestExtension(fixture.origin, fixture.apiBase, { mockYandex: false });
-    const controllerName = 'p0-072-controller.html';
-    await fsp.writeFile(
-      path.join(testExtension.path, controllerName),
-      '<!doctype html><meta charset="utf-8"><title>P0-072 physical evidence controller</title>\n',
-      'utf8'
-    );
     const copiedWorker = await fsp.readFile(path.join(testExtension.path, 'service-worker.js'));
     assert.strictEqual(
       sha256Bytes(copiedWorker),
@@ -385,45 +335,26 @@ async function run() {
       'physical harness must preserve exact production service-worker.js bytes'
     );
 
-    setStage('browser-launch-initial');
     browser = await launchChromium(testExtension.path, { preserveProfile: true });
-    setStage('browser-launched-initial');
     profile = browser.profile;
     const extensionId = browser.extensionId;
-    setStage('controller-attach-initial');
-    options = await browser.attachPage(
-      `chrome-extension://${extensionId}/${controllerName}`,
-      'P0-072 inert controller page'
-    );
-    setStage('controller-attached-initial');
-    assert.strictEqual(
-      await options.evaluate('chrome.runtime.id'),
-      extensionId,
-      'inert controller must execute inside the exact unpacked extension origin'
-    );
-    setStage('pause-observer-install');
+    options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'P0-072 options page');
+    await options.evaluate(`(async () => {
+      await chrome.storage.local.clear();
+      await chrome.storage.session.clear();
+      return true;
+    })()`);
     await installPauseObserver(options);
-    setStage('pause-observer-installed');
 
     // Case A: exact real Chrome late completion after Journal reset.
-    setStage('case-a-create-tab');
     const tabA = await createSelectedFixtureTab(options, fixture.articleUrl, 'late-complete');
-    setStage('case-a-trigger-download');
     const downloadA = await triggerPdfDownload(options, tabA, createdIds, 'late-complete');
-    setStage('case-a-download-paused');
-    setStage('case-a-clear-journal');
     const resetA = await clearJournalAndRequireSuperseded(options, downloadA.id, 'late-complete');
-    setStage('case-a-reset-superseded');
 
-    setStage('case-a-resume-download');
     await options.evaluate(`chrome.downloads.resume(${downloadA.id})`);
-    setStage('case-a-wait-terminal');
     const terminalA = await waitPhysicalTerminal(options, downloadA.id, 'late-complete');
-    setStage('case-a-terminal');
     assert.strictEqual(terminalA.state, 'complete', 'late-complete: resumed real Chrome download must complete');
-    setStage('case-a-wait-receipt-retire');
     await waitReceiptRetiredWithoutJournal(options, downloadA.id, fixture.articleUrl, 'late-complete');
-    setStage('case-a-complete');
 
     assert(terminalA.filename && fs.existsSync(terminalA.filename), 'late-complete: physical PDF file must exist');
     const statA = fs.statSync(terminalA.filename);
@@ -435,43 +366,22 @@ async function run() {
     assert.strictEqual(magic.toString('ascii'), '%PDF-', 'late-complete: physical file must be a PDF');
 
     // Case B: reset-superseded admitted effect survives an actual browser SIGKILL.
-    setStage('case-b-create-tab');
     const tabB = await createSelectedFixtureTab(options, fixture.articleUrl + '?restart=1', 'restart');
-    setStage('case-b-trigger-download');
     const downloadB = await triggerPdfDownload(options, tabB, createdIds, 'restart');
-    setStage('case-b-download-paused');
-    setStage('case-b-clear-journal');
     const resetB = await clearJournalAndRequireSuperseded(options, downloadB.id, 'restart');
-    setStage('case-b-reset-superseded');
 
-    setStage('case-b-remove-observer');
     await removePauseObserver(options);
-    setStage('case-b-sigkill');
     await browser.stop({ preserveProfile: true, signal: 'SIGKILL' });
-    setStage('case-b-killed');
     browser = null;
     options = null;
 
-    setStage('case-b-relaunch');
     browser = await launchChromium(testExtension.path, {
       profilePath: profile,
       preserveProfile: true
     });
-    setStage('case-b-relaunched');
     assert.strictEqual(browser.extensionId, extensionId, 'same profile/path must retain exact unpacked extension identity');
-    setStage('case-b-controller-attach');
-    options = await browser.attachPage(
-      `chrome-extension://${extensionId}/${controllerName}`,
-      'P0-072 inert controller page after restart'
-    );
-    setStage('case-b-controller-attached');
-    assert.strictEqual(
-      await options.evaluate('chrome.runtime.id'),
-      extensionId,
-      'restarted inert controller must execute inside the same unpacked extension origin'
-    );
+    options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'P0-072 options page after restart');
 
-    setStage('case-b-wait-receipt');
     const postRestartReceipt = await waitFor(async () => {
       const snap = await snapshot(options);
       return (snap.pendingDownloads || []).find((item) =>
@@ -480,7 +390,6 @@ async function run() {
       ) || null;
     }, { timeoutMs: 15_000, intervalMs: 100, label: 'durable superseded receipt after SIGKILL restart' });
 
-    setStage('case-b-read-downloaditem');
     const restartItems = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`);
     const restartItem = Array.isArray(restartItems) ? restartItems[0] : null;
     assert(restartItem, 'restart: exact Chrome DownloadItem must remain discoverable after browser restart');
@@ -501,7 +410,6 @@ async function run() {
     // Force the existing durable maintenance boundary now instead of waiting
     // one minute for the production startup alarm. This invokes the unmodified
     // production alarm handler and reconciliation code.
-    setStage('case-b-trigger-maintenance');
     await options.evaluate(`chrome.alarms.create('webclip-operation-log-cleanup', { when: Date.now() + 100 })`);
     await sleep(500);
     await waitFor(async () => {
@@ -517,7 +425,6 @@ async function run() {
       terminalB = Array.isArray(rows) ? rows[0] || null : null;
     }
 
-    setStage('case-b-final-snapshot');
     const finalB = await snapshot(options);
     const survivingB = (finalB.pendingDownloads || []).find((item) => Number(item?.downloadId) === downloadB.id) || null;
     assert(
@@ -534,7 +441,6 @@ async function run() {
       'restart: old-generation Journal entry must not be resurrected'
     );
 
-    setStage('result-build');
     const result = {
       browser: await options.evaluate('navigator.userAgent'),
       extensionId,
@@ -579,22 +485,7 @@ async function run() {
     const stable = JSON.stringify(result, Object.keys(result).sort());
     result.resultSha256 = sha256Bytes(Buffer.from(stable, 'utf8'));
     console.log('P0_072_REAL_CHROME_RESULT=' + JSON.stringify(result));
-    setStage('complete');
     return result;
-  } catch (error) {
-    console.error('P0_072_FAILURE_STAGE=' + stage);
-    const proc = browser?.proc || null;
-    console.error('P0_072_BROWSER_PROCESS=' + JSON.stringify({
-      exitCode: proc?.exitCode ?? null,
-      signalCode: proc?.signalCode ?? null,
-      killed: Boolean(proc?.killed)
-    }));
-    const stderrPath = String(browser?.stderrPath || '');
-    if (stderrPath) {
-      const stderrText = await fsp.readFile(stderrPath, 'utf8').catch(() => '');
-      if (stderrText) console.error('P0_072_BROWSER_STDERR_TAIL=' + JSON.stringify(stderrText.slice(-8000)));
-    }
-    throw error;
   } finally {
     await removePauseObserver(options).catch(() => {});
     await browser?.stop({ preserveProfile: false }).catch(() => {});
@@ -603,6 +494,8 @@ async function run() {
     await fixture.close().catch(() => {});
   }
 }
+
+module.exports = Object.freeze({ sourceContract });
 
 if (require.main === module) {
   const timer = setTimeout(() => {
