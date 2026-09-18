@@ -4253,7 +4253,12 @@ async function uploadCachedRecordToYandex(cached, { tabId = cached?.tabId || 0, 
   const journalWarning = String(journalAppend?.warning || '');
   const journalRecoveryGuaranteed = Boolean(journalAppend?.recoveryGuaranteed);
   if (journalAppend?.cancelled) {
-    // clear/import already removed the source checkpoint intentionally.
+    // A reset may preserve this checkpoint only as reconciliation authority.
+    // Remote verification is terminal, so retire it without recreating the
+    // cleared/replaced Journal entry.
+    await removePendingRemoteSave(remoteCheckpoint.id).catch((error) => {
+      console.warn('WebClip reset-superseded remote checkpoint cleanup:', error);
+    });
   } else if (!journalWarning) {
     await removePendingRemoteSave(remoteCheckpoint.id).catch((error) => {
       console.warn('WebClip remote-save checkpoint cleanup:', error);
@@ -5017,6 +5022,73 @@ function normalizePendingRemotePdfCacheReceipt(value = {}) {
   return Object.freeze({ pdfCacheKey, pdfCacheGeneration, expectedPdfBytes });
 }
 
+function pendingRemoteResetDisposition(item = {}) {
+  const phase = String(item.phase || '');
+  const exactPdfReceipt = normalizePendingRemotePdfCacheReceipt(item);
+  if (phase === 'admitted-unknown' || phase === 'stale-unverified') return 'preserve';
+  if (phase === 'prepared' && !exactPdfReceipt) {
+    // Upgrade safety: older builds could persist "prepared" after the remote
+    // request had effectively crossed the admission boundary. Preserve that
+    // ambiguity instead of treating local reset as external cancellation.
+    return 'preserve';
+  }
+  return 'drop';
+}
+
+function pendingRemoteMatchesJournalResetScope(item = {}, { urlKey = '', siteKey = '' } = {}) {
+  if (!urlKey && !siteKey) return true;
+  const meta = item?.data?.meta || {};
+  const pendingUrlKey = normalizeJournalUrl(meta.url || '');
+  const pendingSiteKey = getJournalSiteKey(meta.url || meta.hostname || '');
+  return Boolean(
+    (urlKey && pendingUrlKey === urlKey) ||
+    (siteKey && pendingSiteKey === siteKey)
+  );
+}
+
+function pendingRemoteResetProvenance(item = {}) {
+  if (item?.supersededByJournalReset !== true) return {};
+  return {
+    supersededByJournalReset: true,
+    journalResetAt: Math.max(0, Number(item.journalResetAt) || 0),
+    journalResetScope: String(item.journalResetScope || '').slice(0, 24)
+  };
+}
+
+function markPendingRemoteSupersededByJournalReset(item = {}, { scope = 'all', resetAt = Date.now() } = {}) {
+  return {
+    ...item,
+    supersededByJournalReset: true,
+    journalResetAt: Math.max(0, Number(resetAt) || Date.now()),
+    journalResetScope: String(scope || 'all').slice(0, 24),
+    updatedAt: Math.max(0, Number(resetAt) || Date.now())
+  };
+}
+
+function reconcilePendingRemoteStoreForJournalReset(
+  pendingRemoteStore,
+  { urlKey = '', siteKey = '', scope = 'all', resetAt = Date.now(), fail = () => {} } = {}
+) {
+  const request = pendingRemoteStore.openCursor();
+  request.onsuccess = () => {
+    try {
+      const cursor = request.result;
+      if (!cursor) return;
+      const item = cursor.value || {};
+      if (pendingRemoteMatchesJournalResetScope(item, { urlKey, siteKey })) {
+        if (pendingRemoteResetDisposition(item) === 'preserve') {
+          cursor.update(markPendingRemoteSupersededByJournalReset(item, { scope, resetAt }));
+        } else {
+          cursor.delete();
+        }
+      }
+      cursor.continue();
+    } catch (error) { fail(error); }
+  };
+  request.onerror = () => fail(request.error || new Error('Не удалось reconcile pending Yandex checkpoints при сбросе журнала.'));
+  return request;
+}
+
 function pendingRemotePdfCacheRetentionIdentity(item = {}) {
   const phase = String(item.phase || '');
   const receipt = normalizePendingRemotePdfCacheReceipt(item);
@@ -5116,7 +5188,17 @@ async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, c
       existingReq.onsuccess = () => {
         try {
           const existing = existingReq.result;
-          if (existing) { pending.put(existing.phase === 'remote-verified' ? { ...existing, updatedAt: now, operationId: item.operationId || existing.operationId } : existing.phase === 'stale-unverified' ? { ...item, createdAt: now } : { ...item, createdAt: Number(existing.createdAt || now) }); return; }
+          if (existing) {
+            const resetProvenance = pendingRemoteResetProvenance(existing);
+            pending.put(
+              existing.phase === 'remote-verified'
+                ? { ...existing, updatedAt: now, operationId: item.operationId || existing.operationId, ...resetProvenance }
+                : existing.phase === 'stale-unverified'
+                  ? { ...item, createdAt: now, ...resetProvenance }
+                  : { ...item, createdAt: Number(existing.createdAt || now), ...resetProvenance }
+            );
+            return;
+          }
           let activeCount = 0; const countReq = pending.openCursor();
           countReq.onsuccess = () => { try { const cursor = countReq.result; if (cursor) { if (String(cursor.value?.phase || '') !== 'stale-unverified') activeCount += 1; cursor.continue(); return; } if (activeCount >= MAX_PENDING_REMOTE_SAVES) { fail(new Error(`Очередь активного восстановления удалённых сохранений заполнена (${MAX_PENDING_REMOTE_SAVES}).`)); return; } pending.put(item); } catch (e) { fail(e); } };
           countReq.onerror = () => fail(countReq.error || new Error('Не удалось проверить размер очереди удалённых сохранений.'));
@@ -5238,7 +5320,7 @@ async function appendJournalEntryFromDurableCheckpoint(data, operationId = '', {
     });
     if (!entry) {
       return {
-        warning: `Запись журнала не добавлена: ${label} был удалён конкурентной очисткой/заменой журнала.`,
+        warning: `Запись журнала не добавлена: ${label} был удалён или superseded конкурентной очисткой/заменой журнала.`,
         recoveryGuaranteed: false,
         cancelled: true,
         journalEntryId: prepared.journalEntryId
@@ -5295,7 +5377,7 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
     if (!id || !item?.data) continue;
     try {
       const existingEntry = await getJournalEntryById(id);
-      if (existingEntry) {
+      if (existingEntry && item?.supersededByJournalReset !== true) {
         await removePendingRemoteSave(id);
         recovered += 1;
         continue;
@@ -5344,7 +5426,10 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
         label: 'checkpoint удалённого сохранения'
       });
       if (journalAppend.cancelled) {
-        // A concurrent clear/import deliberately removed the source checkpoint.
+        // Missing or reset-superseded Journal authority must not resurrect the
+        // old entry. The remote outcome is now verified, so its receipt may be
+        // retired as terminal.
+        await removePendingRemoteSave(id);
         cancelled += 1;
       } else if (!journalAppend.warning) {
         await removePendingRemoteSave(id);
@@ -5969,9 +6054,9 @@ async function appendJournalEntry({ destination, filename, remotePath = '', fold
           const durableGet = durableStore.get(requiredDurableKey);
           durableGet.onsuccess = () => {
             try {
-              if (!durableGet.result) {
-                // A concurrent clear/import intentionally removed this source
-                // checkpoint. Do not resurrect stale in-memory metadata.
+              if (!durableGet.result || durableGet.result?.supersededByJournalReset === true) {
+                // Missing or reset-superseded durable authority cannot
+                // resurrect metadata into the replacement Journal generation.
                 durableCheckpointMissing = true;
                 pendingStore.delete(id);
                 return;
@@ -7083,7 +7168,11 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
           store.clear();
           pendingStore.clear();
           pendingDownloadStore.clear();
-          pendingRemoteStore.clear();
+          reconcilePendingRemoteStoreForJournalReset(pendingRemoteStore, {
+            scope,
+            resetAt: Date.now(),
+            fail
+          });
           return;
         }
         const handleCursorError = (request, message) => {
@@ -7126,7 +7215,13 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
         };
         prunePending(pendingStore, 'pending journal checkpoints');
         prunePending(pendingDownloadStore, 'pending local-download checkpoints');
-        prunePending(pendingRemoteStore, 'pending Yandex checkpoints');
+        reconcilePendingRemoteStoreForJournalReset(pendingRemoteStore, {
+          urlKey,
+          siteKey,
+          scope,
+          resetAt: Date.now(),
+          fail
+        });
       },
       JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
     );
@@ -8525,7 +8620,11 @@ async function commitStagedJournalImport(prepared, operationId, expectedJournalR
       const beginReplace = () => {
         tx.objectStore(JOURNAL_PENDING_STORE).clear();
         tx.objectStore(JOURNAL_PENDING_DOWNLOAD_STORE).clear();
-        tx.objectStore(JOURNAL_PENDING_REMOTE_STORE).clear();
+        reconcilePendingRemoteStoreForJournalReset(tx.objectStore(JOURNAL_PENDING_REMOTE_STORE), {
+          scope: 'import-replace',
+          resetAt: Date.now(),
+          fail: abort
+        });
         touchJournalDbRevision(tx, 'import-replace');
         const clearRequest = journalStore.clear();
         clearRequest.onerror = () => abort(clearRequest.error || new Error('Не удалось очистить старый журнал перед импортом.'));
