@@ -247,6 +247,50 @@ async function downloadObserverState(observerPage) {
     .then((value) => value.p0072ObserverState || { enabled: true, created: [], pauseErrors: [] })`);
 }
 
+async function attachStablePopupController(browser, extensionId, label) {
+  const url = 'chrome-extension://' + extensionId + '/popup.html';
+  let lastError = null;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    let page = null;
+    try {
+      page = await browser.attachPage(url, label + ' attempt ' + attempt);
+      const ready = await waitFor(async () => {
+        try {
+          const state = await page.evaluate(`({
+            readyState: document.readyState,
+            marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
+            api: Boolean(globalThis.WebClipContentInjectionGuard),
+            ensureTopContentScript: typeof globalThis.ensureTopContentScript
+          })`);
+          return state?.readyState === 'complete'
+            && state?.marker
+            && state?.api
+            && state?.ensureTopContentScript === 'function'
+            ? state
+            : null;
+        } catch (error) {
+          lastError = error;
+          return null;
+        }
+      }, { timeoutMs: 3_000, intervalMs: 100, label: label + ' readiness attempt ' + attempt });
+      if (ready) {
+        await sleep(350);
+        const stable = await page.evaluate(`({
+          marker: Boolean(globalThis.__webclipContentInjectionGuardV6),
+          api: Boolean(globalThis.WebClipContentInjectionGuard),
+          ensureTopContentScript: typeof globalThis.ensureTopContentScript
+        })`);
+        if (stable?.marker && stable?.api && stable?.ensureTopContentScript === 'function') return page;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await page?.close().catch(() => {});
+    await sleep(400);
+  }
+  throw new Error(label + ': stable popup controller unavailable: ' + String(lastError?.message || lastError || 'unknown'));
+}
+
 async function createSelectedFixtureTab(options, articleUrl, label) {
   const tab = await options.evaluate(`chrome.tabs.create({ url: ${js(articleUrl)}, active: true })`);
   const tabId = Number(tab?.id);
@@ -533,7 +577,7 @@ async function run() {
     observer = await loadDownloadObserver(browser, observerExtension.path);
     mark('observer-loaded');
     mark('controller-attach');
-    options = await browser.attachPage(`chrome-extension://${extensionId}/popup.html`, 'P0-072 guarded popup controller');
+    options = await attachStablePopupController(browser, extensionId, 'P0-072 guarded popup controller');
     mark('controller-attached');
     await options.evaluate(`(async () => {
       await chrome.storage.local.clear();
@@ -600,7 +644,7 @@ async function run() {
     });
     mark('case-b-browser-restarted');
     assert.strictEqual(browser.extensionId, extensionId, 'same profile/path must retain exact unpacked extension identity');
-    options = await browser.attachPage(`chrome-extension://${extensionId}/popup.html`, 'P0-072 guarded popup controller after restart');
+    options = await attachStablePopupController(browser, extensionId, 'P0-072 guarded popup controller after restart');
 
     mark('case-b-receipt-after-restart');
     const postRestartReceipt = await waitFor(async () => {
