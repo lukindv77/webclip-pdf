@@ -190,22 +190,15 @@ eq(api.pdfCacheGenerationMatchesRemoteRetention(cacheA, {
 const checkpointSection = section(
   worker,
   'async function checkpointPendingRemoteSaveIntent',
-  'async function markPendingRemoteSaveAdmitted'
+  'async function markPendingRemoteSaveVerified'
 );
 ok(checkpointSection.includes("pdfCacheKey = ''"), 'remote checkpoint API accepts exact cache key');
 ok(checkpointSection.includes("pdfCacheGeneration = ''"), 'remote checkpoint API accepts exact cache generation');
 ok(checkpointSection.includes('normalizePendingRemotePdfCacheReceipt({ pdfCacheKey, pdfCacheGeneration, expectedPdfBytes })'), 'checkpoint normalizes one exact local-byte receipt');
 ok(checkpointSection.includes('WEBCLIP_REMOTE_PDF_CACHE_RECEIPT_REQUIRED'), 'new remote checkpoint fails closed without exact local-byte receipt');
 ok(checkpointSection.includes('...pdfCacheReceipt'), 'durable checkpoint persists exact local-byte receipt');
-
-const admittedSection = section(
-  worker,
-  'async function markPendingRemoteSaveAdmitted',
-  'async function markPendingRemoteSaveVerified'
-);
-ok(admittedSection.includes("phase: 'admitted-unknown'"), 'external admission has an explicit durable unknown phase');
-ok(admittedSection.includes('normalizePendingRemotePdfCacheReceipt(current)'), 'admission requires exact cache receipt to already be durable');
-ok(!admittedSection.includes('operationId ==='), 'admission is not authorized by caller correlation equality');
+ok(checkpointSection.includes("phase: 'admitted-unknown'"), 'checkpoint is born admitted-unknown at the external-admission boundary');
+ok(!checkpointSection.includes("phase: 'prepared'"), 'production checkpoint creation has no cross-DB prepared-to-admitted window');
 
 const uploadSection = section(
   worker,
@@ -214,11 +207,12 @@ const uploadSection = section(
 );
 ok(uploadSection.includes("pdfCacheKey: String(cached.key || '')"), 'remote checkpoint receives exact P0-079 cache key');
 ok(uploadSection.includes("pdfCacheGeneration: String(cached.cacheGeneration || '')"), 'remote checkpoint receives exact P0-079 generation');
-const firstAdmission = uploadSection.indexOf('remoteCheckpoint = await markPendingRemoteSaveAdmitted(remoteCheckpoint.id);');
+const checkpointCreate = uploadSection.indexOf('remoteCheckpoint = await checkpointPendingRemoteSaveIntent({');
 const signedTransfer = uploadSection.indexOf('uploadResponse = await runOffscreenSignedTransfer({');
-ok(firstAdmission >= 0 && firstAdmission < signedTransfer, 'admitted-unknown commits before signed PDF transfer starts');
-ok(uploadSection.includes('if (existingFileReused)'), 'existing remote object path is explicit');
-ok(uploadSection.indexOf('if (existingFileReused)') < uploadSection.indexOf("let publicUrl = '';"), 'existing-file path upgrades durable phase before publication/final verification');
+ok(checkpointCreate >= 0 && checkpointCreate < signedTransfer, 'admitted-unknown checkpoint commits before signed PDF transfer starts');
+ok(!uploadSection.includes('markPendingRemoteSaveAdmitted'), 'no second cross-DB admission transition can race TTL cleanup');
+ok(uploadSection.includes('if (allowExisting)'), 'existing remote object lookup remains explicit before checkpoint creation');
+ok(uploadSection.indexOf('await ensureRemoteCheckpoint();') < uploadSection.indexOf("let publicUrl = '';"), 'existing-file path also has durable admitted-unknown checkpoint before publication/final verification');
 
 const retentionSnapshotSection = section(
   worker,
@@ -257,5 +251,5 @@ ok(maintenance.includes("runStage('remote-checkpoint-cleanup', cleanupStalePendi
 console.log(
   'P0-079 nonterminal PDF cache retention: PASS; checks=' + checks +
   '; durable_exact_receipt=true; admitted_unknown=true; restart=true; legacy_upgrade_fallback=true;' +
-  ' prepared_new_disposable=true; operationId_capability=false; p0_072_reset_closure=false'
+  ' no_prepared_admission_window=true; operationId_capability=false; p0_072_reset_closure=false'
 );
