@@ -372,6 +372,12 @@ async function run() {
   try {
     setStage('extension-prepare');
     testExtension = await prepareTestExtension(fixture.origin, fixture.apiBase, { mockYandex: false });
+    const controllerName = 'p0-072-controller.html';
+    await fsp.writeFile(
+      path.join(testExtension.path, controllerName),
+      '<!doctype html><meta charset="utf-8"><title>P0-072 physical evidence controller</title>\n',
+      'utf8'
+    );
     const copiedWorker = await fsp.readFile(path.join(testExtension.path, 'service-worker.js'));
     assert.strictEqual(
       sha256Bytes(copiedWorker),
@@ -384,14 +390,17 @@ async function run() {
     setStage('browser-launched-initial');
     profile = browser.profile;
     const extensionId = browser.extensionId;
-    setStage('options-attach-initial');
-    options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'P0-072 options page');
-    setStage('options-attached-initial');
-    await options.evaluate(`(async () => {
-      await chrome.storage.local.clear();
-      await chrome.storage.session.clear();
-      return true;
-    })()`);
+    setStage('controller-attach-initial');
+    options = await browser.attachPage(
+      `chrome-extension://${extensionId}/${controllerName}`,
+      'P0-072 inert controller page'
+    );
+    setStage('controller-attached-initial');
+    assert.strictEqual(
+      await options.evaluate('chrome.runtime.id'),
+      extensionId,
+      'inert controller must execute inside the exact unpacked extension origin'
+    );
     setStage('pause-observer-install');
     await installPauseObserver(options);
     setStage('pause-observer-installed');
@@ -450,9 +459,17 @@ async function run() {
     });
     setStage('case-b-relaunched');
     assert.strictEqual(browser.extensionId, extensionId, 'same profile/path must retain exact unpacked extension identity');
-    setStage('case-b-options-attach');
-    options = await browser.attachPage(`chrome-extension://${extensionId}/options.html`, 'P0-072 options page after restart');
-    setStage('case-b-options-attached');
+    setStage('case-b-controller-attach');
+    options = await browser.attachPage(
+      `chrome-extension://${extensionId}/${controllerName}`,
+      'P0-072 inert controller page after restart'
+    );
+    setStage('case-b-controller-attached');
+    assert.strictEqual(
+      await options.evaluate('chrome.runtime.id'),
+      extensionId,
+      'restarted inert controller must execute inside the same unpacked extension origin'
+    );
 
     setStage('case-b-wait-receipt');
     const postRestartReceipt = await waitFor(async () => {
