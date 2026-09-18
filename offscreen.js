@@ -3,7 +3,8 @@ const MAX_TEXT_BLOB_CHARS = 64 * 1024 * 1024;
 const PDF_CACHE_DB_NAME = 'WebClipPdfRetryCache';
 const PDF_CACHE_STORE = 'pdfs';
 const PDF_CACHE_META_STORE = 'meta';
-const PDF_CACHE_DB_VERSION = 3;
+const PDF_CACHE_RETRY_INDEX_STORE = 'retryIndex';
+const PDF_CACHE_DB_VERSION = 4;
 const TRANSFER_DB_NAME = 'WebClipOffscreenTransfers';
 const TRANSFER_STORE = 'payloads';
 const TRANSFER_DB_VERSION = 1;
@@ -318,10 +319,14 @@ async function handleSignedTransfer(message, reservation) {
   try {
     const fetchOptions = { method, signal: controller.signal, redirect: 'error', headers: {} };
     if (mode === 'pdf-cache-upload') {
-      const record = await getPdfCacheRecord(String(spec.pdfCacheKey || ''), deadlineAt);
-      if (!record) throw new Error('PDF retry-cache для offscreen upload не найден.');
+      const exactPdf = await getExactSealedPdfCacheRecord(
+        String(spec.pdfCacheKey || ''),
+        String(spec.pdfCacheGeneration || ''),
+        Number(spec.expectedPdfBytes || 0),
+        deadlineAt
+      );
       fetchOptions.headers['Content-Type'] = String(spec.contentType || 'application/pdf').slice(0, 200);
-      fetchOptions.body = cachedPdfRecordToBlob(record);
+      fetchOptions.body = exactPdf.blob;
       resizeSignedTransferReservation(reservation, fetchOptions.body.size);
     } else if (mode === 'text-payload-upload') {
       const record = await getTransferPayload(String(spec.payloadKey || ''), deadlineAt);
@@ -455,25 +460,80 @@ function timeoutIdbTransaction(tx, reject, timeoutMs, label) {
   };
 }
 
-async function getPdfCacheRecord(key, deadlineAt = 0) {
-  if (!key || key.length > 240) throw new Error('Некорректный ключ PDF retry-cache.');
+function isExactSealedPdfCacheRecord(record, key, generation, expectedBytes) {
+  const cacheKey = String(key || '');
+  const cacheGeneration = String(generation || '');
+  const byteLength = Math.max(0, Number(expectedBytes) || 0);
+  return Boolean(
+    record &&
+    cacheGeneration &&
+    cacheGeneration.length <= 80 &&
+    cacheKey === `pdf:${cacheGeneration}` &&
+    String(record.key || '') === cacheKey &&
+    String(record.cacheGeneration || '') === cacheGeneration &&
+    record.sealed === true &&
+    byteLength > 0 &&
+    Math.max(0, Number(record.pdfByteLength) || 0) === byteLength
+  );
+}
+
+async function getExactSealedPdfCacheRecord(key, generation, expectedBytes, deadlineAt = 0) {
+  const cacheKey = String(key || '');
+  const cacheGeneration = String(generation || '');
+  const byteLength = Math.max(0, Number(expectedBytes) || 0);
+  if (!cacheGeneration || cacheGeneration.length > 80 || cacheKey !== `pdf:${cacheGeneration}` || byteLength <= 0) {
+    const error = new Error('Некорректный exact PDF cache receipt.');
+    error.code = 'OFFSCREEN_PDF_CACHE_RECEIPT_INVALID';
+    throw error;
+  }
   const openTimeoutMs = boundedIdbPhaseTimeout(deadlineAt, 10_000, 'Открытие PDF retry-cache');
   const db = await openDbBounded(PDF_CACHE_DB_NAME, PDF_CACHE_DB_VERSION, (database) => {
     if (!database.objectStoreNames.contains(PDF_CACHE_STORE)) database.createObjectStore(PDF_CACHE_STORE, { keyPath: 'key' });
     if (!database.objectStoreNames.contains(PDF_CACHE_META_STORE)) database.createObjectStore(PDF_CACHE_META_STORE, { keyPath: 'key' });
+    if (!database.objectStoreNames.contains(PDF_CACHE_RETRY_INDEX_STORE)) database.createObjectStore(PDF_CACHE_RETRY_INDEX_STORE, { keyPath: 'key' });
   }, openTimeoutMs);
   try {
     return await new Promise((resolve, reject) => {
-      const tx = db.transaction(PDF_CACHE_STORE, 'readonly');
-      const guard = timeoutIdbTransaction(tx, reject, boundedIdbPhaseTimeout(deadlineAt, 20_000, 'Чтение PDF retry-cache'), 'Чтение PDF retry-cache');
-      const req = tx.objectStore(PDF_CACHE_STORE).get(key);
-      req.onsuccess = () => guard.resolve(resolve, req.result || null);
-      req.onerror = () => guard.reject(req.error || new Error('Не удалось прочитать PDF retry-cache.'));
-      tx.onabort = () => guard.reject(tx.error || new Error('Чтение PDF retry-cache прервано.'));
-      tx.onerror = () => guard.reject(tx.error || new Error('Ошибка чтения PDF retry-cache.'));
+      const tx = db.transaction([PDF_CACHE_STORE, PDF_CACHE_META_STORE], 'readonly');
+      const guard = timeoutIdbTransaction(tx, reject, boundedIdbPhaseTimeout(deadlineAt, 20_000, 'Чтение exact PDF retry-cache'), 'Чтение exact PDF retry-cache');
+      const pdfRequest = tx.objectStore(PDF_CACHE_STORE).get(cacheKey);
+      const metaRequest = tx.objectStore(PDF_CACHE_META_STORE).get(cacheKey);
+      tx.oncomplete = () => {
+        if (guard.isSettled()) return;
+        const record = pdfRequest.result || null;
+        const metadata = metaRequest.result || null;
+        if (
+          !isExactSealedPdfCacheRecord(record, cacheKey, cacheGeneration, byteLength) ||
+          !isExactSealedPdfCacheRecord(metadata, cacheKey, cacheGeneration, byteLength)
+        ) {
+          const error = new Error('Exact sealed PDF cache generation не совпадает с upload receipt.');
+          error.code = 'OFFSCREEN_PDF_CACHE_GENERATION_MISMATCH';
+          guard.reject(error);
+          return;
+        }
+        let blob;
+        try {
+          blob = cachedPdfRecordToBlob(record);
+        } catch (error) {
+          guard.reject(error);
+          return;
+        }
+        if (blob.size !== byteLength) {
+          const error = new Error('Размер exact PDF cache generation изменился.');
+          error.code = 'OFFSCREEN_PDF_CACHE_SIZE_MISMATCH';
+          guard.reject(error);
+          return;
+        }
+        guard.resolve(resolve, { record, blob });
+      };
+      pdfRequest.onerror = () => guard.reject(pdfRequest.error || new Error('Не удалось прочитать exact PDF cache bytes.'));
+      metaRequest.onerror = () => guard.reject(metaRequest.error || new Error('Не удалось прочитать exact PDF cache metadata.'));
+      tx.onabort = () => guard.reject(tx.error || new Error('Чтение exact PDF retry-cache прервано.'));
+      tx.onerror = () => guard.reject(tx.error || new Error('Ошибка чтения exact PDF retry-cache.'));
     });
   } finally { db.close(); }
 }
+
 
 async function openTransferDb(timeoutMs = 10_000) {
   return openDbBounded(TRANSFER_DB_NAME, TRANSFER_DB_VERSION, (database) => {
