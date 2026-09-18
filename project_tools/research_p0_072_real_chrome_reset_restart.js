@@ -566,6 +566,67 @@ async function latestBackgroundMaintenanceLog(options) {
   })`);
 }
 
+async function removeLevelDbLocks(root) {
+  const entries = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    const full = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      await removeLevelDbLocks(full);
+    } else if (entry.name === 'LOCK') {
+      await fsp.rm(full, { force: true });
+    }
+  }
+}
+
+async function verifyKilledProfileReceipt(testExtensionPath, sourceProfile, expectedExtensionId, downloadId, operationId) {
+  const sourceIndexedDb = path.join(sourceProfile, 'Default', 'IndexedDB');
+  assert(fs.existsSync(sourceIndexedDb), 'killed profile must retain IndexedDB directory');
+  const witnessProfile = await fsp.mkdtemp(path.join(os.tmpdir(), 'webclip-p0-072-killed-profile-witness-'));
+  const witnessIndexedDb = path.join(witnessProfile, 'Default', 'IndexedDB');
+  let witnessBrowser = null;
+  let witnessPage = null;
+  try {
+    await fsp.mkdir(path.dirname(witnessIndexedDb), { recursive: true });
+    await fsp.cp(sourceIndexedDb, witnessIndexedDb, { recursive: true, force: true });
+    await removeLevelDbLocks(witnessIndexedDb);
+
+    witnessBrowser = await launchChromium(testExtensionPath, {
+      profilePath: witnessProfile,
+      preserveProfile: true
+    });
+    assert.strictEqual(
+      witnessBrowser.extensionId,
+      expectedExtensionId,
+      'killed-profile witness must retain exact unpacked extension identity'
+    );
+    witnessPage = await attachStablePopupController(
+      witnessBrowser,
+      expectedExtensionId,
+      'P0-072 killed-profile receipt witness controller'
+    );
+    const receipt = await waitFor(async () => {
+      const snap = await snapshot(witnessPage);
+      return (snap.pendingDownloads || []).find((item) =>
+        Number(item?.downloadId) === Number(downloadId)
+        && String(item?.operationId || '') === String(operationId || '')
+        && item?.supersededByJournalReset === true
+        && item?.downloadAdmissionPhase === 'admitted-unknown'
+      ) || null;
+    }, { timeoutMs: 10_000, intervalMs: 100, label: 'killed-profile durable superseded receipt witness' });
+    return {
+      downloadId: Number(receipt.downloadId),
+      operationId: String(receipt.operationId || ''),
+      updatedAt: Number(receipt.updatedAt || 0),
+      supersededByJournalReset: Boolean(receipt.supersededByJournalReset),
+      downloadAdmissionPhase: String(receipt.downloadAdmissionPhase || '')
+    };
+  } finally {
+    await witnessPage?.close().catch(() => {});
+    await witnessBrowser?.stop({ preserveProfile: true }).catch(() => {});
+    await fsp.rm(witnessProfile, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 async function waitReceiptRetiredWithoutJournal(options, downloadId, articleUrl, label) {
   return waitFor(async () => {
     const snap = await snapshot(options);
@@ -676,6 +737,17 @@ async function run() {
     browser = null;
     options = null;
 
+    mark('case-b-killed-profile-witness');
+    const killedProfileWitness = await verifyKilledProfileReceipt(
+      testExtension.path,
+      profile,
+      extensionId,
+      downloadB.id,
+      resetB.receipt?.operationId
+    );
+    mark('case-b-killed-profile-witness-confirmed');
+    console.log('P0_072_KILLED_PROFILE_RECEIPT=' + JSON.stringify(killedProfileWitness));
+
     mark('case-b-restart-browser');
     browser = await launchChromium(testExtension.path, {
       profilePath: profile,
@@ -686,13 +758,11 @@ async function run() {
     options = await attachStablePopupController(browser, extensionId, 'P0-072 guarded popup controller after restart');
 
     mark('case-b-receipt-after-restart');
-    const postRestartReceipt = await waitFor(async () => {
-      const snap = await snapshot(options);
-      return (snap.pendingDownloads || []).find((item) =>
-        Number(item?.downloadId) === downloadB.id
-        && item?.supersededByJournalReset === true
-      ) || null;
-    }, { timeoutMs: 15_000, intervalMs: 100, label: 'durable superseded receipt after SIGKILL restart' });
+    const initialPostRestart = await snapshot(options);
+    let postRestartReceipt = (initialPostRestart.pendingDownloads || []).find((item) =>
+      Number(item?.downloadId) === downloadB.id
+      && item?.supersededByJournalReset === true
+    ) || null;
 
     mark('case-b-download-after-restart');
     const restartItems = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`);
@@ -706,57 +776,84 @@ async function run() {
       error: restartItem.error || '',
       filename: restartItem.filename || ''
     }));
-    console.log('P0_072_RESTART_RECEIPT=' + JSON.stringify({
-      downloadId: postRestartReceipt.downloadId,
-      kind: postRestartReceipt.kind,
-      downloadAdmissionPhase: postRestartReceipt.downloadAdmissionPhase,
-      supersededByJournalReset: postRestartReceipt.supersededByJournalReset,
-      recoveryState: postRestartReceipt.recoveryState || ''
-    }));
-
-    // If Chrome kept it resumable, allow it to continue. If Chrome already
-    // reached a terminal state during restart, maintenance will settle that
-    // terminal fact instead.
-    if (restartItem.state !== 'complete' && restartItem.state !== 'interrupted') {
-      if (restartItem.paused || restartItem.canResume) {
-        await options.evaluate(`chrome.downloads.resume(${downloadB.id})`).catch(() => {});
-      }
-    } else if (restartItem.state === 'interrupted' && restartItem.canResume) {
-      await options.evaluate(`chrome.downloads.resume(${downloadB.id})`).catch(() => {});
+    if (postRestartReceipt) {
+      console.log('P0_072_RESTART_RECEIPT=' + JSON.stringify({
+        downloadId: postRestartReceipt.downloadId,
+        kind: postRestartReceipt.kind,
+        downloadAdmissionPhase: postRestartReceipt.downloadAdmissionPhase,
+        supersededByJournalReset: postRestartReceipt.supersededByJournalReset,
+        recoveryState: postRestartReceipt.recoveryState || ''
+      }));
+    } else {
+      console.log('P0_072_RESTART_RECEIPT=consumed-before-page-probe');
     }
 
-    let terminalB = await waitPhysicalTerminal(options, downloadB.id, 'restart').catch(() => null);
+    let terminalB = null;
+    let restartReconciliationMode = '';
 
-    // Exercise the real production alarm boundary at Chrome's supported
-    // minimum timing rather than assuming a 100 ms alarm delivery.
-    mark('case-b-maintenance');
-    await options.evaluate(`chrome.alarms.create('webclip-operation-log-cleanup', { delayInMinutes: 0.5 })`);
-    let lastMaintenanceState = null;
-    await waitFor(async () => {
-      const snap = await snapshot(options);
-      const rows = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`).catch(() => []);
-      const alarm = await options.evaluate(`chrome.alarms.get('webclip-operation-log-cleanup')`).catch(() => null);
-      const row = (snap.pendingDownloads || []).find((item) => Number(item?.downloadId) === downloadB.id) || null;
-      lastMaintenanceState = {
-        row,
-        download: Array.isArray(rows) ? rows[0] || null : null,
-        alarm: alarm || null
-      };
-      if (!row) return true;
-      if (row.kind === 'unknown' && row.recoveryState === 'manual-resolution' && row.supersededByJournalReset === true) return true;
-      return false;
-    }, { timeoutMs: 140_000, intervalMs: 250, label: 'restart maintenance reconciliation' }).catch(async (error) => {
-      const maintenanceLog = await latestBackgroundMaintenanceLog(options).catch(() => null);
-      throw new Error(
-        String(error?.message || error)
-        + '; lastState=' + JSON.stringify(lastMaintenanceState)
-        + '; maintenanceLog=' + JSON.stringify(maintenanceLog)
+    if (!postRestartReceipt) {
+      assert(
+        restartItem.state === 'complete' || restartItem.state === 'interrupted',
+        'restart: early receipt consumption requires exact terminal Chrome DownloadItem'
       );
-    });
+      await sleep(500);
+      const earlyFinal = await snapshot(options);
+      const earlyRow = (earlyFinal.pendingDownloads || []).find((item) => Number(item?.downloadId) === downloadB.id) || null;
+      assert.strictEqual(earlyRow, null, 'restart: early terminal reconciliation must retire exact durable receipt');
+      assert.strictEqual(
+        (earlyFinal.entries || []).some((entry) => String(entry?.url || '').startsWith(fixture.articleUrl)),
+        false,
+        'restart: early terminal reconciliation must not resurrect old-generation Journal metadata'
+      );
+      terminalB = restartItem;
+      restartReconciliationMode = 'terminal-onChanged-before-page-probe';
+      mark('case-b-reconciled-onchanged');
+    } else {
+      // If Chrome kept it resumable, allow it to continue. If Chrome already
+      // reached a terminal state during restart, maintenance will settle that
+      // terminal fact instead.
+      if (restartItem.state !== 'complete' && restartItem.state !== 'interrupted') {
+        if (restartItem.paused || restartItem.canResume) {
+          await options.evaluate(`chrome.downloads.resume(${downloadB.id})`).catch(() => {});
+        }
+      } else if (restartItem.state === 'interrupted' && restartItem.canResume) {
+        await options.evaluate(`chrome.downloads.resume(${downloadB.id})`).catch(() => {});
+      }
 
-    if (!terminalB) {
-      const rows = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`);
-      terminalB = Array.isArray(rows) ? rows[0] || null : null;
+      terminalB = await waitPhysicalTerminal(options, downloadB.id, 'restart').catch(() => null);
+
+      // Exercise the real production alarm boundary at Chrome's supported
+      // minimum timing rather than assuming a 100 ms alarm delivery.
+      mark('case-b-maintenance');
+      await options.evaluate(`chrome.alarms.create('webclip-operation-log-cleanup', { delayInMinutes: 0.5 })`);
+      let lastMaintenanceState = null;
+      await waitFor(async () => {
+        const snap = await snapshot(options);
+        const rows = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`).catch(() => []);
+        const alarm = await options.evaluate(`chrome.alarms.get('webclip-operation-log-cleanup')`).catch(() => null);
+        const row = (snap.pendingDownloads || []).find((item) => Number(item?.downloadId) === downloadB.id) || null;
+        lastMaintenanceState = {
+          row,
+          download: Array.isArray(rows) ? rows[0] || null : null,
+          alarm: alarm || null
+        };
+        if (!row) return true;
+        if (row.kind === 'unknown' && row.recoveryState === 'manual-resolution' && row.supersededByJournalReset === true) return true;
+        return false;
+      }, { timeoutMs: 140_000, intervalMs: 250, label: 'restart maintenance reconciliation' }).catch(async (error) => {
+        const maintenanceLog = await latestBackgroundMaintenanceLog(options).catch(() => null);
+        throw new Error(
+          String(error?.message || error)
+          + '; lastState=' + JSON.stringify(lastMaintenanceState)
+          + '; maintenanceLog=' + JSON.stringify(maintenanceLog)
+        );
+      });
+      restartReconciliationMode = 'production-maintenance';
+
+      if (!terminalB) {
+        const rows = await options.evaluate(`chrome.downloads.search({ id: ${downloadB.id} })`);
+        terminalB = Array.isArray(rows) ? rows[0] || null : null;
+      }
     }
 
     const finalB = await snapshot(options);
@@ -800,11 +897,14 @@ async function run() {
         resetOperationId: resetB.operationId,
         preCrashReceiptUpdatedAt: Number(resetB.receipt?.updatedAt || 0),
         postRestartReceiptUpdatedAt: Number(postRestartReceipt?.updatedAt || 0),
+        killedProfileReceiptUpdatedAt: Number(killedProfileWitness.updatedAt || 0),
+        killedProfileReceiptWitness: true,
         chromeStateAfterRestart: String(restartItem.state || ''),
         chromeCanResumeAfterRestart: Boolean(restartItem.canResume),
         terminalStateObserved: String(terminalB?.state || ''),
+        reconciliationMode: restartReconciliationMode,
         receiptOutcome: survivingB ? 'manual-resolution' : 'retired-terminal',
-        supersededEvidencePreserved: Boolean(survivingB?.supersededByJournalReset || !survivingB),
+        supersededEvidencePreserved: Boolean(killedProfileWitness.supersededByJournalReset && (survivingB?.supersededByJournalReset || !survivingB)),
         journalResurrected: false
       },
       evidenceBoundary: {
