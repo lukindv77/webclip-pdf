@@ -5649,8 +5649,18 @@ async function bindPendingLocalDownloadIntent(intentKey, downloadId) {
               if (existing) {
                 const sameOperation = String(existing.operationId || '') && String(existing.operationId || '') === String(intent.operationId || '');
                 if (sameOperation) {
+                  const rebound = intent.supersededByJournalReset === true
+                    ? {
+                      ...existing,
+                      supersededByJournalReset: true,
+                      journalResetAt: Math.max(0, Number(intent.journalResetAt) || 0),
+                      journalResetScope: String(intent.journalResetScope || '').slice(0, 24),
+                      updatedAt: Date.now()
+                    }
+                    : existing;
+                  if (rebound !== existing) pending.put(rebound);
                   pending.delete(key);
-                  setResult(existing);
+                  setResult(rebound);
                   return;
                 }
                 const error = new Error(`DownloadItem #${id} уже принадлежит другому durable intent WebClip.`);
