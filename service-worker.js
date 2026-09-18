@@ -7383,7 +7383,7 @@ function assertManagedYandexSourcePath(path, rootPath, allowedBranches) {
   }
 }
 
-async function moveJournalYandexFileToTrash(entry, operationId = '') {
+async function moveJournalYandexFileToTrash(entry, operationId = '', journalAuthority = null) {
   let detachedReceiptId = '';
   let moveAdmitted = false;
   try {
@@ -7411,7 +7411,8 @@ async function moveJournalYandexFileToTrash(entry, operationId = '') {
       targetPath,
       sourceResourceId: current?.resource_id ? normalizeYandexResourceIdFromApi(current.resource_id) : String(entry?.resourceId || ''),
       sourcePublicUrl: current?.public_url ? normalizeYandexPublicUrlFromApi(current.public_url) : String(entry?.publicUrl || ''),
-      operationId
+      operationId,
+      journalAuthority
     });
     detachedReceiptId = detachedReceipt.id;
 
@@ -7782,11 +7783,13 @@ async function markPendingDestructiveMoveAdmitted(id) {
   try {
     return await runIndexedDbTransactionBounded(
       db,
-      JOURNAL_PENDING_DESTRUCTIVE_STORE,
+      [JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE],
       'readwrite',
       'Фиксация admission destructive move',
-      ({ store, setResult, fail }) => {
-        const pending = store();
+      ({ tx, setResult, fail }) => {
+        const pending = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
         const request = pending.get(key);
         request.onsuccess = () => {
           try {
@@ -7810,9 +7813,35 @@ async function markPendingDestructiveMoveAdmitted(id) {
               fail(error);
               return;
             }
-            const next = { ...current, phase: 'admitted-unknown', updatedAt: Date.now() };
-            pending.put(next);
-            setResult(next);
+
+            let entryReady = false;
+            let generationReady = false;
+            let journalEntry = null;
+            let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+            let compared = false;
+            const compareAndAdmit = () => {
+              if (compared || !entryReady || !generationReady) return;
+              compared = true;
+              if (!pendingDestructiveMoveJournalAuthorityMatches(current, resetGeneration, journalEntry)) {
+                const error = new Error('Journal authority устарела до admission destructive move.');
+                error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_JOURNAL_AUTHORITY_STALE_BEFORE_ADMISSION';
+                fail(error);
+                return;
+              }
+              const next = { ...current, phase: 'admitted-unknown', updatedAt: Date.now() };
+              pending.put(next);
+              setResult(next);
+            };
+            const entryReq = entries.get(current.sourceJournalEntryId);
+            entryReq.onsuccess = () => { journalEntry = entryReq.result || null; entryReady = true; compareAndAdmit(); };
+            entryReq.onerror = () => fail(entryReq.error || new Error('Не удалось проверить Journal row перед destructive admission.'));
+            const generationReq = meta.get(JOURNAL_RESET_GENERATION_KEY);
+            generationReq.onsuccess = () => {
+              resetGeneration = normalizeJournalResetGeneration(generationReq.result?.value);
+              generationReady = true;
+              compareAndAdmit();
+            };
+            generationReq.onerror = () => fail(generationReq.error || new Error('Не удалось проверить Journal generation перед destructive admission.'));
           } catch (error) { fail(error); }
         };
         request.onerror = () => fail(request.error || new Error('Не удалось прочитать destructive-move receipt перед admission.'));
@@ -7833,24 +7862,44 @@ async function updateReadMoveJournalCheckpointFromReceipt(receiptId, patch = {})
       'Обновление read-move checkpoint по detached receipt',
       ({ tx, setResult, fail }) => {
         const receipts = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
         const request = receipts.get(key);
         request.onsuccess = () => {
           try {
             const receipt = request.result;
             if (!receipt || receipt.supersededByJournalReset === true) { setResult(null); return; }
-            const entries = tx.objectStore(JOURNAL_STORE);
-            const entryReq = entries.get(receipt.sourceJournalEntryId);
-            entryReq.onsuccess = () => {
+            let entryReady = false;
+            let generationReady = false;
+            let current = null;
+            let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+            let compared = false;
+            const compareAndWrite = () => {
+              if (compared || !entryReady || !generationReady) return;
+              compared = true;
+              if (!pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)) {
+                setResult(null);
+                return;
+              }
               try {
-                const current = entryReq.result;
-                if (!pendingDestructiveMoveEntryMatches(receipt, current)) { setResult(null); return; }
                 const updated = { ...current, ...patch, id: current.id, entryRevision: nextJournalEntryRevision(current.entryRevision) };
+                const advancedReceipt = pendingDestructiveMoveAdvanceJournalAuthority(receipt, resetGeneration, updated);
                 entries.put(updated);
+                receipts.put({ ...advancedReceipt, updatedAt: Date.now() });
                 touchJournalDbRevision(tx, 'read-move-checkpoint');
                 setResult(updated);
               } catch (error) { fail(error); }
             };
+            const entryReq = entries.get(receipt.sourceJournalEntryId);
+            entryReq.onsuccess = () => { current = entryReq.result || null; entryReady = true; compareAndWrite(); };
             entryReq.onerror = () => fail(entryReq.error || new Error('Не удалось проверить Journal authority для read-move checkpoint.'));
+            const generationReq = meta.get(JOURNAL_RESET_GENERATION_KEY);
+            generationReq.onsuccess = () => {
+              resetGeneration = normalizeJournalResetGeneration(generationReq.result?.value);
+              generationReady = true;
+              compareAndWrite();
+            };
+            generationReq.onerror = () => fail(generationReq.error || new Error('Не удалось проверить Journal generation для read-move checkpoint.'));
           } catch (error) { fail(error); }
         };
         request.onerror = () => fail(request.error || new Error('Не удалось прочитать detached read-move receipt.'));
@@ -8202,6 +8251,8 @@ async function finalizeReadMoveJournalFromReceipt(receiptId, patch = {}) {
       'Финализация read-move Journal по detached receipt',
       ({ tx, setResult, fail }) => {
         const receipts = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
         const request = receipts.get(key);
         request.onsuccess = () => {
           try {
@@ -8218,16 +8269,21 @@ async function finalizeReadMoveJournalFromReceipt(receiptId, patch = {}) {
               setResult({ cancelled: true, entry: null, supersededByJournalReset: true });
               return;
             }
-            const entries = tx.objectStore(JOURNAL_STORE);
-            const entryReq = entries.get(receipt.sourceJournalEntryId);
-            entryReq.onsuccess = () => {
+
+            let entryReady = false;
+            let generationReady = false;
+            let current = null;
+            let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+            let compared = false;
+            const compareAndFinalize = () => {
+              if (compared || !entryReady || !generationReady) return;
+              compared = true;
+              if (!pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)) {
+                receipts.delete(key);
+                setResult({ cancelled: true, entry: null, sourceAuthorityLost: true });
+                return;
+              }
               try {
-                const current = entryReq.result;
-                if (!pendingDestructiveMoveEntryMatches(receipt, current)) {
-                  receipts.delete(key);
-                  setResult({ cancelled: true, entry: null, sourceAuthorityLost: true });
-                  return;
-                }
                 const updated = { ...current, ...patch, id: current.id, entryRevision: nextJournalEntryRevision(current.entryRevision) };
                 entries.put(updated);
                 receipts.delete(key);
@@ -8235,7 +8291,16 @@ async function finalizeReadMoveJournalFromReceipt(receiptId, patch = {}) {
                 setResult({ cancelled: false, entry: updated });
               } catch (error) { fail(error); }
             };
+            const entryReq = entries.get(receipt.sourceJournalEntryId);
+            entryReq.onsuccess = () => { current = entryReq.result || null; entryReady = true; compareAndFinalize(); };
             entryReq.onerror = () => fail(entryReq.error || new Error('Не удалось проверить Journal authority при terminal read-move finalize.'));
+            const generationReq = meta.get(JOURNAL_RESET_GENERATION_KEY);
+            generationReq.onsuccess = () => {
+              resetGeneration = normalizeJournalResetGeneration(generationReq.result?.value);
+              generationReady = true;
+              compareAndFinalize();
+            };
+            generationReq.onerror = () => fail(generationReq.error || new Error('Не удалось проверить Journal generation при terminal read-move finalize.'));
           } catch (error) { fail(error); }
         };
         request.onerror = () => fail(request.error || new Error('Не удалось прочитать terminal destructive-move receipt.'));
@@ -8260,6 +8325,8 @@ async function finalizeTrashDeleteFromReceipt(receiptId) {
       'Финализация Trash Journal delete по detached receipt',
       ({ tx, setResult, fail }) => {
         const receipts = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
         const request = receipts.get(key);
         request.onsuccess = () => {
           try {
@@ -8279,23 +8346,35 @@ async function finalizeTrashDeleteFromReceipt(receiptId) {
               setResult({ cancelled: true, deletedEntry: null, supersededByJournalReset: true });
               return;
             }
-            const entries = tx.objectStore(JOURNAL_STORE);
-            const entryReq = entries.get(receipt.sourceJournalEntryId);
-            entryReq.onsuccess = () => {
-              try {
-                const current = entryReq.result;
-                if (!pendingDestructiveMoveEntryMatches(receipt, current)) {
-                  receipts.delete(key);
-                  setResult({ cancelled: true, deletedEntry: null, sourceAuthorityLost: true });
-                  return;
-                }
-                entries.delete(current.id);
+
+            let entryReady = false;
+            let generationReady = false;
+            let current = null;
+            let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+            let compared = false;
+            const compareAndDelete = () => {
+              if (compared || !entryReady || !generationReady) return;
+              compared = true;
+              if (!pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)) {
                 receipts.delete(key);
-                touchJournalDbRevision(tx, 'trash-move-finalize');
-                setResult({ cancelled: false, deletedEntry: current });
-              } catch (error) { fail(error); }
+                setResult({ cancelled: true, deletedEntry: null, sourceAuthorityLost: true });
+                return;
+              }
+              entries.delete(current.id);
+              receipts.delete(key);
+              touchJournalDbRevision(tx, 'trash-move-finalize');
+              setResult({ cancelled: false, deletedEntry: current });
             };
+            const entryReq = entries.get(receipt.sourceJournalEntryId);
+            entryReq.onsuccess = () => { current = entryReq.result || null; entryReady = true; compareAndDelete(); };
             entryReq.onerror = () => fail(entryReq.error || new Error('Не удалось проверить Journal authority при terminal Trash finalize.'));
+            const generationReq = meta.get(JOURNAL_RESET_GENERATION_KEY);
+            generationReq.onsuccess = () => {
+              resetGeneration = normalizeJournalResetGeneration(generationReq.result?.value);
+              generationReady = true;
+              compareAndDelete();
+            };
+            generationReq.onerror = () => fail(generationReq.error || new Error('Не удалось проверить Journal generation при terminal Trash finalize.'));
           } catch (error) { fail(error); }
         };
         request.onerror = () => fail(request.error || new Error('Не удалось прочитать terminal Trash destructive-move receipt.'));
@@ -8348,7 +8427,7 @@ async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } 
     let journalSuperseded = false;
     let statsWarning = '';
     if (isYandex && action === 'trash') {
-      moved = await moveJournalYandexFileToTrash(entry, operationId);
+      moved = await moveJournalYandexFileToTrash(entry, operationId, deleteAuthority);
       emitJournalOperationProgress(operationId, 'journal', 'Удаляем исходную запись журнала по verified Trash receipt…', 92);
       const finalized = await finalizeTrashDeleteFromReceipt(moved.detachedReceiptId);
       journalSuperseded = Boolean(finalized?.cancelled);
@@ -8407,8 +8486,10 @@ async function chooseAvailableTargetPath(folder, filename, operationId = '') {
 
 async function moveReadLaterEntryToRead(id, operationId = '') {
   operationId = String(operationId || '') || makeOperationLogId('mark-read');
-  const entry = await getJournalEntryById(id);
-  if (!entry) return { ok: false, error: 'Запись журнала не найдена.' };
+  const authoritySnapshot = await readJournalEntryWithAuthority(id);
+  const entry = authoritySnapshot?.entry || null;
+  const journalAuthority = authoritySnapshot?.token || null;
+  if (!entry || !journalAuthority) return { ok: false, error: 'Запись журнала не найдена.' };
   if (entry.destination !== 'yandex' || entry.readingMode !== 'later') return { ok: false, error: 'Эта запись не относится к режиму «Прочитать позже».' };
   await startOperationLog(operationId, 'mark-read', 'Перенос «Прочитать позже» в «Прочитано»', {
     journalEntryId: id,
@@ -8459,7 +8540,8 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
       targetPath,
       sourceResourceId: current?.resource_id ? normalizeYandexResourceIdFromApi(current.resource_id) : String(entry.resourceId || ''),
       sourcePublicUrl: current?.public_url ? normalizeYandexPublicUrlFromApi(current.public_url) : String(entry.publicUrl || ''),
-      operationId
+      operationId,
+      journalAuthority
     });
     detachedReceiptId = detachedReceipt.id;
     const checkpoint = await updateReadMoveJournalCheckpointFromReceipt(detachedReceiptId, {
