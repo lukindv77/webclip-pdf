@@ -147,8 +147,8 @@ function releaseAuthority({ runtimeComplete = false, shadowComplete = false, exp
   const implementationRuntimeDelta = implementationDelta.filter((path) => !isResearchControlPath(path));
   deepEq(
     implementationRuntimeDelta,
-    ['application-generation.js', 'content-injection-guard.js', 'frame-agent.js', 'offscreen.js', 'service-worker.js'],
-    'current production entry contains bounded P0-080 generation paths, P0-070 worker/render authority and the separate P0-079 offscreen byte-generation consumer'
+    ['application-generation.js', 'content-injection-guard.js', 'frame-agent.js', 'journal.js', 'offscreen.js', 'service-worker.js'],
+    'current production entry contains bounded P0-080/P0-070/P0-079 paths plus the Journal v8 opener required by detached P0-072 destructive receipts'
   );
   check(implementationDelta.includes('project_tools/test_p0_080_application_generation_primitive.js'), 'primitive deterministic proof accompanies runtime path');
   check(implementationDelta.includes('project_tools/test_p0_080_generation_bootstrap.js'), 'generation bootstrap ordering proof accompanies production wiring');
