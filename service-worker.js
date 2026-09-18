@@ -6171,7 +6171,12 @@ async function reconcilePendingLocalDownloads(trigger = 'maintenance', maxItems 
       await flushOperationLogWrites(operationId).catch(() => {});
       continue;
     }
-    const download = Array.isArray(matches) ? matches.find(isOwnExtensionDownload) || null : null;
+    const identity = globalThis.WebClipLocalDownloadIdentity?.chooseUniqueBoundDownloadForReceipt({
+      receipt: item,
+      downloads: Array.isArray(matches) ? matches : [],
+      extensionId: chrome.runtime.id
+    }) || { download: null, mode: 'guard-unavailable' };
+    const download = identity.download || null;
     if (download?.state === 'complete') {
       if (await finalizeForMaintenance(item, id, 'complete')) completed += 1;
       else pendingCount += 1;
