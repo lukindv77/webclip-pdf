@@ -78,6 +78,16 @@
     </details>
 
     <section id="backupInfo" class="backup-info" aria-label="Резервная копия журнала на Яндекс Диске"></section>
+    <details id="destructiveRecoveryPanel" class="destructive-recovery-panel hidden">
+      <summary class="destructive-recovery-title">Требуют ручной проверки: <span id="destructiveRecoveryCount">0</span></summary>
+      <div class="destructive-recovery-content">
+        <p class="destructive-recovery-warning">WebClip не знает точный итог этих destructive-операций. Сначала вручную проверьте соответствующий файл на Яндекс Диске. Списание удаляет только recovery receipt: оно не перемещает файл, не удаляет файл и не изменяет запись Журнала.</p>
+        <div class="destructive-recovery-toolbar">
+          <button id="refreshDestructiveRecovery" type="button" class="secondary">Обновить список</button>
+        </div>
+        <div id="destructiveRecoveryList" class="destructive-recovery-list"></div>
+      </div>
+    </details>
     <div id="status" class="status" role="status" aria-live="polite"></div>
     <div id="lastOperationIdRow" class="operation-id-row journal-last-operation hidden">Последний operationId: <code id="lastOperationId"></code> <button id="copyLastOperationId" type="button">Копировать</button></div>
     <section id="entries" class="entries" aria-label="Записи журнала"></section>
