@@ -92,10 +92,10 @@ ok(trashFinalize.includes("receipt.kind !== 'trash-move' || receipt.phase !== 'r
 const addComment = functionSource(worker, 'addJournalComment');
 const editComment = functionSource(worker, 'editJournalComment');
 const deleteComment = functionSource(worker, 'deleteJournalComment');
-ok(addComment.includes('updateJournalEntryRecord(id,'), 'comment add remains a separate later migration');
-ok(editComment.includes('updateJournalEntryRecord(id,'), 'comment edit remains a separate later migration');
-ok(deleteComment.includes('updateJournalEntryRecord(id,'), 'comment delete remains a separate later migration');
-ok(!addComment.includes('updateJournalEntryRecordCas'), 'this tranche does not falsely claim comments CAS');
+ok(addComment.includes('updateJournalEntryRecordCas(authority,'), 'comment add now composes the same P0-076 CAS primitive');
+ok(editComment.includes('updateJournalEntryRecordCas(authority,'), 'comment edit now composes the same P0-076 CAS primitive');
+ok(deleteComment.includes('updateJournalEntryRecordCas(authority,'), 'comment delete now composes the same P0-076 CAS primitive');
+ok(!addComment.includes('updateJournalEntryRecord(id,'), 'comment migration does not reintroduce blind point writes');
 
 ok(registry.includes('| P0-076 | ACTIVE |'), 'P0-076 remains ACTIVE');
 ok(registry.includes('| P0-072 | ACTIVE |'), 'P0-072 remains separate ACTIVE owner');
@@ -106,5 +106,5 @@ ok(/\*\*NOT READY\.\*\*/.test(readiness), 'release readiness remains NOT READY')
 console.log(
   'P0-076 local delete CAS migration: PASS; checks=' + checks +
   '; admission_snapshot=true; local_delete_cas=true; stale_nonretarget=true;' +
-  ' trash_receipt_unchanged=true; comments_pending=true; release_closed=false'
+  ' trash_receipt_unchanged=true; comments_cas=true; release_closed=false'
 );
