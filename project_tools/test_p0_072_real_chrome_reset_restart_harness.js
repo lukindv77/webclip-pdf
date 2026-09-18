@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { sourceContract } = require('./research_p0_072_real_chrome_reset_restart.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const driver = fs.readFileSync(path.join(ROOT, 'project_tools/browser_p1_007_unpacked_integration.js'), 'utf8');
@@ -58,6 +59,13 @@ for (const token of yandexTokens) ok(harness.includes(token), 'evidence boundary
 ok(!harness.includes("WEBCLIP_YANDEX_SET_MANUAL_TOKEN"), 'P0-072 local Chrome harness never supplies Yandex credentials');
 ok(!harness.includes("YANDEX_API_BASE"), 'P0-072 local Chrome harness never rewrites Yandex API');
 ok(!harness.includes("yandexApi("), 'P0-072 local Chrome harness never invokes provider helpers directly');
+
+const liveSourceContract = sourceContract();
+eq(liveSourceContract.admittedBeforeChromeStart, true, 'live source contract proves durable admission before Chrome start');
+eq(liveSourceContract.clearUsesResetFence, true, 'live source contract proves reset fence');
+eq(liveSourceContract.supersededCompletionNoResurrection, true, 'live source contract proves superseded completion cannot resurrect Journal');
+eq(liveSourceContract.restartRecoveryReadsChrome, true, 'live source contract proves restart recovery reads exact Chrome DownloadItem and finalizes through maintenance wrapper');
+eq(liveSourceContract.startupSchedulesDurableMaintenance, true, 'live source contract proves startup schedules durable maintenance');
 
 const startIndex = worker.indexOf('await markPendingLocalDownloadAdmitted(key)');
 const chromeIndex = worker.indexOf('chrome.downloads.download({', startIndex);
