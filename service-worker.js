@@ -7001,12 +7001,24 @@ function normalizeJournalComments(entry = {}) {
   return result;
 }
 
+function journalCommentConflictResult() {
+  return {
+    ok: false,
+    stale: true,
+    conflict: true,
+    code: 'JOURNAL_ENTRY_STALE',
+    error: 'Запись журнала изменилась. Обновите журнал и повторите действие.'
+  };
+}
+
 async function addJournalComment(id, comment) {
   if (!id) return { ok: false, error: 'Не указана запись журнала.' };
   const text = String(comment || '');
   if (!text.trim()) return { ok: false, error: 'Введите текст комментария.' };
-  const current = await getJournalEntryById(id);
-  if (!current) return { ok: false, error: 'Запись журнала не найдена.' };
+  const snapshot = await readJournalEntryWithAuthority(id);
+  const current = snapshot?.entry || null;
+  const authority = snapshot?.token || null;
+  if (!current || !authority) return { ok: false, error: 'Запись журнала не найдена.' };
   const comments = normalizeJournalComments(current);
   if (comments.length >= MAX_IMPORTED_COMMENTS_PER_ENTRY) return { ok: false, error: `В одной записи допускается не более ${MAX_IMPORTED_COMMENTS_PER_ENTRY} комментариев.` };
   if (text.length > MAX_IMPORTED_COMMENT_CHARS) return { ok: false, error: `Комментарий не должен превышать ${MAX_IMPORTED_COMMENT_CHARS} символов.` };
@@ -7019,9 +7031,11 @@ async function addJournalComment(id, comment) {
     updatedAt: now,
     deletedAt: 0
   });
-  const updated = await updateJournalEntryRecord(id, { journalComments: comments, journalComment: '', journalCommentUpdatedAt: 0 });
+  const result = await updateJournalEntryRecordCas(authority, { journalComments: comments, journalComment: '', journalCommentUpdatedAt: 0 });
+  if (result?.stale) return journalCommentConflictResult();
+  if (!result?.ok || !result.entry) return { ok: false, error: 'Не удалось сохранить комментарий.' };
   notifyJournalChanged('comment-add');
-  return { ok: true, entry: { ...updated, journalComments: comments } };
+  return { ok: true, entry: { ...result.entry, journalComments: comments } };
 }
 
 async function editJournalComment(id, commentId, comment) {
@@ -7029,8 +7043,10 @@ async function editJournalComment(id, commentId, comment) {
   if (!commentId) return { ok: false, error: 'Не указан комментарий.' };
   const text = String(comment || '');
   if (!text.trim()) return { ok: false, error: 'Введите текст комментария.' };
-  const current = await getJournalEntryById(id);
-  if (!current) return { ok: false, error: 'Запись журнала не найдена.' };
+  const snapshot = await readJournalEntryWithAuthority(id);
+  const current = snapshot?.entry || null;
+  const authority = snapshot?.token || null;
+  if (!current || !authority) return { ok: false, error: 'Запись журнала не найдена.' };
   const comments = normalizeJournalComments(current);
   const index = comments.findIndex((item) => item.id === commentId);
   if (index < 0) return { ok: false, error: 'Комментарий не найден.' };
@@ -7041,9 +7057,11 @@ async function editJournalComment(id, commentId, comment) {
   const prospective = comments.map((item, itemIndex) => itemIndex === index ? { ...item, text } : item);
   try { assertJournalCommentBudget(prospective); } catch (error) { return { ok: false, error: normalizeError(error) }; }
   comments[index] = { ...comments[index], text, updatedAt: Date.now() };
-  const updated = await updateJournalEntryRecord(id, { journalComments: comments, journalComment: '', journalCommentUpdatedAt: 0 });
+  const result = await updateJournalEntryRecordCas(authority, { journalComments: comments, journalComment: '', journalCommentUpdatedAt: 0 });
+  if (result?.stale) return journalCommentConflictResult();
+  if (!result?.ok || !result.entry) return { ok: false, error: 'Не удалось обновить комментарий.' };
   notifyJournalChanged('comment-edit');
-  return { ok: true, entry: { ...updated, journalComments: comments } };
+  return { ok: true, entry: { ...result.entry, journalComments: comments } };
 }
 
 async function getJournalEntriesByIds(ids) {
@@ -7075,8 +7093,10 @@ async function updateJournalComment(id, comment) {
 async function deleteJournalComment(id, commentId) {
   if (!id) return { ok: false, error: 'Не указана запись журнала.' };
   if (!commentId) return { ok: false, error: 'Не указан комментарий.' };
-  const current = await getJournalEntryById(id);
-  if (!current) return { ok: false, error: 'Запись журнала не найдена.' };
+  const snapshot = await readJournalEntryWithAuthority(id);
+  const current = snapshot?.entry || null;
+  const authority = snapshot?.token || null;
+  if (!current || !authority) return { ok: false, error: 'Запись журнала не найдена.' };
   const comments = normalizeJournalComments(current);
   const index = comments.findIndex((item) => item.id === commentId);
   if (index < 0) return { ok: false, error: 'Комментарий не найден.' };
@@ -7084,9 +7104,11 @@ async function deleteJournalComment(id, commentId) {
     return { ok: false, error: 'Комментарий уже помечен как удалённый.' };
   }
   comments[index] = { ...comments[index], deletedAt: Date.now() };
-  const updated = await updateJournalEntryRecord(id, { journalComments: comments, journalComment: '', journalCommentUpdatedAt: 0 });
+  const result = await updateJournalEntryRecordCas(authority, { journalComments: comments, journalComment: '', journalCommentUpdatedAt: 0 });
+  if (result?.stale) return journalCommentConflictResult();
+  if (!result?.ok || !result.entry) return { ok: false, error: 'Не удалось удалить комментарий.' };
   notifyJournalChanged('comment-delete');
-  return { ok: true, entry: { ...updated, journalComments: comments } };
+  return { ok: true, entry: { ...result.entry, journalComments: comments } };
 }
 
 async function deleteJournalEntryRecordOnly(id) {
