@@ -138,17 +138,31 @@ async function installPauseObserver(options) {
     const listener = async (item) => {
       const filename = String(item?.filename || '');
       if (!/\\.pdf$/i.test(filename)) return;
+      const record = {
+        id: Number(item.id),
+        filename,
+        state: String(item?.state || ''),
+        paused: Boolean(item?.paused),
+        canResume: Boolean(item?.canResume),
+        startTime: String(item?.startTime || ''),
+        observedAt: Date.now(),
+        pauseSettled: false
+      };
+      globalThis.__p0072ChromeDownloadEvidence.created.push(record);
       try {
-        await chrome.downloads.pause(item.id);
+        await Promise.race([
+          chrome.downloads.pause(item.id),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('pause settlement timed out after 5000 ms')), 5000))
+        ]);
+        record.pauseSettled = true;
       } catch (error) {
         globalThis.__p0072ChromeDownloadEvidence.pauseErrors.push({
           id: item.id,
           error: String(error?.message || error || '')
         });
       }
-      const current = (await chrome.downloads.search({ id: item.id }))[0] || item;
-      globalThis.__p0072ChromeDownloadEvidence.created.push({
-        id: Number(item.id),
+      const current = (await chrome.downloads.search({ id: item.id }).catch(() => []))[0] || item;
+      Object.assign(record, {
         filename: String(current.filename || filename),
         state: String(current.state || ''),
         paused: Boolean(current.paused),
