@@ -5641,6 +5641,8 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
   let authAvailable = true;
   let operationContext = null;
   try {
+    // Replace the legacy getValidYandexAccessToken() preflight with one
+    // atomic auth/config snapshot that all covered requests reuse.
     operationContext = await captureCurrentYandexOperationContext();
   } catch (_) {
     authAvailable = false;
@@ -13422,7 +13424,8 @@ async function getCurrentYandexAccountUid(operationId = '') {
   return uid;
 }
 
-async function ensureYandexPublicUrl(remotePath, operationId = '', outerDeadlineAt = 0, operationContext = null) {
+async function ensureYandexPublicUrl(remotePath, operationId = '', outerDeadlineAt = 0) {
+  const operationContext = arguments.length > 3 ? arguments[3] : null;
   const localDeadline = Date.now() + 45_000;
   const requestedDeadline = Math.max(0, Number(outerDeadlineAt) || 0);
   const deadline = requestedDeadline > Date.now() ? Math.min(localDeadline, requestedDeadline) : localDeadline;
