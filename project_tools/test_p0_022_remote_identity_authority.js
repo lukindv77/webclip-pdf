@@ -2,6 +2,7 @@
 
 // P0-022 production regression: imported/legacy locators are discovery hints;
 // destructive Yandex commands require an immutable current-provider receipt.
+// P1-231 binds the resulting runtime bytes to fresh exact-generation evidence.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
