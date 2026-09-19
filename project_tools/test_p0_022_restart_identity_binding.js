@@ -2,6 +2,7 @@
 
 // P0-022 restart/manual-resolution regression: only a complete durable copy of
 // the current provider observation may cross worker death into local finalize.
+// P1-231 binds the changed runtime bytes to fresh exact-generation evidence.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
