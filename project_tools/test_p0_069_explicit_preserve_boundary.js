@@ -62,7 +62,7 @@ eq(outcome.publicationAction, 'preserve', 'explicit preserve action is retained'
 eq(outcome.publicationOutcome, 'preserved-by-user', 'result records deliberate preservation');
 ok(Object.isFrozen(outcome), 'publication outcome is immutable');
 
-const deleteStart = worker.indexOf('async function deleteJournalEntry');
+const deleteStart = worker.indexOf('async function deleteJournalEntry(id,');
 const deleteEnd = worker.indexOf('async function chooseAvailableTargetPath', deleteStart);
 ok(deleteStart >= 0 && deleteEnd > deleteStart, 'delete implementation markers must be present');
 const deleteSource = worker.slice(deleteStart, deleteEnd);

@@ -46,7 +46,7 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 | P0-045 | ACTIVE | Incognito must remain fail-closed across persistent Journal/Action/popup/status surfaces; normal-profile state must not leak into private-tab UI/authority. |
 | P0-050 | ACTIVE | Derived `urlStats` rebuild/publication needs a versioned generation isolated from concurrent point mutations. |
 | P0-066 | ACTIVE | One durable/display URL confidentiality sanitizer must cover source URLs, locator URLs and imported/public metadata; secrets/userinfo/non-durable schemes cannot persist. |
-| P0-069 | ACTIVE | Deleting a Journal entry with a public Yandex link requires explicit publication outcome; local deletion cannot silently strand public access/control. |
+| P0-069 | ACTIVE | Deleting a Journal entry with a public Yandex link requires explicit publication outcome; standalone durable revoke is implemented, while delete-time revoke composition remains fail-closed pending composed recovery and live evidence. |
 | P0-070 | ACTIVE | User save authority is exact full-document generation from command admission through print/cache/download/upload/Journal finalization. |
 | P0-072 | ACTIVE | Bulk clear/replace cannot treat deletion of checkpoints as cancellation of already admitted non-cancellable external side effects. |
 | P0-073 | ACTIVE | Remote-save completion/recovery is immutable account/root scoped; unresolved operation A cannot be rebound to account/root B. |
@@ -101,7 +101,7 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 | P1-161 | ACTIVE | Reauthorization needs bounded non-secret return-to-origin context and explicit manual resume; no automatic upload replay. |
 | P1-162 | ACTIVE | Large Journal domain tree needs generation-fenced incremental rendering rather than one synchronous DOM construction. |
 | P1-163 | ACTIVE | Streaming JSON parser should await only on chunk refill, not per character, while preserving all security/size/deadline limits. |
-| P1-164 | ACTIVE | Per-entry Yandex public-link revoke requires explicit confirmation, durable/reconciled unpublish and truthful resulting identity/path semantics. |
+| P1-164 | ACTIVE | Standalone per-entry Yandex public-link revoke now has explicit confirmation, checkpoint-before-unpublish, observation-only restart reconciliation, exact identity continuity and verified-private Journal CAS; live Yandex qualification and delete-time composition remain. |
 | P1-165 | ACTIVE | OAuth state must be effectively verified from captured redirect (prefer `launchWebAuthFlow`); generating state without returned-state comparison is insufficient. |
 | P1-166 | ACTIVE | Unique unresolved `executeScript`/`tabs.create` actual settlements need global admission cap without discarding actual-settlement ownership on local timeout. |
 | P1-167 | ACTIVE | PDF preparation/diagnostic acquisition needs one shared node/time/mutation/string budget; bounded output alone is not bounded computation. |
