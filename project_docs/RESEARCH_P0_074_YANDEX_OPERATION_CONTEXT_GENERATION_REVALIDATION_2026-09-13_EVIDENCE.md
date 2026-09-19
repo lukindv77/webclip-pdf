@@ -367,10 +367,10 @@ P1-231 exact-generation evidence must be synchronized to the final runtime-byte 
 
 The first fully green candidate containing the bounded P0-074 recovery context and synchronized P1-231 direct goldens was:
 
-- exact head: `9010a216da468afef466d96703a99eb1e46e5bdc`;
-- Repository Integrity: run `35414754702`, conclusion `success`;
+- exact head: `db82584bc37270b85f8c4d73ce5846e7baaed9d8`;
+- Repository Integrity: run `35415090343`, conclusion `success`;
 - deterministic P0-074 production authority regression: `PASS 48 checks`;
-- exact runtime/package fingerprint: `sha256:7a43fec77555a966bfe6a4ace57f785a541ae0e899decb3b43d99585874db734`;
+- exact runtime/package fingerprint: `sha256:2788f0027579edb9307e690948888b59e59eede72136b4e8df405c6875f0d79a`;
 - package topology: unchanged at 34 current root package files;
 - manifest: unchanged at `0.9.8`.
 
