@@ -260,12 +260,25 @@ Direct deterministic production regression:
 
 - `project_tools/test_p0_022_remote_identity_authority.js`;
 - local `node --check`: PASS;
-- local execution: **PASS 31 checks**;
-- runtime SHA-256: `e9f141f587979ac0b72d0d057bfe528507d74d8be4a8c6f1f68cdbfa972cf8c1`;
-- runtime Git blob: `dcd764849c0d1549f7d59bdb5e692352509eafd4`;
-- test SHA-256: `75fa0aa4c51e875faebeb516f4bc3743067449f7d6a8534e8641d67150423d58`;
-- test Git blob: `ded885e3608c7494703c94ae31c730c087c1d137`.
+- local execution: **PASS 32 checks**;
+- runtime SHA-256: `f5a6b4cc0e1bf7d30a32b920939e2158f62398e7b2393e2f8848766e784fb975`;
+- runtime Git blob: `f5c495e70ff2501bdc341e76d6e15d13f778dc8e`;
+- test SHA-256: `20bbe0450a4b96d22954ed404e2b8191eb8932173fdc637af6314d07359982a4`;
+- test Git blob: `5f668b330fab6154d3288cd3294816574a91b529`.
 
 The regression covers immutable receipt construction, imported stale-id supersession by current provider observation, exact path/resource/context admission, same-path replacement rejection, late retarget rejection, account/root mismatch, missing current `resource_id`, provider-verified conflict, import downgrade, native promotion, and both destructive consumers.
 
 P0-022 remains **ACTIVE** pending real Yandex evidence and broader closure schedules, especially public-object deletion composition with P0-069, restart/manual-resolution behavior around the new receipt, and authorized end-to-end account/root switching. Manifest remains `0.9.8`; release remains **NOT READY**.
+
+
+### Exact-generation CI receipt
+
+Canonical runtime candidate:
+
+- PR head: `21cd6db069940633cfc8d1c162418939c81a1da0`;
+- Repository Integrity run: `35434208137`;
+- every production/adjacent deterministic test passed;
+- the only failures were the direct and downstream runtime-fingerprint chain retaining the preceding golden;
+- observed exact runtime fingerprint: `sha256:3d73583d5230510b66748263314f9b55c396fed3a459f092ba2ad9c92c7826bd`.
+
+Only the direct S0-F/S0-G/S0-H golden constants are synchronized to that observed fingerprint. Downstream identity/settlement/builder/migration models remain unchanged and must pass transitively on the next exact-head run.
