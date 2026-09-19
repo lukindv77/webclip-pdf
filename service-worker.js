@@ -1,5 +1,83 @@
-importScripts('public-suffix.js', 'journal-import-stream.js', 'journal-text-filter.js', 'local-download-identity.js', 'yandex-recovery-namespace.js');
+importScripts('public-suffix.js', 'journal-import-stream.js', 'journal-text-filter.js', 'local-download-identity.js');
 importScripts('journal-import-digest.js');
+
+// P0-073 authority for durable remote-save recovery. A checkpoint may be
+// interpreted only inside the exact Yandex account/root namespace it bound.
+globalThis.WebClipYandexRecoveryNamespace = (() => {
+  const MAX_ACCOUNT_UID_CHARS = 1024;
+  const MAX_PATH_CHARS = 4096;
+
+  function fail(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    throw error;
+  }
+
+  function normalizeAccountUid(value) {
+    return String(value || '').trim().slice(0, MAX_ACCOUNT_UID_CHARS);
+  }
+
+  function normalizePath(value) {
+    let path = String(value || '').trim().slice(0, MAX_PATH_CHARS).replace(/\\/g, '/').replace(/^disk:/i, '');
+    if (!path) return '';
+    if (!path.startsWith('/')) path = `/${path}`;
+    const stack = [];
+    for (const segment of path.split('/')) {
+      if (!segment || segment === '.') continue;
+      if (segment === '..') {
+        if (stack.length) stack.pop();
+        continue;
+      }
+      stack.push(segment);
+    }
+    return `/${stack.join('/')}` || '/';
+  }
+
+  function isPathWithinRoot(path, root) {
+    const normalizedPath = normalizePath(path);
+    const normalizedRoot = normalizePath(root);
+    if (!normalizedPath || !normalizedRoot) return false;
+    return normalizedPath === normalizedRoot
+      || normalizedRoot === '/'
+      || normalizedPath.startsWith(`${normalizedRoot}/`);
+  }
+
+  function checkpointData(receipt) {
+    const data = receipt?.data && typeof receipt.data === 'object' ? receipt.data : receipt;
+    return data && typeof data === 'object' ? data : {};
+  }
+
+  function validateBoundRecoveryReceipt(receipt) {
+    const data = checkpointData(receipt);
+    const accountUid = normalizeAccountUid(data.accountUid);
+    const rootPath = normalizePath(data.rootPath);
+    const remotePath = normalizePath(data.remotePath);
+    if (!accountUid) fail('WEBCLIP_REMOTE_RECOVERY_ACCOUNT_UNKNOWN', 'Recovery-checkpoint не содержит привязку к аккаунту Яндекс Диска.');
+    if (!rootPath) fail('WEBCLIP_REMOTE_RECOVERY_ROOT_UNKNOWN', 'Recovery-checkpoint не содержит привязку к корневому каталогу Яндекс Диска.');
+    if (!remotePath || !isPathWithinRoot(remotePath, rootPath)) {
+      fail('WEBCLIP_REMOTE_RECOVERY_PATH_OUTSIDE_ROOT', 'Путь recovery-checkpoint находится вне привязанного корневого каталога Яндекс Диска.');
+    }
+    return Object.freeze({ accountUid, rootPath, remotePath });
+  }
+
+  function proveRecoveryNamespace({ receipt, currentAccountUid } = {}) {
+    const binding = validateBoundRecoveryReceipt(receipt);
+    const current = normalizeAccountUid(currentAccountUid);
+    if (!current) fail('WEBCLIP_REMOTE_RECOVERY_AUTH_REQUIRED', 'Не удалось доказать текущий аккаунт Яндекс Диска для recovery-checkpoint.');
+    if (current !== binding.accountUid) {
+      fail('WEBCLIP_REMOTE_RECOVERY_ACCOUNT_MISMATCH', 'Текущий аккаунт Яндекс Диска не совпадает с аккаунтом recovery-checkpoint.');
+    }
+    return binding;
+  }
+
+  return Object.freeze({
+    normalizeAccountUid,
+    normalizePath,
+    isPathWithinRoot,
+    validateBoundRecoveryReceipt,
+    proveRecoveryNamespace
+  });
+})();
 
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
 const YANDEX_API_BASE = 'https://cloud-api.yandex.net/v1/disk';
@@ -5270,7 +5348,7 @@ async function getPendingRemotePdfCacheRetentionSnapshot() {
 
 async function checkpointPendingRemoteSaveIntent(data, { expectedPdfBytes = 0, createPublicLinks = false, operationId = '', pdfCacheKey = '', pdfCacheGeneration = '' } = {}) {
   const prepared = normalizePendingJournalAppendData({ ...data, destination: 'yandex', operationId: String(operationId || data?.operationId || '').slice(0, MAX_OPERATION_ID_CHARS) });
-  globalThis.WebClipYandexRecoveryNamespace.validateBoundRecoveryReceipt(prepared);
+  WebClipYandexRecoveryNamespace.validateBoundRecoveryReceipt(prepared);
   const pdfCacheReceipt = normalizePendingRemotePdfCacheReceipt({ pdfCacheKey, pdfCacheGeneration, expectedPdfBytes });
   if (!pdfCacheReceipt) {
     const error = new Error('Checkpoint удалённого сохранения требует exact sealed PDF cache generation.');
@@ -5501,13 +5579,13 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
       }
 
       let current = item;
-      globalThis.WebClipYandexRecoveryNamespace.validateBoundRecoveryReceipt(current);
+      WebClipYandexRecoveryNamespace.validateBoundRecoveryReceipt(current);
       if (current.phase !== 'remote-verified') {
         if (!authAvailable) {
           deferred += 1;
           continue;
         }
-        const namespace = globalThis.WebClipYandexRecoveryNamespace.proveRecoveryNamespace({
+        const namespace = WebClipYandexRecoveryNamespace.proveRecoveryNamespace({
           receipt: current,
           currentAccountUid
         });

@@ -359,7 +359,7 @@ The bounded runtime candidate was first committed at:
 
 This tranche selects and implements the P0-073 namespace fence without claiming the separate P0-074 immutable-request-context closure:
 
-- a pure runtime authority, `yandex-recovery-namespace.js`, normalizes and validates the checkpoint's non-empty `accountUid`, `rootPath`, and `remotePath`;
+- a pure runtime authority embedded at `service-worker.js` startup normalizes and validates the checkpoint's non-empty `accountUid`, `rootPath`, and `remotePath`;
 - checkpoint admission now rejects a missing account/root binding and a path outside the bound root before durable remote-save authority is written;
 - maintenance/restart recovery obtains the current Yandex account UID and proves it equals the checkpoint account before the first target-object `/resources` read;
 - the same proof therefore precedes any recovery publication, verification, or adoption action;
@@ -375,6 +375,8 @@ Local candidate result:
 `P0-073 remote recovery namespace authority: PASS 23 checks`
 
 The regression includes positive exact-account/root recovery plus negative controls for account A -> B, missing account, missing root, empty/outside/sibling path, unknown current account, normalization, and source-order assertions proving the namespace fence precedes target-object read and publication.
+
+After the first full CI pass, the authority was embedded into the existing service-worker package member instead of adding a new root runtime file. This keeps the selected P0-073 change inside the already admitted package topology while retaining direct source-extracted deterministic execution.
 
 ### Remaining boundary
 

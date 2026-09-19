@@ -6,10 +6,16 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const ROOT = path.resolve(__dirname, '..');
-require(path.join(ROOT, 'yandex-recovery-namespace.js'));
-const authority = globalThis.WebClipYandexRecoveryNamespace;
+const worker = fs.readFileSync(path.join(ROOT, 'service-worker.js'), 'utf8');
+const authorityStart = worker.indexOf('globalThis.WebClipYandexRecoveryNamespace = (() => {');
+const authorityEnd = worker.indexOf('\n\nconst OFFSCREEN_DOCUMENT_PATH', authorityStart);
+assert.ok(authorityStart >= 0 && authorityEnd > authorityStart, 'P0-073 runtime authority source block must be extractable');
+const authorityContext = vm.createContext({});
+vm.runInContext(worker.slice(authorityStart, authorityEnd), authorityContext, { filename: 'service-worker-p0-073-authority.js' });
+const authority = authorityContext.WebClipYandexRecoveryNamespace;
 let checks = 0;
 
 function eq(actual, expected, message) {
@@ -98,10 +104,9 @@ throwsCode(
 eq(authority.isPathWithinRoot('/WebClip', '/WebClip'), true, 'exact root is contained');
 eq(authority.isPathWithinRoot('/anything/a.pdf', '/'), true, 'disk root contains absolute path');
 eq(authority.isPathWithinRoot('/WebClip2/a.pdf', '/WebClip'), false, 'component boundary is enforced');
-eq(authority.normalizeDiskPath('/WebClip/a/../b.pdf'), '/WebClip/b.pdf', 'dot segments normalize before containment');
+eq(authority.normalizePath('/WebClip/a/../b.pdf'), '/WebClip/b.pdf', 'dot segments normalize before containment');
 
-const worker = fs.readFileSync(path.join(ROOT, 'service-worker.js'), 'utf8');
-ok(worker.includes("'yandex-recovery-namespace.js'"), 'service worker imports P0-073 authority');
+ok(worker.includes('globalThis.WebClipYandexRecoveryNamespace = (() => {'), 'service worker defines P0-073 authority before body execution');
 ok(worker.includes('validateBoundRecoveryReceipt(prepared)'), 'checkpoint creation validates durable namespace');
 ok(worker.includes('proveRecoveryNamespace({'), 'recovery proves current account against checkpoint');
 const recoverStart = worker.indexOf('async function recoverPendingRemoteSaves(');
