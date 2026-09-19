@@ -7443,7 +7443,8 @@ async function deleteJournalEntryRecordOnly(id) {
   return entry;
 }
 
-async function findYandexFileForJournalEntry(entry, operationId = '', operationContext = null) {
+async function findYandexFileForJournalEntry(entry, operationId = '') {
+  const operationContext = arguments.length > 2 ? arguments[2] : null;
   const expectedResourceId = String(entry?.resourceId || '').trim();
   const expectedPublicUrl = String(entry?.publicUrl || '').trim();
   const expectedAccountUid = String(entry?.accountUid || '').trim();
@@ -7484,7 +7485,7 @@ async function findYandexFileForJournalEntry(entry, operationId = '', operationC
     if (!item || (item.type && item.type !== 'file')) return false;
     const itemId = item.resource_id ? normalizeYandexResourceIdFromApi(item.resource_id) : '';
     const itemPublic = item.public_url ? normalizeYandexPublicUrlFromApi(item.public_url) : '';
-    if (provenance !== WebClipYandexRemoteIdentityAuthority.PROVIDER_VERIFIED) {
+    if (provenance !== 'provider-verified') {
       if (!discoveryByHint) return true;
       return Boolean(
         (expectedResourceId && itemId && itemId === expectedResourceId)
@@ -9097,7 +9098,8 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
     const current = await findYandexFileForJournalEntry(entry, operationId, operationContext);
     const identityReceipt = current?.remoteIdentityReceipt || null;
     const sourcePath = normalizeDiskPath(identityReceipt?.path || '');
-    assertManagedYandexSourcePath(sourcePath, operationContext.rootPath, [YANDEX_READ_LATER_DIR, YANDEX_UPLOAD_DIR]);
+    const config = { rootPath: operationContext.rootPath };
+    assertManagedYandexSourcePath(sourcePath, config.rootPath, [YANDEX_READ_LATER_DIR, YANDEX_UPLOAD_DIR]);
     const structure = await ensureYandexServiceFolders({ includeUpload: true, operationId, operationContext });
     const targetFolder = joinDiskPath(structure.uploadPath, ...getSiteFolderSegments(entry.hostname || hostnameFromUrl(entry.url)));
     emitJournalOperationProgress(operationId, 'folder', `Подготавливаем папку Прочитано: ${targetFolder}`, 34);
