@@ -72,6 +72,16 @@ Exact local source identities before PR:
 
 The first PR workflow event stopped at the PR metadata contract before syntax or deterministic tests because the initial body mentioned adjacent owners as contextual prose. The body was narrowed to the actual declared owners before the next candidate commit; that run is not implementation evidence.
 
+## Exact-generation CI receipt
+
+Canonical runtime candidate before this docs-only receipt:
+
+- PR head: `486a0ff025432deadff330992a58f9eff32af1a9`;
+- Repository Integrity run: `35436134800` — PASS;
+- direct exact RPF: `sha256:1b40c128fba4c0f2637f39a6307ad9c377ea4c3a276a6e525dc68661fef4bd67`;
+- direct S0-F/S0-G/S0-H goldens were synchronized to that observed runtime fingerprint;
+- downstream identity, settlement, builder, and migration models passed transitively without their own golden edits.
+
 ## Closure boundary
 
 This tranche does not claim P0-022 closure. The following remain open:
