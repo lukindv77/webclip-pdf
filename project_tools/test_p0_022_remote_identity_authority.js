@@ -42,6 +42,7 @@ function metadata(overrides = {}) {
 }
 
 ok(authority && typeof authority.createObservedReceipt === 'function', 'production authority is exported');
+eq(authority.AUTHORITY, 'yandex-api-observed-resource', 'destructive receipt authority is exact');
 eq(authority.normalizeProvenance('provider-verified'), 'provider-verified', 'verified native provenance is retained');
 eq(authority.normalizeProvenance('forged', { imported: true }), 'imported-unverified', 'import cannot assert provider provenance');
 eq(authority.normalizeProvenance(''), 'legacy-unverified', 'missing provenance is legacy-unverified');
