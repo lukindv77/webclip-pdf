@@ -114,7 +114,7 @@ check('C08 backup upload legitimately provisions', () => has(backupUpload, 'ensu
 // Remaining three semantic consumers are bound by ordered source sequences.
 check('C09 root-setting ancillary provisioning', () => matches(/config\.rootPath\s*=\s*normalized[\s\S]{0,2200}ensureYandexServiceFolders\(\{\s*includeUpload:\s*true,\s*includeReadLater:\s*true,\s*includeBackup:\s*true\s*\}\)/, 'root config commit -> ancillary ensure'));
 check('C10 page upload provisioning', () => matches(/emitPageUploadProgress\([^\n]*disk-access[\s\S]{0,1200}ensureYandexServiceFolders\(\{[\s\S]{0,500}includeUpload:\s*readingMode\s*===\s*'read'[\s\S]{0,500}includeReadLater:\s*readingMode\s*===\s*'later'/, 'page upload -> admitted service branch candidate'));
-check('C11 journal read-state move provisioning', () => matches(/assertManagedYandexSourcePath\(sourcePath,\s*config\.rootPath,\s*\[YANDEX_READ_LATER_DIR,\s*YANDEX_UPLOAD_DIR\]\)[\s\S]{0,800}ensureYandexServiceFolders\(\{\s*includeUpload:\s*true,\s*operationId\s*\}\)/, 'read-state move -> upload branch ensure'));
+check('C11 journal read-state move provisioning', () => matches(/assertManagedYandexSourcePath\(sourcePath,\s*config\.rootPath,\s*\[YANDEX_READ_LATER_DIR,\s*YANDEX_UPLOAD_DIR\]\)[\s\S]{0,1000}ensureYandexServiceFolders\(\{[\s\S]{0,500}includeUpload:\s*true[\s\S]{0,500}operationContext/, 'read-state move -> upload branch ensure'));
 
 // Classification/admission model.
 for (const site of sites.filter((s) => s.cls === 'H1' || s.cls === 'H2')) {
