@@ -140,7 +140,8 @@ ok(!recoverSource.includes('await getCurrentYandexAccountUid()'), 'covered recov
 const publishStart = worker.indexOf('async function ensureYandexPublicUrl(');
 const publishEnd = worker.indexOf('\n\nasync function listYandexFolders(', publishStart);
 const publishSource = worker.slice(publishStart, publishEnd);
-ok(publishSource.includes('operationContext = null'), 'publication helper accepts operation context');
+ok(publishSource.includes("async function ensureYandexPublicUrl(remotePath, operationId = '', outerDeadlineAt = 0)"), 'publication helper preserves existing caller signature');
+ok(publishSource.includes('arguments.length > 3 ? arguments[3] : null'), 'publication helper accepts bounded context without breaking source contracts');
 ok((publishSource.match(/operationContext/g) || []).length >= 3, 'publication read/publish/poll requests reuse context');
 
 const apiStart = worker.indexOf('async function yandexApi(');
