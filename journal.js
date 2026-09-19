@@ -2424,6 +2424,11 @@ function buildEntryCard(entry) {
     try { await chrome.runtime.sendMessage({ type: 'WEBCLIP_OPEN_URL', url: entry.url }); } catch (_) {}
   }));
   if (later) primaryActions.appendChild(makeButton('Перенести в «Прочитано»', false, () => moveEntryToRead(entry), 'move-read-button'));
+  if (canOpenYandexFile) {
+    const revokePublic = makeButton('Отозвать публичную ссылку', false, () => revokeEntryPublicAccess(entry, revokePublic), 'danger');
+    revokePublic.title = 'Отозвать доступ по ссылке и подтвердить приватное состояние метаданными Яндекс Диска.';
+    primaryActions.appendChild(revokePublic);
+  }
   primaryActions.append(linkedOperationLog.showButton, linkedOperationLog.copyButton);
   primaryActions.appendChild(makeButton('Удалить запись', false, () => deleteEntry(entry), 'danger'));
   siteActionsRow.appendChild(primaryActions);
@@ -2712,6 +2717,35 @@ async function deleteEntry(entry) {
     return;
   }
   openDeleteDialog(entry);
+}
+
+async function revokeEntryPublicAccess(entry, button = null) {
+  if (!entry?.id || entry.destination !== 'yandex' || !String(entry.publicUrl || '').trim()) return;
+  const confirmed = window.confirm(
+    'Отозвать публичный доступ к этому exact файлу на Яндекс Диске?\n\n'
+    + 'WebClip сначала сохранит durable checkpoint, затем выполнит unpublish и очистит ссылку в журнале только после подтверждённого приватного состояния.'
+  );
+  if (!confirmed) return;
+  const operationId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  showLastOperationId(operationId);
+  if (button) button.disabled = true;
+  setStatus(`Отзываем публичную ссылку и проверяем результат… · operationId: ${operationId}`, '');
+  try {
+    const result = await chrome.runtime.sendMessage({
+      type: 'WEBCLIP_JOURNAL_REVOKE_PUBLIC_ACCESS',
+      id: entry.id,
+      operationId
+    });
+    requireOk(result);
+    const notice = result.publicationOutcome === 'already-private-verified'
+      ? 'Файл уже был приватным; устаревшая ссылка удалена из журнала.'
+      : 'Публичный доступ отозван и приватное состояние подтверждено Яндекс Диском.';
+    setStatus(`${notice} · operationId: ${result.operationId || operationId}`, result.journalSuperseded ? '' : 'ok');
+    await loadJournal();
+  } catch (error) {
+    if (button) button.disabled = false;
+    setStatus(`${error?.message || String(error)} Запись журнала сохранена; повторная unpublish команда автоматически не отправляется. · operationId: ${operationId}`, 'error');
+  }
 }
 
 function resetDeleteProgressUi() {

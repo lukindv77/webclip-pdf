@@ -3236,6 +3236,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           operationId: String(message.operationId || '')
         });
 
+      case 'WEBCLIP_JOURNAL_REVOKE_PUBLIC_ACCESS':
+        if (senderKind !== 'extension') throw new Error('Отзыв публичной ссылки доступен только странице журнала WebClip.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return revokeJournalEntryPublicAccess(String(message.id || ''), String(message.operationId || ''));
+
       case 'WEBCLIP_JOURNAL_UPDATE_COMMENT':
         return updateJournalComment(String(message.id || ''), String(message.comment || ''));
 
@@ -7759,6 +7764,232 @@ async function revalidateYandexDestructiveReceipt(receipt, operationContext, ope
   });
 }
 
+async function readYandexPublicationStateByReceipt(receipt, operationContext, operationId = '', timeoutMs = 8_000) {
+  const context = WebClipYandexOperationContext.proveRecoveryContext({
+    context: operationContext,
+    binding: { accountUid: receipt?.accountUid, rootPath: receipt?.rootPath }
+  });
+  const sourcePath = normalizeDiskPath(receipt?.sourcePath || receipt?.path || '');
+  const sourceResourceId = String(receipt?.sourceResourceId || receipt?.resourceId || '').trim();
+  if (!sourcePath || !sourceResourceId || !isDiskPathInside(sourcePath, context.rootPath)) {
+    const error = new Error('Publication-revoke receipt не содержит exact path/resource_id внутри bound root.');
+    error.code = 'WEBCLIP_PUBLICATION_REVOKE_IDENTITY_INVALID';
+    throw error;
+  }
+  const metadata = await yandexApi('/resources', {
+    method: 'GET',
+    query: { path: sourcePath, fields: 'name,path,type,size,public_url,resource_id' },
+    timeoutMs,
+    operationId,
+    operationContext: context
+  }, false);
+  const observedPath = metadata?.path ? normalizeYandexDiskPathFromApi(metadata.path) : sourcePath;
+  const observedResourceId = metadata?.resource_id ? normalizeYandexResourceIdFromApi(metadata.resource_id) : '';
+  if (metadata?.type !== 'file' || observedPath !== sourcePath || observedResourceId !== sourceResourceId) {
+    const error = new Error('Publication-revoke reconciliation не подтвердил exact resource_id/path исходного файла.');
+    error.code = 'WEBCLIP_PUBLICATION_REVOKE_IDENTITY_CONFLICT';
+    throw error;
+  }
+  return Object.freeze({
+    metadata,
+    path: observedPath,
+    resourceId: observedResourceId,
+    publicUrl: metadata?.public_url ? normalizeYandexPublicUrlFromApi(metadata.public_url) : ''
+  });
+}
+
+async function reconcilePendingPublicationRevokeReceipt(item, trigger = 'maintenance') {
+  const context = await captureCurrentYandexOperationContext();
+  const observed = await readYandexPublicationStateByReceipt(item, context, String(item?.operationId || ''), 10_000);
+  if (observed.publicUrl) {
+    return Object.freeze({
+      settled: false,
+      reason: `После ${trigger} exact remote object всё ещё содержит public_url. Automatic unpublish retry запрещён; требуется ручная проверка.`
+    });
+  }
+  const verified = await markPendingDestructiveMoveVerified(item.id, {
+    remotePath: observed.path,
+    resourceId: observed.resourceId,
+    filename: observed.metadata?.name ? normalizeYandexItemNameFromApi(observed.metadata.name) : '',
+    folder: parentDiskPath(observed.path),
+    publicUrl: ''
+  });
+  return Object.freeze({ settled: true, receipt: verified });
+}
+
+async function revokeJournalEntryPublicAccess(id, operationId = '') {
+  operationId = String(operationId || '') || makeOperationLogId('journal-revoke-public');
+  if (!id) return { ok: false, error: 'Не указана запись журнала.' };
+  const authoritySnapshot = await readJournalEntryWithAuthority(id);
+  const entry = authoritySnapshot?.entry || null;
+  const journalAuthority = authoritySnapshot?.token || null;
+  if (!entry || !journalAuthority) return { ok: false, error: 'Запись журнала уже отсутствует.' };
+  const expectedPublicUrl = String(entry.publicUrl || '').trim();
+  if (entry.destination !== 'yandex' || !expectedPublicUrl) {
+    return { ok: false, error: 'У этой записи нет известной публичной ссылки Яндекс Диска.' };
+  }
+
+  await startOperationLog(operationId, 'journal-publication-revoke', 'Отзыв публичного доступа к файлу Яндекс Диска', {
+    journalEntryId: id,
+    remotePath: entry.remotePath || '',
+    resourceId: entry.resourceId || '',
+    accountUid: entry.accountUid ? '[BOUND]' : '',
+    rootPath: entry.rootPath || '',
+    requestedPublicationOutcome: 'private'
+  });
+
+  let detachedReceiptId = '';
+  let revokeAdmitted = false;
+  try {
+    emitJournalOperationProgress(operationId, 'locate', 'Проверяем exact файл и текущую публичную ссылку…', 12);
+    const operationContext = await captureCurrentYandexOperationContext();
+    const current = await findYandexFileForJournalEntry(entry, operationId, operationContext);
+    const identityReceipt = current?.remoteIdentityReceipt || null;
+    const sourcePath = normalizeDiskPath(identityReceipt?.path || '');
+    const observedPublicUrl = String(identityReceipt?.publicUrl || '').trim();
+    if (!sourcePath || !identityReceipt?.resourceId) {
+      const error = new Error('Яндекс Диск не подтвердил exact path/resource_id для отзыва ссылки.');
+      error.code = 'WEBCLIP_PUBLICATION_REVOKE_IDENTITY_REQUIRED';
+      throw error;
+    }
+    assertManagedYandexSourcePath(sourcePath, operationContext.rootPath, [YANDEX_UPLOAD_DIR, YANDEX_READ_LATER_DIR, YANDEX_TRASH_DIR]);
+
+    if (!observedPublicUrl) {
+      const entryResourceId = String(entry.resourceId || '').trim();
+      if (!entryResourceId || entryResourceId !== String(identityReceipt.resourceId || '')) {
+        const error = new Error('Файл по сохранённому пути уже приватный, но запись не содержит совпадающий stable resource_id. WebClip не будет очищать единственную известную публичную ссылку по одному пути.');
+        error.code = 'WEBCLIP_PUBLICATION_REVOKE_ALREADY_PRIVATE_IDENTITY_UNPROVEN';
+        throw error;
+      }
+      emitJournalOperationProgress(operationId, 'verify', 'Файл уже приватный; очищаем устаревшую ссылку в журнале…', 78);
+      const updated = await updateJournalEntryRecordCas(journalAuthority, {
+        publicUrl: '',
+        resourceId: identityReceipt.resourceId,
+        remotePath: sourcePath,
+        remoteIdentityProvenance: WebClipYandexRemoteIdentityAuthority.PROVIDER_VERIFIED,
+        publicationRevokedAt: Date.now()
+      });
+      const journalSuperseded = Boolean(!updated?.ok && updated?.stale);
+      if (!journalSuperseded) notifyJournalChanged('publication-revoke');
+      emitJournalOperationProgress(operationId, 'complete', journalSuperseded
+        ? 'Файл подтверждён приватным; replacement Journal state не изменён.'
+        : 'Файл уже был приватным. Устаревшая публичная ссылка удалена из журнала.', 100, journalSuperseded ? 'partial' : 'success');
+      return { ok: true, operationId, publicationOutcome: 'already-private-verified', journalSuperseded };
+    }
+    if (observedPublicUrl !== expectedPublicUrl) {
+      const error = new Error('Текущая public_url exact файла не совпадает со ссылкой записи журнала. Отзыв остановлен без изменения доступа.');
+      error.code = 'WEBCLIP_PUBLICATION_REVOKE_PUBLIC_URL_CONFLICT';
+      throw error;
+    }
+
+    const receipt = await checkpointPendingPublicationRevokeIntent(entry, {
+      sourcePath,
+      sourceResourceId: identityReceipt.resourceId,
+      sourcePublicUrl: observedPublicUrl,
+      remoteIdentityReceipt: identityReceipt,
+      operationId,
+      journalAuthority
+    });
+    detachedReceiptId = receipt.id;
+
+    emitJournalOperationProgress(operationId, 'revoke', 'Фиксируем durable admission и отзываем публичную ссылку…', 48);
+    const revalidatedMetadata = await yandexApi('/resources', {
+      method: 'GET',
+      query: { path: sourcePath, fields: 'name,path,type,size,public_url,resource_id' },
+      timeoutMs: 8_000,
+      operationId,
+      operationContext
+    }, false);
+    WebClipYandexRemoteIdentityAuthority.assertDestructiveCommand({
+      receipt: identityReceipt,
+      operationContext,
+      sourcePath,
+      metadata: revalidatedMetadata
+    });
+    const revalidatedPublicUrl = revalidatedMetadata?.public_url
+      ? normalizeYandexPublicUrlFromApi(revalidatedMetadata.public_url)
+      : '';
+    if (revalidatedPublicUrl !== observedPublicUrl) {
+      const error = new Error('Public_url изменилась после provider observation; unpublish admission запрещён.');
+      error.code = 'WEBCLIP_PUBLICATION_REVOKE_REVALIDATION_CONFLICT';
+      throw error;
+    }
+    await markPendingDestructiveMoveAdmitted(detachedReceiptId);
+    revokeAdmitted = true;
+
+    let commandError = null;
+    try {
+      await yandexApi('/resources/unpublish', {
+        method: 'PUT',
+        query: { path: sourcePath },
+        timeoutMs: 15_000,
+        operationId,
+        operationContext
+      }, false);
+    } catch (error) {
+      commandError = error;
+      appendOperationLogEvent(operationId, {
+        category: 'publication-revoke-settlement', level: 'warn', stage: 'revoke',
+        message: 'Unpublish command не дал надёжного terminal result; проверяем authoritative resource metadata без повторной команды.',
+        data: { error: normalizeError(error), retryForbidden: true }
+      });
+    }
+
+    emitJournalOperationProgress(operationId, 'verify', 'Проверяем, что public_url действительно исчезла…', 72);
+    const verifyDeadline = Date.now() + 45_000;
+    let observedPrivate = null;
+    let lastVerifyError = null;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      let remaining = verifyDeadline - Date.now();
+      if (remaining <= 500) break;
+      if (attempt) {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(300 * attempt, Math.max(0, remaining - 500))));
+        remaining = verifyDeadline - Date.now();
+        if (remaining <= 500) break;
+      }
+      try {
+        const observed = await readYandexPublicationStateByReceipt(receipt, operationContext, operationId, Math.max(1_000, Math.min(8_000, remaining)));
+        if (!observed.publicUrl) { observedPrivate = observed; break; }
+      } catch (error) {
+        lastVerifyError = error;
+      }
+    }
+    if (!observedPrivate) {
+      const error = new Error(`Яндекс Диск не подтвердил приватное состояние exact файла. Повтор unpublish запрещён; durable receipt сохранён для reconciliation.${commandError ? ` Команда: ${normalizeError(commandError)}.` : ''}${lastVerifyError ? ` Проверка: ${normalizeError(lastVerifyError)}.` : ''}`);
+      error.code = 'WEBCLIP_PUBLICATION_REVOKE_SETTLEMENT_UNKNOWN';
+      throw error;
+    }
+
+    await markPendingDestructiveMoveVerified(detachedReceiptId, {
+      remotePath: observedPrivate.path,
+      resourceId: observedPrivate.resourceId,
+      filename: observedPrivate.metadata?.name ? normalizeYandexItemNameFromApi(observedPrivate.metadata.name) : String(entry.filename || ''),
+      folder: parentDiskPath(observedPrivate.path),
+      publicUrl: ''
+    });
+    emitJournalOperationProgress(operationId, 'journal', 'Фиксируем подтверждённое приватное состояние в журнале…', 90);
+    const finalized = await finalizePublicationRevokeJournalFromReceipt(detachedReceiptId);
+    const journalSuperseded = Boolean(finalized?.cancelled);
+    if (!journalSuperseded) notifyJournalChanged('publication-revoke');
+    refreshActionForAllTabs().catch(() => {});
+    emitJournalOperationProgress(operationId, 'complete', journalSuperseded
+      ? 'Публичный доступ отозван; replacement Journal state не изменён.'
+      : 'Публичный доступ отозван и подтверждён метаданными Яндекс Диска.', 100, journalSuperseded ? 'partial' : 'success');
+    return { ok: true, operationId, publicationOutcome: 'revoked-verified', journalSuperseded };
+  } catch (error) {
+    if (detachedReceiptId) {
+      if (revokeAdmitted) {
+        await markPendingDestructiveMoveFailure(detachedReceiptId, error).catch(() => {});
+        activeDestructiveMoveReceipts.delete(detachedReceiptId);
+      } else {
+        await removePendingDestructiveMove(detachedReceiptId).catch(() => {});
+      }
+    }
+    emitJournalOperationProgress(operationId, 'error', `Ошибка: ${normalizeError(error)}`, 100, 'error');
+    throw error;
+  }
+}
+
 async function moveJournalYandexFileToTrash(entry, operationId = '', journalAuthority = null) {
   let detachedReceiptId = '';
   let moveAdmitted = false;
@@ -7991,6 +8222,7 @@ function pendingDestructiveMoveRemoteIdentityStatus(item = {}, { requireTerminal
   if (!accountUid || !rootPath) return invalid('missing-context');
   if (!sourcePath || !targetPath || !sourceResourceId) return invalid('missing-object-identity');
   if (!isDiskPathInside(sourcePath, rootPath) || !isDiskPathInside(targetPath, rootPath)) return invalid('path-outside-root');
+  if (item.kind === 'publication-revoke' && targetPath !== sourcePath) return invalid('publication-path-retarget');
   if (!Number.isFinite(observedAt) || observedAt <= 0 || !Number.isFinite(contextCapturedAt) || contextCapturedAt <= 0) return invalid('invalid-observation-generation');
   if (!allowedProvenance.has(sourceProvenance)) return invalid('invalid-source-provenance');
 
@@ -8002,6 +8234,7 @@ function pendingDestructiveMoveRemoteIdentityStatus(item = {}, { requireTerminal
     if (!verifiedPath || verifiedPath !== targetPath) return invalid('terminal-path-mismatch');
     if (!verifiedResourceId || verifiedResourceId !== sourceResourceId) return invalid('terminal-resource-mismatch');
     if (!Number.isFinite(verifiedAt) || verifiedAt <= 0) return invalid('terminal-observation-invalid');
+    if (item.kind === 'publication-revoke' && String(item.verifiedPublicUrl || '').trim()) return invalid('publication-still-public');
   }
 
   return Object.freeze({
@@ -8136,6 +8369,14 @@ async function checkpointPendingReadMoveIntent(entry, {
             const cursor = cursorReq.result;
             if (cursor) {
               count += 1;
+              const existing = cursor.value || {};
+              if (existing.kind === 'publication-revoke'
+                && String(existing.sourceJournalEntryId || '') === item.sourceJournalEntryId) {
+                const error = new Error('Для этой записи уже существует незавершённый publication-revoke receipt. Сначала дождитесь reconciliation или выполните ручное решение.');
+                error.code = 'WEBCLIP_PUBLICATION_REVOKE_ALREADY_PENDING';
+                fail(error);
+                return;
+              }
               if (count >= MAX_PENDING_DESTRUCTIVE_MOVES) {
                 fail(new Error('Слишком много незавершённых destructive-move receipts. Требуется reconciliation/manual resolution.'));
                 return;
@@ -8248,6 +8489,14 @@ async function checkpointPendingTrashMoveIntent(entry, {
             const cursor = cursorReq.result;
             if (cursor) {
               count += 1;
+              const existing = cursor.value || {};
+              if (existing.kind === 'publication-revoke'
+                && String(existing.sourceJournalEntryId || '') === item.sourceJournalEntryId) {
+                const error = new Error('Для этой записи уже существует незавершённый publication-revoke receipt. Перемещение в Trash пока запрещено.');
+                error.code = 'WEBCLIP_PUBLICATION_REVOKE_ALREADY_PENDING';
+                fail(error);
+                return;
+              }
               if (count >= MAX_PENDING_DESTRUCTIVE_MOVES) {
                 fail(new Error('Слишком много незавершённых destructive-move receipts. Требуется reconciliation/manual resolution.'));
                 return;
@@ -8274,6 +8523,135 @@ async function checkpointPendingTrashMoveIntent(entry, {
   return item;
 }
 
+async function checkpointPendingPublicationRevokeIntent(entry, {
+  sourcePath = '',
+  sourceResourceId = '',
+  sourcePublicUrl = '',
+  remoteIdentityReceipt = null,
+  operationId = '',
+  journalAuthority = null
+} = {}) {
+  const sourceJournalAuthority = normalizeJournalEntryAuthorityToken(journalAuthority);
+  const normalizedSourcePath = normalizeDiskPath(sourcePath || '');
+  const normalizedPublicUrl = String(sourcePublicUrl || '').trim();
+  if (normalizeDiskPath(remoteIdentityReceipt?.path || '') !== normalizedSourcePath
+    || String(remoteIdentityReceipt?.resourceId || '') !== String(sourceResourceId || '')
+    || String(remoteIdentityReceipt?.publicUrl || '') !== normalizedPublicUrl) {
+    const error = new Error('Publication-revoke receipt требует exact provider-observed path/resource_id/public_url.');
+    error.code = 'WEBCLIP_PUBLICATION_REVOKE_IDENTITY_RECEIPT_REQUIRED';
+    throw error;
+  }
+  if (!normalizedPublicUrl) {
+    const error = new Error('Publication-revoke receipt нельзя создать без подтверждённой текущей публичной ссылки.');
+    error.code = 'WEBCLIP_PUBLICATION_REVOKE_PUBLIC_URL_REQUIRED';
+    throw error;
+  }
+  const remoteIdentityFields = pendingDestructiveMoveRemoteIdentityFields(remoteIdentityReceipt, {
+    sourcePath: normalizedSourcePath,
+    targetPath: normalizedSourcePath,
+    sourceResourceId,
+    operationId
+  });
+  const now = Date.now();
+  const item = {
+    id: makePendingDestructiveMoveId('publication-revoke'),
+    kind: 'publication-revoke',
+    phase: 'prepared',
+    createdAt: now,
+    updatedAt: now,
+    operationId: String(operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
+    sourceJournalEntryId: String(entry?.id || '').slice(0, MAX_IMPORTED_ENTRY_ID_CHARS),
+    sourceJournalCreatedAt: Math.max(0, Number(entry?.createdAt) || 0),
+    sourceJournalResetGeneration: sourceJournalAuthority?.resetGeneration || 0,
+    sourceJournalEntryRevision: sourceJournalAuthority?.entryRevision || 0,
+    sourceUrlKey: normalizeJournalUrl(entry?.url || ''),
+    sourceSiteKey: getJournalSiteKey(entry?.url || entry?.hostname || ''),
+    sourcePath: normalizedSourcePath,
+    targetPath: normalizedSourcePath,
+    sourceResourceId: String(sourceResourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
+    sourcePublicUrl: normalizedPublicUrl.slice(0, MAX_YANDEX_PUBLIC_URL_CHARS),
+    requestedPublicationOutcome: 'private',
+    ...remoteIdentityFields,
+    lastError: ''
+  };
+  if (!item.sourceJournalEntryId || !item.sourcePath || !item.sourceResourceId) {
+    throw new Error('Publication-revoke receipt требует exact Journal id/path/resource_id.');
+  }
+  if (!sourceJournalAuthority || sourceJournalAuthority.entryId !== item.sourceJournalEntryId) {
+    const error = new Error('Publication-revoke receipt требует exact P0-076 Journal authority.');
+    error.code = 'WEBCLIP_PUBLICATION_REVOKE_JOURNAL_AUTHORITY_INVALID';
+    throw error;
+  }
+  const db = await openJournalDb();
+  try {
+    await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE],
+      'readwrite',
+      'Создание publication-revoke receipt',
+      ({ tx, fail }) => {
+        const pending = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
+        let queueReady = false;
+        let entryReady = false;
+        let generationReady = false;
+        let current = null;
+        let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+        let added = false;
+        const maybeAdd = () => {
+          if (added || !queueReady || !entryReady || !generationReady) return;
+          if (!pendingDestructiveMoveJournalAuthorityMatches(item, resetGeneration, current)
+            || String(current?.publicUrl || '').trim() !== item.sourcePublicUrl) {
+            const error = new Error('Journal authority/public_url устарели до создания publication-revoke receipt.');
+            error.code = 'WEBCLIP_PUBLICATION_REVOKE_JOURNAL_AUTHORITY_STALE_BEFORE_RECEIPT';
+            fail(error);
+            return;
+          }
+          added = true;
+          pending.add(item);
+        };
+        let count = 0;
+        const cursorReq = pending.openCursor();
+        cursorReq.onsuccess = () => {
+          try {
+            const cursor = cursorReq.result;
+            if (cursor) {
+              count += 1;
+              const existing = cursor.value || {};
+              if (['read-move', 'trash-move', 'publication-revoke'].includes(existing.kind)
+                && String(existing.sourceJournalEntryId || '') === item.sourceJournalEntryId) {
+                const error = new Error('Для этой записи уже существует незавершённый remote destructive receipt. Новый publication revoke запрещён до reconciliation/manual resolution.');
+                error.code = 'WEBCLIP_PUBLICATION_REVOKE_ALREADY_PENDING';
+                fail(error);
+                return;
+              }
+              if (count >= MAX_PENDING_DESTRUCTIVE_MOVES) {
+                fail(new Error('Слишком много незавершённых destructive receipts. Требуется reconciliation/manual resolution.'));
+                return;
+              }
+              cursor.continue();
+              return;
+            }
+            queueReady = true;
+            maybeAdd();
+          } catch (error) { fail(error); }
+        };
+        cursorReq.onerror = () => fail(cursorReq.error || new Error('Не удалось проверить очередь publication-revoke receipts.'));
+        const entryReq = entries.get(item.sourceJournalEntryId);
+        entryReq.onsuccess = () => { current = entryReq.result || null; entryReady = true; maybeAdd(); };
+        entryReq.onerror = () => fail(entryReq.error || new Error('Не удалось проверить Journal row перед publication-revoke receipt.'));
+        const generationReq = meta.get(JOURNAL_RESET_GENERATION_KEY);
+        generationReq.onsuccess = () => { resetGeneration = normalizeJournalResetGeneration(generationReq.result?.value); generationReady = true; maybeAdd(); };
+        generationReq.onerror = () => fail(generationReq.error || new Error('Не удалось проверить Journal generation перед publication-revoke receipt.'));
+      },
+      RECOVERY_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  activeDestructiveMoveReceipts.add(item.id);
+  return item;
+}
+
 async function markPendingDestructiveMoveAdmitted(id) {
   const key = String(id || '');
   const db = await openJournalDb();
@@ -8291,7 +8669,7 @@ async function markPendingDestructiveMoveAdmitted(id) {
         request.onsuccess = () => {
           try {
             const current = request.result;
-            if (!current || (current.kind !== 'read-move' && current.kind !== 'trash-move')) {
+            if (!current || !['read-move', 'trash-move', 'publication-revoke'].includes(current.kind)) {
               const error = new Error('Destructive-move receipt исчез до admission.');
               error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_MISSING_BEFORE_ADMISSION';
               fail(error);
@@ -8452,6 +8830,12 @@ async function markPendingDestructiveMoveVerified(id, outcome = {}) {
               fail(error);
               return;
             }
+            if (current.kind === 'publication-revoke' && String(outcome.publicUrl || '').trim()) {
+              const error = new Error('Publication revoke нельзя подтвердить, пока metadata всё ещё содержит public_url.');
+              error.code = 'WEBCLIP_PUBLICATION_REVOKE_NOT_PRIVATE';
+              fail(error);
+              return;
+            }
             const verifiedAt = Date.now();
             const next = {
               ...current,
@@ -8569,7 +8953,7 @@ function pendingDestructiveMoveManualReceiptForUi(item = {}) {
   const remoteIdentity = pendingDestructiveMoveRemoteIdentityStatus(item, { requireTerminal: item.phase === 'remote-verified' });
   return Object.freeze({
     id: String(item.id || '').slice(0, MAX_IMPORTED_ENTRY_ID_CHARS),
-    kind: kind === 'read-move' || kind === 'trash-move' ? kind : 'unknown',
+    kind: ['read-move', 'trash-move', 'publication-revoke'].includes(kind) ? kind : 'unknown',
     phase: String(item.phase || '').slice(0, 40),
     operationId: String(item.operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
     sourceJournalEntryId: String(item.sourceJournalEntryId || '').slice(0, MAX_IMPORTED_ENTRY_ID_CHARS),
@@ -8788,13 +9172,39 @@ async function reconcilePendingDestructiveMoves(trigger = 'maintenance', maxItem
   let failed = 0;
 
   for (const raw of queue) {
-    const item = raw && typeof raw === 'object' ? raw : {};
+    let item = raw && typeof raw === 'object' ? raw : {};
     const id = String(item.id || '').trim();
     const kind = String(item.kind || '');
     const operationId = String(item.operationId || '');
     if (!id) continue;
-    const disposition = pendingDestructiveMoveRecoveryDisposition(item);
+    let disposition = pendingDestructiveMoveRecoveryDisposition(item);
     try {
+      if (kind === 'publication-revoke' && item.phase === 'admitted-unknown') {
+        try {
+          const settlement = await reconcilePendingPublicationRevokeReceipt(item, trigger);
+          if (!settlement.settled) {
+            await markPendingDestructiveMoveManualResolution(id, settlement.reason, trigger);
+            manualResolution += 1;
+            recordOperationStage(operationId, 'recovery-manual', settlement.reason, 100, 'partial', {
+              trigger, kind, recoveryState: 'manual-resolution', retryForbidden: true
+            });
+            await flushOperationLogWrites(operationId).catch(() => {});
+            continue;
+          }
+          item = settlement.receipt;
+          disposition = 'finalize-local';
+        } catch (error) {
+          const reason = `Publication-revoke settlement нельзя доказать после restart без повторной unpublish команды: ${normalizeError(error)}`;
+          await markPendingDestructiveMoveManualResolution(id, reason, trigger);
+          manualResolution += 1;
+          recordOperationStage(operationId, 'recovery-manual', reason, 100, 'partial', {
+            trigger, kind, recoveryState: 'manual-resolution', retryForbidden: true
+          });
+          await flushOperationLogWrites(operationId).catch(() => {});
+          continue;
+        }
+      }
+
       if (disposition === 'drop-prepared') {
         await removePendingDestructiveMove(id);
         preparedDropped += 1;
@@ -8803,8 +9213,8 @@ async function reconcilePendingDestructiveMoves(trigger = 'maintenance', maxItem
         continue;
       }
 
-      if (disposition === 'manual-resolution' || (kind !== 'read-move' && kind !== 'trash-move')) {
-        const reason = kind !== 'read-move' && kind !== 'trash-move'
+      if (disposition === 'manual-resolution' || !['read-move', 'trash-move', 'publication-revoke'].includes(kind)) {
+        const reason = !['read-move', 'trash-move', 'publication-revoke'].includes(kind)
           ? `Неизвестный destructive-move kind «${kind || 'empty'}»; automatic recovery запрещён.`
           : 'Destructive move был durably admitted, но terminal exact remote outcome не был записан до restart. Automatic Yandex retry/verification запрещён; требуется manual resolution под P1-090.';
         await markPendingDestructiveMoveManualResolution(id, reason, trigger);
@@ -8844,6 +9254,23 @@ async function reconcilePendingDestructiveMoves(trigger = 'maintenance', maxItem
           kind,
           recoveryState: 'manual-resolution',
           legacyJournalAuthority: true
+        });
+        await flushOperationLogWrites(operationId).catch(() => {});
+        continue;
+      }
+
+      if (kind === 'publication-revoke') {
+        const result = await finalizePublicationRevokeJournalFromReceipt(id);
+        if (result?.cancelled) cancelled += 1;
+        else {
+          finalized += 1;
+          notifyJournalChanged('publication-revoke');
+          refreshActionForAllTabs().catch(() => {});
+        }
+        recordOperationStage(operationId, 'recovery-finalize', result?.cancelled
+          ? 'Verified private publication receipt завершён как superseded/history-only без изменения replacement Journal state.'
+          : 'Verified private publication receipt после restart очистил publicUrl исходной Journal записи.', 100, result?.cancelled ? 'partial' : 'success', {
+          trigger, kind, cancelled: Boolean(result?.cancelled)
         });
         await flushOperationLogWrites(operationId).catch(() => {});
         continue;
@@ -9024,6 +9451,93 @@ async function finalizeReadMoveJournalFromReceipt(receiptId, patch = {}) {
   return result;
 }
 
+async function finalizePublicationRevokeJournalFromReceipt(receiptId) {
+  const key = String(receiptId || '');
+  const db = await openJournalDb();
+  let result = null;
+  try {
+    result = await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE],
+      'readwrite',
+      'Финализация publication revoke по detached receipt',
+      ({ tx, setResult, fail }) => {
+        const receipts = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
+        const entries = tx.objectStore(JOURNAL_STORE);
+        const meta = tx.objectStore(JOURNAL_META_STORE);
+        const request = receipts.get(key);
+        request.onsuccess = () => {
+          try {
+            const receipt = request.result;
+            if (!receipt) { setResult({ cancelled: true, entry: null, receiptMissing: true }); return; }
+            if (receipt.kind !== 'publication-revoke' || receipt.phase !== 'remote-verified') {
+              const error = new Error('Publication-revoke receipt не имеет terminal private verification.');
+              error.code = 'WEBCLIP_PUBLICATION_REVOKE_NOT_VERIFIED';
+              fail(error);
+              return;
+            }
+            const remoteIdentityStatus = pendingDestructiveMoveRemoteIdentityStatus(receipt, { requireTerminal: true });
+            if (!remoteIdentityStatus.ok || String(receipt.verifiedPublicUrl || '').trim()) {
+              const error = new Error(`Publication-revoke terminal identity/private binding недействителен: ${remoteIdentityStatus.reason || 'public-url-present'}.`);
+              error.code = 'WEBCLIP_PUBLICATION_REVOKE_TERMINAL_BINDING_INVALID';
+              fail(error);
+              return;
+            }
+            if (receipt.supersededByJournalReset === true) {
+              receipts.delete(key);
+              setResult({ cancelled: true, entry: null, supersededByJournalReset: true });
+              return;
+            }
+
+            let entryReady = false;
+            let generationReady = false;
+            let current = null;
+            let resetGeneration = JOURNAL_INITIAL_RESET_GENERATION;
+            let compared = false;
+            const compareAndFinalize = () => {
+              if (compared || !entryReady || !generationReady) return;
+              compared = true;
+              if (!pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)) {
+                receipts.delete(key);
+                setResult({ cancelled: true, entry: null, sourceAuthorityLost: true });
+                return;
+              }
+              const updated = {
+                ...current,
+                id: current.id,
+                publicUrl: '',
+                remotePath: normalizeDiskPath(receipt.verifiedPath || receipt.sourcePath || current.remotePath || ''),
+                resourceId: String(receipt.verifiedResourceId || receipt.sourceResourceId || current.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
+                remoteIdentityProvenance: WebClipYandexRemoteIdentityAuthority.PROVIDER_VERIFIED,
+                publicationRevokedAt: Math.max(0, Number(receipt.verifiedAt) || 0) || Date.now(),
+                entryRevision: nextJournalEntryRevision(current.entryRevision)
+              };
+              entries.put(updated);
+              receipts.delete(key);
+              touchJournalDbRevision(tx, 'publication-revoke-finalize');
+              setResult({ cancelled: false, entry: updated });
+            };
+            const entryReq = entries.get(receipt.sourceJournalEntryId);
+            entryReq.onsuccess = () => { current = entryReq.result || null; entryReady = true; compareAndFinalize(); };
+            entryReq.onerror = () => fail(entryReq.error || new Error('Не удалось проверить Journal authority при publication-revoke finalize.'));
+            const generationReq = meta.get(JOURNAL_RESET_GENERATION_KEY);
+            generationReq.onsuccess = () => {
+              resetGeneration = normalizeJournalResetGeneration(generationReq.result?.value);
+              generationReady = true;
+              compareAndFinalize();
+            };
+            generationReq.onerror = () => fail(generationReq.error || new Error('Не удалось проверить Journal generation при publication-revoke finalize.'));
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось прочитать terminal publication-revoke receipt.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+  } finally { db.close(); }
+  activeDestructiveMoveReceipts.delete(key);
+  return result;
+}
+
 async function finalizeTrashDeleteFromReceipt(receiptId) {
   const key = String(receiptId || '');
   const statsToken = await beginJournalStatsMutation('delete');
@@ -9154,8 +9668,9 @@ async function deleteJournalEntry(id, { diskAction = 'keep', publicationAction =
   const action = String(diskAction || 'keep');
   if (isYandex && action !== 'keep' && action !== 'trash') return { ok: false, error: 'Выберите, оставить файл на Яндекс Диске или переместить его в Trash.' };
   // P0-069: settle the publication choice before logging or admitting any
-  // remote/local destructive side effect. Revocation remains fail-closed until
-  // its durable exact-object recovery protocol is implemented.
+  // remote/local destructive side effect. Delete-time revoke composition stays
+  // fail-closed until its two-effect recovery protocol is proven; the separate
+  // P1-164 action settles publication before this delete path is entered.
   const publication = resolveJournalDeletePublicationOutcome(entry, publicationAction);
   await startOperationLog(operationId, 'journal-delete', isYandex && action === 'trash' ? 'Удаление записи журнала и перенос файла в Trash' : 'Удаление записи журнала', {
     journalEntryId: id, destination: entry.destination || '', diskAction: action, remotePath: entry.remotePath || '',
@@ -14211,6 +14726,13 @@ function joinDiskPath(base, ...parts) {
     .map(sanitizeDiskName);
   const prefix = start === '/' ? '' : start;
   return normalizeDiskPath(`${prefix}/${cleaned.join('/')}`) || '/';
+}
+
+function parentDiskPath(path) {
+  const normalized = normalizeDiskPath(path || '');
+  if (!normalized || normalized === '/') return normalized;
+  const slash = normalized.lastIndexOf('/');
+  return slash <= 0 ? '/' : normalized.slice(0, slash);
 }
 
 async function closeOffscreenDocumentIfIdle(nonce) {
