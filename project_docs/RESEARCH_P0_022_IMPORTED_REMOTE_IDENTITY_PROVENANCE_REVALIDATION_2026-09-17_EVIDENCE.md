@@ -236,3 +236,49 @@ P0-022 remains **ACTIVE / ROOT-CAUSE-REVALIDATED**. Implementation closure still
 - manual-resolution path when identity cannot be proven.
 
 No release-readiness change is implied. Release remains **NOT READY** unless current canonical `RELEASE_READINESS.md` is explicitly changed by an authorized release tranche.
+
+
+## Production implementation tranche — 2026-09-19
+
+Implementation baseline: `main` at `147de759522e1c5e19a16b4dc78de1e4f847abc0`.
+
+This bounded tranche moves P0-022 from research-only revalidation to **ACTIVE / IMPLEMENTATION-IN-PROGRESS**. It does not claim full closure.
+
+Production changes:
+
+- Journal remote identity now carries one explicit provenance class: `provider-verified`, `imported-unverified`, or `legacy-unverified`;
+- import normalization always downgrades portable locator metadata to `imported-unverified`, even if imported bytes claim stronger provenance;
+- current native remote-save verification promotes the resulting Journal row to `provider-verified`;
+- destructive lookup captures one P0-074 operation context and returns an immutable `yandex-api-observed-resource` receipt containing exact account, root, `resource_id`, path, observation time, operation id, and context capture generation;
+- imported/legacy identifiers are discovery hints only; they cannot directly form the destructive receipt;
+- provider-verified stored identity conflicts fail closed;
+- Trash and ReadmeLater→Upload checkpoint the exact observed identity, re-read the same source path immediately before remote admission, and reject path/resource/context retargeting;
+- move outcome must retain the exact receipt `resource_id`;
+- existing P0-076 Journal generation/revision CAS remains the final local-mutation gate.
+
+Direct deterministic production regression:
+
+- `project_tools/test_p0_022_remote_identity_authority.js`;
+- local `node --check`: PASS;
+- local execution: **PASS 32 checks**;
+- runtime SHA-256: `f5a6b4cc0e1bf7d30a32b920939e2158f62398e7b2393e2f8848766e784fb975`;
+- runtime Git blob: `f5c495e70ff2501bdc341e76d6e15d13f778dc8e`;
+- test SHA-256: `20bbe0450a4b96d22954ed404e2b8191eb8932173fdc637af6314d07359982a4`;
+- test Git blob: `5f668b330fab6154d3288cd3294816574a91b529`.
+
+The regression covers immutable receipt construction, imported stale-id supersession by current provider observation, exact path/resource/context admission, same-path replacement rejection, late retarget rejection, account/root mismatch, missing current `resource_id`, provider-verified conflict, import downgrade, native promotion, and both destructive consumers.
+
+P0-022 remains **ACTIVE** pending real Yandex evidence and broader closure schedules, especially public-object deletion composition with P0-069, restart/manual-resolution behavior around the new receipt, and authorized end-to-end account/root switching. Manifest remains `0.9.8`; release remains **NOT READY**.
+
+
+### Exact-generation CI receipt
+
+Canonical runtime candidate:
+
+- PR head: `21cd6db069940633cfc8d1c162418939c81a1da0`;
+- Repository Integrity run: `35434208137`;
+- every production/adjacent deterministic test passed;
+- the only failures were the direct and downstream runtime-fingerprint chain retaining the preceding golden;
+- observed exact runtime fingerprint: `sha256:3d73583d5230510b66748263314f9b55c396fed3a459f092ba2ad9c92c7826bd`.
+
+Only the direct S0-F/S0-G/S0-H golden constants are synchronized to that observed fingerprint. Downstream identity/settlement/builder/migration models remain unchanged and must pass transitively on the next exact-head run.
