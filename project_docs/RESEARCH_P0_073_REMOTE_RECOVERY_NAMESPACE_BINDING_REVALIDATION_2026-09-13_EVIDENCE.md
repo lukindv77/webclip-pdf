@@ -345,3 +345,60 @@ No Yandex credentials were available or used in this research tranche, so no rea
 Research coverage remains complete in the project-wide sense. This tranche strengthens one already-known critical owner; it does not make critical closure complete and does not make the project release ready.
 
 `P0-073` remains `ACTIVE / ROOT-CAUSE-REVALIDATED`.
+
+
+## Implementation progress — 2026-09-18
+
+Canonical starting point for this implementation tranche:
+
+`24af246cec527687dfea4d8be5e8cb25d8ec83e4`
+
+The bounded runtime candidate was first committed at:
+
+`7c9b0a7a6d3b4ff5a0e9f7dbf30522730e90578e`
+
+This tranche selects and implements the P0-073 namespace fence without claiming the separate P0-074 immutable-request-context closure:
+
+- a pure runtime authority embedded at `service-worker.js` startup normalizes and validates the checkpoint's non-empty `accountUid`, `rootPath`, and `remotePath`;
+- checkpoint admission now rejects a missing account/root binding and a path outside the bound root before durable remote-save authority is written;
+- maintenance/restart recovery obtains the current Yandex account UID and proves it equals the checkpoint account before the first target-object `/resources` read;
+- the same proof therefore precedes any recovery publication, verification, or adoption action;
+- same textual root/path, same byte size, caller `operationId`, or a missing legacy account/root cannot substitute for the durable namespace binding;
+- already `remote-verified` checkpoints still require a structurally valid durable binding before local Journal finalization, but do not require a new remote read merely to finish that local step.
+
+Deterministic production regression:
+
+`project_tools/test_p0_073_remote_recovery_namespace_authority.js`
+
+Local candidate result:
+
+`P0-073 remote recovery namespace authority: PASS 23 checks`
+
+The regression includes positive exact-account/root recovery plus negative controls for account A -> B, missing account, missing root, empty/outside/sibling path, unknown current account, normalization, and source-order assertions proving the namespace fence precedes target-object read and publication.
+
+After the first full CI pass, the authority was embedded into the existing service-worker package member instead of adding a new root runtime file. This keeps the selected P0-073 change inside the already admitted package topology while retaining direct source-extracted deterministic execution.
+
+### Remaining boundary
+
+P0-073 remains `ACTIVE / IMPLEMENTATION-IN-PROGRESS`. This tranche does not claim:
+
+- P0-074 immutable token/account/root/config/publication context across every request in the long operation;
+- P1-184 exact remote object/content identity after namespace proof;
+- P0-078 publication-generation/revocation closure;
+- authorized isolated two-account Yandex E2E with same-path/same-size controls.
+
+No Yandex credentials are added or used. Manifest remains `0.9.8`; release readiness remains `NOT READY`; no build, tag, GitHub Release, or release decision is implied.
+
+
+### Exact-generation CI receipt — 2026-09-19
+
+The first fully green candidate containing the embedded P0-073 authority and synchronized P1-231 direct goldens was:
+
+- exact head: `fe1b0506cbf7f9980c01ad2effc02c56b39f6c76`;
+- Repository Integrity: run `35413624237`, conclusion `success`;
+- deterministic P0-073 production authority regression: `PASS 24 checks`;
+- exact S0-E RPF: `sha256:6b7f60999284a12040aabce4e3d9496919749a815ce4e27d3129eb06ae7249e9`;
+- package topology: unchanged at 34 current root package files;
+- manifest: unchanged at `0.9.8`.
+
+This is deterministic implementation-progress evidence, not authorized two-account Yandex closure. P0-073 remains `ACTIVE`; release readiness remains `NOT READY`.
