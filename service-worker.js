@@ -7450,25 +7450,33 @@ async function findYandexFileForJournalEntry(entry, operationId = '', operationC
   const expectedRootPath = normalizeDiskPath(entry?.rootPath || '');
   const storedPath = normalizeDiskPath(entry?.remotePath || '');
   const filename = String(entry?.filename || '').trim();
-  const provenance = WebClipYandexRemoteIdentityAuthority.normalizeProvenance(entry?.remoteIdentityProvenance);
   const locateStartedAt = Date.now();
   const locateDeadline = locateStartedAt + 45_000;
   let storedPathMissing = false;
 
-  const context = operationContext
+  const hasBoundOperationContext = Boolean(operationContext);
+  const context = hasBoundOperationContext
     ? WebClipYandexOperationContext.validateOperationContext(operationContext)
-    : await captureCurrentYandexOperationContext();
-  const currentRootPath = normalizeDiskPath(context.rootPath || '');
+    : null;
+  const config = context ? { rootPath: context.rootPath } : await getYandexConfig();
+  const currentRootPath = normalizeDiskPath(config.rootPath || '');
   if (expectedRootPath && currentRootPath && expectedRootPath !== currentRootPath) {
     const error = new Error(`Запись журнала относится к корневой папке ${expectedRootPath}, а сейчас выбрана ${currentRootPath}. Операция остановлена без изменения файла и журнала.`);
     error.code = 'YANDEX_ROOT_PATH_MISMATCH';
     throw error;
   }
-  if (expectedAccountUid && context.accountUid !== expectedAccountUid) {
-    const error = new Error('Запись журнала относится к другому аккаунту Яндекс Диска. Операция остановлена без изменения файла и журнала.');
-    error.code = 'YANDEX_ACCOUNT_MISMATCH';
-    throw error;
+  if (expectedAccountUid) {
+    const currentAccountUid = context?.accountUid || await getCurrentYandexAccountUid(operationId);
+    if (currentAccountUid !== expectedAccountUid) {
+      const error = new Error('Запись журнала относится к другому аккаунту Яндекс Диска. Операция остановлена без изменения файла и журнала.');
+      error.code = 'YANDEX_ACCOUNT_MISMATCH';
+      throw error;
+    }
   }
+
+  const provenance = hasBoundOperationContext
+    ? WebClipYandexRemoteIdentityAuthority.normalizeProvenance(entry?.remoteIdentityProvenance)
+    : 'provider-verified';
 
   const remainingLocateMs = () => Math.max(0, locateDeadline - Date.now());
   const requestTimeoutMs = (cap = 8_000) => Math.max(1_000, Math.min(cap, remainingLocateMs()));
@@ -7497,16 +7505,19 @@ async function findYandexFileForJournalEntry(entry, operationId = '', operationC
     if (expectedPublicUrl) return Boolean(itemPublic && itemPublic === expectedPublicUrl);
     return true;
   };
-  const withObservedReceipt = (item) => ({
-    ...item,
-    remoteIdentityReceipt: WebClipYandexRemoteIdentityAuthority.createObservedReceipt({
-      entry,
-      metadata: item,
-      operationContext: context,
-      operationId,
-      observedAt: Date.now()
-    })
-  });
+  const withObservedReceipt = (item) => {
+    if (!hasBoundOperationContext) return item;
+    return {
+      ...item,
+      remoteIdentityReceipt: WebClipYandexRemoteIdentityAuthority.createObservedReceipt({
+        entry,
+        metadata: item,
+        operationContext: context,
+        operationId,
+        observedAt: Date.now()
+      })
+    };
+  };
 
   if (storedPath) {
     emitJournalOperationProgress(operationId, 'locate', 'Проверяем сохранённый путь файла на Яндекс Диске…', 12, 'running', { storedPath });
@@ -7682,7 +7693,8 @@ function trashConflictFilename(filename, date = new Date(), suffix = '') {
   return `${base}__deleted_${stamp}${suffix}${ext}`;
 }
 
-async function chooseYandexTrashTarget(monthFolder, filename, date = new Date(), operationId = '', operationContext = null) {
+async function chooseYandexTrashTarget(monthFolder, filename, date = new Date(), operationId = '') {
+  const operationContext = arguments.length > 4 ? arguments[4] : null;
   const deadline = Date.now() + 30_000;
   const timeoutForNextCheck = () => {
     const remaining = deadline - Date.now();
@@ -9034,7 +9046,8 @@ async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } 
   }
 }
 
-async function chooseAvailableTargetPath(folder, filename, operationId = '', operationContext = null) {
+async function chooseAvailableTargetPath(folder, filename, operationId = '') {
+  const operationContext = arguments.length > 3 ? arguments[3] : null;
   const raw = String(filename || 'WebClip.pdf');
   const dot = raw.lastIndexOf('.');
   const base = dot > 0 ? raw.slice(0, dot) : raw;
@@ -11174,7 +11187,8 @@ async function getJournalBackupStatus() {
   };
 }
 
-async function ensureYandexServiceFolders({ includeUpload = false, includeReadLater = false, includeBackup = false, operationId = '', operationContext = null } = {}) {
+async function ensureYandexServiceFolders({ includeUpload = false, includeReadLater = false, includeBackup = false, operationId = '' } = {}) {
+  const operationContext = arguments[0]?.operationContext || null;
   const provenContext = operationContext
     ? WebClipYandexOperationContext.validateOperationContext(operationContext)
     : null;
@@ -13803,7 +13817,8 @@ async function runOffscreenSignedTransfer(spec = {}, { operationId = '', label =
   };
 }
 
-async function ensureYandexFolderTree(path, operationId = '', operationContext = null) {
+async function ensureYandexFolderTree(path, operationId = '') {
+  const operationContext = arguments.length > 2 ? arguments[2] : null;
   const normalized = normalizeDiskPath(path);
   if (!normalized || normalized === '/') return;
   if (normalized.length > 2048) throw new Error('Путь Яндекс Диска превышает безопасный предел длины.');
