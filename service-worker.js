@@ -7962,6 +7962,93 @@ function pendingDestructiveMoveAdvanceJournalAuthority(receipt = {}, resetGenera
   };
 }
 
+const PENDING_DESTRUCTIVE_REMOTE_IDENTITY_SCHEMA_VERSION = 1;
+
+function pendingDestructiveMoveRemoteIdentityStatus(item = {}, { requireTerminal = false } = {}) {
+  const invalid = (reason) => Object.freeze({ ok: false, reason: String(reason || 'invalid-remote-identity') });
+  if (!item || typeof item !== 'object') return invalid('missing-receipt');
+  if (Number(item.remoteIdentitySchemaVersion) !== PENDING_DESTRUCTIVE_REMOTE_IDENTITY_SCHEMA_VERSION) return invalid('unsupported-schema');
+  if (item.remoteIdentityAuthority !== WebClipYandexRemoteIdentityAuthority.AUTHORITY) return invalid('missing-provider-authority');
+
+  const operationId = String(item.operationId || '').trim();
+  const remoteIdentityOperationId = String(item.remoteIdentityOperationId || '').trim();
+  const accountUid = String(item.accountUid || '').trim();
+  const rootPath = normalizeDiskPath(item.rootPath || '');
+  const sourcePath = normalizeDiskPath(item.sourcePath || '');
+  const targetPath = normalizeDiskPath(item.targetPath || '');
+  const sourceResourceId = String(item.sourceResourceId || '').trim();
+  const observedAt = Number(item.remoteIdentityObservedAt);
+  const contextCapturedAt = Number(item.remoteIdentityContextCapturedAt);
+  const sourceProvenance = String(item.sourceIdentityProvenance || '');
+  const allowedProvenance = new Set([
+    WebClipYandexRemoteIdentityAuthority.PROVIDER_VERIFIED,
+    WebClipYandexRemoteIdentityAuthority.IMPORTED_UNVERIFIED,
+    WebClipYandexRemoteIdentityAuthority.LEGACY_UNVERIFIED
+  ]);
+
+  if (!operationId || remoteIdentityOperationId !== operationId) return invalid('operation-mismatch');
+  if (!accountUid || !rootPath) return invalid('missing-context');
+  if (!sourcePath || !targetPath || !sourceResourceId) return invalid('missing-object-identity');
+  if (!isDiskPathInside(sourcePath, rootPath) || !isDiskPathInside(targetPath, rootPath)) return invalid('path-outside-root');
+  if (!Number.isFinite(observedAt) || observedAt <= 0 || !Number.isFinite(contextCapturedAt) || contextCapturedAt <= 0) return invalid('invalid-observation-generation');
+  if (!allowedProvenance.has(sourceProvenance)) return invalid('invalid-source-provenance');
+
+  if (requireTerminal) {
+    const verifiedPath = normalizeDiskPath(item.verifiedPath || '');
+    const verifiedResourceId = String(item.verifiedResourceId || '').trim();
+    const verifiedAt = Number(item.verifiedAt);
+    if (String(item.phase || '') !== 'remote-verified') return invalid('terminal-phase-required');
+    if (!verifiedPath || verifiedPath !== targetPath) return invalid('terminal-path-mismatch');
+    if (!verifiedResourceId || verifiedResourceId !== sourceResourceId) return invalid('terminal-resource-mismatch');
+    if (!Number.isFinite(verifiedAt) || verifiedAt <= 0) return invalid('terminal-observation-invalid');
+  }
+
+  return Object.freeze({
+    ok: true,
+    reason: '',
+    operationId,
+    accountUid,
+    rootPath,
+    sourcePath,
+    targetPath,
+    sourceResourceId,
+    observedAt,
+    contextCapturedAt,
+    sourceProvenance
+  });
+}
+
+function pendingDestructiveMoveRemoteIdentityFields(remoteIdentityReceipt, {
+  sourcePath = '',
+  targetPath = '',
+  sourceResourceId = '',
+  operationId = ''
+} = {}) {
+  const fields = {
+    remoteIdentitySchemaVersion: PENDING_DESTRUCTIVE_REMOTE_IDENTITY_SCHEMA_VERSION,
+    remoteIdentityAuthority: String(remoteIdentityReceipt?.authority || ''),
+    remoteIdentityOperationId: String(remoteIdentityReceipt?.operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
+    remoteIdentityObservedAt: Math.max(0, Number(remoteIdentityReceipt?.observedAt) || 0),
+    remoteIdentityContextCapturedAt: Math.max(0, Number(remoteIdentityReceipt?.contextCapturedAt) || 0),
+    sourceIdentityProvenance: String(remoteIdentityReceipt?.sourceProvenance || ''),
+    accountUid: String(remoteIdentityReceipt?.accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
+    rootPath: normalizeDiskPath(remoteIdentityReceipt?.rootPath || '')
+  };
+  const status = pendingDestructiveMoveRemoteIdentityStatus({
+    ...fields,
+    operationId: String(operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
+    sourcePath: normalizeDiskPath(sourcePath || ''),
+    targetPath: normalizeDiskPath(targetPath || ''),
+    sourceResourceId: String(sourceResourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS)
+  });
+  if (!status.ok) {
+    const error = new Error(`Destructive-move receipt не получил exact provider-observed durable identity binding: ${status.reason}.`);
+    error.code = 'WEBCLIP_REMOTE_IDENTITY_DURABLE_BINDING_INVALID';
+    throw error;
+  }
+  return Object.freeze(fields);
+}
+
 async function checkpointPendingReadMoveIntent(entry, {
   sourcePath = '',
   targetPath = '',
@@ -7972,15 +8059,18 @@ async function checkpointPendingReadMoveIntent(entry, {
   journalAuthority = null
 } = {}) {
   const sourceJournalAuthority = normalizeJournalEntryAuthorityToken(journalAuthority);
-  if (
-    remoteIdentityReceipt?.authority !== WebClipYandexRemoteIdentityAuthority.AUTHORITY
-    || normalizeDiskPath(remoteIdentityReceipt?.path || '') !== normalizeDiskPath(sourcePath || '')
-    || String(remoteIdentityReceipt?.resourceId || '') !== String(sourceResourceId || '')
-  ) {
+  if (normalizeDiskPath(remoteIdentityReceipt?.path || '') !== normalizeDiskPath(sourcePath || '')
+    || String(remoteIdentityReceipt?.resourceId || '') !== String(sourceResourceId || '')) {
     const error = new Error('Destructive read-move receipt требует exact provider-observed remote identity receipt.');
     error.code = 'WEBCLIP_REMOTE_IDENTITY_RECEIPT_REQUIRED';
     throw error;
   }
+  const remoteIdentityFields = pendingDestructiveMoveRemoteIdentityFields(remoteIdentityReceipt, {
+    sourcePath,
+    targetPath,
+    sourceResourceId,
+    operationId
+  });
   const now = Date.now();
   const item = {
     id: makePendingDestructiveMoveId('read-move'),
@@ -7999,12 +8089,7 @@ async function checkpointPendingReadMoveIntent(entry, {
     targetPath: normalizeDiskPath(targetPath || ''),
     sourceResourceId: String(sourceResourceId || entry?.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
     sourcePublicUrl: String(sourcePublicUrl || entry?.publicUrl || '').slice(0, MAX_YANDEX_PUBLIC_URL_CHARS),
-    remoteIdentityAuthority: WebClipYandexRemoteIdentityAuthority.AUTHORITY,
-    remoteIdentityObservedAt: Math.max(0, Number(remoteIdentityReceipt.observedAt) || 0),
-    remoteIdentityContextCapturedAt: Math.max(0, Number(remoteIdentityReceipt.contextCapturedAt) || 0),
-    sourceIdentityProvenance: WebClipYandexRemoteIdentityAuthority.normalizeProvenance(remoteIdentityReceipt.sourceProvenance),
-    accountUid: String(remoteIdentityReceipt.accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
-    rootPath: normalizeDiskPath(remoteIdentityReceipt.rootPath || ''),
+    ...remoteIdentityFields,
     lastError: ''
   };
   if (!item.sourceJournalEntryId || !item.sourcePath || !item.targetPath) {
@@ -8086,15 +8171,18 @@ async function checkpointPendingTrashMoveIntent(entry, {
   journalAuthority = null
 } = {}) {
   const sourceJournalAuthority = normalizeJournalEntryAuthorityToken(journalAuthority);
-  if (
-    remoteIdentityReceipt?.authority !== WebClipYandexRemoteIdentityAuthority.AUTHORITY
-    || normalizeDiskPath(remoteIdentityReceipt?.path || '') !== normalizeDiskPath(sourcePath || '')
-    || String(remoteIdentityReceipt?.resourceId || '') !== String(sourceResourceId || '')
-  ) {
+  if (normalizeDiskPath(remoteIdentityReceipt?.path || '') !== normalizeDiskPath(sourcePath || '')
+    || String(remoteIdentityReceipt?.resourceId || '') !== String(sourceResourceId || '')) {
     const error = new Error('Destructive trash-move receipt требует exact provider-observed remote identity receipt.');
     error.code = 'WEBCLIP_REMOTE_IDENTITY_RECEIPT_REQUIRED';
     throw error;
   }
+  const remoteIdentityFields = pendingDestructiveMoveRemoteIdentityFields(remoteIdentityReceipt, {
+    sourcePath,
+    targetPath,
+    sourceResourceId,
+    operationId
+  });
   const now = Date.now();
   const item = {
     id: makePendingDestructiveMoveId('trash-move'),
@@ -8113,12 +8201,7 @@ async function checkpointPendingTrashMoveIntent(entry, {
     targetPath: normalizeDiskPath(targetPath || ''),
     sourceResourceId: String(sourceResourceId || entry?.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
     sourcePublicUrl: String(sourcePublicUrl || entry?.publicUrl || '').slice(0, MAX_YANDEX_PUBLIC_URL_CHARS),
-    remoteIdentityAuthority: WebClipYandexRemoteIdentityAuthority.AUTHORITY,
-    remoteIdentityObservedAt: Math.max(0, Number(remoteIdentityReceipt.observedAt) || 0),
-    remoteIdentityContextCapturedAt: Math.max(0, Number(remoteIdentityReceipt.contextCapturedAt) || 0),
-    sourceIdentityProvenance: WebClipYandexRemoteIdentityAuthority.normalizeProvenance(remoteIdentityReceipt.sourceProvenance),
-    accountUid: String(remoteIdentityReceipt.accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
-    rootPath: normalizeDiskPath(remoteIdentityReceipt.rootPath || ''),
+    ...remoteIdentityFields,
     lastError: ''
   };
   if (!item.sourceJournalEntryId || !item.sourcePath || !item.targetPath) {
@@ -8223,6 +8306,13 @@ async function markPendingDestructiveMoveAdmitted(id) {
             if (current.phase !== 'prepared') {
               const error = new Error('Destructive-move receipt имеет неизвестную admission phase.');
               error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_PHASE_INVALID';
+              fail(error);
+              return;
+            }
+            const remoteIdentityStatus = pendingDestructiveMoveRemoteIdentityStatus(current);
+            if (!remoteIdentityStatus.ok) {
+              const error = new Error(`Destructive-move durable identity binding устарел до admission: ${remoteIdentityStatus.reason}.`);
+              error.code = 'WEBCLIP_REMOTE_IDENTITY_DURABLE_BINDING_INVALID';
               fail(error);
               return;
             }
@@ -8343,14 +8433,32 @@ async function markPendingDestructiveMoveVerified(id, outcome = {}) {
               fail(error);
               return;
             }
+            if (current.phase !== 'prepared' && current.phase !== 'admitted-unknown') {
+              const error = new Error('Destructive-move receipt имеет недопустимую phase при terminal verification.');
+              error.code = 'WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_PHASE_INVALID_AT_VERIFY';
+              fail(error);
+              return;
+            }
+            const remoteIdentityStatus = pendingDestructiveMoveRemoteIdentityStatus(current);
+            const verifiedPath = normalizeDiskPath(outcome.remotePath || current.targetPath || '');
+            const verifiedResourceId = String(outcome.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS);
+            if (!remoteIdentityStatus.ok
+              || verifiedPath !== normalizeDiskPath(current.targetPath || '')
+              || !verifiedResourceId
+              || verifiedResourceId !== String(current.sourceResourceId || '')) {
+              const error = new Error(`Terminal destructive outcome не сохраняет exact provider-observed identity: ${remoteIdentityStatus.reason || 'target/resource-mismatch'}.`);
+              error.code = 'WEBCLIP_REMOTE_IDENTITY_TERMINAL_BINDING_CONFLICT';
+              fail(error);
+              return;
+            }
             const verifiedAt = Date.now();
             const next = {
               ...current,
               phase: 'remote-verified',
               updatedAt: verifiedAt,
               verifiedAt,
-              verifiedPath: normalizeDiskPath(outcome.remotePath || current.targetPath || ''),
-              verifiedResourceId: String(outcome.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
+              verifiedPath,
+              verifiedResourceId,
               verifiedFilename: String(outcome.filename || '').slice(0, MAX_YANDEX_ITEM_NAME_CHARS),
               verifiedFolder: normalizeDiskPath(outcome.folder || ''),
               verifiedPublicUrl: String(outcome.publicUrl || '').slice(0, MAX_YANDEX_PUBLIC_URL_CHARS),
@@ -8457,6 +8565,7 @@ function pendingDestructiveMoveIsManual(item = {}) {
 function pendingDestructiveMoveManualReceiptForUi(item = {}) {
   if (!pendingDestructiveMoveIsManual(item)) return null;
   const kind = String(item.kind || '');
+  const remoteIdentity = pendingDestructiveMoveRemoteIdentityStatus(item, { requireTerminal: item.phase === 'remote-verified' });
   return Object.freeze({
     id: String(item.id || '').slice(0, MAX_IMPORTED_ENTRY_ID_CHARS),
     kind: kind === 'read-move' || kind === 'trash-move' ? kind : 'unknown',
@@ -8472,6 +8581,12 @@ function pendingDestructiveMoveManualReceiptForUi(item = {}) {
     verifiedResourceId: String(item.verifiedResourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
     rootPath: normalizeDiskPath(String(item.rootPath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
     hasAccountBinding: Boolean(String(item.accountUid || '').trim()),
+    hasProviderIdentityBinding: remoteIdentity.ok,
+    remoteIdentityProblem: remoteIdentity.ok ? '' : remoteIdentity.reason,
+    remoteIdentityObservedAt: Math.max(0, Number(item.remoteIdentityObservedAt) || 0),
+    remoteIdentityContextCapturedAt: Math.max(0, Number(item.remoteIdentityContextCapturedAt) || 0),
+    sourceIdentityProvenance: String(item.sourceIdentityProvenance || '').slice(0, 40),
+    verifiedAt: Math.max(0, Number(item.verifiedAt) || 0),
     updatedAt: Math.max(0, Number(item.updatedAt) || 0),
     manualResolutionAt: Math.max(0, Number(item.manualResolutionAt) || 0),
     manualResolutionTrigger: String(item.manualResolutionTrigger || '').slice(0, 80),
@@ -8700,6 +8815,21 @@ async function reconcilePendingDestructiveMoves(trigger = 'maintenance', maxItem
 
       if (disposition !== 'finalize-local') continue;
 
+      const remoteIdentityStatus = pendingDestructiveMoveRemoteIdentityStatus(item, { requireTerminal: true });
+      if (!remoteIdentityStatus.ok) {
+        const reason = `Verified destructive receipt не содержит exact P0-022 provider identity continuity (${remoteIdentityStatus.reason}); automatic local finalization запрещена.`;
+        await markPendingDestructiveMoveManualResolution(id, reason, trigger);
+        manualResolution += 1;
+        recordOperationStage(operationId, 'recovery-manual', reason, 100, 'partial', {
+          trigger,
+          kind,
+          recoveryState: 'manual-resolution',
+          remoteIdentityProblem: remoteIdentityStatus.reason
+        });
+        await flushOperationLogWrites(operationId).catch(() => {});
+        continue;
+      }
+
       // A reset-superseded verified receipt is history-only and can be retired
       // without touching Journal state. Otherwise, legacy verified receipts that
       // predate the P0-076 cursor cannot automatically patch/delete the current
@@ -8762,6 +8892,7 @@ async function reconcilePendingDestructiveMoves(trigger = 'maintenance', maxItem
         filename: verifiedFilename,
         publicUrl: String(item.verifiedPublicUrl || item.sourcePublicUrl || '').slice(0, MAX_YANDEX_PUBLIC_URL_CHARS),
         resourceId: String(item.verifiedResourceId || item.sourceResourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
+        remoteIdentityProvenance: WebClipYandexRemoteIdentityAuthority.PROVIDER_VERIFIED,
         movedToReadAt: Math.max(0, Number(item.verifiedAt) || 0) || Date.now(),
         readMovePendingAt: 0,
         readMoveSourcePath: '',

@@ -128,6 +128,8 @@ ok(reconcile.includes("item.supersededByJournalReset !== true && !pendingDestruc
 ok(reconcile.includes('Verified legacy destructive receipt не содержит exact P0-076 Journal authority'), 'legacy no-cursor reason is explicit');
 ok(reconcile.includes('legacyJournalAuthority: true'), 'legacy authority backlog is visible in operation evidence');
 ok(reconcile.includes('markPendingDestructiveMoveManualResolution(id, reason, trigger)'), 'admitted unknown becomes durable manual-resolution');
+ok(reconcile.includes('pendingDestructiveMoveRemoteIdentityStatus(item, { requireTerminal: true })'), 'verified restart finalize requires exact durable provider identity continuity');
+ok(reconcile.includes('exact P0-022 provider identity continuity'), 'legacy/incomplete provider receipt is retained for manual resolution');
 ok(reconcile.includes("kind === 'trash-move'"), 'Trash terminal local finalization is kind-specific');
 ok(reconcile.includes('finalizeTrashDeleteFromReceipt(id)'), 'verified Trash resumes local delete only');
 ok(reconcile.includes("item.supersededByJournalReset === true"), 'verified ReadLater reset-superseded history is retired without resurrection');
@@ -137,6 +139,7 @@ ok(reconcile.includes('verifiedFolder'), 'ReadLater restart requires terminal fo
 ok(reconcile.includes('verifiedFilename'), 'ReadLater restart requires terminal filename metadata');
 ok(reconcile.includes('Verified ReadLater receipt не содержит полного terminal local-finalization metadata'), 'legacy/incomplete verified receipt fails closed');
 ok(reconcile.includes("readingMode: 'read'"), 'complete terminal ReadLater receipt restores local read state');
+ok(reconcile.includes('remoteIdentityProvenance: WebClipYandexRemoteIdentityAuthority.PROVIDER_VERIFIED'), 'restart ReadLater finalization preserves provider-verified provenance');
 ok(reconcile.includes('readMovePendingAt: 0'), 'restart finalize clears old entry checkpoint');
 ok(reconcile.includes('countPendingDestructiveMovePhases()'), 'reconcile returns durable backlog truth');
 ok(!reconcile.includes('yandexApi('), 'restart reconciliation performs no Yandex request');
