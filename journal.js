@@ -71,6 +71,7 @@ let pendingDeleteEntry = null;
 let journalDeleteBusy = false;
 let activeDeleteOperationId = '';
 let deleteRetryAction = 'trash';
+let deleteRetryPublicationAction = 'none';
 let pendingMoveReadEntry = null;
 let activeMoveReadOperationId = '';
 let moveReadBusy = false;
@@ -235,6 +236,9 @@ const deleteText = document.getElementById('deleteText');
 const deleteChoices = document.getElementById('deleteChoices');
 const deleteKeepFile = document.getElementById('deleteKeepFile');
 const deleteTrashFile = document.getElementById('deleteTrashFile');
+const deletePublicationChoices = document.getElementById('deletePublicationChoices');
+const deletePreservePublicAccess = document.getElementById('deletePreservePublicAccess');
+const deleteRevokePublicAccess = document.getElementById('deleteRevokePublicAccess');
 const deleteStatus = document.getElementById('deleteStatus');
 const deleteProgress = document.getElementById('deleteProgress');
 const deleteProgressBar = document.getElementById('deleteProgressBar');
@@ -364,10 +368,11 @@ confirmInput.addEventListener('keydown', (event) => {
 
 deleteKeepFile.addEventListener('change', updateDeleteChoiceState);
 deleteTrashFile.addEventListener('change', updateDeleteChoiceState);
+deletePreservePublicAccess.addEventListener('change', updateDeleteChoiceState);
 deleteCancel.addEventListener('click', closeDeleteDialog);
 deleteProceed.addEventListener('click', confirmDeleteEntry);
-deleteRetry.addEventListener('click', () => runDeleteOperation(deleteRetryAction));
-deleteOnlyAfterError.addEventListener('click', () => runDeleteOperation('keep'));
+deleteRetry.addEventListener('click', () => runDeleteOperation(deleteRetryAction, deleteRetryPublicationAction));
+deleteOnlyAfterError.addEventListener('click', () => runDeleteOperation('keep', deleteRetryPublicationAction));
 document.getElementById('copyDeleteOperationId').addEventListener('click', () => copyOperationId(activeDeleteOperationId));
 moveReadClose.addEventListener('click', closeMoveReadProgress);
 document.getElementById('copyMoveReadOperationId').addEventListener('click', () => copyOperationId(activeMoveReadOperationId));
@@ -2725,11 +2730,19 @@ function openDeleteDialog(entry) {
   if (journalDeleteBusy) return;
   pendingDeleteEntry = entry;
   activeDeleteOperationId = '';
+  const hasKnownPublicAccess = entry?.destination === 'yandex' && Boolean(String(entry?.publicUrl || '').trim());
   deleteDialog.className = 'delete-dialog';
-  deleteTitle.textContent = 'Что сделать с файлом на Яндекс Диске?';
-  deleteText.textContent = `Запись: ${entry.title || 'Без названия'}\nФайл при сохранении: ${entry.filename || '—'}\nПуть при сохранении: ${entry.remotePath || 'не указан'}\n\nВыберите один вариант. Без выбора удаление не начнётся.`;
+  deleteTitle.textContent = hasKnownPublicAccess
+    ? 'Что сделать с файлом и публичным доступом?'
+    : 'Что сделать с файлом на Яндекс Диске?';
+  deleteText.textContent = `Запись: ${entry.title || 'Без названия'}\nФайл при сохранении: ${entry.filename || '—'}\nПуть при сохранении: ${entry.remotePath || 'не указан'}\n\n${hasKnownPublicAccess
+    ? 'У файла есть публичная ссылка. Отдельно подтвердите судьбу файла и публичного доступа.'
+    : 'Выберите один вариант. Без выбора удаление не начнётся.'}`;
   deleteKeepFile.checked = false;
   deleteTrashFile.checked = false;
+  deletePreservePublicAccess.checked = false;
+  deleteRevokePublicAccess.checked = false;
+  deletePublicationChoices.classList.toggle('hidden', !hasKnownPublicAccess);
   deleteStatus.textContent = '';
   deleteStatus.className = 'delete-status';
   deleteProceed.disabled = true;
@@ -2737,13 +2750,20 @@ function openDeleteDialog(entry) {
   deleteKeepFile.disabled = false;
   deleteTrashFile.disabled = false;
   deleteChoices.disabled = false;
+  deletePublicationChoices.disabled = false;
   resetDeleteProgressUi();
   deleteBackdrop.classList.remove('hidden');
 }
 
+function pendingDeleteHasKnownPublicAccess() {
+  return pendingDeleteEntry?.destination === 'yandex' && Boolean(String(pendingDeleteEntry?.publicUrl || '').trim());
+}
+
 function updateDeleteChoiceState() {
   if (journalDeleteBusy) return;
-  deleteProceed.disabled = !(deleteKeepFile.checked || deleteTrashFile.checked);
+  const diskChoiceReady = deleteKeepFile.checked || deleteTrashFile.checked;
+  const publicationChoiceReady = !pendingDeleteHasKnownPublicAccess() || deletePreservePublicAccess.checked;
+  deleteProceed.disabled = !(diskChoiceReady && publicationChoiceReady);
   deleteStatus.textContent = '';
   deleteStatus.className = 'delete-status';
   deleteDialog.className = 'delete-dialog';
@@ -2757,6 +2777,9 @@ function closeDeleteDialog() {
   activeDeleteOperationId = '';
   deleteKeepFile.checked = false;
   deleteTrashFile.checked = false;
+  deletePreservePublicAccess.checked = false;
+  deleteRevokePublicAccess.checked = false;
+  deletePublicationChoices.classList.add('hidden');
   deleteStatus.textContent = '';
   deleteStatus.className = 'delete-status';
   resetDeleteProgressUi();
@@ -2775,14 +2798,22 @@ async function confirmDeleteEntry() {
   if (journalDeleteBusy) return;
   const diskAction = deleteTrashFile.checked ? 'trash' : deleteKeepFile.checked ? 'keep' : '';
   if (!diskAction) {
-    deleteStatus.textContent = 'Сначала выберите один из двух вариантов.';
+    deleteStatus.textContent = 'Сначала выберите судьбу файла.';
     deleteStatus.className = 'delete-status error';
     return;
   }
-  await runDeleteOperation(diskAction);
+  const publicationAction = pendingDeleteHasKnownPublicAccess()
+    ? (deletePreservePublicAccess.checked ? 'preserve' : '')
+    : 'none';
+  if (!publicationAction) {
+    deleteStatus.textContent = 'Подтвердите, что публичный доступ по ссылке будет сохранён, или отмените удаление.';
+    deleteStatus.className = 'delete-status error';
+    return;
+  }
+  await runDeleteOperation(diskAction, publicationAction);
 }
 
-async function runDeleteOperation(diskAction) {
+async function runDeleteOperation(diskAction, publicationAction = 'none') {
   const entry = pendingDeleteEntry;
   if (!entry?.id || journalDeleteBusy) return;
   journalDeleteBusy = true;
@@ -2797,6 +2828,7 @@ async function runDeleteOperation(diskAction) {
   deleteKeepFile.disabled = true;
   deleteTrashFile.disabled = true;
   deleteChoices.disabled = true;
+  deletePublicationChoices.disabled = true;
   deleteRetry.classList.add('hidden');
   deleteOnlyAfterError.classList.add('hidden');
   deleteProceed.classList.add('hidden');
@@ -2813,7 +2845,7 @@ async function runDeleteOperation(diskAction) {
 
   try {
     const result = await chrome.runtime.sendMessage({
-      type: 'WEBCLIP_JOURNAL_DELETE', id: entry.id, diskAction, operationId: activeDeleteOperationId
+      type: 'WEBCLIP_JOURNAL_DELETE', id: entry.id, diskAction, publicationAction, operationId: activeDeleteOperationId
     });
     requireOk(result);
     const completedOperationId = activeDeleteOperationId;
@@ -2822,9 +2854,12 @@ async function runDeleteOperation(diskAction) {
     activeDeleteOperationId = '';
     deleteBackdrop.classList.add('hidden');
     pendingDeleteEntry = null;
-    setStatus(diskAction === 'trash'
+    const publicationNotice = result.publicationOutcome === 'preserved-by-user'
+      ? ' Публичный доступ по ссылке сохранён по вашему явному выбору.'
+      : '';
+    setStatus((diskAction === 'trash'
       ? `Запись удалена. Файл перемещён на Яндекс Диске в: ${result.trashPath || 'Trash'} · operationId: ${completedOperationId}`
-      : `Запись удалена. Файл оставлен на Яндекс Диске. · operationId: ${completedOperationId}`, 'ok');
+      : `Запись удалена. Файл оставлен на Яндекс Диске. · operationId: ${completedOperationId}`) + publicationNotice, 'ok');
     await loadJournal();
   } catch (error) {
     journalDeleteBusy = false;
@@ -2837,8 +2872,10 @@ async function runDeleteOperation(diskAction) {
     deleteKeepFile.disabled = false;
     deleteTrashFile.disabled = false;
     deleteChoices.disabled = false;
+    deletePublicationChoices.disabled = false;
     deleteProceed.classList.add('hidden');
     deleteRetryAction = diskAction;
+    deleteRetryPublicationAction = publicationAction;
     deleteRetry.textContent = 'Повторить';
     deleteRetry.classList.remove('hidden');
     if (diskAction === 'trash') deleteOnlyAfterError.classList.remove('hidden');
