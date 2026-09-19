@@ -117,6 +117,7 @@ eq((captureSource.match(/readYandexAuthState\(\)/g) || []).length, 1, 'capture u
 ok(captureSource.includes('accountUid: yandexAuth.account?.uid'), 'capture requires the account from the same auth snapshot');
 ok(captureSource.includes('rootPath: yandexConfig.rootPath'), 'capture takes root from the same config snapshot');
 ok(captureSource.includes('createPublicLinks: yandexConfig.createPublicLinks !== false'), 'capture takes publication policy from the same config snapshot');
+ok(!captureSource.includes('chrome.storage.'), 'captured secret context is not written to storage');
 
 const recoverStart = worker.indexOf('async function recoverPendingRemoteSaves(');
 const recoverEnd = worker.indexOf('\n\nasync function listStalePendingRemoteSaves(', recoverStart);
@@ -149,5 +150,6 @@ ok(apiSource.includes('options.operationContext'), 'Yandex API accepts captured 
 ok(apiSource.includes('validateOperationContext(options.operationContext).accessToken'), 'Yandex API selects token from validated context');
 ok(apiSource.includes(': await getValidYandexAccessToken()'), 'uncovered callers retain bounded compatibility fallback');
 ok(apiSource.includes('sanitizeOperationLogValue(options.query || {})'), 'request log sanitizes query only, not secret context');
+ok(!apiSource.includes('sanitizeOperationLogValue(options)'), 'request log never serializes the full secret-bearing options object');
 
 console.log(`P0-074 Yandex recovery operation context: PASS ${checks} checks`);
