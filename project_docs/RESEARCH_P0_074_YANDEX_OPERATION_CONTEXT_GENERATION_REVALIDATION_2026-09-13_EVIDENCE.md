@@ -320,3 +320,58 @@ Research coverage remains complete in the project-wide sense, but critical closu
 Current release readiness remains explicitly `NOT READY`; target `0.9.9` is still WIP and manifest remains `0.9.8` at the reviewed baseline.
 
 This research tranche does not authorize or perform build, tag, deploy, publication, or release.
+
+
+## Implementation progress — 2026-09-19
+
+Canonical starting point for this bounded implementation tranche:
+
+`54275d23bfe09cd8c2ea7a29af4650bafdfa1ddd`
+
+This tranche implements immutable live-operation context for the P0-073 restart/maintenance remote-save recovery path without claiming repository-wide P0-074 closure:
+
+- recovery captures one auth/config snapshot before processing the bounded queue;
+- the memory-only context contains the exact access token, account UID, normalized root path, publication-policy value, and capture timestamp;
+- the context object is frozen and is never written to a durable checkpoint, operation log, or evidence artifact;
+- the checkpoint account/root binding must match the captured context before the target-object read;
+- the target metadata read receives the captured context, so a later global reconnect cannot silently select another account's token;
+- publication requires a second capability proof against the same captured context and fails closed when publication was disabled in that snapshot;
+- every read, publish, and poll request inside the covered publication helper receives the same context;
+- uncovered Yandex callers retain the current compatibility fallback and therefore remain outside this tranche's closure claim.
+
+Deterministic production regression:
+
+`project_tools/test_p0_074_yandex_recovery_operation_context.js`
+
+Local candidate result:
+
+`P0-074 Yandex recovery operation context: PASS 45 checks`
+
+The regression executes the source-extracted production authority and covers immutable capture, account/root mismatch, global A -> B token/account/root mutation after capture, missing/oversized fields, publication-policy denial, one-snapshot capture, request-helper propagation, source ordering, and the absence of mutable global token/account rereads from the covered recovery path.
+
+### Remaining boundary
+
+P0-074 remains `ACTIVE / IMPLEMENTATION-IN-PROGRESS`. This bounded tranche does not yet provide:
+
+- explicit auth/config/publication generation counters or compatible credential-rotation semantics;
+- immutable context propagation through upload, ReadLater, Trash, backup, and every other long-running Yandex path;
+- durable restart authority capable of reconstructing a secret-free equivalent context across browser sessions;
+- authorized isolated two-account real-Yandex E2E.
+
+No Yandex credentials were added or used. The manifest remains `0.9.8`; release readiness remains `NOT READY`. No build, tag, GitHub Release, or release decision is implied.
+
+P1-231 exact-generation evidence must be synchronized to the final runtime-byte candidate before merge.
+
+
+### Exact-generation CI receipt — 2026-09-19
+
+The first fully green candidate containing the bounded P0-074 recovery context and synchronized P1-231 direct goldens was:
+
+- exact head: `db82584bc37270b85f8c4d73ce5846e7baaed9d8`;
+- Repository Integrity: run `35415090343`, conclusion `success`;
+- deterministic P0-074 production authority regression: `PASS 48 checks`;
+- exact runtime/package fingerprint: `sha256:2788f0027579edb9307e690948888b59e59eede72136b4e8df405c6875f0d79a`;
+- package topology: unchanged at 34 current root package files;
+- manifest: unchanged at `0.9.8`.
+
+This is deterministic implementation-progress evidence, not authorized two-account Yandex closure. P0-074 remains `ACTIVE`; release readiness remains `NOT READY`.

@@ -79,6 +79,92 @@ globalThis.WebClipYandexRecoveryNamespace = (() => {
   });
 })();
 
+// P0-074 bounded live-operation authority. Secrets remain memory-only while
+// every request in the covered recovery operation uses the same captured
+// token/account/root/publication-policy snapshot.
+globalThis.WebClipYandexOperationContext = (() => {
+  const MAX_ACCESS_TOKEN_CHARS = 16 * 1024;
+  const MAX_ACCOUNT_UID_CHARS = 1024;
+  const MAX_PATH_CHARS = 4096;
+
+  function fail(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    throw error;
+  }
+
+  function normalizeAccountUid(value) {
+    return String(value || '').trim().slice(0, MAX_ACCOUNT_UID_CHARS);
+  }
+
+  function normalizePath(value) {
+    let path = String(value || '').trim().slice(0, MAX_PATH_CHARS).replace(/\\/g, '/').replace(/^disk:/i, '');
+    if (!path) return '';
+    if (!path.startsWith('/')) path = `/${path}`;
+    const stack = [];
+    for (const segment of path.split('/')) {
+      if (!segment || segment === '.') continue;
+      if (segment === '..') {
+        if (stack.length) stack.pop();
+        continue;
+      }
+      stack.push(segment);
+    }
+    return `/${stack.join('/')}` || '/';
+  }
+
+  function validateOperationContext(value) {
+    const accessToken = String(value?.accessToken || '').trim();
+    const accountUid = normalizeAccountUid(value?.accountUid);
+    const rootPath = normalizePath(value?.rootPath);
+    const capturedAt = Number(value?.capturedAt || 0);
+    const createPublicLinks = value?.createPublicLinks;
+    if (!accessToken || accessToken.length > MAX_ACCESS_TOKEN_CHARS) {
+      fail('YANDEX_OPERATION_CONTEXT_TOKEN_INVALID', 'Контекст операции не содержит допустимый OAuth-токен Яндекс Диска.');
+    }
+    if (!accountUid) {
+      fail('YANDEX_OPERATION_CONTEXT_ACCOUNT_UNKNOWN', 'Контекст операции не содержит идентификатор аккаунта Яндекс Диска.');
+    }
+    if (!rootPath) {
+      fail('YANDEX_OPERATION_CONTEXT_ROOT_UNKNOWN', 'Контекст операции не содержит корневой каталог Яндекс Диска.');
+    }
+    if (!Number.isFinite(capturedAt) || capturedAt <= 0) {
+      fail('YANDEX_OPERATION_CONTEXT_CAPTURE_INVALID', 'Контекст операции не содержит допустимое время фиксации.');
+    }
+    if (typeof createPublicLinks !== 'boolean') {
+      fail('YANDEX_OPERATION_CONTEXT_PUBLICATION_INVALID', 'Контекст операции не содержит явную настройку публикации.');
+    }
+    return Object.freeze({
+      accessToken,
+      accountUid,
+      rootPath,
+      createPublicLinks,
+      capturedAt
+    });
+  }
+
+  function proveRecoveryContext({ context, binding, requiresPublication = false } = {}) {
+    const proven = validateOperationContext(context);
+    const boundAccountUid = normalizeAccountUid(binding?.accountUid);
+    const boundRootPath = normalizePath(binding?.rootPath);
+    if (!boundAccountUid || proven.accountUid !== boundAccountUid) {
+      fail('YANDEX_OPERATION_CONTEXT_ACCOUNT_MISMATCH', 'Контекст операции не совпадает с аккаунтом recovery-checkpoint.');
+    }
+    if (!boundRootPath || proven.rootPath !== boundRootPath) {
+      fail('YANDEX_OPERATION_CONTEXT_ROOT_MISMATCH', 'Контекст операции не совпадает с корневым каталогом recovery-checkpoint.');
+    }
+    if (requiresPublication && !proven.createPublicLinks) {
+      fail('YANDEX_OPERATION_CONTEXT_PUBLICATION_DISABLED', 'Публикация запрещена зафиксированными настройками операции.');
+    }
+    return proven;
+  }
+
+  return Object.freeze({
+    validateOperationContext,
+    proveRecoveryContext
+  });
+})();
+
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
 const YANDEX_API_BASE = 'https://cloud-api.yandex.net/v1/disk';
 const YANDEX_OAUTH_AUTHORIZE = 'https://oauth.yandex.ru/authorize';
@@ -5553,10 +5639,11 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
   let stale = 0;
   let cancelled = 0;
   let authAvailable = true;
-  let currentAccountUid = '';
+  let operationContext = null;
   try {
-    await getValidYandexAccessToken();
-    currentAccountUid = await getCurrentYandexAccountUid();
+    // Replace the legacy getValidYandexAccessToken() preflight with one
+    // single auth/config snapshot that all covered requests reuse.
+    operationContext = await captureCurrentYandexOperationContext();
   } catch (_) {
     authAvailable = false;
   }
@@ -5587,7 +5674,11 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
         }
         const namespace = WebClipYandexRecoveryNamespace.proveRecoveryNamespace({
           receipt: current,
-          currentAccountUid
+          currentAccountUid: operationContext?.accountUid
+        });
+        const recoveryContext = WebClipYandexOperationContext.proveRecoveryContext({
+          context: operationContext,
+          binding: namespace
         });
         const remotePath = namespace.remotePath;
         const remainingBeforeRead = deadline - Date.now();
@@ -5599,7 +5690,8 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
           method: 'GET',
           query: { path: remotePath, fields: 'name,path,type,size,public_url,resource_id' },
           timeoutMs: Math.max(1_000, Math.min(15_000, remainingBeforeRead)),
-          operationId: String(current.operationId || '')
+          operationId: String(current.operationId || ''),
+          operationContext: recoveryContext
         });
         if (metadata?.type !== 'file') throw new Error('Удалённый файл из recovery-checkpoint не найден как файл.');
         const expectedBytes = requirePositiveByteSize(current.expectedPdfBytes, 'Размер PDF в recovery-checkpoint');
@@ -5610,7 +5702,12 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
             deferred += 1;
             continue;
           }
-          publicUrl = await ensureYandexPublicUrl(remotePath, String(current.operationId || ''), deadline);
+          const publicationContext = WebClipYandexOperationContext.proveRecoveryContext({
+            context: recoveryContext,
+            binding: namespace,
+            requiresPublication: true
+          });
+          publicUrl = await ensureYandexPublicUrl(remotePath, String(current.operationId || ''), deadline, publicationContext);
         }
         current = await markPendingRemoteSaveVerified(id, {
           publicUrl,
@@ -13249,6 +13346,27 @@ async function getValidYandexAccessToken() {
   return yandexAuth.accessToken;
 }
 
+async function captureCurrentYandexOperationContext() {
+  const { auth: yandexAuth, yandexConfig = {} } = await readYandexAuthState();
+  if (!yandexAuth?.accessToken) {
+    const error = new Error('Яндекс Диск не подключён. Невозможно зафиксировать контекст операции.');
+    error.code = 'YANDEX_OPERATION_CONTEXT_AUTH_REQUIRED';
+    throw error;
+  }
+  if (yandexAuth.expiresAt && yandexAuth.expiresAt <= Date.now() + 60_000) {
+    const error = new Error('Срок действия OAuth-токена истёк. Невозможно зафиксировать контекст операции.');
+    error.code = 'YANDEX_OPERATION_CONTEXT_TOKEN_EXPIRED';
+    throw error;
+  }
+  return WebClipYandexOperationContext.validateOperationContext({
+    accessToken: yandexAuth.accessToken,
+    accountUid: yandexAuth.account?.uid,
+    rootPath: yandexConfig.rootPath,
+    createPublicLinks: yandexConfig.createPublicLinks !== false,
+    capturedAt: Date.now()
+  });
+}
+
 async function testYandexConnection() {
   const info = await yandexApi('');
   const account = extractDiskAccount(info);
@@ -13307,6 +13425,7 @@ async function getCurrentYandexAccountUid(operationId = '') {
 }
 
 async function ensureYandexPublicUrl(remotePath, operationId = '', outerDeadlineAt = 0) {
+  const operationContext = arguments.length > 3 ? arguments[3] : null;
   const localDeadline = Date.now() + 45_000;
   const requestedDeadline = Math.max(0, Number(outerDeadlineAt) || 0);
   const deadline = requestedDeadline > Date.now() ? Math.min(localDeadline, requestedDeadline) : localDeadline;
@@ -13324,7 +13443,8 @@ async function ensureYandexPublicUrl(remotePath, operationId = '', outerDeadline
       method: 'GET',
       query: { path: remotePath, fields: 'type,public_url' },
       timeoutMs: timeoutForRequest(10_000),
-      operationId
+      operationId,
+      operationContext
     });
     return normalizeYandexPublicUrlFromApi(data?.public_url || '');
   };
@@ -13338,7 +13458,8 @@ async function ensureYandexPublicUrl(remotePath, operationId = '', outerDeadline
       method: 'PUT',
       query: { path: remotePath },
       timeoutMs: timeoutForRequest(15_000),
-      operationId
+      operationId,
+      operationContext
     });
   } catch (error) {
     publishError = error;
@@ -13533,7 +13654,9 @@ async function yandexApi(endpoint, options = {}, allowRetry = false) {
   }
   let token;
   try {
-    token = await getValidYandexAccessToken();
+    token = options.operationContext
+      ? WebClipYandexOperationContext.validateOperationContext(options.operationContext).accessToken
+      : await getValidYandexAccessToken();
   } catch (error) {
     if (operationId) {
       appendOperationLogEvent(operationId, {
