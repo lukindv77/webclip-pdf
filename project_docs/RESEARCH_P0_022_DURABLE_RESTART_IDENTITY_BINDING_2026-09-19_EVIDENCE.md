@@ -70,6 +70,8 @@ Exact local source identities before PR:
 - restart regression SHA-256: `829697fa33db457d8f71fe9b44328f2f26cac043c8a6677823dfa00834901913`;
 - restart regression Git blob: `6bce361460bf5271282220d3632d906012641276`.
 
+The first PR workflow event stopped at the PR metadata contract before syntax or deterministic tests because the initial body mentioned adjacent owners as contextual prose. The body was narrowed to the actual declared owners before the next candidate commit; that run is not implementation evidence.
+
 ## Closure boundary
 
 This tranche does not claim P0-022 closure. The following remain open:
