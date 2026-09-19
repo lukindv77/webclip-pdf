@@ -165,6 +165,119 @@ globalThis.WebClipYandexOperationContext = (() => {
   });
 })();
 
+// P0-022 destructive remote-object authority. Journal locators can guide a
+// bounded lookup, but only current private Yandex metadata observed inside one
+// immutable operation context can authorize a physical mutation.
+globalThis.WebClipYandexRemoteIdentityAuthority = (() => {
+  const AUTHORITY = 'yandex-api-observed-resource';
+  const PROVIDER_VERIFIED = 'provider-verified';
+  const IMPORTED_UNVERIFIED = 'imported-unverified';
+  const LEGACY_UNVERIFIED = 'legacy-unverified';
+  const MAX_OPERATION_ID_CHARS = 180;
+  const MAX_RESOURCE_ID_CHARS = 1024;
+  const MAX_PUBLIC_URL_CHARS = 8192;
+
+  function fail(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    throw error;
+  }
+
+  function normalizeProvenance(value, { imported = false } = {}) {
+    if (imported) return IMPORTED_UNVERIFIED;
+    if (value === PROVIDER_VERIFIED) return PROVIDER_VERIFIED;
+    return value === IMPORTED_UNVERIFIED ? IMPORTED_UNVERIFIED : LEGACY_UNVERIFIED;
+  }
+
+  function normalizeResourceId(value) {
+    return String(value || '').trim().slice(0, MAX_RESOURCE_ID_CHARS);
+  }
+
+  function normalizePublicUrl(value) {
+    return String(value || '').trim().slice(0, MAX_PUBLIC_URL_CHARS);
+  }
+
+  function createObservedReceipt({ entry = {}, metadata = {}, operationContext, operationId = '', observedAt = Date.now() } = {}) {
+    const context = WebClipYandexOperationContext.validateOperationContext(operationContext);
+    const type = String(metadata?.type || '').trim();
+    const resourceId = normalizeResourceId(metadata?.resource_id);
+    const path = WebClipYandexRecoveryNamespace.normalizePath(metadata?.path);
+    const publicUrl = normalizePublicUrl(metadata?.public_url);
+    const provenance = normalizeProvenance(entry?.remoteIdentityProvenance);
+    const entryAccountUid = String(entry?.accountUid || '').trim();
+    const entryRootPath = WebClipYandexRecoveryNamespace.normalizePath(entry?.rootPath);
+    const entryResourceId = normalizeResourceId(entry?.resourceId);
+    const entryPublicUrl = normalizePublicUrl(entry?.publicUrl);
+
+    if (type !== 'file') fail('WEBCLIP_REMOTE_IDENTITY_FILE_REQUIRED', 'Яндекс Диск не подтвердил тип удалённого объекта как файл.');
+    if (!resourceId) fail('WEBCLIP_REMOTE_IDENTITY_RESOURCE_REQUIRED', 'Яндекс Диск не вернул exact resource_id удалённого файла.');
+    if (!path || !WebClipYandexRecoveryNamespace.isPathWithinRoot(path, context.rootPath)) {
+      fail('WEBCLIP_REMOTE_IDENTITY_PATH_OUTSIDE_ROOT', 'Наблюдаемый удалённый файл находится вне зафиксированного корневого каталога.');
+    }
+    if (!Number.isFinite(Number(observedAt)) || Number(observedAt) <= 0) {
+      fail('WEBCLIP_REMOTE_IDENTITY_OBSERVATION_INVALID', 'Наблюдение удалённого объекта не имеет допустимого времени.');
+    }
+    if (entryAccountUid && entryAccountUid !== context.accountUid) {
+      fail('WEBCLIP_REMOTE_IDENTITY_ENTRY_ACCOUNT_CONFLICT', 'Аккаунт записи журнала конфликтует с зафиксированным контекстом операции.');
+    }
+    if (entryRootPath && entryRootPath !== context.rootPath) {
+      fail('WEBCLIP_REMOTE_IDENTITY_ENTRY_ROOT_CONFLICT', 'Корневой каталог записи журнала конфликтует с зафиксированным контекстом операции.');
+    }
+    if (provenance === PROVIDER_VERIFIED) {
+      if (!entryResourceId || entryResourceId !== resourceId) {
+        fail('WEBCLIP_REMOTE_IDENTITY_VERIFIED_RESOURCE_CONFLICT', 'Provider-verified resource_id записи конфликтует с текущим объектом Яндекс Диска.');
+      }
+      if (entryPublicUrl && publicUrl && entryPublicUrl !== publicUrl) {
+        fail('WEBCLIP_REMOTE_IDENTITY_VERIFIED_PUBLIC_CONFLICT', 'Provider-verified public_url записи конфликтует с текущим объектом Яндекс Диска.');
+      }
+    }
+
+    return Object.freeze({
+      authority: AUTHORITY,
+      operationId: String(operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
+      accountUid: context.accountUid,
+      rootPath: context.rootPath,
+      resourceId,
+      path,
+      publicUrl,
+      observedAt: Number(observedAt),
+      contextCapturedAt: context.capturedAt,
+      sourceProvenance: provenance
+    });
+  }
+
+  function assertDestructiveCommand({ receipt, operationContext, sourcePath = '', metadata = {} } = {}) {
+    const context = WebClipYandexOperationContext.validateOperationContext(operationContext);
+    if (!receipt || receipt.authority !== AUTHORITY) {
+      fail('WEBCLIP_REMOTE_IDENTITY_RECEIPT_REQUIRED', 'Destructive-команда требует current provider-observed remote identity receipt.');
+    }
+    const receiptPath = WebClipYandexRecoveryNamespace.normalizePath(receipt.path);
+    const commandPath = WebClipYandexRecoveryNamespace.normalizePath(sourcePath);
+    const observedPath = WebClipYandexRecoveryNamespace.normalizePath(metadata?.path);
+    const observedResourceId = normalizeResourceId(metadata?.resource_id);
+    if (receipt.accountUid !== context.accountUid || receipt.rootPath !== context.rootPath || receipt.contextCapturedAt !== context.capturedAt) {
+      fail('WEBCLIP_REMOTE_IDENTITY_CONTEXT_RETARGET', 'Remote identity receipt не принадлежит текущему immutable-контексту операции.');
+    }
+    if (!commandPath || commandPath !== receiptPath) {
+      fail('WEBCLIP_REMOTE_IDENTITY_PATH_RETARGET', 'Destructive-команда попыталась изменить target после provider observation.');
+    }
+    if (String(metadata?.type || '') !== 'file' || observedPath !== receiptPath || observedResourceId !== receipt.resourceId) {
+      fail('WEBCLIP_REMOTE_IDENTITY_REVALIDATION_CONFLICT', 'Удалённый объект изменился после provider observation; destructive admission запрещён.');
+    }
+    return receipt;
+  }
+
+  return Object.freeze({
+    AUTHORITY,
+    PROVIDER_VERIFIED,
+    IMPORTED_UNVERIFIED,
+    LEGACY_UNVERIFIED,
+    normalizeProvenance,
+    createObservedReceipt,
+    assertDestructiveCommand
+  });
+})();
+
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
 const YANDEX_API_BASE = 'https://cloud-api.yandex.net/v1/disk';
 const YANDEX_OAUTH_AUTHORIZE = 'https://oauth.yandex.ru/authorize';
@@ -5171,6 +5284,7 @@ function normalizePendingJournalAppendData(data = {}) {
     resourceId: String(data.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
     accountUid: String(data.accountUid || '').trim().slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
     rootPath: normalizeDiskPath(String(data.rootPath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
+    remoteIdentityProvenance: WebClipYandexRemoteIdentityAuthority.normalizeProvenance(data.remoteIdentityProvenance),
     journalEntryId,
     journalCreatedAt: createdAt,
     operationId: String(data.operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
@@ -5491,7 +5605,7 @@ async function markPendingRemoteSaveVerified(id, { publicUrl = '', resourceId = 
   try {
     return await runIndexedDbTransactionBounded(db, JOURNAL_PENDING_REMOTE_STORE, 'readwrite', 'Подтверждение checkpoint удалённого сохранения', ({ store, setResult, fail }) => {
       const pending = store(); const req = pending.get(key);
-      req.onsuccess = () => { try { const current = req.result; if (!current?.data) { fail(new Error('Durable checkpoint удалённого сохранения не найден перед финализацией.')); return; } const result = { ...current, phase: 'remote-verified', updatedAt: Date.now(), lastError: '', data: normalizePendingJournalAppendData({ ...current.data, publicUrl: String(publicUrl || current.data.publicUrl || ''), resourceId: String(resourceId || current.data.resourceId || ''), journalEntryId: key, journalCreatedAt: current.data.journalCreatedAt }) }; pending.put(result); setResult(result); } catch (e) { fail(e); } };
+      req.onsuccess = () => { try { const current = req.result; if (!current?.data) { fail(new Error('Durable checkpoint удалённого сохранения не найден перед финализацией.')); return; } const result = { ...current, phase: 'remote-verified', updatedAt: Date.now(), lastError: '', data: normalizePendingJournalAppendData({ ...current.data, publicUrl: String(publicUrl || current.data.publicUrl || ''), resourceId: String(resourceId || current.data.resourceId || ''), remoteIdentityProvenance: WebClipYandexRemoteIdentityAuthority.PROVIDER_VERIFIED, journalEntryId: key, journalCreatedAt: current.data.journalCreatedAt }) }; pending.put(result); setResult(result); } catch (e) { fail(e); } };
       req.onerror = () => fail(req.error || new Error('Не удалось прочитать checkpoint удалённого сохранения.'));
     }, RECOVERY_IDB_TX_TIMEOUT_MS);
   } finally { db.close(); }
@@ -6398,7 +6512,7 @@ async function reconcilePendingLocalDownloads(trigger = 'maintenance', maxItems 
   return { trigger, checked: items.length, completed, interrupted, rebound, pending: pendingCount, unknown, expired, failed };
 }
 
-async function appendJournalEntry({ destination, filename, remotePath = '', folder = '', publicUrl = '', resourceId = '', accountUid = '', rootPath = '', meta = {}, journalEntryId = '', journalCreatedAt = 0, operationId = '', sourceReceipt = null }, options = {}) {
+async function appendJournalEntry({ destination, filename, remotePath = '', folder = '', publicUrl = '', resourceId = '', accountUid = '', rootPath = '', remoteIdentityProvenance = '', meta = {}, journalEntryId = '', journalCreatedAt = 0, operationId = '', sourceReceipt = null }, options = {}) {
   const selectionSnapshot = sanitizeSelectionSnapshot(meta.selectionSnapshot);
   const createdAt = Number(journalCreatedAt || 0) > 0 ? Number(journalCreatedAt) : Date.now();
   const id = String(journalEntryId || '').trim()
@@ -6421,6 +6535,9 @@ async function appendJournalEntry({ destination, filename, remotePath = '', fold
     remotePath: String(remotePath || ''), folder: String(folder || ''), publicUrl: String(publicUrl || ''), resourceId: String(resourceId || ''),
     accountUid: String(accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
     rootPath: normalizeDiskPath(String(rootPath || '').slice(0, MAX_IMPORTED_PATH_CHARS)),
+    remoteIdentityProvenance: destination === 'yandex'
+      ? WebClipYandexRemoteIdentityAuthority.normalizeProvenance(remoteIdentityProvenance)
+      : WebClipYandexRemoteIdentityAuthority.LEGACY_UNVERIFIED,
     hostname: String(meta.hostname || ''), siteAddress: String(meta.siteAddress || ''),
     url: String(meta.url || ''), urlKey: normalizeJournalUrl(meta.url || ''), siteKey: getJournalSiteKey(meta.url || meta.hostname || ''),
     title: String(meta.title || ''),
@@ -7326,39 +7443,46 @@ async function deleteJournalEntryRecordOnly(id) {
   return entry;
 }
 
-async function findYandexFileForJournalEntry(entry, operationId = '') {
+async function findYandexFileForJournalEntry(entry, operationId = '', operationContext = null) {
   const expectedResourceId = String(entry?.resourceId || '').trim();
   const expectedPublicUrl = String(entry?.publicUrl || '').trim();
   const expectedAccountUid = String(entry?.accountUid || '').trim();
   const expectedRootPath = normalizeDiskPath(entry?.rootPath || '');
   const storedPath = normalizeDiskPath(entry?.remotePath || '');
   const filename = String(entry?.filename || '').trim();
+  const provenance = WebClipYandexRemoteIdentityAuthority.normalizeProvenance(entry?.remoteIdentityProvenance);
   const locateStartedAt = Date.now();
   const locateDeadline = locateStartedAt + 45_000;
   let storedPathMissing = false;
 
-  const config = await getYandexConfig();
-  const currentRootPath = normalizeDiskPath(config.rootPath || '');
+  const context = operationContext
+    ? WebClipYandexOperationContext.validateOperationContext(operationContext)
+    : await captureCurrentYandexOperationContext();
+  const currentRootPath = normalizeDiskPath(context.rootPath || '');
   if (expectedRootPath && currentRootPath && expectedRootPath !== currentRootPath) {
     const error = new Error(`Запись журнала относится к корневой папке ${expectedRootPath}, а сейчас выбрана ${currentRootPath}. Операция остановлена без изменения файла и журнала.`);
     error.code = 'YANDEX_ROOT_PATH_MISMATCH';
     throw error;
   }
-  if (expectedAccountUid) {
-    const currentAccountUid = await getCurrentYandexAccountUid(operationId);
-    if (currentAccountUid !== expectedAccountUid) {
-      const error = new Error('Запись журнала относится к другому аккаунту Яндекс Диска. Операция остановлена без изменения файла и журнала.');
-      error.code = 'YANDEX_ACCOUNT_MISMATCH';
-      throw error;
-    }
+  if (expectedAccountUid && context.accountUid !== expectedAccountUid) {
+    const error = new Error('Запись журнала относится к другому аккаунту Яндекс Диска. Операция остановлена без изменения файла и журнала.');
+    error.code = 'YANDEX_ACCOUNT_MISMATCH';
+    throw error;
   }
 
   const remainingLocateMs = () => Math.max(0, locateDeadline - Date.now());
   const requestTimeoutMs = (cap = 8_000) => Math.max(1_000, Math.min(cap, remainingLocateMs()));
-  const matchesKnownIdentity = (item) => {
+  const matchesKnownIdentity = (item, { discoveryByHint = false } = {}) => {
     if (!item || (item.type && item.type !== 'file')) return false;
     const itemId = item.resource_id ? normalizeYandexResourceIdFromApi(item.resource_id) : '';
     const itemPublic = item.public_url ? normalizeYandexPublicUrlFromApi(item.public_url) : '';
+    if (provenance !== WebClipYandexRemoteIdentityAuthority.PROVIDER_VERIFIED) {
+      if (!discoveryByHint) return true;
+      return Boolean(
+        (expectedResourceId && itemId && itemId === expectedResourceId)
+        || (expectedPublicUrl && itemPublic && itemPublic === expectedPublicUrl)
+      );
+    }
     if (expectedResourceId) {
       if (itemId) {
         if (itemId !== expectedResourceId) return false;
@@ -7373,6 +7497,16 @@ async function findYandexFileForJournalEntry(entry, operationId = '') {
     if (expectedPublicUrl) return Boolean(itemPublic && itemPublic === expectedPublicUrl);
     return true;
   };
+  const withObservedReceipt = (item) => ({
+    ...item,
+    remoteIdentityReceipt: WebClipYandexRemoteIdentityAuthority.createObservedReceipt({
+      entry,
+      metadata: item,
+      operationContext: context,
+      operationId,
+      observedAt: Date.now()
+    })
+  });
 
   if (storedPath) {
     emitJournalOperationProgress(operationId, 'locate', 'Проверяем сохранённый путь файла на Яндекс Диске…', 12, 'running', { storedPath });
@@ -7381,11 +7515,12 @@ async function findYandexFileForJournalEntry(entry, operationId = '') {
         method: 'GET',
         timeoutMs: requestTimeoutMs(8_000),
         query: { path: storedPath, fields: 'name,path,type,size,public_url,resource_id' },
-        operationId
+        operationId,
+        operationContext: context
       }, false);
       if (direct?.type === 'file' && matchesKnownIdentity(direct)) {
         emitJournalOperationProgress(operationId, 'locate', 'Файл найден по сохранённому пути.', 24, 'running', { sourcePath: direct?.path || storedPath });
-        return direct;
+        return withObservedReceipt(direct);
       }
     } catch (error) {
       if (Number(error?.status) === 404) {
@@ -7412,12 +7547,12 @@ async function findYandexFileForJournalEntry(entry, operationId = '') {
     if (!normalized || normalized === storedPath || candidates.some((item) => item.path === normalized)) return;
     candidates.push({ path: normalized, kind });
   };
-  if (filename && config.rootPath) {
+  if (filename && currentRootPath) {
     const siteSegments = getSiteFolderSegments(entry?.hostname || hostnameFromUrl(entry?.url));
     if (entry?.readMoveTargetPath) pushCandidate(entry.readMoveTargetPath, 'pending-move-target');
     if (entry?.readMoveSourcePath) pushCandidate(entry.readMoveSourcePath, 'pending-move-source');
-    pushCandidate(joinDiskPath(config.rootPath, YANDEX_UPLOAD_DIR, ...siteSegments, filename), 'Upload');
-    pushCandidate(joinDiskPath(config.rootPath, YANDEX_READ_LATER_DIR, ...siteSegments, filename), 'ReadmeLater');
+    pushCandidate(joinDiskPath(currentRootPath, YANDEX_UPLOAD_DIR, ...siteSegments, filename), 'Upload');
+    pushCandidate(joinDiskPath(currentRootPath, YANDEX_READ_LATER_DIR, ...siteSegments, filename), 'ReadmeLater');
     if (entry?.folder) pushCandidate(joinDiskPath(entry.folder, filename), 'saved-folder');
 
     // Если предыдущая попытка успела переместить файл в Trash, а локальная часть
@@ -7425,7 +7560,7 @@ async function findYandexFileForJournalEntry(entry, operationId = '') {
     const now = new Date();
     for (let delta = 0; delta < 2; delta += 1) {
       const d = new Date(now.getFullYear(), now.getMonth() - delta, 1);
-      pushCandidate(joinDiskPath(config.rootPath, YANDEX_TRASH_DIR, journalBackupMonthFolderName(d), filename), 'Trash');
+      pushCandidate(joinDiskPath(currentRootPath, YANDEX_TRASH_DIR, journalBackupMonthFolderName(d), filename), 'Trash');
     }
   }
 
@@ -7440,14 +7575,15 @@ async function findYandexFileForJournalEntry(entry, operationId = '') {
     try {
       const data = await yandexApi('/resources', {
         method: 'GET', timeoutMs: requestTimeoutMs(5_000), operationId,
-        query: { path: candidate.path, fields: 'name,path,type,size,public_url,resource_id' }
+        query: { path: candidate.path, fields: 'name,path,type,size,public_url,resource_id' },
+        operationContext: context
       }, false);
       if (data?.type === 'file' && matchesKnownIdentity(data)) {
         emitJournalOperationProgress(operationId, 'locate', 'Файл найден в известной папке WebClip.', 24, 'running', {
           sourcePath: data?.path || candidate.path,
           candidateKind: candidate.kind
         });
-        return data;
+        return withObservedReceipt(data);
       }
     } catch (error) {
       if (Number(error?.status) === 404) continue;
@@ -7495,7 +7631,8 @@ async function findYandexFileForJournalEntry(entry, operationId = '') {
     let data;
     try {
       data = await yandexApi('/resources/files', {
-        method: 'GET', timeoutMs: requestTimeoutMs(8_000), operationId, retryAttempt: 0, query
+        method: 'GET', timeoutMs: requestTimeoutMs(8_000), operationId, retryAttempt: 0, query,
+        operationContext: context
       }, true);
     } catch (error) {
       if (error?.code !== 'YANDEX_TIMEOUT' || remainingLocateMs() <= 2_000) {
@@ -7511,7 +7648,8 @@ async function findYandexFileForJournalEntry(entry, operationId = '') {
       });
       try {
         data = await yandexApi('/resources/files', {
-          method: 'GET', timeoutMs: requestTimeoutMs(5_000), operationId, retryAttempt: 1, query
+          method: 'GET', timeoutMs: requestTimeoutMs(5_000), operationId, retryAttempt: 1, query,
+          operationContext: context
         }, false);
       } catch (retryError) {
         if (retryError?.code === 'YANDEX_TIMEOUT') {
@@ -7522,10 +7660,10 @@ async function findYandexFileForJournalEntry(entry, operationId = '') {
     }
 
     const items = Array.isArray(data?.items) ? data.items : [];
-    const match = items.find((item) => matchesKnownIdentity(item));
+    const match = items.find((item) => matchesKnownIdentity(item, { discoveryByHint: true }));
     if (match) {
       emitJournalOperationProgress(operationId, 'locate', 'Актуальное расположение файла найдено.', 24, 'running', { sourcePath: match?.path || '' });
-      return match;
+      return withObservedReceipt(match);
     }
     const total = Number(data?.total || 0);
     if (!items.length || (total && offset + items.length >= total) || items.length < limit) break;
@@ -7544,7 +7682,7 @@ function trashConflictFilename(filename, date = new Date(), suffix = '') {
   return `${base}__deleted_${stamp}${suffix}${ext}`;
 }
 
-async function chooseYandexTrashTarget(monthFolder, filename, date = new Date(), operationId = '') {
+async function chooseYandexTrashTarget(monthFolder, filename, date = new Date(), operationId = '', operationContext = null) {
   const deadline = Date.now() + 30_000;
   const timeoutForNextCheck = () => {
     const remaining = deadline - Date.now();
@@ -7553,7 +7691,7 @@ async function chooseYandexTrashTarget(monthFolder, filename, date = new Date(),
   };
   const preferred = joinDiskPath(monthFolder, filename || 'WebClip.pdf');
   try {
-    await yandexApi('/resources', { method: 'GET', query: { path: preferred, fields: 'type' }, timeoutMs: timeoutForNextCheck(), operationId });
+    await yandexApi('/resources', { method: 'GET', query: { path: preferred, fields: 'type' }, timeoutMs: timeoutForNextCheck(), operationId, operationContext });
   } catch (error) {
     if (Number(error?.status) === 404) return preferred;
     throw error;
@@ -7562,7 +7700,7 @@ async function chooseYandexTrashTarget(monthFolder, filename, date = new Date(),
     const candidateName = trashConflictFilename(filename, date, n ? `_${n + 1}` : '');
     const candidate = joinDiskPath(monthFolder, candidateName);
     try {
-      await yandexApi('/resources', { method: 'GET', query: { path: candidate, fields: 'type' }, timeoutMs: timeoutForNextCheck(), operationId });
+      await yandexApi('/resources', { method: 'GET', query: { path: candidate, fields: 'type' }, timeoutMs: timeoutForNextCheck(), operationId, operationContext });
     } catch (error) {
       if (Number(error?.status) === 404) return candidate;
       throw error;
@@ -7585,34 +7723,58 @@ function assertManagedYandexSourcePath(path, rootPath, allowedBranches) {
   }
 }
 
+async function revalidateYandexDestructiveReceipt(receipt, operationContext, operationId = '') {
+  const sourcePath = normalizeDiskPath(receipt?.path || '');
+  if (!sourcePath) {
+    const error = new Error('Destructive-команда не получила exact source path из remote identity receipt.');
+    error.code = 'WEBCLIP_REMOTE_IDENTITY_RECEIPT_REQUIRED';
+    throw error;
+  }
+  const metadata = await yandexApi('/resources', {
+    method: 'GET',
+    query: { path: sourcePath, fields: 'name,path,type,size,public_url,resource_id' },
+    timeoutMs: 8_000,
+    operationId,
+    operationContext
+  }, false);
+  return WebClipYandexRemoteIdentityAuthority.assertDestructiveCommand({
+    receipt,
+    operationContext,
+    sourcePath,
+    metadata
+  });
+}
+
 async function moveJournalYandexFileToTrash(entry, operationId = '', journalAuthority = null) {
   let detachedReceiptId = '';
   let moveAdmitted = false;
   try {
     emitJournalOperationProgress(operationId, 'locate', 'Ищем актуальное расположение файла на Яндекс Диске…', 12);
-    const config = await getYandexConfig();
-    if (!config.rootPath) throw new Error('В настройках не выбрана корневая папка Яндекс Диска.');
-    const current = await findYandexFileForJournalEntry(entry, operationId);
-    const sourcePath = current?.path ? normalizeYandexDiskPathFromApi(current.path) : normalizeDiskPath(entry?.remotePath || '');
+    const operationContext = await captureCurrentYandexOperationContext();
+    const rootPath = normalizeDiskPath(operationContext.rootPath || '');
+    const current = await findYandexFileForJournalEntry(entry, operationId, operationContext);
+    const identityReceipt = current?.remoteIdentityReceipt || null;
+    const sourcePath = normalizeDiskPath(identityReceipt?.path || '');
     if (!sourcePath) throw new Error('Яндекс Диск не вернул текущий путь файла.');
-    assertManagedYandexSourcePath(sourcePath, config.rootPath, [YANDEX_UPLOAD_DIR, YANDEX_READ_LATER_DIR, YANDEX_TRASH_DIR]);
+    assertManagedYandexSourcePath(sourcePath, rootPath, [YANDEX_UPLOAD_DIR, YANDEX_READ_LATER_DIR, YANDEX_TRASH_DIR]);
 
     const deletionDate = new Date();
     const monthName = journalBackupMonthFolderName(deletionDate);
-    const trashRoot = joinDiskPath(config.rootPath, YANDEX_TRASH_DIR);
+    const trashRoot = joinDiskPath(rootPath, YANDEX_TRASH_DIR);
     const monthFolder = joinDiskPath(trashRoot, monthName);
     emitJournalOperationProgress(operationId, 'folder', `Подготавливаем папку ${YANDEX_TRASH_DIR}/${monthName}…`, 30, 'running', { sourcePath, monthFolder });
-    await ensureYandexFolderTree(monthFolder, operationId);
+    await ensureYandexFolderTree(monthFolder, operationId, operationContext);
 
     const currentName = current?.name ? normalizeYandexItemNameFromApi(current.name) : String(entry?.filename || 'WebClip.pdf');
     const alreadyInTrash = normalizeDiskPath(sourcePath).startsWith(`${normalizeDiskPath(trashRoot)}/`);
-    const targetPath = alreadyInTrash ? sourcePath : await chooseYandexTrashTarget(monthFolder, currentName, deletionDate, operationId);
+    const targetPath = alreadyInTrash ? sourcePath : await chooseYandexTrashTarget(monthFolder, currentName, deletionDate, operationId, operationContext);
 
     const detachedReceipt = await checkpointPendingTrashMoveIntent(entry, {
       sourcePath,
       targetPath,
-      sourceResourceId: current?.resource_id ? normalizeYandexResourceIdFromApi(current.resource_id) : String(entry?.resourceId || ''),
-      sourcePublicUrl: current?.public_url ? normalizeYandexPublicUrlFromApi(current.public_url) : String(entry?.publicUrl || ''),
+      sourceResourceId: identityReceipt.resourceId,
+      sourcePublicUrl: identityReceipt.publicUrl,
+      remoteIdentityReceipt: identityReceipt,
       operationId,
       journalAuthority
     });
@@ -7620,13 +7782,15 @@ async function moveJournalYandexFileToTrash(entry, operationId = '', journalAuth
 
     emitJournalOperationProgress(operationId, 'move', alreadyInTrash ? 'Файл уже находится в Trash. Повторное перемещение не требуется…' : 'Перемещаем файл в папку Trash…', 55, 'running', { sourcePath, targetPath });
     if (!alreadyInTrash && normalizeDiskPath(sourcePath) !== normalizeDiskPath(targetPath)) {
+      await revalidateYandexDestructiveReceipt(identityReceipt, operationContext, operationId);
       await markPendingDestructiveMoveAdmitted(detachedReceiptId);
       moveAdmitted = true;
       await yandexApi('/resources/move', {
         method: 'POST',
         query: { from: sourcePath, path: targetPath, overwrite: 'false', force_async: 'false' },
         timeoutMs: 15_000,
-        operationId
+        operationId,
+        operationContext
       });
     }
 
@@ -7647,7 +7811,8 @@ async function moveJournalYandexFileToTrash(entry, operationId = '', journalAuth
           query: { path: targetPath, fields: 'name,path,type,size,public_url,resource_id' },
           timeoutMs: Math.max(1_000, Math.min(8_000, remaining)),
           operationId,
-          retryAttempt: attempt
+          retryAttempt: attempt,
+          operationContext
         });
         if (moved?.type === 'file') break;
       } catch (error) {
@@ -7659,17 +7824,21 @@ async function moveJournalYandexFileToTrash(entry, operationId = '', journalAuth
       error.code = 'YANDEX_TIMEOUT';
       throw error;
     }
+    const movedResourceId = moved?.resource_id ? normalizeYandexResourceIdFromApi(moved.resource_id) : '';
+    if (!movedResourceId || movedResourceId !== identityReceipt.resourceId) {
+      const error = new Error('Яндекс Диск подтвердил target path, но exact resource_id не совпал с destructive receipt.');
+      error.code = 'WEBCLIP_REMOTE_IDENTITY_MOVE_OUTCOME_CONFLICT';
+      throw error;
+    }
 
     const trashPath = moved?.path ? normalizeYandexDiskPathFromApi(moved.path) : targetPath;
-    const resourceId = moved?.resource_id
-      ? normalizeYandexResourceIdFromApi(moved.resource_id)
-      : (current?.resource_id ? normalizeYandexResourceIdFromApi(current.resource_id) : String(entry?.resourceId || ''));
+    const resourceId = movedResourceId;
     await markPendingDestructiveMoveVerified(detachedReceiptId, {
       remotePath: trashPath,
       resourceId,
       filename: moved?.name ? normalizeYandexItemNameFromApi(moved.name) : currentName,
       folder: monthFolder,
-      publicUrl: moved?.public_url ? normalizeYandexPublicUrlFromApi(moved.public_url) : String(entry?.publicUrl || '')
+      publicUrl: moved?.public_url ? normalizeYandexPublicUrlFromApi(moved.public_url) : String(identityReceipt.publicUrl || '')
     });
     return {
       sourcePath,
@@ -7785,10 +7954,20 @@ async function checkpointPendingReadMoveIntent(entry, {
   targetPath = '',
   sourceResourceId = '',
   sourcePublicUrl = '',
+  remoteIdentityReceipt = null,
   operationId = '',
   journalAuthority = null
 } = {}) {
   const sourceJournalAuthority = normalizeJournalEntryAuthorityToken(journalAuthority);
+  if (
+    remoteIdentityReceipt?.authority !== WebClipYandexRemoteIdentityAuthority.AUTHORITY
+    || normalizeDiskPath(remoteIdentityReceipt?.path || '') !== normalizeDiskPath(sourcePath || '')
+    || String(remoteIdentityReceipt?.resourceId || '') !== String(sourceResourceId || '')
+  ) {
+    const error = new Error('Destructive read-move receipt требует exact provider-observed remote identity receipt.');
+    error.code = 'WEBCLIP_REMOTE_IDENTITY_RECEIPT_REQUIRED';
+    throw error;
+  }
   const now = Date.now();
   const item = {
     id: makePendingDestructiveMoveId('read-move'),
@@ -7807,8 +7986,12 @@ async function checkpointPendingReadMoveIntent(entry, {
     targetPath: normalizeDiskPath(targetPath || ''),
     sourceResourceId: String(sourceResourceId || entry?.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
     sourcePublicUrl: String(sourcePublicUrl || entry?.publicUrl || '').slice(0, MAX_YANDEX_PUBLIC_URL_CHARS),
-    accountUid: String(entry?.accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
-    rootPath: normalizeDiskPath(entry?.rootPath || ''),
+    remoteIdentityAuthority: WebClipYandexRemoteIdentityAuthority.AUTHORITY,
+    remoteIdentityObservedAt: Math.max(0, Number(remoteIdentityReceipt.observedAt) || 0),
+    remoteIdentityContextCapturedAt: Math.max(0, Number(remoteIdentityReceipt.contextCapturedAt) || 0),
+    sourceIdentityProvenance: WebClipYandexRemoteIdentityAuthority.normalizeProvenance(remoteIdentityReceipt.sourceProvenance),
+    accountUid: String(remoteIdentityReceipt.accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
+    rootPath: normalizeDiskPath(remoteIdentityReceipt.rootPath || ''),
     lastError: ''
   };
   if (!item.sourceJournalEntryId || !item.sourcePath || !item.targetPath) {
@@ -7885,10 +8068,20 @@ async function checkpointPendingTrashMoveIntent(entry, {
   targetPath = '',
   sourceResourceId = '',
   sourcePublicUrl = '',
+  remoteIdentityReceipt = null,
   operationId = '',
   journalAuthority = null
 } = {}) {
   const sourceJournalAuthority = normalizeJournalEntryAuthorityToken(journalAuthority);
+  if (
+    remoteIdentityReceipt?.authority !== WebClipYandexRemoteIdentityAuthority.AUTHORITY
+    || normalizeDiskPath(remoteIdentityReceipt?.path || '') !== normalizeDiskPath(sourcePath || '')
+    || String(remoteIdentityReceipt?.resourceId || '') !== String(sourceResourceId || '')
+  ) {
+    const error = new Error('Destructive trash-move receipt требует exact provider-observed remote identity receipt.');
+    error.code = 'WEBCLIP_REMOTE_IDENTITY_RECEIPT_REQUIRED';
+    throw error;
+  }
   const now = Date.now();
   const item = {
     id: makePendingDestructiveMoveId('trash-move'),
@@ -7907,8 +8100,12 @@ async function checkpointPendingTrashMoveIntent(entry, {
     targetPath: normalizeDiskPath(targetPath || ''),
     sourceResourceId: String(sourceResourceId || entry?.resourceId || '').slice(0, MAX_YANDEX_RESOURCE_ID_CHARS),
     sourcePublicUrl: String(sourcePublicUrl || entry?.publicUrl || '').slice(0, MAX_YANDEX_PUBLIC_URL_CHARS),
-    accountUid: String(entry?.accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
-    rootPath: normalizeDiskPath(entry?.rootPath || ''),
+    remoteIdentityAuthority: WebClipYandexRemoteIdentityAuthority.AUTHORITY,
+    remoteIdentityObservedAt: Math.max(0, Number(remoteIdentityReceipt.observedAt) || 0),
+    remoteIdentityContextCapturedAt: Math.max(0, Number(remoteIdentityReceipt.contextCapturedAt) || 0),
+    sourceIdentityProvenance: WebClipYandexRemoteIdentityAuthority.normalizeProvenance(remoteIdentityReceipt.sourceProvenance),
+    accountUid: String(remoteIdentityReceipt.accountUid || '').slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS),
+    rootPath: normalizeDiskPath(remoteIdentityReceipt.rootPath || ''),
     lastError: ''
   };
   if (!item.sourceJournalEntryId || !item.sourcePath || !item.targetPath) {
@@ -8837,7 +9034,7 @@ async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } 
   }
 }
 
-async function chooseAvailableTargetPath(folder, filename, operationId = '') {
+async function chooseAvailableTargetPath(folder, filename, operationId = '', operationContext = null) {
   const raw = String(filename || 'WebClip.pdf');
   const dot = raw.lastIndexOf('.');
   const base = dot > 0 ? raw.slice(0, dot) : raw;
@@ -8848,7 +9045,7 @@ async function chooseAvailableTargetPath(folder, filename, operationId = '') {
     if (remaining <= 0) throw new Error('Подбор свободного имени файла в Upload превысил 45 секунд. Операция остановлена без изменения записи журнала.');
     const candidateName = n ? `${base}__${n + 1}${ext}` : raw;
     const candidate = joinDiskPath(folder, candidateName);
-    try { await yandexApi('/resources', { method: 'GET', query: { path: candidate, fields: 'type' }, timeoutMs: Math.max(1_000, Math.min(8_000, remaining)), operationId }); }
+    try { await yandexApi('/resources', { method: 'GET', query: { path: candidate, fields: 'type' }, timeoutMs: Math.max(1_000, Math.min(8_000, remaining)), operationId, operationContext }); }
     catch (error) { if (Number(error?.status) === 404) return candidate; throw error; }
   }
   throw new Error('Не удалось подобрать свободное имя файла в папке Upload.');
@@ -8883,15 +9080,15 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
     }
 
     emitJournalOperationProgress(operationId, 'locate', 'Ищем актуальное расположение файла «Прочитать позже»…', 12);
-    const current = await findYandexFileForJournalEntry(entry, operationId);
-    const sourcePath = current?.path ? normalizeYandexDiskPathFromApi(current.path) : normalizeDiskPath(entry.remotePath || '');
-    const config = await getYandexConfig();
-    if (!config.rootPath) throw new Error('Не выбрана корневая папка Яндекс Диска.');
-    assertManagedYandexSourcePath(sourcePath, config.rootPath, [YANDEX_READ_LATER_DIR, YANDEX_UPLOAD_DIR]);
-    const structure = await ensureYandexServiceFolders({ includeUpload: true, operationId });
+    const operationContext = await captureCurrentYandexOperationContext();
+    const current = await findYandexFileForJournalEntry(entry, operationId, operationContext);
+    const identityReceipt = current?.remoteIdentityReceipt || null;
+    const sourcePath = normalizeDiskPath(identityReceipt?.path || '');
+    assertManagedYandexSourcePath(sourcePath, operationContext.rootPath, [YANDEX_READ_LATER_DIR, YANDEX_UPLOAD_DIR]);
+    const structure = await ensureYandexServiceFolders({ includeUpload: true, operationId, operationContext });
     const targetFolder = joinDiskPath(structure.uploadPath, ...getSiteFolderSegments(entry.hostname || hostnameFromUrl(entry.url)));
     emitJournalOperationProgress(operationId, 'folder', `Подготавливаем папку Прочитано: ${targetFolder}`, 34);
-    await ensureYandexFolderTree(targetFolder, operationId);
+    await ensureYandexFolderTree(targetFolder, operationId, operationContext);
     const normalizedSource = normalizeDiskPath(sourcePath);
     const normalizedTargetFolder = normalizeDiskPath(targetFolder);
     const alreadyInUploadFolder = normalizedSource.startsWith(`${normalizedTargetFolder}/`);
@@ -8899,7 +9096,7 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
       ? normalizedSource
       : checkpointTargetPath && normalizeDiskPath(checkpointTargetPath).startsWith(`${normalizedTargetFolder}/`)
         ? normalizeDiskPath(checkpointTargetPath)
-        : await chooseAvailableTargetPath(targetFolder, current?.name ? normalizeYandexItemNameFromApi(current.name) : String(entry.filename || 'WebClip.pdf'), operationId);
+        : await chooseAvailableTargetPath(targetFolder, current?.name ? normalizeYandexItemNameFromApi(current.name) : String(entry.filename || 'WebClip.pdf'), operationId, operationContext);
     checkpointTargetPath = targetPath;
 
     // P0-072: destructive external authority lives outside the replaceable
@@ -8908,8 +9105,9 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
     const detachedReceipt = await checkpointPendingReadMoveIntent(entry, {
       sourcePath: normalizedSource,
       targetPath,
-      sourceResourceId: current?.resource_id ? normalizeYandexResourceIdFromApi(current.resource_id) : String(entry.resourceId || ''),
-      sourcePublicUrl: current?.public_url ? normalizeYandexPublicUrlFromApi(current.public_url) : String(entry.publicUrl || ''),
+      sourceResourceId: identityReceipt.resourceId,
+      sourcePublicUrl: identityReceipt.publicUrl,
+      remoteIdentityReceipt: identityReceipt,
       operationId,
       journalAuthority
     });
@@ -8939,13 +9137,15 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
 
     emitJournalOperationProgress(operationId, 'move', alreadyInUploadFolder ? 'Файл уже находится в нужной папке Upload. Повторное перемещение не требуется…' : 'Перемещаем файл из ReadmeLater в Upload…', 58);
     if (!alreadyInUploadFolder) {
+      await revalidateYandexDestructiveReceipt(identityReceipt, operationContext, operationId);
       await markPendingDestructiveMoveAdmitted(detachedReceiptId);
       moveAdmitted = true;
       await yandexApi('/resources/move', {
         method: 'POST',
         query: { from: sourcePath, path: targetPath, overwrite: 'false', force_async: 'false' },
         timeoutMs: 15_000,
-        operationId
+        operationId,
+        operationContext
       });
     }
 
@@ -8966,7 +9166,8 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
           query: { path: targetPath, fields: 'name,path,type,size,public_url,resource_id' },
           timeoutMs: Math.max(1_000, Math.min(8_000, remaining)),
           operationId,
-          retryAttempt: attempt
+          retryAttempt: attempt,
+          operationContext
         });
         if (moved?.type === 'file') break;
       } catch (error) {
@@ -8980,21 +9181,27 @@ async function moveReadLaterEntryToRead(id, operationId = '') {
     }
 
     const verifiedPath = moved.path ? normalizeYandexDiskPathFromApi(moved.path) : targetPath;
-    const verifiedResourceId = moved.resource_id ? normalizeYandexResourceIdFromApi(moved.resource_id) : String(entry.resourceId || '');
+    const verifiedResourceId = moved.resource_id ? normalizeYandexResourceIdFromApi(moved.resource_id) : '';
+    if (!verifiedResourceId || verifiedResourceId !== identityReceipt.resourceId) {
+      const error = new Error('Яндекс Диск подтвердил Upload path, но exact resource_id не совпал с destructive receipt.');
+      error.code = 'WEBCLIP_REMOTE_IDENTITY_MOVE_OUTCOME_CONFLICT';
+      throw error;
+    }
     await markPendingDestructiveMoveVerified(detachedReceiptId, {
       remotePath: verifiedPath,
       resourceId: verifiedResourceId,
       filename: moved.name ? normalizeYandexItemNameFromApi(moved.name) : String(entry.filename || ''),
       folder: targetFolder,
-      publicUrl: moved.public_url ? normalizeYandexPublicUrlFromApi(moved.public_url) : String(entry.publicUrl || '')
+      publicUrl: moved.public_url ? normalizeYandexPublicUrlFromApi(moved.public_url) : String(identityReceipt.publicUrl || '')
     });
     const finalized = await finalizeReadMoveJournalFromReceipt(detachedReceiptId, {
       readingMode: 'read',
       remotePath: verifiedPath,
       folder: targetFolder,
       filename: moved.name ? normalizeYandexItemNameFromApi(moved.name) : String(entry.filename || ''),
-      publicUrl: moved.public_url ? normalizeYandexPublicUrlFromApi(moved.public_url) : String(entry.publicUrl || ''),
+      publicUrl: moved.public_url ? normalizeYandexPublicUrlFromApi(moved.public_url) : String(identityReceipt.publicUrl || ''),
       resourceId: verifiedResourceId,
+      remoteIdentityProvenance: WebClipYandexRemoteIdentityAuthority.PROVIDER_VERIFIED,
       movedToReadAt: Date.now(),
       readMovePendingAt: 0,
       readMoveSourcePath: '',
@@ -9569,6 +9776,7 @@ function normalizeImportedJournalEntry(raw, index, seenIds = null, forcedId = ''
     resourceId: boundedImportString(raw.resourceId || '', MAX_YANDEX_RESOURCE_ID_CHARS),
     accountUid: boundedImportString(raw.accountUid || '', MAX_YANDEX_ACCOUNT_FIELD_CHARS),
     rootPath: normalizeDiskPath(boundedImportString(raw.rootPath || '', MAX_IMPORTED_PATH_CHARS)),
+    remoteIdentityProvenance: WebClipYandexRemoteIdentityAuthority.normalizeProvenance(raw.remoteIdentityProvenance, { imported: true }),
     hostname,
     siteAddress: boundedImportString(raw.siteAddress || '', MAX_IMPORTED_URL_CHARS),
     url,
@@ -10966,26 +11174,29 @@ async function getJournalBackupStatus() {
   };
 }
 
-async function ensureYandexServiceFolders({ includeUpload = false, includeReadLater = false, includeBackup = false, operationId = '' } = {}) {
-  const config = await getYandexConfig();
+async function ensureYandexServiceFolders({ includeUpload = false, includeReadLater = false, includeBackup = false, operationId = '', operationContext = null } = {}) {
+  const provenContext = operationContext
+    ? WebClipYandexOperationContext.validateOperationContext(operationContext)
+    : null;
+  const config = provenContext ? { rootPath: provenContext.rootPath } : await getYandexConfig();
   if (!config.rootPath) throw new Error('Не выбрана корневая папка Яндекс Диска. Откройте настройки расширения.');
 
-  await getValidYandexAccessToken();
+  if (!provenContext) await getValidYandexAccessToken();
   const result = { rootPath: config.rootPath, uploadPath: '', readLaterPath: '', backupPath: '', journalPath: '' };
   try {
-    await ensureYandexFolderTree(config.rootPath, operationId);
+    await ensureYandexFolderTree(config.rootPath, operationId, provenContext);
     if (includeUpload) {
       result.uploadPath = joinDiskPath(config.rootPath, YANDEX_UPLOAD_DIR);
-      await ensureYandexFolderTree(result.uploadPath, operationId);
+      await ensureYandexFolderTree(result.uploadPath, operationId, provenContext);
     }
     if (includeReadLater) {
       result.readLaterPath = joinDiskPath(config.rootPath, YANDEX_READ_LATER_DIR);
-      await ensureYandexFolderTree(result.readLaterPath, operationId);
+      await ensureYandexFolderTree(result.readLaterPath, operationId, provenContext);
     }
     if (includeBackup) {
       result.backupPath = joinDiskPath(config.rootPath, YANDEX_BACKUP_DIR);
       result.journalPath = joinDiskPath(result.backupPath, YANDEX_JOURNAL_DIR);
-      await ensureYandexFolderTree(result.journalPath, operationId);
+      await ensureYandexFolderTree(result.journalPath, operationId, provenContext);
     }
   } catch (error) {
     const parts = [];
@@ -13592,7 +13803,7 @@ async function runOffscreenSignedTransfer(spec = {}, { operationId = '', label =
   };
 }
 
-async function ensureYandexFolderTree(path, operationId = '') {
+async function ensureYandexFolderTree(path, operationId = '', operationContext = null) {
   const normalized = normalizeDiskPath(path);
   if (!normalized || normalized === '/') return;
   if (normalized.length > 2048) throw new Error('Путь Яндекс Диска превышает безопасный предел длины.');
@@ -13618,7 +13829,8 @@ async function ensureYandexFolderTree(path, operationId = '') {
         method: 'PUT',
         query: { path: current },
         timeoutMs: timeoutForRequest(),
-        operationId
+        operationId,
+        operationContext
       });
     } catch (error) {
       // 409 обычно означает, что ресурс уже существует. Но для служебной
@@ -13629,7 +13841,8 @@ async function ensureYandexFolderTree(path, operationId = '') {
         method: 'GET',
         query: { path: current, fields: 'name,path,type' },
         timeoutMs: timeoutForRequest(),
-        operationId
+        operationId,
+        operationContext
       });
       if (existing?.type !== 'dir') {
         throw new Error(`Путь ${current} уже существует на Яндекс Диске, но не является папкой.`);
