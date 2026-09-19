@@ -89,7 +89,7 @@ ok(creator.includes('pending.add(item)'), 'Trash receipt creation is create-once
 ok(creator.includes('MAX_PENDING_DESTRUCTIVE_MOVES'), 'Trash receipt admission is bounded');
 
 const admission = functionSource(worker, 'markPendingDestructiveMoveAdmitted');
-ok(admission.includes("current.kind !== 'read-move' && current.kind !== 'trash-move'"), 'common admission only recognizes reviewed destructive classes');
+ok(admission.includes("!['read-move', 'trash-move', 'publication-revoke'].includes(current.kind)"), 'common admission recognizes the reviewed move and publication-revoke classes');
 ok(admission.includes("phase: 'admitted-unknown'"), 'Trash move has explicit admitted unknown phase');
 ok(admission.includes('WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_MISSING_BEFORE_ADMISSION'), 'reset-deleted prepared receipt fails closed');
 ok(admission.includes('WEBCLIP_DESTRUCTIVE_MOVE_RECEIPT_SUPERSEDED_BEFORE_ADMISSION'), 'reset-superseded receipt cannot start remote move');
