@@ -5642,7 +5642,7 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
   let operationContext = null;
   try {
     // Replace the legacy getValidYandexAccessToken() preflight with one
-    // atomic auth/config snapshot that all covered requests reuse.
+    // single auth/config snapshot that all covered requests reuse.
     operationContext = await captureCurrentYandexOperationContext();
   } catch (_) {
     authAvailable = false;
