@@ -61,7 +61,7 @@ const CURRENT_RELATION = Object.freeze({
 });
 
 const EXPECTED_IDENTITIES = Object.freeze({
-  rpf: 'sha256:1b40c128fba4c0f2637f39a6307ad9c377ea4c3a276a6e525dc68661fef4bd67',
+  rpf: 'sha256:22f5dd62cb84bfa3e860f01b469c503a7c579d1cd4f9914658289fda8af92d4a',
   chromeQcf: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandexQcf: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
   rcf: 'sha256:4d4d22be60b3f2e94fc24282207889c124c2d726e4070bcab482163f58102f50',

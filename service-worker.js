@@ -3232,6 +3232,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case 'WEBCLIP_JOURNAL_DELETE':
         return deleteJournalEntry(String(message.id || ''), {
           diskAction: String(message.diskAction || 'keep'),
+          publicationAction: String(message.publicationAction || ''),
           operationId: String(message.operationId || '')
         });
 
@@ -9117,7 +9118,31 @@ async function finalizeTrashDeleteFromReceipt(receiptId) {
   return { ...result, statsWarning };
 }
 
-async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } = {}) {
+function resolveJournalDeletePublicationOutcome(entry, publicationAction = '') {
+  const hasKnownPublicAccess = entry?.destination === 'yandex' && Boolean(String(entry?.publicUrl || '').trim());
+  if (!hasKnownPublicAccess) {
+    return Object.freeze({ hasKnownPublicAccess: false, publicationAction: 'none', publicationOutcome: 'none' });
+  }
+
+  const action = String(publicationAction || '').trim().toLowerCase();
+  if (action === 'revoke') {
+    const error = new Error('Безопасный отзыв публичного доступа пока не реализован. Отмените удаление и сначала ограничьте доступ на Яндекс Диске.');
+    error.code = 'WEBCLIP_PUBLICATION_REVOKE_UNAVAILABLE';
+    throw error;
+  }
+  if (action !== 'preserve') {
+    const error = new Error('Для опубликованного файла подтвердите, что публичный доступ по ссылке будет сохранён.');
+    error.code = 'WEBCLIP_PUBLICATION_OUTCOME_REQUIRED';
+    throw error;
+  }
+  return Object.freeze({
+    hasKnownPublicAccess: true,
+    publicationAction: 'preserve',
+    publicationOutcome: 'preserved-by-user'
+  });
+}
+
+async function deleteJournalEntry(id, { diskAction = 'keep', publicationAction = '', operationId = '' } = {}) {
   operationId = String(operationId || '') || makeOperationLogId('journal-delete');
   if (!id) return { ok: false, error: 'Не указан идентификатор записи журнала.' };
   const authoritySnapshot = await readJournalEntryWithAuthority(id);
@@ -9128,9 +9153,15 @@ async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } 
   const isYandex = entry.destination === 'yandex';
   const action = String(diskAction || 'keep');
   if (isYandex && action !== 'keep' && action !== 'trash') return { ok: false, error: 'Выберите, оставить файл на Яндекс Диске или переместить его в Trash.' };
+  // P0-069: settle the publication choice before logging or admitting any
+  // remote/local destructive side effect. Revocation remains fail-closed until
+  // its durable exact-object recovery protocol is implemented.
+  const publication = resolveJournalDeletePublicationOutcome(entry, publicationAction);
   await startOperationLog(operationId, 'journal-delete', isYandex && action === 'trash' ? 'Удаление записи журнала и перенос файла в Trash' : 'Удаление записи журнала', {
     journalEntryId: id, destination: entry.destination || '', diskAction: action, remotePath: entry.remotePath || '',
-    resourceId: entry.resourceId || '', hasPublicUrl: Boolean(entry.publicUrl), accountUid: entry.accountUid ? '[BOUND]' : '', rootPath: entry.rootPath || '', url: entry.url || '', filename: entry.filename || ''
+    resourceId: entry.resourceId || '', hasPublicUrl: publication.hasKnownPublicAccess,
+    publicationAction: publication.publicationAction, publicationOutcome: publication.publicationOutcome,
+    accountUid: entry.accountUid ? '[BOUND]' : '', rootPath: entry.rootPath || '', url: entry.url || '', filename: entry.filename || ''
   });
 
   let moved = null;
@@ -9169,6 +9200,8 @@ async function deleteJournalEntry(id, { diskAction = 'keep', operationId = '' } 
       trashPath: moved?.trashPath || '',
       trashMonth: moved?.trashMonth || '',
       operationId,
+      publicationAction: publication.publicationAction,
+      publicationOutcome: publication.publicationOutcome,
       journalSuperseded,
       statsWarning
     };
