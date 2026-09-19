@@ -388,3 +388,17 @@ P0-073 remains `ACTIVE / IMPLEMENTATION-IN-PROGRESS`. This tranche does not clai
 - authorized isolated two-account Yandex E2E with same-path/same-size controls.
 
 No Yandex credentials are added or used. Manifest remains `0.9.8`; release readiness remains `NOT READY`; no build, tag, GitHub Release, or release decision is implied.
+
+
+### Exact-generation CI receipt — 2026-09-19
+
+The first fully green candidate containing the embedded P0-073 authority and synchronized P1-231 direct goldens was:
+
+- exact head: `fe1b0506cbf7f9980c01ad2effc02c56b39f6c76`;
+- Repository Integrity: run `35413624237`, conclusion `success`;
+- deterministic P0-073 production authority regression: `PASS 24 checks`;
+- exact S0-E RPF: `sha256:6b7f60999284a12040aabce4e3d9496919749a815ce4e27d3129eb06ae7249e9`;
+- package topology: unchanged at 34 current root package files;
+- manifest: unchanged at `0.9.8`.
+
+This is deterministic implementation-progress evidence, not authorized two-account Yandex closure. P0-073 remains `ACTIVE`; release readiness remains `NOT READY`.
