@@ -81,8 +81,10 @@ ok(creator.includes('sourcePath'), 'Trash receipt captures source remote path');
 ok(creator.includes('targetPath'), 'Trash receipt captures intended target');
 ok(creator.includes('sourceResourceId'), 'Trash receipt captures known remote object evidence');
 ok(creator.includes('sourcePublicUrl'), 'Trash receipt captures secondary remote identity evidence');
-ok(creator.includes('accountUid'), 'Trash receipt carries account binding evidence');
-ok(creator.includes('rootPath'), 'Trash receipt carries root binding evidence');
+const identityFields = functionSource(worker, 'pendingDestructiveMoveRemoteIdentityFields');
+ok(creator.includes('pendingDestructiveMoveRemoteIdentityFields'), 'Trash receipt obtains one normalized durable identity envelope');
+ok(identityFields.includes('accountUid:'), 'normalized identity envelope carries account binding evidence');
+ok(identityFields.includes('rootPath:'), 'normalized identity envelope carries root binding evidence');
 ok(creator.includes('pending.add(item)'), 'Trash receipt creation is create-once');
 ok(creator.includes('MAX_PENDING_DESTRUCTIVE_MOVES'), 'Trash receipt admission is bounded');
 
