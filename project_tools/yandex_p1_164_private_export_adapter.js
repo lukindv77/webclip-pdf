@@ -92,6 +92,11 @@ function validatePrivateExport(value) {
     kind: value.kind,
     phase: value.phase,
     manualResolutionSourcePhase: value.manualResolutionSourcePhase,
+    receiptAnchor: {
+      receiptId: value.receiptId,
+      receiptUpdatedAt: value.receiptUpdatedAt,
+      exportedAt: new Date(exportedAt).toISOString()
+    },
     receipt: { ...value.receipt },
     currentContext: { ...value.currentContext },
     watchSeconds: value.watchSeconds
@@ -137,6 +142,11 @@ function buildObserverInput(privateExport, testedSourceSha, watchSecondsOverride
     kind: value.kind,
     phase: value.phase,
     manualResolutionSourcePhase: value.manualResolutionSourcePhase,
+    receiptAnchor: {
+      receiptId: value.receiptId,
+      receiptUpdatedAt: value.receiptUpdatedAt,
+      exportedAt: value.exportedAt
+    },
     receipt: { ...value.receipt },
     currentContext: { ...value.currentContext },
     watchSeconds

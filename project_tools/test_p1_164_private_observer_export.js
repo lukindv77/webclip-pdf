@@ -13,6 +13,7 @@ const worker = fs.readFileSync(path.join(ROOT, 'service-worker.js'), 'utf8');
 const page = fs.readFileSync(path.join(ROOT, 'journal.js'), 'utf8');
 const adapterSource = fs.readFileSync(path.join(ROOT, 'project_tools', 'yandex_p1_164_private_export_adapter.js'), 'utf8');
 const adapter = require('./yandex_p1_164_private_export_adapter.js');
+const observer = require('./yandex_p1_164_live_observer.js');
 
 let checks = 0;
 function ok(value, message) { assert.ok(value, message); checks += 1; }
@@ -180,6 +181,14 @@ eq(normalized.receiptUpdatedAt, fixture.updatedAt, 'adapter keeps exact receipt 
 const input = adapter.buildObserverInput(normalized, 'b'.repeat(40), 90);
 eq(input.testedSourceSha, 'b'.repeat(40), 'adapter binds exact checkout SHA');
 eq(input.watchSeconds, 90, 'adapter applies bounded watch override');
+eq(input.receiptAnchor.receiptId, fixture.id, 'private observer input carries exact raw receipt id');
+eq(input.receiptAnchor.receiptUpdatedAt, fixture.updatedAt, 'private observer input carries exact receipt revision');
+eq(input.receiptAnchor.exportedAt, normalized.exportedAt, 'private observer input carries exact export time');
+const publicAnchor = observer.receiptAnchor(observer.validateConfig(input));
+ok(/^sha256:[0-9a-f]{64}$/.test(publicAnchor.receiptIdDigest), 'observer sanitizes receipt id to digest');
+eq(publicAnchor.receiptUpdatedAt, fixture.updatedAt, 'sanitized anchor retains receipt revision');
+eq(publicAnchor.exportedAt, normalized.exportedAt, 'sanitized anchor retains export time');
+ok(!JSON.stringify(publicAnchor).includes(fixture.id), 'sanitized anchor hides raw receipt id');
 eq(input.receipt.accountUid, fixture.accountUid, 'adapter does not retarget account');
 eq(input.receipt.rootPath, fixture.rootPath, 'adapter does not retarget receipt root');
 eq(input.receipt.sourcePath, fixture.sourcePath, 'adapter does not retarget source');
@@ -200,5 +209,6 @@ ok(adapterSource.includes('fs.unlinkSync(resolvedOutput)'), 'adapter removes a p
 throwsCode(() => adapter.assertResolvedOutsideRepo(ROOT), 'PRIVATE_PATH_INSIDE_REPOSITORY', 'resolved repository root rejected');
 ok(adapterSource.includes("'--untracked-files=no'"), 'adapter checks tracked checkout cleanliness');
 ok(adapterSource.includes('raw_identity_stdout=false'), 'adapter stdout explicitly excludes raw identity');
+ok(adapterSource.includes('receiptAnchor'), 'adapter carries receipt snapshot metadata into private observer input');
 
 console.log(`P1-164 private observer export: PASS; checks=${checks}; network_calls=0; provider_mutations=0; oauth_credentials=0`);

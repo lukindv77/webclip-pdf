@@ -47,6 +47,11 @@ function observation(overrides = {}) {
     phase: 'prepared',
     manualResolutionSourcePhase: '',
     effectivePhase: 'prepared',
+    receiptAnchor: {
+      receiptIdDigest: digest('b'),
+      receiptUpdatedAt: 1700000000000,
+      exportedAt: '2026-09-20T10:59:59.000Z'
+    },
     identityDigests: {
       operationId: digest('3'),
       accountUid: digest('4'),
@@ -89,6 +94,7 @@ function observation(overrides = {}) {
     ...base,
     ...overrides,
     subject: { ...base.subject, ...(overrides.subject || {}) },
+    receiptAnchor: { ...base.receiptAnchor, ...(overrides.receiptAnchor || {}) },
     identityDigests: { ...base.identityDigests, ...(overrides.identityDigests || {}) },
     context: { ...base.context, ...(overrides.context || {}) },
     source: { ...base.source, ...(overrides.source || {}) },
@@ -114,6 +120,7 @@ eq(ledger.digestObject(prepared), ledger.digestObject(JSON.parse(JSON.stringify(
 const subject = ledger.sessionSubject(prepared);
 ok(!Object.prototype.hasOwnProperty.call(subject.receiptIdentityDigests, 'currentRootPath'), 'current root excluded from immutable receipt subject');
 eq(subject.receiptIdentityDigests.accountUid, digest('4'), 'receipt account digest stays in immutable subject');
+eq(subject.receiptIdDigest, digest('b'), 'receipt id digest stays in immutable subject');
 
 const header = ledger.makeHeader(prepared, {
   sessionId: 'session-fixture-0001',
@@ -124,6 +131,8 @@ ok(header.limitations.includes('does-not-authenticate-observer-origin'), 'origin
 ok(header.limitations.includes('does-not-detect-consistent-rewrite-without-external-final-digest'), 'consistent rewrite limit is explicit');
 ok(header.limitations.includes('does-not-detect-tail-truncation-without-external-final-digest'), 'tail truncation limit is explicit');
 ok(header.limitations.includes('operator-labels-are-non-evidentiary'), 'operator labels are explicitly non-evidentiary');
+ok(header.limitations.includes('private-receipt-anchor-is-snapshot-not-command-admission-proof'), 'receipt snapshot is not admission proof');
+ok(header.limitations.includes('does-not-authenticate-private-export-origin'), 'private export origin is not authenticated');
 
 const first = ledger.makeEntry(header, null, prepared, 'baseline', {
   recordedAt: '2026-09-20T11:00:02.000Z'
@@ -137,6 +146,10 @@ const revoke = observation({
   generatedAt: '2026-09-20T11:00:10.000Z',
   phase: 'revoke-admitted-unknown',
   effectivePhase: 'revoke-admitted-unknown',
+  receiptAnchor: {
+    receiptUpdatedAt: 1700000000100,
+    exportedAt: '2026-09-20T11:00:09.000Z'
+  },
   source: { isPublic: false },
   classification: {
     state: 'revoke-settled-private',
@@ -206,6 +219,10 @@ const rootSwitch = observation({
   generatedAt: '2026-09-20T11:00:20.000Z',
   phase: 'revoke-admitted-unknown',
   effectivePhase: 'revoke-admitted-unknown',
+  receiptAnchor: {
+    receiptUpdatedAt: 1700000000100,
+    exportedAt: '2026-09-20T11:00:09.000Z'
+  },
   identityDigests: { currentRootPath: digest('b') },
   context: { rootMatches: false },
   classification: {
@@ -224,11 +241,19 @@ const third = ledger.makeEntry(header, second, rootSwitch, 'root-switch-check', 
 });
 eq(third.sequence, 3, 'same receipt subject accepts current-root change');
 eq(third.observation.identityDigests.currentRootPath, digest('b'), 'root-switch checkpoint preserves changed current-root digest');
+eq(third.observation.receiptAnchor.receiptUpdatedAt, revoke.receiptAnchor.receiptUpdatedAt, 'root switch can reobserve same durable receipt revision');
 
 throwsCode(
   () => ledger.makeEntry(header, second, observation({ identityDigests: { accountUid: digest('c') } }), 'other'),
   'SESSION_SUBJECT_MISMATCH',
   'receipt account digest cannot retarget within session'
+);
+throwsCode(
+  () => ledger.makeEntry(header, second, observation({
+    receiptAnchor: { receiptIdDigest: digest('c') }
+  }), 'other'),
+  'SESSION_SUBJECT_MISMATCH',
+  'receipt id digest cannot retarget within session'
 );
 throwsCode(
   () => ledger.makeEntry(header, second, prepared, 'other'),
@@ -239,15 +264,70 @@ throwsCode(
   () => ledger.makeEntry(header, second, observation({
     generatedAt: '2026-09-20T11:00:30.000Z',
     phase: 'prepared',
-    effectivePhase: 'prepared'
+    effectivePhase: 'prepared',
+    receiptAnchor: {
+      receiptUpdatedAt: 1700000000200,
+      exportedAt: '2026-09-20T11:00:29.000Z'
+    }
   }), 'other'),
   'SESSION_PHASE_REGRESSION',
-  'effective phase cannot regress'
+  'effective phase cannot regress even with a newer receipt revision'
 );
 throwsCode(
   () => ledger.makeEntry(header, first, prepared, 'other', { recordedAt: '2026-09-20T11:00:03.000Z' }),
   'SESSION_DUPLICATE_OBSERVATION',
   'same sanitized observation cannot append twice'
+);
+throwsCode(
+  () => ledger.validateObservation({
+    ...prepared,
+    receiptAnchor: { ...prepared.receiptAnchor, exportedAt: '2026-09-20T11:00:01.000Z' }
+  }),
+  'SESSION_RECEIPT_EXPORTED_AFTER_OBSERVATION',
+  'receipt export cannot postdate its provider observation'
+);
+throwsCode(
+  () => ledger.makeEntry(header, second, {
+    ...revoke,
+    generatedAt: '2026-09-20T11:00:31.000Z',
+    receiptAnchor: { ...revoke.receiptAnchor, receiptUpdatedAt: 1700000000050, exportedAt: '2026-09-20T11:00:30.000Z' }
+  }, 'other'),
+  'SESSION_RECEIPT_REVISION_REGRESSION',
+  'receipt revision cannot regress'
+);
+throwsCode(
+  () => ledger.makeEntry(header, second, {
+    ...revoke,
+    generatedAt: '2026-09-20T11:00:31.000Z',
+    receiptAnchor: { ...revoke.receiptAnchor, exportedAt: '2026-09-20T11:00:08.000Z' }
+  }, 'other'),
+  'SESSION_RECEIPT_EXPORT_TIME_REGRESSION',
+  'private export snapshot time cannot regress'
+);
+const revokeVerifiedSameRevision = observation({
+  generatedAt: '2026-09-20T11:00:32.000Z',
+  phase: 'revoke-verified',
+  effectivePhase: 'revoke-verified',
+  receiptAnchor: {
+    receiptUpdatedAt: revoke.receiptAnchor.receiptUpdatedAt,
+    exportedAt: '2026-09-20T11:00:31.000Z'
+  },
+  source: { isPublic: false },
+  classification: {
+    state: 'pre-move-ready',
+    safeNextAction: 'return-to-webclip-for-single-move-admission',
+    terminal: true
+  },
+  watch: {
+    requestedSeconds: 0,
+    elapsedMs: 4,
+    attempts: [{ attempt: 1, elapsedMs: 4, state: 'pre-move-ready' }]
+  }
+});
+throwsCode(
+  () => ledger.makeEntry(header, second, revokeVerifiedSameRevision, 'pre-move-admission'),
+  'SESSION_PHASE_CHANGED_WITHOUT_RECEIPT_ADVANCE',
+  'phase advance requires a newer durable receipt revision'
 );
 throwsCode(
   () => ledger.validateObservation({
@@ -271,6 +351,11 @@ throwsCode(
   () => ledger.validateObservation({ ...prepared, identityDigests: { ...prepared.identityDigests, sourcePath: '/raw/path' } }),
   'SESSION_IDENTITY_DIGEST_INVALID',
   'raw path cannot occupy a digest slot'
+);
+throwsCode(
+  () => ledger.validateObservation({ ...prepared, receiptAnchor: { ...prepared.receiptAnchor, receiptIdDigest: 'raw-receipt-id' } }),
+  'SESSION_RECEIPT_ID_DIGEST_INVALID',
+  'raw receipt id cannot occupy sanitized receipt anchor'
 );
 throwsCode(
   () => ledger.validateObservation({ ...prepared, limitations: observerLimitations.slice(1) }),
@@ -314,12 +399,17 @@ try {
   eq(summary.evidenceClass, 'local-observation-chain-only', 'summary does not claim provider attestation');
   eq(summary.qualificationPass, false, 'ledger never emits qualification PASS');
   eq(summary.checkpointCount, 3, 'summary checkpoint count');
+  eq(summary.subject.receiptIdDigest, digest('b'), 'summary subject binds receipt id digest');
+  eq(summary.checkpoints[1].receiptUpdatedAt, revoke.receiptAnchor.receiptUpdatedAt, 'summary exposes sanitized receipt revision');
+  eq(summary.checkpoints[2].receiptIdDigest, digest('b'), 'summary keeps receipt id digest without raw id');
   deep(
     summary.checkpoints.map((item) => item.classification.state),
     ['pre-admission-ready', 'revoke-settled-private', 'root-conflict'],
     'summary exposes only sanitized observed states'
   );
   ok(summary.limitations.includes('does-not-authenticate-observer-origin'), 'summary preserves authenticity limitation');
+  ok(summary.limitations.includes('private-receipt-anchor-is-snapshot-not-command-admission-proof'), 'summary preserves receipt-snapshot limitation');
+  ok(summary.limitations.includes('does-not-authenticate-private-export-origin'), 'summary preserves private-export origin limitation');
   ok(summary.limitations.includes('does-not-detect-consistent-rewrite-without-external-final-digest'), 'summary requires external final digest for rewrite detection');
   ok(summary.limitations.includes('does-not-detect-tail-truncation-without-external-final-digest'), 'summary requires external final digest for tail-truncation detection');
   ok(!JSON.stringify(summary).includes('/raw/'), 'summary has no fixture raw path');
@@ -369,6 +459,8 @@ ok(!toolSource.includes('WEBCLIP_YANDEX_OAUTH_TOKEN'), 'session ledger never con
 ok(toolSource.includes("fs.openSync(filename, 'wx', 0o600)"), 'checkpoint files use exclusive restrictive creation');
 ok(toolSource.includes("'does-not-authenticate-observer-origin'"), 'source states local chain authenticity limitation');
 ok(toolSource.includes("'does-not-detect-consistent-rewrite-without-external-final-digest'"), 'source states consistent rewrite limitation');
+ok(toolSource.includes("'private-receipt-anchor-is-snapshot-not-command-admission-proof'"), 'source states receipt snapshot limitation');
+ok(toolSource.includes('SESSION_PHASE_CHANGED_WITHOUT_RECEIPT_ADVANCE'), 'source requires durable receipt advance for phase changes');
 ok(toolSource.includes('qualificationPass: false'), 'source cannot synthesize qualification pass');
 
 console.log(

@@ -12,10 +12,10 @@ const observer = require('./yandex_p1_164_live_observer.js');
 const ROOT = path.resolve(__dirname, '..');
 const REAL_ROOT = fs.realpathSync(ROOT);
 
-const OBSERVATION_SCHEMA = 'webclip-p1-164-live-observation/v1';
-const HEADER_SCHEMA = 'webclip-p1-164-observation-session-header/v1';
-const ENTRY_SCHEMA = 'webclip-p1-164-observation-session-entry/v1';
-const SUMMARY_SCHEMA = 'webclip-p1-164-observation-session-summary/v1';
+const OBSERVATION_SCHEMA = 'webclip-p1-164-live-observation/v2';
+const HEADER_SCHEMA = 'webclip-p1-164-observation-session-header/v2';
+const ENTRY_SCHEMA = 'webclip-p1-164-observation-session-entry/v2';
+const SUMMARY_SCHEMA = 'webclip-p1-164-observation-session-summary/v2';
 const KIND = 'publication-revoke-trash';
 
 const MAX_OBSERVATION_BYTES = 256 * 1024;
@@ -131,6 +131,8 @@ const RESOURCE_ERROR_CLASSES = new Set([
 ]);
 const OBSERVER_LIMITATIONS = Object.freeze([
   'observer-issued-no-provider-mutation',
+  'private-receipt-anchor-is-snapshot-not-command-admission-proof',
+  'does-not-authenticate-private-export-origin',
   'does-not-prove-webclip-command-admission-by-itself',
   'does-not-prove-running-extension-source-sha',
   'does-not-close-p1-164-by-itself',
@@ -142,6 +144,8 @@ const SESSION_LIMITATIONS = Object.freeze([
   'does-not-detect-consistent-rewrite-without-external-final-digest',
   'does-not-detect-tail-truncation-without-external-final-digest',
   'operator-labels-are-non-evidentiary',
+  'private-receipt-anchor-is-snapshot-not-command-admission-proof',
+  'does-not-authenticate-private-export-origin',
   'does-not-prove-webclip-command-admission',
   'does-not-prove-running-extension-source-sha',
   'does-not-close-p1-164',
@@ -262,7 +266,7 @@ function validateObservation(value) {
   exactKeys(value, [
     'schema', 'generatedAt', 'evidenceClass', 'testedSourceSha', 'subject',
     'kind', 'phase', 'manualResolutionSourcePhase', 'effectivePhase',
-    'identityDigests', 'context', 'source', 'target', 'classification',
+    'receiptAnchor', 'identityDigests', 'context', 'source', 'target', 'classification',
     'watch', 'limitations'
   ], 'SESSION_OBSERVATION_SHAPE_INVALID');
 
@@ -282,6 +286,13 @@ function validateObservation(value) {
   }
 
   const generated = validIso(value.generatedAt, 'SESSION_GENERATED_AT_INVALID');
+
+  exactKeys(value.receiptAnchor, ['receiptIdDigest', 'receiptUpdatedAt', 'exportedAt'], 'SESSION_RECEIPT_ANCHOR_SHAPE_INVALID');
+  if (!isDigest(value.receiptAnchor.receiptIdDigest)) fail('SESSION_RECEIPT_ID_DIGEST_INVALID');
+  const receiptUpdatedAt = Number(value.receiptAnchor.receiptUpdatedAt);
+  if (!Number.isSafeInteger(receiptUpdatedAt) || receiptUpdatedAt <= 0) fail('SESSION_RECEIPT_UPDATED_AT_INVALID');
+  const receiptExported = validIso(value.receiptAnchor.exportedAt, 'SESSION_RECEIPT_EXPORTED_AT_INVALID');
+  if (receiptExported.ms > generated.ms) fail('SESSION_RECEIPT_EXPORTED_AFTER_OBSERVATION');
 
   exactKeys(value.subject, ['rpf', 'yandexQcf'], 'SESSION_SUBJECT_SHAPE_INVALID');
   if (!isDigest(value.subject.rpf) || !isDigest(value.subject.yandexQcf)) fail('SESSION_SUBJECT_DIGEST_INVALID');
@@ -373,6 +384,11 @@ function validateObservation(value) {
     phase: String(value.phase),
     manualResolutionSourcePhase: String(value.manualResolutionSourcePhase || ''),
     effectivePhase: String(value.effectivePhase),
+    receiptAnchor: Object.freeze({
+      receiptIdDigest: String(value.receiptAnchor.receiptIdDigest),
+      receiptUpdatedAt,
+      exportedAt: receiptExported.text
+    }),
     identityDigests: Object.freeze(identityDigests),
     context: Object.freeze({
       accountState: String(value.context.accountState),
@@ -405,6 +421,7 @@ function sessionSubject(observation) {
     rpf: value.subject.rpf,
     yandexQcf: value.subject.yandexQcf,
     kind: KIND,
+    receiptIdDigest: value.receiptAnchor.receiptIdDigest,
     receiptIdentityDigests: Object.freeze(receiptIdentityDigests)
   });
 }
@@ -441,9 +458,10 @@ function validateHeader(value) {
   const created = validIso(value.createdAt, 'SESSION_CREATED_AT_INVALID');
   if (value.evidenceClass !== 'local-observation-chain-only') fail('SESSION_HEADER_EVIDENCE_CLASS_INVALID');
 
-  exactKeys(value.subject, ['testedSourceSha', 'rpf', 'yandexQcf', 'kind', 'receiptIdentityDigests'], 'SESSION_HEADER_SUBJECT_SHAPE_INVALID');
+  exactKeys(value.subject, ['testedSourceSha', 'rpf', 'yandexQcf', 'kind', 'receiptIdDigest', 'receiptIdentityDigests'], 'SESSION_HEADER_SUBJECT_SHAPE_INVALID');
   if (!/^[0-9a-f]{40}$/.test(String(value.subject.testedSourceSha || ''))) fail('SESSION_TESTED_SOURCE_SHA_INVALID');
   if (!isDigest(value.subject.rpf) || !isDigest(value.subject.yandexQcf)) fail('SESSION_SUBJECT_DIGEST_INVALID');
+  if (!isDigest(value.subject.receiptIdDigest)) fail('SESSION_RECEIPT_ID_DIGEST_INVALID');
   if (value.subject.kind !== KIND) fail('SESSION_KIND_INVALID');
   exactKeys(value.subject.receiptIdentityDigests, RECEIPT_DIGEST_KEYS, 'SESSION_HEADER_IDENTITY_SHAPE_INVALID');
   const receiptIdentityDigests = {};
@@ -468,6 +486,7 @@ function validateHeader(value) {
       rpf: String(value.subject.rpf),
       yandexQcf: String(value.subject.yandexQcf),
       kind: KIND,
+      receiptIdDigest: String(value.subject.receiptIdDigest),
       receiptIdentityDigests: Object.freeze(receiptIdentityDigests)
     }),
     limitations: Object.freeze([...SESSION_LIMITATIONS])
@@ -498,6 +517,18 @@ function makeEntry(header, previousEntry, observation, label, options = {}) {
     const previous = validateEntry(previousEntry, h);
     const previousObservation = validateObservation(previous.observation);
     if (Date.parse(value.generatedAt) < Date.parse(previousObservation.generatedAt)) fail('SESSION_OBSERVATION_TIME_REGRESSION');
+    if (Date.parse(value.receiptAnchor.exportedAt) < Date.parse(previousObservation.receiptAnchor.exportedAt)) {
+      fail('SESSION_RECEIPT_EXPORT_TIME_REGRESSION');
+    }
+    if (value.receiptAnchor.receiptUpdatedAt < previousObservation.receiptAnchor.receiptUpdatedAt) {
+      fail('SESSION_RECEIPT_REVISION_REGRESSION');
+    }
+    if (
+      value.effectivePhase !== previousObservation.effectivePhase
+      && value.receiptAnchor.receiptUpdatedAt <= previousObservation.receiptAnchor.receiptUpdatedAt
+    ) {
+      fail('SESSION_PHASE_CHANGED_WITHOUT_RECEIPT_ADVANCE');
+    }
     if (PHASE_RANK.get(value.effectivePhase) < PHASE_RANK.get(previousObservation.effectivePhase)) {
       fail('SESSION_PHASE_REGRESSION');
     }
@@ -653,6 +684,9 @@ function readSession(sessionDir) {
   let previousDigest = digestObject(header);
   let previousGeneratedAt = -1;
   let previousRecordedAt = -1;
+  let previousReceiptExportedAt = -1;
+  let previousReceiptUpdatedAt = -1;
+  let previousEffectivePhase = '';
   let previousRank = -1;
   const seenObservationDigests = new Set();
 
@@ -674,6 +708,16 @@ function readSession(sessionDir) {
     if (observationAt < previousGeneratedAt) fail('SESSION_OBSERVATION_TIME_REGRESSION');
     if (recordedAt < observationAt) fail('SESSION_RECORDED_AT_BEFORE_OBSERVATION');
     if (recordedAt < Date.parse(header.createdAt)) fail('SESSION_RECORDED_AT_BEFORE_HEADER');
+    const receiptExportedAt = Date.parse(observation.receiptAnchor.exportedAt);
+    if (receiptExportedAt < previousReceiptExportedAt) fail('SESSION_RECEIPT_EXPORT_TIME_REGRESSION');
+    if (observation.receiptAnchor.receiptUpdatedAt < previousReceiptUpdatedAt) fail('SESSION_RECEIPT_REVISION_REGRESSION');
+    if (
+      previousEffectivePhase
+      && observation.effectivePhase !== previousEffectivePhase
+      && observation.receiptAnchor.receiptUpdatedAt <= previousReceiptUpdatedAt
+    ) {
+      fail('SESSION_PHASE_CHANGED_WITHOUT_RECEIPT_ADVANCE');
+    }
     const rank = PHASE_RANK.get(observation.effectivePhase);
     if (rank < previousRank) fail('SESSION_PHASE_REGRESSION');
     if (recordedAt < previousRecordedAt) fail('SESSION_RECORDED_AT_REGRESSION');
@@ -682,6 +726,9 @@ function readSession(sessionDir) {
     previousDigest = digestObject(entry);
     previousGeneratedAt = observationAt;
     previousRecordedAt = recordedAt;
+    previousReceiptExportedAt = receiptExportedAt;
+    previousReceiptUpdatedAt = observation.receiptAnchor.receiptUpdatedAt;
+    previousEffectivePhase = observation.effectivePhase;
     previousRank = rank;
   }
 
@@ -737,6 +784,9 @@ function summarizeSession(sessionDir) {
       operatorLabelEvidence: false,
       phase: observation.phase,
       effectivePhase: observation.effectivePhase,
+      receiptUpdatedAt: observation.receiptAnchor.receiptUpdatedAt,
+      receiptExportedAt: observation.receiptAnchor.exportedAt,
+      receiptIdDigest: observation.receiptAnchor.receiptIdDigest,
       currentRootPathDigest: observation.identityDigests.currentRootPath,
       accountState: observation.context.accountState,
       accountMatches: observation.context.accountMatches,
