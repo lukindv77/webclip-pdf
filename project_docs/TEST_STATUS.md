@@ -223,3 +223,13 @@ A repository-side qualification helper now exists at `project_tools/yandex_p1_16
 Its deterministic contract test is `project_tools/test_p1_164_live_observer.js`. The test covers no-replay phase classification, visibility-watch bounds, auth/account/root conflicts, source/target replacement, immutable-target occupation, secret handling, and absence of mutating provider endpoints. This source-level harness is preparation for authorized real Yandex qualification; it is not itself live-provider evidence and does not advance Yandex QCF.
 
 P1-164 remains **ACTIVE**. Real revoke+move success/unknown settlement, visibility delay, auth expiry, account/root switching, replacement/collision, and real manual-resolution UX still require authorized physical Yandex evidence. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+## P1-164 private observer export bridge
+
+The manual `publication-revoke-trash` recovery path now has an explicit private qualification export. The worker re-reads the exact manual receipt, stale-checks `updatedAt`, requires the existing provider-identity envelope and preserved remote phase, snapshots the current local root separately, and prepares a local Save As file without making a Yandex request or reading an OAuth credential. The private file contains exact account/path/resource/public-link identity and must remain outside the repository.
+
+`project_tools/yandex_p1_164_private_export_adapter.js` validates that private schema, rejects credential fields and repository-local private files, requires a clean tracked checkout, and binds the final GET-only observer input to the exact current Git HEAD. Neither the export nor adapter proves the source SHA of the already-running browser extension; the live observer now states this limitation explicitly.
+
+Deterministic coverage is `project_tools/test_p1_164_private_observer_export.js` plus the extended `project_tools/test_p1_164_live_observer.js`. Runtime changes advance the package RPF to `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a`; Chrome/Yandex QCF, full RCF and BCF remain unchanged because their contract projections/roots did not change.
+
+This is qualification infrastructure, not live-provider evidence. P1-164 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**.
