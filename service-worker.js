@@ -9479,9 +9479,15 @@ async function markPendingDestructiveMoveManualResolution(id, reason = '', trigg
             if (!current) { setResult(null); return; }
             const terminalVerified = current.phase === 'remote-verified';
             const now = Date.now();
+            const manualResolutionSourcePhase = String(
+              current.manualResolutionSourcePhase
+              || (current.phase === 'manual-resolution' ? '' : current.phase)
+              || ''
+            ).slice(0, 40);
             const next = {
               ...current,
               phase: terminalVerified ? 'remote-verified' : 'manual-resolution',
+              manualResolutionSourcePhase,
               manualResolutionRequired: true,
               manualResolutionAt: Math.max(0, Number(current.manualResolutionAt) || 0) || now,
               manualResolutionTrigger: String(trigger || 'maintenance').slice(0, 80),
@@ -9535,6 +9541,11 @@ function pendingDestructiveMoveManualReceiptForUi(item = {}) {
     updatedAt: Math.max(0, Number(item.updatedAt) || 0),
     manualResolutionAt: Math.max(0, Number(item.manualResolutionAt) || 0),
     manualResolutionTrigger: String(item.manualResolutionTrigger || '').slice(0, 80),
+    manualResolutionSourcePhase: String(
+      item.manualResolutionSourcePhase
+      || (item.phase === 'manual-resolution' ? '' : item.phase)
+      || ''
+    ).slice(0, 40),
     lastError: String(item.lastError || '').slice(0, 2000),
     supersededByJournalReset: item.supersededByJournalReset === true
   });
