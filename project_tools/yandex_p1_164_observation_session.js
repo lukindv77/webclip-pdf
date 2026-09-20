@@ -8,6 +8,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const observer = require('./yandex_p1_164_live_observer.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const REAL_ROOT = fs.realpathSync(ROOT);
@@ -139,6 +140,7 @@ const OBSERVER_LIMITATIONS = Object.freeze([
 const SESSION_LIMITATIONS = Object.freeze([
   'local-hash-chain-is-tamper-evident-not-authenticated',
   'does-not-authenticate-observer-origin',
+  'does-not-detect-tail-truncation-without-external-final-digest',
   'operator-labels-are-non-evidentiary',
   'does-not-prove-webclip-command-admission',
   'does-not-prove-running-extension-source-sha',
@@ -304,6 +306,22 @@ function validateObservation(value) {
   if (!CLASSIFICATION_STATES.has(String(value.classification.state || ''))) fail('SESSION_CLASSIFICATION_STATE_INVALID');
   if (!NEXT_ACTIONS.has(String(value.classification.safeNextAction || ''))) fail('SESSION_NEXT_ACTION_INVALID');
   if (typeof value.classification.terminal !== 'boolean') fail('SESSION_CLASSIFICATION_TERMINAL_INVALID');
+  const recomputed = observer.classifyObservation({
+    phase: String(value.effectivePhase),
+    accountState: String(value.context.accountState),
+    accountMatches: value.context.accountMatches,
+    rootMatches: value.context.rootMatches,
+    samePath: value.context.sameSourceTargetPath,
+    source,
+    target
+  });
+  if (
+    recomputed.state !== value.classification.state
+    || recomputed.safeNextAction !== value.classification.safeNextAction
+    || recomputed.terminal !== value.classification.terminal
+  ) {
+    fail('SESSION_CLASSIFICATION_MISMATCH');
+  }
 
   exactKeys(value.watch, ['requestedSeconds', 'elapsedMs', 'attempts'], 'SESSION_WATCH_SHAPE_INVALID');
   const requestedSeconds = Number(value.watch.requestedSeconds);
@@ -395,6 +413,7 @@ function sessionId(value = '') {
 function makeHeader(observation, options = {}) {
   const value = validateObservation(observation);
   const created = validIso(options.createdAt || new Date().toISOString(), 'SESSION_CREATED_AT_INVALID');
+  if (created.ms < Date.parse(value.generatedAt)) fail('SESSION_CREATED_AT_BEFORE_OBSERVATION');
   return Object.freeze({
     schema: HEADER_SCHEMA,
     sessionId: sessionId(options.sessionId),
@@ -462,6 +481,8 @@ function makeEntry(header, previousEntry, observation, label, options = {}) {
   const observationSafe = publicObservation(value);
   const observationDigest = digestObject(observationSafe);
   const recorded = validIso(options.recordedAt || new Date().toISOString(), 'SESSION_RECORDED_AT_INVALID');
+  if (recorded.ms < Date.parse(value.generatedAt)) fail('SESSION_RECORDED_AT_BEFORE_OBSERVATION');
+  if (recorded.ms < Date.parse(h.createdAt)) fail('SESSION_RECORDED_AT_BEFORE_HEADER');
 
   if (previousEntry) {
     const previous = validateEntry(previousEntry, h);
@@ -611,6 +632,7 @@ function readSession(sessionDir) {
   if (!names.includes('000000.header.json')) fail('SESSION_HEADER_MISSING');
   const allowed = new Set(['000000.header.json']);
   const checkpointNames = names.filter((name) => /^\d{6}\.checkpoint\.json$/.test(name));
+  if (checkpointNames.length < 1) fail('SESSION_CHECKPOINT_MISSING');
   if (checkpointNames.length > MAX_CHECKPOINTS) fail('SESSION_TOO_MANY_CHECKPOINTS');
   checkpointNames.forEach((name) => allowed.add(name));
   const unexpected = names.filter((name) => !allowed.has(name));
@@ -637,15 +659,18 @@ function readSession(sessionDir) {
     seenObservationDigests.add(entry.observationDigest);
 
     const observation = validateObservation(entry.observation);
-    if (observation.generatedAtMs < previousGeneratedAt) fail('SESSION_OBSERVATION_TIME_REGRESSION');
+    const observationAt = Date.parse(observation.generatedAt);
+    const recordedAt = Date.parse(entry.recordedAt);
+    if (observationAt < previousGeneratedAt) fail('SESSION_OBSERVATION_TIME_REGRESSION');
+    if (recordedAt < observationAt) fail('SESSION_RECORDED_AT_BEFORE_OBSERVATION');
+    if (recordedAt < Date.parse(header.createdAt)) fail('SESSION_RECORDED_AT_BEFORE_HEADER');
     const rank = PHASE_RANK.get(observation.effectivePhase);
     if (rank < previousRank) fail('SESSION_PHASE_REGRESSION');
-    const recordedAt = Date.parse(entry.recordedAt);
     if (recordedAt < previousRecordedAt) fail('SESSION_RECORDED_AT_REGRESSION');
 
     entries.push(entry);
     previousDigest = digestObject(entry);
-    previousGeneratedAt = Date.parse(observation.generatedAt);
+    previousGeneratedAt = observationAt;
     previousRecordedAt = recordedAt;
     previousRank = rank;
   }
