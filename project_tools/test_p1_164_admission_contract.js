@@ -276,8 +276,8 @@ throwsCode(
   'CLI modes cannot conflict'
 );
 
-ok(!source.includes('fetch('), 'admission witness performs no network call');
-ok(!source.includes('yandexApi('), 'admission witness cannot issue Yandex API calls');
+ok(!source.includes('fetch('), 'admission witness performs no fetch');
+ok(!source.includes("require('node:http')") && !source.includes("require('node:https')"), 'admission witness imports no HTTP client');
 ok(!source.includes('WEBCLIP_YANDEX_OAUTH_TOKEN'), 'admission witness consumes no OAuth token');
 ok(source.includes('qualificationPass: false'), 'admission binding cannot emit qualification PASS');
 ok(source.includes('source-contract-only-not-runtime-execution-evidence'), 'runtime execution limitation is explicit');
