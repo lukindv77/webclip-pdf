@@ -21,6 +21,14 @@ EXPECTED_TOOL_VERSIONS = {
     "node-version": "22.23.2",
 }
 
+REPOSITORY_INTEGRITY_WORKFLOW = ".github/workflows/repository-integrity.yml"
+EXACT_CHECKOUT_MARKERS = (
+    "ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}",
+    "EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}",
+    'actual="$(git rev-parse HEAD)"',
+    'if [[ "$actual" != "$EXPECTED_SHA" ]]; then',
+)
+
 DEPENDABOT_MARKERS = (
     'package-ecosystem: "github-actions"',
     'directory: "/"',
@@ -60,6 +68,20 @@ def evaluate(workflows: Mapping[str, str]) -> list[str]:
     return errors
 
 
+def evaluate_repository_integrity_exact_checkout(workflows: Mapping[str, str]) -> list[str]:
+    text = workflows.get(REPOSITORY_INTEGRITY_WORKFLOW, "")
+    if not text:
+        return [f"{REPOSITORY_INTEGRITY_WORKFLOW}: workflow is missing"]
+
+    errors: list[str] = []
+    for marker in EXACT_CHECKOUT_MARKERS:
+        if marker not in text:
+            errors.append(
+                f"{REPOSITORY_INTEGRITY_WORKFLOW}: exact PR-head checkout marker missing: {marker}"
+            )
+    return errors
+
+
 def evaluate_dependabot(text: str) -> list[str]:
     errors: list[str] = []
     for marker in DEPENDABOT_MARKERS:
@@ -94,6 +116,7 @@ def main() -> int:
         return 1
 
     errors = evaluate(workflows)
+    errors.extend(evaluate_repository_integrity_exact_checkout(workflows))
 
     if not DEPENDABOT.is_file():
         errors.append(".github/dependabot.yml is missing")
@@ -108,7 +131,8 @@ def main() -> int:
 
     print(
         f"CI/supply-chain hygiene PASS: {len(workflows)} workflow(s), "
-        "external actions immutable, permissions read-only, Dependabot low-noise."
+        "external actions immutable, permissions read-only, Repository Integrity exact-head checkout enforced, "
+        "Dependabot low-noise."
     )
     return 0
 

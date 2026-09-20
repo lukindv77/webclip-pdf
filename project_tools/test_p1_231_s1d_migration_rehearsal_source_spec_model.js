@@ -19,7 +19,7 @@ const ANCHORS = Object.freeze({
   'project_docs/RELEASE_READINESS.md': '165766b248ffa48fc88f0140283adf0e855df22f',
   'project_tools/check_release_readiness.py': 'd3569428a3ea4e5d90be24426fd09c233c75b882',
   '.github/workflows/release-gate.yml': 'f6813f364d39932fb32a1cc2d527d2d7a489ed02',
-  '.github/workflows/repository-integrity.yml': 'a8b24780df4c18ee3f85ec2bc51925be3a40541c',
+  '.github/workflows/repository-integrity.yml': 'aca16dbc49742881ffb7df34a7c7d0fab9bec80e',
 });
 const KINDS = ['unpacked-chrome', 'yandex-e2e', 'blocker-review', 'release-decision'];
 const SHA = Object.freeze({
@@ -168,6 +168,14 @@ function expectBlocked(r, state) { assert.strictEqual(r.state, 'shadow-observed'
   const rtext = fs.readFileSync(path.join(ROOT, 'project_docs/RELEASE_READINESS.md'), 'utf8');
   test('V1 readiness marker retained', () => assert(rtext.includes('WEBCLIP_RELEASE_READINESS_V1')));
   test('manifest remains 0.9.8', () => assert.strictEqual(JSON.parse(fs.readFileSync(path.join(ROOT,'manifest.json'),'utf8')).version, '0.9.8'));
+  const integrityWorkflow = fs.readFileSync(path.join(ROOT, '.github/workflows/repository-integrity.yml'), 'utf8');
+  test('Repository Integrity checks out literal PR head', () => assert(
+    integrityWorkflow.includes("ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}")
+  ));
+  test('Repository Integrity verifies actual checkout SHA', () => assert(
+    integrityWorkflow.includes('actual="$(git rev-parse HEAD)"')
+    && integrityWorkflow.includes('if [[ "$actual" != "$EXPECTED_SHA" ]]; then')
+  ));
   test('V1 status has five blockers', () => {
     const py = process.platform === 'win32' ? 'python' : 'python3';
     const p = spawnSync(py, ['project_tools/check_release_readiness.py', 'status'], { cwd: ROOT, encoding: 'utf8' });
@@ -278,7 +286,7 @@ function expectBlocked(r, state) { assert.strictEqual(r.state, 'shadow-observed'
     `current_identity=candidate-ineligible; current_settlement=candidate-ineligible; current_equivalence=candidate-ineligible; ` +
     `namespace_before_short_circuit=true; candidate_ineligible_not_missing=true; latest_attempt_ordering=true; append_only=true; ` +
     `main_movement=fail-closed; workflow_binding=fail-closed; metadata_drift=fail-closed; rollback=v1-only; ` +
-    `v1_authority=unchanged; v1_blockers=5; s2_authorized=false; release_authorized=false; product_zip=false; ` +
+    `v1_authority=unchanged; v1_blockers=5; repository_integrity_exact_head=true; s2_authorized=false; release_authorized=false; product_zip=false; ` +
     `rpf=${CURRENT.rpf}; bcf=${CURRENT.bcf}; head=${head}`
   );
 })();

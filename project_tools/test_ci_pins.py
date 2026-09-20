@@ -30,6 +30,30 @@ updates:
           - "*"
 """
 
+GOOD_REPOSITORY_INTEGRITY = """name: Repository integrity
+permissions:
+  contents: read
+jobs:
+  repository-integrity:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [[ "$actual" != "$EXPECTED_SHA" ]]; then
+            exit 1
+          fi
+"""
+
 
 def expect_pass(name: str, text: str) -> None:
     errors = module.evaluate({".github/workflows/test.yml": text})
@@ -79,6 +103,29 @@ def main() -> None:
         f"permissions:\n  contents: read\nruns-on: ubuntu-24.04\n- uses: actions/checkout@{PIN}\npython-version: '3.12'\n",
         "python-version must be exact",
     )
+
+    exact_errors = module.evaluate_repository_integrity_exact_checkout(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: GOOD_REPOSITORY_INTEGRITY}
+    )
+    if exact_errors:
+        raise AssertionError(f"repository-integrity-exact-good: expected PASS, got {exact_errors}")
+
+    no_ref = GOOD_REPOSITORY_INTEGRITY.replace(
+        "          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}\n",
+        "",
+    )
+    exact_errors = module.evaluate_repository_integrity_exact_checkout(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: no_ref}
+    )
+    if not any("exact PR-head checkout marker missing" in error and "ref:" in error for error in exact_errors):
+        raise AssertionError(f"repository-integrity-no-ref: expected exact-ref failure, got {exact_errors}")
+
+    no_verify = GOOD_REPOSITORY_INTEGRITY.replace('          actual="$(git rev-parse HEAD)"\n', "")
+    exact_errors = module.evaluate_repository_integrity_exact_checkout(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: no_verify}
+    )
+    if not any("git rev-parse HEAD" in error for error in exact_errors):
+        raise AssertionError(f"repository-integrity-no-verify: expected verify failure, got {exact_errors}")
 
     dep_errors = module.evaluate_dependabot(GOOD_DEPENDABOT)
     if dep_errors:

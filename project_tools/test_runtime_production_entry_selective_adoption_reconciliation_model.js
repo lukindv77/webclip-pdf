@@ -22,7 +22,9 @@ function changedPaths(base, head = 'HEAD') {
   return text ? text.split(/\r?\n/).filter(Boolean) : [];
 }
 function isResearchControlPath(path) {
-  return path.startsWith('project_docs/') || path.startsWith('project_tools/');
+  return path.startsWith('project_docs/')
+    || path.startsWith('project_tools/')
+    || path.startsWith('.github/workflows/');
 }
 
 const BASELINE = '8704480b2ec0df9a7a9753821407d6772dee858a';
@@ -142,6 +144,7 @@ function releaseAuthority({ runtimeComplete = false, shadowComplete = false, exp
   check(historicalDeltaB.every(isResearchControlPath), 'no runtime/product file changed between historical baseline B and implementation entry');
   check(historicalDeltaA.includes('project_docs/RESEARCH_REGISTRY.md'), 'baseline A delta includes current ownership authority update');
   check(historicalDeltaB.includes('project_docs/RESEARCH_REGISTRY.md'), 'baseline B delta includes current ownership authority update');
+  check(isResearchControlPath('.github/workflows/repository-integrity.yml'), 'delivery workflow is control-plane, not product runtime');
 
   const implementationDelta = changedPaths(IMPLEMENTATION_ENTRY_BASE);
   const implementationRuntimeDelta = implementationDelta.filter((path) => !isResearchControlPath(path));
