@@ -43,7 +43,7 @@ It intentionally contains raw account UID, paths, stable `resource_id`, and the 
 `project_tools/yandex_p1_164_private_export_adapter.js` consumes exactly the private schema and refuses:
 
 - execution under CI;
-- input or output paths inside the repository;
+- input or output paths inside the repository, including paths that resolve there through a symlinked file/parent;
 - unexpected schema fields;
 - any credential-shaped key such as access/refresh token, authorization, client secret, or PKCE verifier;
 - a receipt outside the current `destructive:publication-revoke-trash:...` namespace;
@@ -51,7 +51,7 @@ It intentionally contains raw account UID, paths, stable `resource_id`, and the 
 - a watch window outside 0–120 seconds;
 - overwrite of an existing output file.
 
-The adapter requires a clean tracked checkout and binds the final observer input to `git rev-parse HEAD`. The output is created exclusively and chmodded to mode `0600` where the platform permits it.
+The adapter requires a clean tracked checkout and binds the final observer input to `git rev-parse HEAD`. Existing private inputs and output parents are canonicalized with `realpath` before the repository-boundary check; the output is created exclusively and chmodded to mode `0600` where the platform permits it, and a partial newly-created output is removed if serialization fails.
 
 This binding means “the observer will run against this exact clean source checkout.” It does **not** by itself prove that the browser instance which originally created the receipt was loaded from the same source SHA. The live observer output therefore now carries the explicit limitation:
 
