@@ -10,6 +10,7 @@ const { execFileSync } = require('node:child_process');
 const observer = require('./yandex_p1_164_live_observer.js');
 
 const ROOT = path.resolve(__dirname, '..');
+const REAL_ROOT = fs.realpathSync(ROOT);
 const PRIVATE_SCHEMA = 'webclip-p1-164-private-observer-export/v1';
 const MAX_PRIVATE_BYTES = 64 * 1024;
 const FORBIDDEN_CREDENTIAL_KEYS = new Set([
@@ -29,15 +30,19 @@ function exactKeys(value, allowed, code) {
   if (keys.length !== want.length || keys.some((key, index) => key !== want[index])) fail(code);
 }
 
+function assertResolvedOutsideRepo(resolvedPath, label = 'private file') {
+  const absolute = path.resolve(String(resolvedPath || ''));
+  const relative = path.relative(REAL_ROOT, absolute);
+  if (!relative || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
+    fail('PRIVATE_PATH_INSIDE_REPOSITORY', `${label}: resolved path must stay outside repository`);
+  }
+  return absolute;
+}
+
 function outsideRepoPath(value, label = 'private file') {
   const raw = String(value || '').trim();
   if (!raw) fail('PRIVATE_PATH_REQUIRED', `${label}: path required`);
-  const absolute = path.resolve(raw);
-  const relative = path.relative(ROOT, absolute);
-  if (!relative || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
-    fail('PRIVATE_PATH_INSIDE_REPOSITORY', `${label}: file must stay outside repository`);
-  }
-  return absolute;
+  return assertResolvedOutsideRepo(path.resolve(raw), label);
 }
 
 function assertNoCredentialKeys(value, trail = '') {
@@ -142,31 +147,54 @@ function buildObserverInput(privateExport, testedSourceSha, watchSecondsOverride
 
 function readPrivateJson(filename) {
   const input = outsideRepoPath(filename, 'private export');
+  let resolved;
   let stat;
-  try { stat = fs.statSync(input); } catch (_) { fail('PRIVATE_EXPORT_UNREADABLE'); }
+  try {
+    resolved = assertResolvedOutsideRepo(fs.realpathSync(input), 'private export');
+    stat = fs.statSync(resolved);
+  } catch (error) {
+    if (error?.code === 'PRIVATE_PATH_INSIDE_REPOSITORY') throw error;
+    fail('PRIVATE_EXPORT_UNREADABLE');
+  }
   if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_PRIVATE_BYTES) fail('PRIVATE_EXPORT_FILE_INVALID');
   let value;
-  try { value = JSON.parse(fs.readFileSync(input, 'utf8')); } catch (_) { fail('PRIVATE_EXPORT_JSON_INVALID'); }
+  try { value = JSON.parse(fs.readFileSync(resolved, 'utf8')); } catch (_) { fail('PRIVATE_EXPORT_JSON_INVALID'); }
   return validatePrivateExport(value);
 }
 
 function writeExclusivePrivateJson(filename, value) {
   const output = outsideRepoPath(filename, 'observer input');
   const parent = path.dirname(output);
+  let realParent;
   let stat;
-  try { stat = fs.statSync(parent); } catch (_) { fail('PRIVATE_OUTPUT_PARENT_INVALID'); }
-  if (!stat.isDirectory()) fail('PRIVATE_OUTPUT_PARENT_INVALID');
-  let fd = -1;
   try {
-    fd = fs.openSync(output, 'wx', 0o600);
+    realParent = fs.realpathSync(parent);
+    stat = fs.statSync(realParent);
+  } catch (_) {
+    fail('PRIVATE_OUTPUT_PARENT_INVALID');
+  }
+  if (!stat.isDirectory()) fail('PRIVATE_OUTPUT_PARENT_INVALID');
+  const resolvedOutput = assertResolvedOutsideRepo(path.join(realParent, path.basename(output)), 'observer input');
+  let fd = -1;
+  let created = false;
+  try {
+    fd = fs.openSync(resolvedOutput, 'wx', 0o600);
+    created = true;
     fs.writeFileSync(fd, JSON.stringify(value, null, 2) + '\n', { encoding: 'utf8' });
+    fs.closeSync(fd);
+    fd = -1;
+    try { fs.chmodSync(resolvedOutput, 0o600); } catch (_) {}
   } catch (error) {
+    if (fd >= 0) {
+      try { fs.closeSync(fd); } catch (_) {}
+      fd = -1;
+    }
+    if (created) {
+      try { fs.unlinkSync(resolvedOutput); } catch (_) {}
+    }
     if (error?.code === 'EEXIST') fail('PRIVATE_OUTPUT_EXISTS');
     throw error;
-  } finally {
-    if (fd >= 0) fs.closeSync(fd);
   }
-  try { fs.chmodSync(output, 0o600); } catch (_) {}
 }
 
 function parseArgs(argv) {
@@ -208,6 +236,7 @@ if (require.main === module) {
 module.exports = Object.freeze({
   PRIVATE_SCHEMA,
   outsideRepoPath,
+  assertResolvedOutsideRepo,
   assertNoCredentialKeys,
   validatePrivateExport,
   buildObserverInput,
