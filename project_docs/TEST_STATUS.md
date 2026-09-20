@@ -206,3 +206,12 @@ Until the applicable real release QA is completed and an explicit release decisi
 The former root `QA_STATUS_0_9_9.md` accumulated many sequential WIP notes and duplicated implementation/test history. It was retirement-compared on 2026-08-29 against this document and `TEST_EVIDENCE.md`.
 
 Unique browser/environment observations were copied into `TEST_EVIDENCE.md`; durable current release constraints remain above. The old narrative was then removed from current `main` and remains recoverable from Git history.
+
+
+## Current P1-164 manual-resolution boundary
+
+The durable publication-revoke and revoke+Trash protocols preserve at-most-once remote admission semantics: once unpublish or move is durably admitted, automatic recovery observes rather than replaying that command.
+
+The current manual-resolution refinement additionally preserves the exact pre-manual remote phase in bounded `manualResolutionSourcePhase` metadata before the visible receipt phase becomes `manual-resolution`. Journal recovery UI distinguishes an unknown admitted unpublish, a verified-private source before move admission, and an unknown admitted move; legacy receipts without that lineage remain explicit unknown rather than inferring an admission state. The dangerous dismiss flow remains receipt-only and performs no Yandex or Journal mutation.
+
+Deterministic source coverage is in `test_p0_072_destructive_manual_resolution_operator.js` and `test_p1_164_revoke_trash_composition.js`. This is not live Yandex evidence. P1-164 and P1-090 remain ACTIVE, manifest version remains `0.9.8`, and release readiness remains **NOT READY**.
