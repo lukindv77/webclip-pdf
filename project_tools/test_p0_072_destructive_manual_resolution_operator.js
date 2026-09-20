@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const worker = fs.readFileSync(path.join(ROOT, 'service-worker.js'), 'utf8');
@@ -72,9 +73,14 @@ const isManual = functionSource(worker, 'pendingDestructiveMoveIsManual');
 ok(isManual.includes("String(item.phase || '') === 'manual-resolution'"), 'explicit manual phase is recognized');
 ok(isManual.includes('item.manualResolutionRequired === true'), 'verified manual-required state is recognized');
 
+const markManual = functionSource(worker, 'markPendingDestructiveMoveManualResolution');
+ok(markManual.includes('manualResolutionSourcePhase'), 'manual transition preserves the pre-manual remote phase');
+ok(markManual.includes("current.phase === 'manual-resolution' ? '' : current.phase"), 'legacy manual receipts do not fabricate a source phase');
+ok(markManual.indexOf('manualResolutionSourcePhase') < markManual.indexOf("phase: terminalVerified ? 'remote-verified' : 'manual-resolution'"), 'source phase is derived before the visible manual phase overwrites it');
+
 const sanitize = functionSource(worker, 'pendingDestructiveMoveManualReceiptForUi');
 ok(sanitize.includes('if (!pendingDestructiveMoveIsManual(item)) return null'), 'only manual receipts are projected to UI');
-for (const field of ['sourcePath', 'targetPath', 'verifiedPath', 'sourceResourceId', 'verifiedResourceId', 'updatedAt', 'manualResolutionAt', 'lastError']) {
+for (const field of ['sourcePath', 'targetPath', 'verifiedPath', 'sourceResourceId', 'verifiedResourceId', 'updatedAt', 'manualResolutionAt', 'manualResolutionSourcePhase', 'lastError']) {
   ok(sanitize.includes(field), 'manual projection carries review evidence: ' + field);
 }
 ok(!sanitize.includes('publicUrl'), 'manual UI projection does not expose public URLs unnecessarily');
@@ -116,10 +122,22 @@ ok(html.includes('WebClip не знает точный итог'), 'UI states un
 ok(html.includes('Списание удаляет только recovery receipt'), 'UI states dismiss-only semantics');
 ok(html.includes('id="refreshDestructiveRecovery"'), 'manual backlog can be explicitly refreshed');
 
+const guidanceSource = functionSource(journal, 'manualDestructiveReceiptRecoveryGuidance');
+const guidanceContext = vm.createContext({ String });
+vm.runInContext(guidanceSource + '\nthis.guide = manualDestructiveReceiptRecoveryGuidance;', guidanceContext);
+const guide = guidanceContext.guide;
+ok(guide({ kind: 'publication-revoke-trash', manualResolutionSourcePhase: 'revoke-admitted-unknown' }).includes('Unpublish уже был durably admitted'), 'composite unknown revoke has explicit no-retry guidance');
+ok(guide({ kind: 'publication-revoke-trash', manualResolutionSourcePhase: 'revoke-verified' }).includes('move ещё не был durably admitted'), 'composite verified revoke distinguishes not-yet-admitted move');
+ok(guide({ kind: 'publication-revoke-trash', manualResolutionSourcePhase: 'move-admitted-unknown' }).includes('Move уже был durably admitted'), 'composite unknown move has explicit no-retry guidance');
+ok(guide({ kind: 'publication-revoke', manualResolutionSourcePhase: 'admitted-unknown' }).includes('automatic unpublish retry запрещён'), 'standalone revoke guidance preserves no-replay rule');
+ok(guide({ kind: 'trash-move', manualResolutionSourcePhase: 'admitted-unknown' }).includes('automatic move retry запрещён'), 'single move guidance preserves no-replay rule');
+ok(guide({ kind: 'publication-revoke-trash', phase: 'manual-resolution' }).includes('legacy receipt'), 'legacy manual receipt stays explicit unknown rather than fabricating phase');
+
 const render = functionSource(journal, 'renderDestructiveRecovery');
-for (const field of ['sourcePath', 'targetPath', 'verifiedPath', 'sourceResourceId', 'verifiedResourceId']) {
+for (const field of ['sourcePath', 'targetPath', 'verifiedPath', 'sourceResourceId', 'verifiedResourceId', 'manualResolutionSourcePhase']) {
   ok(render.includes(field), 'UI renders review evidence: ' + field);
 }
+ok(render.includes('manualDestructiveReceiptRecoveryGuidance(receipt)'), 'UI renders phase-specific recovery guidance');
 ok(render.includes('Списать receipt после ручной проверки'), 'UI action requires prior manual check by wording');
 
 const refresh = functionSource(journal, 'refreshDestructiveRecovery');
@@ -128,6 +146,7 @@ ok(refresh.includes('limit: 50'), 'UI requests bounded manual list');
 
 const uiDismiss = functionSource(journal, 'dismissManualDestructiveReceipt');
 ok(uiDismiss.includes('requestDangerousConfirmation'), 'dismiss requires existing 9-digit dangerous confirmation');
+ok(uiDismiss.includes('manualDestructiveReceiptRecoveryGuidance(receipt)'), 'dismiss confirmation repeats phase-specific guidance');
 ok(uiDismiss.includes('receipt?.updatedAt'), 'UI carries exact receipt version from list');
 ok(uiDismiss.includes("type: 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_DISMISS'"), 'UI uses dedicated dismiss endpoint');
 ok(uiDismiss.includes('id,'), 'dismiss request carries exact receipt id');
@@ -137,6 +156,7 @@ ok(uiDismiss.includes('не будет обращаться к Яндекс Ди
 ok(uiDismiss.includes('не изменял Яндекс Диск и Журнал'), 'post-result status states no provider/Journal mutation');
 
 ok(css.includes('.destructive-recovery-panel'), 'manual backlog has dedicated visible styling');
+ok(css.includes('.destructive-recovery-card-guidance'), 'phase-specific manual guidance has dedicated visible styling');
 ok(css.includes('.destructive-recovery-dismiss'), 'dismiss action has distinct styling');
 
 ok(registry.includes('| P0-072 | ACTIVE |'), 'P0-072 remains ACTIVE');

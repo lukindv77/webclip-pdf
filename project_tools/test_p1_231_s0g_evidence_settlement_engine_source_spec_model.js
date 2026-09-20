@@ -422,10 +422,10 @@ function baseReceipts(sourceSha = A) {
 
 // Canonical predecessor integration.
 test('current S0-E protocol is exact', () => assert.strictEqual(s0e.kv.protocol, 'WEBCLIP_RELEASE_IDENTITY_V1'));
-test('current S0-E RPF exact', () => assert.strictEqual(currentIds.rpf, 'sha256:9fc5df31057a62f50a57dfdd03dbe51ed024f696c2063323e69326a10ffce1e6'));
+test('current S0-E RPF exact', () => assert.strictEqual(currentIds.rpf, 'sha256:bc84a3ae6508f61ff4c3bcb55e384f8484ad10338140f25e8e8f43c180e9239e'));
 test('current Chrome QCF exact', () => assert.strictEqual(currentIds.qcf['unpacked-chrome'], 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c'));
 test('current Yandex QCF exact', () => assert.strictEqual(currentIds.qcf['yandex-e2e'], 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1'));
-test('current full RCF exact', () => assert.strictEqual(currentIds.rcf, 'sha256:0e8b3e0b7e2b07b7419c9cb2ffe4f83535dec63e8a4a18b8d0abfd8277118e84'));
+test('current full RCF exact', () => assert.strictEqual(currentIds.rcf, 'sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce'));
 test('current BCF exact', () => assert.strictEqual(currentIds.bcf, 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'));
 test('current S0-F gate remains blocked portability', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-portability'));
 test('current S0-F RPF agrees with S0-E', () => assert.strictEqual(s0f.kv.rpf, currentIds.rpf));

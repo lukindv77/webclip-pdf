@@ -1595,6 +1595,37 @@ function manualDestructiveReceiptKindLabel(kind) {
   return 'Неизвестная destructive-операция';
 }
 
+function manualDestructiveReceiptRecoveryGuidance(receipt = {}) {
+  const kind = String(receipt?.kind || '');
+  const sourcePhase = String(receipt?.manualResolutionSourcePhase || receipt?.phase || '');
+
+  if (kind === 'publication-revoke-trash') {
+    if (sourcePhase === 'revoke-admitted-unknown') {
+      return 'Unpublish уже был durably admitted, а move ещё не был admitted. Вручную проверьте exact source/resourceId и фактическую публичность; automatic unpublish retry запрещён.';
+    }
+    if (sourcePhase === 'revoke-verified') {
+      return 'Exact source уже был verified private, а move ещё не был durably admitted. Проверьте immutable Trash target и не считайте перемещение выполненным без отдельного evidence.';
+    }
+    if (sourcePhase === 'move-admitted-unknown') {
+      return 'Move уже был durably admitted после verified revoke. Вручную проверьте immutable Trash target и тот же resourceId; automatic move retry запрещён.';
+    }
+  }
+
+  if (kind === 'publication-revoke' && sourcePhase === 'admitted-unknown') {
+    return 'Unpublish уже был durably admitted. Вручную проверьте exact source/resourceId и отсутствие public access; automatic unpublish retry запрещён.';
+  }
+
+  if ((kind === 'trash-move' || kind === 'read-move') && sourcePhase === 'admitted-unknown') {
+    return 'Move уже был durably admitted. Вручную проверьте source/target и exact resourceId; automatic move retry запрещён.';
+  }
+
+  if (sourcePhase === 'remote-verified') {
+    return 'Remote terminal identity уже была verified; manual-resolution относится к локальной authority/legacy boundary. Списание receipt не изменяет Journal или Яндекс Диск.';
+  }
+
+  return 'Исходная remote phase не сохранена в этом legacy receipt. Используйте path/resourceId/ошибку как evidence и не повторяйте destructive remote command из этой карточки.';
+}
+
 function appendDestructiveRecoveryMeta(container, label, value, { code = false } = {}) {
   const text = String(value || '').trim();
   if (!text) return;
@@ -1639,12 +1670,18 @@ function renderDestructiveRecovery(result) {
     appendDestructiveRecoveryMeta(meta, 'verified resourceId', receipt.verifiedResourceId, { code: true });
     appendDestructiveRecoveryMeta(meta, 'Корень', receipt.rootPath, { code: true });
     appendDestructiveRecoveryMeta(meta, 'Сайт', receipt.sourceSiteKey);
+    appendDestructiveRecoveryMeta(meta, 'Remote phase до manual-resolution', receipt.manualResolutionSourcePhase, { code: true });
     appendDestructiveRecoveryMeta(meta, 'Ручная проверка требуется с', formatDate(receipt.manualResolutionAt || receipt.updatedAt));
     appendDestructiveRecoveryMeta(meta, 'Последнее изменение receipt', formatDate(receipt.updatedAt));
     if (receipt.supersededByJournalReset) {
       appendDestructiveRecoveryMeta(meta, 'Журнал', 'исходное состояние уже superseded очисткой/импортом');
     }
     card.append(meta);
+
+    const guidance = document.createElement('div');
+    guidance.className = 'destructive-recovery-card-guidance';
+    guidance.textContent = manualDestructiveReceiptRecoveryGuidance(receipt);
+    card.append(guidance);
 
     if (receipt.lastError) {
       const error = document.createElement('div');
@@ -1712,9 +1749,10 @@ async function dismissManualDestructiveReceipt(receipt, button) {
   }
   const pathHint = receipt.targetPath || receipt.verifiedPath || receipt.sourcePath || 'путь не записан';
   const resourceHint = receipt.verifiedResourceId || receipt.sourceResourceId || 'resourceId не записан';
+  const guidance = manualDestructiveReceiptRecoveryGuidance(receipt);
   const confirmed = await requestDangerousConfirmation({
     title: 'Списать destructive recovery receipt',
-    text: `Сначала вручную проверьте Яндекс Диск и убедитесь в фактическом состоянии файла. Ориентир: ${pathHint}; resourceId: ${resourceHint}. После подтверждения WebClip удалит ТОЛЬКО recovery receipt. WebClip не будет обращаться к Яндекс Диску, перемещать/удалять файл или менять запись Журнала. Если есть сомнения — нажмите «Отмена» и оставьте receipt.`
+    text: `${guidance}\n\nСначала вручную проверьте Яндекс Диск и убедитесь в фактическом состоянии файла. Ориентир: ${pathHint}; resourceId: ${resourceHint}. После подтверждения WebClip удалит ТОЛЬКО recovery receipt. WebClip не будет обращаться к Яндекс Диску, перемещать/удалять файл или менять запись Журнала. Если есть сомнения — нажмите «Отмена» и оставьте receipt.`
   });
   if (!confirmed) return;
 

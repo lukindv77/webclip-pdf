@@ -182,6 +182,20 @@ ok(recovery.includes('Automatic move retry запрещён после durable a
 ok(!recovery.includes("'/resources/unpublish'"), 'recovery helper contains no unpublish command');
 ok(!recovery.includes("'/resources/move'"), 'recovery dispatcher contains no direct move command');
 
+const markManual = functionSource(worker, 'markPendingDestructiveMoveManualResolution');
+ok(markManual.includes('manualResolutionSourcePhase'), 'manual fallback preserves which remote phase required operator review');
+ok(markManual.includes("current.phase === 'manual-resolution' ? '' : current.phase"), 'legacy manual receipts do not invent an admission phase');
+
+const manualProjection = functionSource(worker, 'pendingDestructiveMoveManualReceiptForUi');
+ok(manualProjection.includes('manualResolutionSourcePhase'), 'manual UI projection exposes sanitized pre-manual phase lineage');
+
+const guidance = functionSource(page, 'manualDestructiveReceiptRecoveryGuidance');
+const guidanceContext = vm.createContext({ String });
+vm.runInContext(guidance + '\nthis.guide=manualDestructiveReceiptRecoveryGuidance;', guidanceContext);
+ok(guidanceContext.guide({ kind: 'publication-revoke-trash', manualResolutionSourcePhase: 'revoke-admitted-unknown' }).includes('Unpublish уже был durably admitted'), 'unknown revoke guidance forbids automatic unpublish replay');
+ok(guidanceContext.guide({ kind: 'publication-revoke-trash', manualResolutionSourcePhase: 'revoke-verified' }).includes('move ещё не был durably admitted'), 'verified revoke guidance distinguishes safe pre-move boundary');
+ok(guidanceContext.guide({ kind: 'publication-revoke-trash', manualResolutionSourcePhase: 'move-admitted-unknown' }).includes('automatic move retry запрещён'), 'unknown move guidance forbids automatic move replay');
+
 const genericRecovery = functionSource(worker, 'reconcilePendingDestructiveMoves');
 ok(genericRecovery.includes("kind === 'publication-revoke-trash'"), 'generic restart path recognizes composite receipts');
 ok(genericRecovery.includes('reconcilePendingPublicationRevokeTrashReceipt'), 'generic restart path delegates to the phase-aware protocol');
@@ -224,6 +238,8 @@ for (const stage of ['locate', 'folder', 'revoke', 'verify-revoke', 'move', 'ver
 ok(page.includes('const revokeAllowed = pendingDeleteHasKnownPublicAccess() && diskChoiceReady'), 'revoke is available after either explicit file outcome');
 ok(page.includes("diskAction === 'trash' && publicationAction === 'revoke'"), 'UI selects composite progress only for exact choices');
 ok(page.includes('publicationAction !== \'revoke\''), 'unsafe record-only fallback is hidden for composite errors');
+ok(page.includes('Remote phase до manual-resolution'), 'manual card exposes the preserved remote phase');
+ok(page.includes('destructive-recovery-card-guidance'), 'manual card renders phase-specific operator guidance');
 
 function nextAction(phase, observation = '') {
   if (phase === 'prepared') return 'drop-before-admission';
