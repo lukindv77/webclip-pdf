@@ -121,6 +121,7 @@ const header = ledger.makeHeader(prepared, {
 });
 eq(header.evidenceClass, 'local-observation-chain-only', 'session evidence class is local chain only');
 ok(header.limitations.includes('does-not-authenticate-observer-origin'), 'origin authentication is not overclaimed');
+ok(header.limitations.includes('does-not-detect-consistent-rewrite-without-external-final-digest'), 'consistent rewrite limit is explicit');
 ok(header.limitations.includes('does-not-detect-tail-truncation-without-external-final-digest'), 'tail truncation limit is explicit');
 ok(header.limitations.includes('operator-labels-are-non-evidentiary'), 'operator labels are explicitly non-evidentiary');
 
@@ -180,6 +181,25 @@ throwsCode(
   }),
   'SESSION_WINDOW_EXPIRY_WITHOUT_WATCH',
   'window-expired cannot be fabricated without a watch interval'
+);
+throwsCode(
+  () => ledger.validateObservation({
+    ...windowExpired,
+    watch: { ...windowExpired.watch, elapsedMs: 4999 }
+  }),
+  'SESSION_WINDOW_EXPIRY_TOO_EARLY',
+  'window-expired cannot predate its requested watch boundary'
+);
+throwsCode(
+  () => ledger.validateObservation({
+    ...windowExpired,
+    watch: {
+      ...windowExpired.watch,
+      attempts: [{ attempt: 1, elapsedMs: 10, state: 'rate-limited' }]
+    }
+  }),
+  'SESSION_FINAL_ATTEMPT_CLASSIFICATION_MISMATCH',
+  'final attempt must match the underlying pure classification'
 );
 
 const rootSwitch = observation({
@@ -284,7 +304,7 @@ try {
 
   const verified = ledger.readSession(sessionDir);
   eq(verified.entries.length, 3, 'full chain verifies');
-  const summary = ledger.summarizeSession(verified);
+  const summary = ledger.summarizeSession(sessionDir);
   eq(summary.schema, ledger.SUMMARY_SCHEMA, 'summary schema');
   eq(summary.evidenceClass, 'local-observation-chain-only', 'summary does not claim provider attestation');
   eq(summary.qualificationPass, false, 'ledger never emits qualification PASS');
@@ -295,6 +315,8 @@ try {
     'summary exposes only sanitized observed states'
   );
   ok(summary.limitations.includes('does-not-authenticate-observer-origin'), 'summary preserves authenticity limitation');
+  ok(summary.limitations.includes('does-not-detect-consistent-rewrite-without-external-final-digest'), 'summary requires external final digest for rewrite detection');
+  ok(summary.limitations.includes('does-not-detect-tail-truncation-without-external-final-digest'), 'summary requires external final digest for tail-truncation detection');
   ok(!JSON.stringify(summary).includes('/raw/'), 'summary has no fixture raw path');
   ok(!JSON.stringify(summary).includes('secret'), 'summary has no fixture credential');
 
@@ -341,6 +363,7 @@ ok(!toolSource.includes('fetch('), 'session ledger contains no network call');
 ok(!toolSource.includes('WEBCLIP_YANDEX_OAUTH_TOKEN'), 'session ledger never consumes OAuth token');
 ok(toolSource.includes("fs.openSync(filename, 'wx', 0o600)"), 'checkpoint files use exclusive restrictive creation');
 ok(toolSource.includes("'does-not-authenticate-observer-origin'"), 'source states local chain authenticity limitation');
+ok(toolSource.includes("'does-not-detect-consistent-rewrite-without-external-final-digest'"), 'source states consistent rewrite limitation');
 ok(toolSource.includes('qualificationPass: false'), 'source cannot synthesize qualification pass');
 
 console.log(
