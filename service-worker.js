@@ -3207,6 +3207,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         assertSaveAsOwnerPage(sender, 'journal.html');
         return listPendingDestructiveManualReceipts(message.limit);
 
+      case 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_EXPORT_OBSERVER_PREPARE':
+        if (senderKind !== 'extension') throw new Error('Private observer export доступен только странице журнала WebClip.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return preparePendingPublicationRevokeTrashObserverPrivateExport(String(message.id || ''), message.updatedAt);
+
       case 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_DISMISS':
         if (senderKind !== 'extension') throw new Error('Списание manual destructive recovery доступно только странице журнала WebClip.');
         assertSaveAsOwnerPage(sender, 'journal.html');
@@ -9549,6 +9554,166 @@ function pendingDestructiveMoveManualReceiptForUi(item = {}) {
     lastError: String(item.lastError || '').slice(0, 2000),
     supersededByJournalReset: item.supersededByJournalReset === true
   });
+}
+
+const P1_164_PRIVATE_OBSERVER_EXPORT_SCHEMA = 'webclip-p1-164-private-observer-export/v1';
+
+function buildPendingPublicationRevokeTrashObserverPrivateExport(item = {}, currentRootPath = '', exportedAt = Date.now()) {
+  const fail = (code, message) => {
+    const error = new Error(message);
+    error.code = code;
+    throw error;
+  };
+  if (!pendingDestructiveMoveIsManual(item)) {
+    fail('WEBCLIP_P1_164_EXPORT_MANUAL_REQUIRED', 'Private observer export доступен только для manual-resolution receipt.');
+  }
+  if (String(item.kind || '') !== PUBLICATION_REVOKE_TRASH_KIND) {
+    fail('WEBCLIP_P1_164_EXPORT_KIND_UNSUPPORTED', 'Private observer export поддерживает только publication-revoke-trash receipt.');
+  }
+  const phase = String(item.phase || '').slice(0, 40);
+  const allowedPhases = ['prepared', 'revoke-admitted-unknown', 'revoke-verified', 'move-admitted-unknown', 'remote-verified', 'manual-resolution'];
+  if (!allowedPhases.includes(phase)) {
+    fail('WEBCLIP_P1_164_EXPORT_PHASE_INVALID', 'Receipt содержит неподдерживаемую remote phase.');
+  }
+  const manualResolutionSourcePhase = String(
+    item.manualResolutionSourcePhase
+    || (phase === 'manual-resolution' ? '' : phase)
+    || ''
+  ).slice(0, 40);
+  if (phase === 'manual-resolution' && !['prepared', 'revoke-admitted-unknown', 'revoke-verified', 'move-admitted-unknown', 'remote-verified'].includes(manualResolutionSourcePhase)) {
+    fail('WEBCLIP_P1_164_EXPORT_SOURCE_PHASE_REQUIRED', 'Manual-resolution receipt не содержит доказанную исходную remote phase.');
+  }
+
+  const remoteIdentity = pendingDestructiveMoveRemoteIdentityStatus(item, { requireTerminal: phase === 'remote-verified' });
+  if (!remoteIdentity.ok) {
+    fail('WEBCLIP_P1_164_EXPORT_REMOTE_IDENTITY_INVALID', 'Receipt не содержит достаточную exact provider identity для observer export.');
+  }
+
+  const receiptId = String(item.id || '').trim().slice(0, MAX_IMPORTED_ENTRY_ID_CHARS);
+  const receiptUpdatedAt = Math.max(0, Number(item.updatedAt) || 0);
+  const operationId = String(item.operationId || '').trim().slice(0, MAX_OPERATION_ID_CHARS);
+  const accountUid = String(item.accountUid || '').trim().slice(0, MAX_YANDEX_ACCOUNT_FIELD_CHARS);
+  const rootPath = normalizeDiskPath(String(item.rootPath || '').slice(0, MAX_IMPORTED_PATH_CHARS));
+  const sourcePath = normalizeDiskPath(String(item.sourcePath || '').slice(0, MAX_IMPORTED_PATH_CHARS));
+  const targetPath = normalizeDiskPath(String(item.targetPath || '').slice(0, MAX_IMPORTED_PATH_CHARS));
+  const sourceResourceId = String(item.sourceResourceId || '').trim().slice(0, MAX_YANDEX_RESOURCE_ID_CHARS);
+  const sourcePublicUrl = String(item.sourcePublicUrl || '').trim().slice(0, MAX_YANDEX_PUBLIC_URL_CHARS);
+  const currentRoot = normalizeDiskPath(String(currentRootPath || '').slice(0, MAX_IMPORTED_PATH_CHARS));
+  const exported = Number(exportedAt);
+
+  if (!receiptId || !Number.isSafeInteger(receiptUpdatedAt) || receiptUpdatedAt <= 0 || !operationId
+    || !accountUid || !rootPath || !sourcePath || !targetPath || !sourceResourceId || !sourcePublicUrl || !currentRoot) {
+    fail('WEBCLIP_P1_164_EXPORT_IDENTITY_INCOMPLETE', 'Receipt/current context недостаточны для exact private observer input.');
+  }
+  if (!WebClipYandexRecoveryNamespace.isPathWithinRoot(sourcePath, rootPath)
+    || !WebClipYandexRecoveryNamespace.isPathWithinRoot(targetPath, rootPath)) {
+    fail('WEBCLIP_P1_164_EXPORT_PATH_SCOPE_INVALID', 'Receipt source/target находится вне bound root.');
+  }
+  if (!Number.isFinite(exported) || exported <= 0) {
+    fail('WEBCLIP_P1_164_EXPORT_TIME_INVALID', 'Некорректное время private observer export.');
+  }
+
+  return Object.freeze({
+    schema: P1_164_PRIVATE_OBSERVER_EXPORT_SCHEMA,
+    exportedAt: new Date(exported).toISOString(),
+    receiptId,
+    receiptUpdatedAt,
+    kind: PUBLICATION_REVOKE_TRASH_KIND,
+    phase,
+    manualResolutionSourcePhase: phase === 'manual-resolution' ? manualResolutionSourcePhase : '',
+    receipt: Object.freeze({
+      operationId,
+      accountUid,
+      rootPath,
+      sourcePath,
+      targetPath,
+      sourceResourceId,
+      sourcePublicUrl
+    }),
+    currentContext: Object.freeze({ rootPath: currentRoot }),
+    watchSeconds: 45,
+    containsSensitiveIdentity: true,
+    containsOAuthCredentials: false
+  });
+}
+
+function p1_164PrivateObserverExportFilename() {
+  const d = new Date();
+  const pad = (value) => String(value).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+  return `WebClip_P1-164_Yandex_Observer_${stamp}.private.json`;
+}
+
+async function preparePendingPublicationRevokeTrashObserverPrivateExport(id, expectedUpdatedAt) {
+  const key = String(id || '').trim();
+  const expected = Number(expectedUpdatedAt);
+  if (!key || key.length > MAX_IMPORTED_ENTRY_ID_CHARS || !Number.isSafeInteger(expected) || expected <= 0) {
+    const error = new Error('Некорректная authority private observer export.');
+    error.code = 'WEBCLIP_P1_164_EXPORT_AUTHORITY_INVALID';
+    throw error;
+  }
+  const item = await readPendingDestructiveMoveReceipt(key);
+  if (!item) {
+    const error = new Error('Recovery receipt уже отсутствует. Обновите список перед export.');
+    error.code = 'WEBCLIP_P1_164_EXPORT_RECEIPT_MISSING';
+    throw error;
+  }
+  if (!pendingDestructiveMoveIsManual(item)) {
+    const error = new Error('Recovery receipt больше не находится в manual-resolution. Обновите список.');
+    error.code = 'WEBCLIP_P1_164_EXPORT_RECEIPT_NOT_MANUAL';
+    throw error;
+  }
+  const currentUpdatedAt = Math.max(0, Number(item.updatedAt) || 0);
+  if (currentUpdatedAt !== expected) {
+    const error = new Error('Recovery receipt изменился после отображения. Обновите список и экспортируйте свежую версию.');
+    error.code = 'WEBCLIP_P1_164_EXPORT_RECEIPT_STALE';
+    throw error;
+  }
+  if (activeDestructiveMoveReceipts.has(key)) {
+    const error = new Error('Recovery receipt снова принадлежит активной операции; private export остановлен.');
+    error.code = 'WEBCLIP_P1_164_EXPORT_RECEIPT_BUSY';
+    throw error;
+  }
+
+  const config = await getYandexConfig();
+  const exported = buildPendingPublicationRevokeTrashObserverPrivateExport(item, config.rootPath, Date.now());
+  const text = JSON.stringify(exported, null, 2);
+  let blobUrl = '';
+  let saveAsSessionId = '';
+  try {
+    blobUrl = await createTextBlobUrl(text, 'application/json;charset=utf-8');
+    saveAsSessionId = makePreparedSaveAsSessionId();
+    const filename = p1_164PrivateObserverExportFilename();
+    await createPreparedSaveAsCheckpoint({
+      sessionId: saveAsSessionId,
+      blobUrl,
+      filename,
+      ownerPage: 'journal.html',
+      operationId: ''
+    });
+    return {
+      ok: true,
+      blobUrl,
+      filename,
+      saveAsSessionId,
+      receiptUpdatedAt: currentUpdatedAt,
+      sensitivePrivateFile: true,
+      containsOAuthCredentials: false
+    };
+  } catch (error) {
+    if (blobUrl && saveAsSessionId) {
+      await releasePreparedSaveAsCheckpoint({
+        sessionId: saveAsSessionId,
+        blobUrl,
+        ownerPage: 'journal.html',
+        operationId: '',
+        reason: 'prepare-failed'
+      }).catch(() => {});
+    } else if (blobUrl) {
+      await revokeBlobUrl(blobUrl).catch(() => {});
+    }
+    throw error;
+  }
 }
 
 async function listPendingDestructiveManualReceipts(maxItems = PENDING_DESTRUCTIVE_MANUAL_LIST_MAX) {
