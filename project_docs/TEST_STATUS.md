@@ -240,4 +240,4 @@ The permanent Repository Integrity workflow now checks out the literal PR head S
 
 This closes the process ambiguity observed during PR #300: run #899 tested a synthetic merge commit whose tree was byte-identical to the PR head, and post-merge run #900 tested literal `main`. Future PR runs must now be literal exact-head runs rather than exact-tree-equivalent merge simulations.
 
-`project_tools/check_ci_pins.py` and `project_tools/test_ci_pins.py` enforce this workflow contract. The change is structural only: runtime RPF, Chrome/Yandex QCF, full RCF and BCF remain unchanged. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+`project_tools/check_ci_pins.py` and `project_tools/test_ci_pins.py` enforce this workflow contract. Existing reconciliation models are synchronized so the new permanent workflow blob is an explicit P1-231 S1-D rollback anchor and `.github/workflows/` remains delivery/control-plane rather than product runtime in selective-adoption analysis. The change is structural only: runtime RPF, Chrome/Yandex QCF, full RCF and BCF remain unchanged. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
