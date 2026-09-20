@@ -99,7 +99,8 @@ ok(admission.includes('pendingDestructiveMoveJournalAuthorityMatches(current, re
 const finalize = functionSource(worker, 'finalizeTrashDeleteFromReceipt');
 ok(finalize.includes('beginJournalStatsMutation(\'delete\')'), 'Trash terminal delete preserves Journal stats dirty-marker protocol');
 ok(finalize.includes('[JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE]'), 'Journal delete and receipt consumption share one transaction');
-ok(finalize.includes("receipt.kind !== 'trash-move' || receipt.phase !== 'remote-verified'"), 'local deletion requires terminal verified Trash receipt');
+ok(finalize.includes("!['trash-move', 'publication-revoke-trash'].includes(receipt.kind) || receipt.phase !== 'remote-verified'"), 'local deletion requires a reviewed terminal verified Trash receipt');
+ok(finalize.includes('pendingDestructiveMoveRemoteIdentityStatus(receipt, { requireTerminal: true })'), 'Trash finalization rechecks terminal exact-object identity');
 ok(finalize.includes('receipt.supersededByJournalReset === true'), 'reset-superseded Trash receipt cannot delete replacement Journal entry');
 ok(finalize.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)'), 'terminal delete revalidates P0-072 source identity plus exact P0-076 cursor');
 ok(finalize.includes('entries.delete(current.id)'), 'authorized original entry is deleted only inside receipt transaction');

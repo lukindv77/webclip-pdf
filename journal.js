@@ -1590,6 +1590,8 @@ function refreshBackupInfo() {
 function manualDestructiveReceiptKindLabel(kind) {
   if (kind === 'read-move') return 'ReadLater → Upload';
   if (kind === 'trash-move') return 'Удаление → Trash';
+  if (kind === 'publication-revoke') return 'Отзыв публичного доступа';
+  if (kind === 'publication-revoke-trash') return 'Отзыв доступа → Trash';
   return 'Неизвестная destructive-операция';
 }
 
@@ -2669,6 +2671,16 @@ const DELETE_REVOKE_KEEP_STAGES = [
   ['journal', 'Удаление exact записи локального журнала']
 ];
 
+const DELETE_REVOKE_TRASH_STAGES = [
+  ['locate', 'Проверка exact файла и публичной ссылки'],
+  ['folder', 'Подготовка immutable Trash target'],
+  ['revoke', 'Отдельная admission и отзыв публичного доступа'],
+  ['verify-revoke', 'Подтверждение private exact source'],
+  ['move', 'Отдельная admission и перемещение в Trash'],
+  ['verify-move', 'Подтверждение private exact Trash target'],
+  ['journal', 'Удаление exact записи локального журнала']
+];
+
 let activeDeleteProgressStages = DELETE_OPERATION_STAGES;
 
 const MOVE_READ_STAGES = [
@@ -2808,7 +2820,7 @@ function pendingDeleteHasKnownPublicAccess() {
 function updateDeleteChoiceState() {
   if (journalDeleteBusy) return;
   const diskChoiceReady = deleteKeepFile.checked || deleteTrashFile.checked;
-  const revokeAllowed = pendingDeleteHasKnownPublicAccess() && deleteKeepFile.checked;
+  const revokeAllowed = pendingDeleteHasKnownPublicAccess() && diskChoiceReady;
   deleteRevokePublicAccess.disabled = !revokeAllowed;
   if (!revokeAllowed && deleteRevokePublicAccess.checked) deleteRevokePublicAccess.checked = false;
   const publicationChoiceReady = !pendingDeleteHasKnownPublicAccess()
@@ -2857,9 +2869,7 @@ async function confirmDeleteEntry() {
     ? (deletePreservePublicAccess.checked ? 'preserve' : deleteRevokePublicAccess.checked ? 'revoke' : '')
     : 'none';
   if (!publicationAction) {
-    deleteStatus.textContent = deleteTrashFile.checked
-      ? 'Для переноса опубликованного файла в Trash подтвердите сохранение ссылки. Композиция revoke + Trash пока недоступна.'
-      : 'Выберите: сохранить публичный доступ или отозвать ссылку перед удалением записи.';
+    deleteStatus.textContent = 'Выберите: сохранить публичный доступ или отозвать ссылку перед удалением записи.';
     deleteStatus.className = 'delete-status error';
     return;
   }
@@ -2886,17 +2896,22 @@ async function runDeleteOperation(diskAction, publicationAction = 'none') {
   deleteOnlyAfterError.classList.add('hidden');
   deleteProceed.classList.add('hidden');
   const revokeAndKeep = diskAction === 'keep' && publicationAction === 'revoke';
-  deleteTitle.textContent = diskAction === 'trash'
-    ? 'Перемещение файла в Trash'
+  const revokeAndTrash = diskAction === 'trash' && publicationAction === 'revoke';
+  deleteTitle.textContent = revokeAndTrash
+    ? 'Отзыв ссылки и перемещение в Trash'
+    : diskAction === 'trash'
+      ? 'Перемещение файла в Trash'
     : revokeAndKeep ? 'Отзыв ссылки и удаление записи' : 'Удаление записи журнала';
   deleteStatus.className = 'delete-status';
   if (diskAction === 'trash' || revokeAndKeep) {
     deleteProgress.classList.remove('hidden');
-    activeDeleteProgressStages = revokeAndKeep ? DELETE_REVOKE_KEEP_STAGES : DELETE_OPERATION_STAGES;
+    activeDeleteProgressStages = revokeAndTrash
+      ? DELETE_REVOKE_TRASH_STAGES
+      : (revokeAndKeep ? DELETE_REVOKE_KEEP_STAGES : DELETE_OPERATION_STAGES);
     renderProgressStages(deleteProgressStages, activeDeleteProgressStages);
     updateDeleteProgress({
       stage: 'locate',
-      message: revokeAndKeep
+      message: revokeAndKeep || revokeAndTrash
         ? 'Проверяем exact файл и текущую публичную ссылку…'
         : 'Начинаем поиск файла на Яндекс Диске…',
       percent: 4
@@ -2946,7 +2961,7 @@ async function runDeleteOperation(diskAction, publicationAction = 'none') {
     deleteRetryPublicationAction = publicationAction;
     deleteRetry.textContent = 'Повторить';
     deleteRetry.classList.remove('hidden');
-    if (diskAction === 'trash') deleteOnlyAfterError.classList.remove('hidden');
+    if (diskAction === 'trash' && publicationAction !== 'revoke') deleteOnlyAfterError.classList.remove('hidden');
   }
 }
 

@@ -50,16 +50,15 @@ throwsCode(
   'WEBCLIP_PUBLICATION_OUTCOME_REQUIRED',
   'published delete cannot disguise an omitted choice as none'
 );
-throwsCode(
-  () => context.resolveForTest(published, 'revoke', 'trash'),
-  'WEBCLIP_PUBLICATION_REVOKE_TRASH_UNAVAILABLE',
-  'revoke plus a second remote Trash effect must fail before destructive work'
-);
-
 outcome = context.resolveForTest(published, 'revoke', 'keep');
-eq(outcome.publicationAction, 'revoke', 'revoke is admitted only when the remote file stays in place');
+eq(outcome.publicationAction, 'revoke', 'keep-file revoke is admitted explicitly');
 eq(outcome.publicationOutcome, 'revoke-requested', 'boundary records the requested private outcome before admission');
 ok(Object.isFrozen(outcome), 'revoke request outcome is immutable');
+
+outcome = context.resolveForTest(published, 'revoke', 'trash');
+eq(outcome.publicationAction, 'revoke', 'revoke plus Trash is admitted only through the explicit composite outcome');
+eq(outcome.publicationOutcome, 'revoke-and-trash-requested', 'boundary records the reviewed two-effect outcome before either admission');
+ok(Object.isFrozen(outcome), 'composite revoke request outcome is immutable');
 
 outcome = context.resolveForTest(published, 'preserve');
 eq(outcome.hasKnownPublicAccess, true, 'known public access is detected');
@@ -96,12 +95,12 @@ for (const marker of [
   'id="deleteRevokePublicAccess"',
   'value="revoke" disabled',
   'любой человек со ссылкой сможет и дальше открыть файл',
-  'Вместе с переносом в Trash этот вариант пока недоступен'
+  'отдельно зафиксирована move admission'
 ]) ok(html.includes(marker), `delete dialog marker missing: ${marker}`);
 
 ok(page.includes("deletePublicationChoices.classList.toggle('hidden', !hasKnownPublicAccess)"), 'publication choice appears only for known published entries');
-ok(page.includes('deleteRevokePublicAccess.disabled = !revokeAllowed'), 'revoke choice is enabled only for keep-file composition');
-ok(page.includes('(revokeAllowed && deleteRevokePublicAccess.checked)'), 'proceed admits an explicit revoke choice only when keep-file is selected');
+ok(page.includes('deleteRevokePublicAccess.disabled = !revokeAllowed'), 'revoke choice is enabled only after an explicit file outcome');
+ok(page.includes('(revokeAllowed && deleteRevokePublicAccess.checked)'), 'proceed admits only an explicit compatible revoke choice');
 ok(page.includes("deleteRevokePublicAccess.checked ? 'revoke' : ''"), 'page derives revoke only from deliberate selection');
 ok(page.includes('diskAction, publicationAction, operationId: activeDeleteOperationId'), 'page sends both independent choices');
 ok(page.includes("runDeleteOperation('keep', deleteRetryPublicationAction)"), 'fallback record-only delete retains publication choice');

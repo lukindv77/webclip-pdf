@@ -87,7 +87,7 @@ ok(del.includes('moved = await moveJournalYandexFileToTrash(entry, operationId, 
 ok(del.includes('const finalized = await finalizeTrashDeleteFromReceipt(moved.detachedReceiptId)'), 'Trash finalization still consumes detached P0-072 receipt');
 ok(functionSource(worker, 'checkpointPendingTrashMoveIntent').includes("makePendingDestructiveMoveId('trash-move')"), 'generic P0-076 cursor does not replace worker-issued P0-072 receipt identity');
 ok(trashFinalize.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)'), 'Trash local finalizer now composes P0-072 receipt identity with exact P0-076 cursor');
-ok(trashFinalize.includes("receipt.kind !== 'trash-move' || receipt.phase !== 'remote-verified'"), 'Trash delete still requires remote verification');
+ok(trashFinalize.includes("!['trash-move', 'publication-revoke-trash'].includes(receipt.kind) || receipt.phase !== 'remote-verified'"), 'Trash delete still requires reviewed-kind terminal remote verification');
 
 const addComment = functionSource(worker, 'addJournalComment');
 const editComment = functionSource(worker, 'editJournalComment');

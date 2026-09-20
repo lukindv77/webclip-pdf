@@ -14,7 +14,7 @@ P1-164 remains **ACTIVE / IMPLEMENTATION-IN-PROGRESS**. The tranche implements a
 - the Journal row is updated only under exact reset-generation + row-revision CAS, preserving verified `resourceId` and `remotePath`;
 - a reset-superseded receipt cannot mutate replacement Journal state.
 
-The 2026-09-20 follow-up composes this primitive with the bounded `keep-file + exact Journal delete` outcome. `Revoke + Trash` remains fail-closed because it would add a second remote effect. See `RESEARCH_P1_164_DELETE_KEEP_REVOKE_COMPOSITION_2026-09-20_EVIDENCE.md`.
+The 2026-09-20 follow-ups compose this primitive with both the bounded `keep-file + exact Journal delete` outcome and a distinct two-admission `revoke + Trash` receipt. See `RESEARCH_P1_164_DELETE_KEEP_REVOKE_COMPOSITION_2026-09-20_EVIDENCE.md` and `RESEARCH_P1_164_REVOKE_TRASH_COMPOSITION_2026-09-20_EVIDENCE.md`.
 
 ## Durable settlement protocol
 
@@ -64,7 +64,7 @@ Exact candidate runtime production fingerprint (P1-231):
 
 - qualify success, timeout/unknown settlement, auth expiry, account switch and root switch against a real Yandex account;
 - qualify the new keep-file delete completion against a real Yandex account;
-- design `revoke + Trash` as an explicit second-remote-effect protocol rather than extending the bounded keep-file composition implicitly;
+- qualify the implemented two-admission `revoke + Trash` protocol against a real Yandex account, including both admitted-unknown boundaries;
 - decide the manual-resolution UI for an admitted receipt that remains public or cannot be observed;
 - preserve release gating: this evidence is not a build, tag, deployment or release authorization.
 
