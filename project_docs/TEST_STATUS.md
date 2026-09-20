@@ -232,4 +232,4 @@ The manual `publication-revoke-trash` recovery path now has an explicit private 
 
 Deterministic coverage is `project_tools/test_p1_164_private_observer_export.js` plus the extended `project_tools/test_p1_164_live_observer.js`. Runtime changes advance the package RPF to `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a`; Chrome/Yandex QCF, full RCF and BCF remain unchanged because their contract projections/roots did not change.
 
-This is qualification infrastructure, not live-provider evidence. P1-164 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**.
+This is qualification infrastructure, not live-provider evidence. The extra manual endpoint is also covered by the existing P0-072 destructive manual-recovery endpoint/owner-page test; export does not change P0-072 dismiss/no-replay semantics. P0-072 and P1-164 remain **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**.
