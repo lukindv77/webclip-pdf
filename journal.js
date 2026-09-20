@@ -369,6 +369,7 @@ confirmInput.addEventListener('keydown', (event) => {
 deleteKeepFile.addEventListener('change', updateDeleteChoiceState);
 deleteTrashFile.addEventListener('change', updateDeleteChoiceState);
 deletePreservePublicAccess.addEventListener('change', updateDeleteChoiceState);
+deleteRevokePublicAccess.addEventListener('change', updateDeleteChoiceState);
 deleteCancel.addEventListener('click', closeDeleteDialog);
 deleteProceed.addEventListener('click', confirmDeleteEntry);
 deleteRetry.addEventListener('click', () => runDeleteOperation(deleteRetryAction, deleteRetryPublicationAction));
@@ -2661,6 +2662,15 @@ const DELETE_OPERATION_STAGES = [
   ['journal', 'Удаление записи локального журнала']
 ];
 
+const DELETE_REVOKE_KEEP_STAGES = [
+  ['locate', 'Проверка exact файла и публичной ссылки'],
+  ['revoke', 'Отзыв публичного доступа'],
+  ['verify', 'Подтверждение приватного состояния'],
+  ['journal', 'Удаление exact записи локального журнала']
+];
+
+let activeDeleteProgressStages = DELETE_OPERATION_STAGES;
+
 const MOVE_READ_STAGES = [
   ['locate', 'Поиск актуального файла «Прочитать позже»'],
   ['folder', 'Подготовка структуры Upload по домену'],
@@ -2749,6 +2759,7 @@ async function revokeEntryPublicAccess(entry, button = null) {
 }
 
 function resetDeleteProgressUi() {
+  activeDeleteProgressStages = DELETE_OPERATION_STAGES;
   deleteProgress.classList.add('hidden');
   deleteProgressBar.style.width = '0%';
   deleteProgressPercent.textContent = '0%';
@@ -2783,6 +2794,7 @@ function openDeleteDialog(entry) {
   deleteCancel.disabled = false;
   deleteKeepFile.disabled = false;
   deleteTrashFile.disabled = false;
+  deleteRevokePublicAccess.disabled = true;
   deleteChoices.disabled = false;
   deletePublicationChoices.disabled = false;
   resetDeleteProgressUi();
@@ -2796,7 +2808,12 @@ function pendingDeleteHasKnownPublicAccess() {
 function updateDeleteChoiceState() {
   if (journalDeleteBusy) return;
   const diskChoiceReady = deleteKeepFile.checked || deleteTrashFile.checked;
-  const publicationChoiceReady = !pendingDeleteHasKnownPublicAccess() || deletePreservePublicAccess.checked;
+  const revokeAllowed = pendingDeleteHasKnownPublicAccess() && deleteKeepFile.checked;
+  deleteRevokePublicAccess.disabled = !revokeAllowed;
+  if (!revokeAllowed && deleteRevokePublicAccess.checked) deleteRevokePublicAccess.checked = false;
+  const publicationChoiceReady = !pendingDeleteHasKnownPublicAccess()
+    || deletePreservePublicAccess.checked
+    || (revokeAllowed && deleteRevokePublicAccess.checked);
   deleteProceed.disabled = !(diskChoiceReady && publicationChoiceReady);
   deleteStatus.textContent = '';
   deleteStatus.className = 'delete-status';
@@ -2825,7 +2842,7 @@ function updateDeleteProgress(message) {
   deleteProgressBar.style.width = `${percent}%`;
   deleteProgressPercent.textContent = message.state === 'error' ? 'Ошибка' : `${Math.round(percent)}%`;
   deleteStatus.textContent = message.message || 'Выполняется удаление…';
-  applyProgressMessage(deleteProgressStages, DELETE_OPERATION_STAGES, message);
+  applyProgressMessage(deleteProgressStages, activeDeleteProgressStages, message);
 }
 
 async function confirmDeleteEntry() {
@@ -2837,10 +2854,12 @@ async function confirmDeleteEntry() {
     return;
   }
   const publicationAction = pendingDeleteHasKnownPublicAccess()
-    ? (deletePreservePublicAccess.checked ? 'preserve' : '')
+    ? (deletePreservePublicAccess.checked ? 'preserve' : deleteRevokePublicAccess.checked ? 'revoke' : '')
     : 'none';
   if (!publicationAction) {
-    deleteStatus.textContent = 'Подтвердите, что публичный доступ по ссылке будет сохранён, или отмените удаление.';
+    deleteStatus.textContent = deleteTrashFile.checked
+      ? 'Для переноса опубликованного файла в Trash подтвердите сохранение ссылки. Композиция revoke + Trash пока недоступна.'
+      : 'Выберите: сохранить публичный доступ или отозвать ссылку перед удалением записи.';
     deleteStatus.className = 'delete-status error';
     return;
   }
@@ -2866,12 +2885,22 @@ async function runDeleteOperation(diskAction, publicationAction = 'none') {
   deleteRetry.classList.add('hidden');
   deleteOnlyAfterError.classList.add('hidden');
   deleteProceed.classList.add('hidden');
-  deleteTitle.textContent = diskAction === 'trash' ? 'Перемещение файла в Trash' : 'Удаление записи журнала';
+  const revokeAndKeep = diskAction === 'keep' && publicationAction === 'revoke';
+  deleteTitle.textContent = diskAction === 'trash'
+    ? 'Перемещение файла в Trash'
+    : revokeAndKeep ? 'Отзыв ссылки и удаление записи' : 'Удаление записи журнала';
   deleteStatus.className = 'delete-status';
-  if (diskAction === 'trash') {
+  if (diskAction === 'trash' || revokeAndKeep) {
     deleteProgress.classList.remove('hidden');
-    renderProgressStages(deleteProgressStages, DELETE_OPERATION_STAGES);
-    updateDeleteProgress({ stage: 'locate', message: 'Начинаем поиск файла на Яндекс Диске…', percent: 4 });
+    activeDeleteProgressStages = revokeAndKeep ? DELETE_REVOKE_KEEP_STAGES : DELETE_OPERATION_STAGES;
+    renderProgressStages(deleteProgressStages, activeDeleteProgressStages);
+    updateDeleteProgress({
+      stage: 'locate',
+      message: revokeAndKeep
+        ? 'Проверяем exact файл и текущую публичную ссылку…'
+        : 'Начинаем поиск файла на Яндекс Диске…',
+      percent: 4
+    });
   } else {
     deleteProgress.classList.add('hidden');
     deleteStatus.textContent = 'Файл останется на Яндекс Диске. Удаляется только локальная запись журнала.';
@@ -2890,10 +2919,15 @@ async function runDeleteOperation(diskAction, publicationAction = 'none') {
     pendingDeleteEntry = null;
     const publicationNotice = result.publicationOutcome === 'preserved-by-user'
       ? ' Публичный доступ по ссылке сохранён по вашему явному выбору.'
-      : '';
-    setStatus((diskAction === 'trash'
-      ? `Запись удалена. Файл перемещён на Яндекс Диске в: ${result.trashPath || 'Trash'} · operationId: ${completedOperationId}`
-      : `Запись удалена. Файл оставлен на Яндекс Диске. · operationId: ${completedOperationId}`) + publicationNotice, 'ok');
+      : publicationAction === 'revoke'
+        ? ' Публичный доступ отозван и приватное состояние подтверждено.'
+        : '';
+    const successText = result.journalSuperseded
+      ? `Публичное состояние файла подтверждено; исходная запись журнала уже была изменена или заменена и не затронута. · operationId: ${completedOperationId}`
+      : (diskAction === 'trash'
+        ? `Запись удалена. Файл перемещён на Яндекс Диске в: ${result.trashPath || 'Trash'} · operationId: ${completedOperationId}`
+        : `Запись удалена. Файл оставлен на Яндекс Диске. · operationId: ${completedOperationId}`);
+    setStatus(successText + publicationNotice, 'ok');
     await loadJournal();
   } catch (error) {
     journalDeleteBusy = false;

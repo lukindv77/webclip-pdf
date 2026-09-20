@@ -63,6 +63,6 @@ The baseline fingerprint was independently recomputed as `sha256:1b40c128fba4c0f
 
 ## Remaining closure work
 
-The follow-up P1-164 tranche now provides a standalone durable revoke primitive with exact-object authorization, immutable account/root context, checkpoint-before-unpublish, observation-only restart/timeout reconciliation, verified private post-state, and final Journal CAS. Delete-time `revoke + keep/trash` composition deliberately remains disabled until its two-effect recovery protocol is proven. Real Yandex evidence must still cover preserve and revoke outcomes, including unknown settlement and account/root switching.
+The P1-164 follow-ups now provide both a standalone durable revoke primitive and bounded delete-time `revoke + keep-file + exact Journal delete`. The completion is persisted before unpublish and resumes locally after verified-private restart reconciliation. `Revoke + Trash` deliberately remains disabled because it adds a second remote effect. Real Yandex evidence must still cover preserve and revoke outcomes, including unknown settlement and account/root switching.
 
 Manifest remains `0.9.8`. Release readiness remains **NOT READY**. No build, tag, deploy, or release state is created by this tranche.
