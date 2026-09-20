@@ -115,6 +115,7 @@ const ACCOUNT_STATES = new Set([
   'network',
   'provider-5xx',
   'http-error',
+  'missing',
   'error'
 ]);
 const RESOURCE_STATES = new Set(['present', 'missing', 'auth-rejected', 'rate-limited', 'error']);
@@ -162,14 +163,7 @@ const SENSITIVE_KEYS = new Set([
   'clientsecret',
   'codeverifier',
   'oauthaccesstoken',
-  'oauthrefreshtoken',
-  'sourcepath',
-  'targetpath',
-  'rootpath',
-  'publicurl',
-  'resourceid',
-  'accountuid',
-  'operationid'
+  'oauthrefreshtoken'
 ]);
 
 function fail(code, message = code) {
@@ -212,8 +206,7 @@ function canonicalJson(value) {
   if (typeof value === 'string') return JSON.stringify(value);
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (typeof value === 'number') {
-    if (!Number.isSafeInteger(value) && !Number.isFinite(value)) fail('SESSION_CANONICAL_NUMBER_INVALID');
-    if (!Number.isFinite(value)) fail('SESSION_CANONICAL_NUMBER_INVALID');
+    if (!Number.isSafeInteger(value)) fail('SESSION_CANONICAL_NUMBER_INVALID');
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
