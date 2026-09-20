@@ -80,3 +80,25 @@ Chrome/Yandex qualification fingerprints are not advanced by deterministic sourc
 - preserve the release gate until all required physical evidence is attached.
 
 Manifest remains `0.9.8`. Release readiness remains **NOT READY**. No build, tag, deploy or release state is created by this tranche.
+
+## Follow-up: phase-aware manual-resolution lineage
+
+A post-merge source audit of canonical `a30bf0e6e6636fdc6c34aa8159801054e7c2d7db` found one bounded operator-safety gap in the existing manual-resolution path: `markPendingDestructiveMoveManualResolution()` replaced a nonterminal receipt phase with `manual-resolution`. The durable receipt still retained paths, resource ids and the textual failure reason, but the Journal recovery UI could no longer distinguish whether the unknown admitted effect was the first `unpublish`, the second `move`, or whether revoke had already been verified while move had not yet been admitted.
+
+The follow-up preserves this lineage without adding any remote effect:
+
+- before the visible phase is changed to `manual-resolution`, the receipt stores bounded `manualResolutionSourcePhase`;
+- repeated manual marking preserves the original source phase; a legacy receipt already in `manual-resolution` does not fabricate one;
+- the sanitized Journal projection exposes only that bounded phase value in addition to the already-reviewed paths/resource ids and does not add OAuth, signed URL, public URL or account uid disclosure;
+- the operator card and dangerous-dismiss confirmation provide distinct guidance for `revoke-admitted-unknown`, `revoke-verified`, `move-admitted-unknown`, standalone `admitted-unknown`, and terminal `remote-verified`;
+- unknown revoke explicitly forbids automatic unpublish replay, unknown move explicitly forbids automatic move replay, and the verified-revoke/pre-move boundary explicitly states that the move was not durably admitted;
+- legacy receipts with no source-phase lineage remain explicit unknown/manual evidence.
+
+The dismiss action remains local receipt deletion only. It performs no Yandex API call and does not mutate the Journal row or remote file. This follow-up therefore improves manual-resolution protocol truthfulness but is not real-provider settlement evidence.
+
+Focused deterministic coverage is extended in:
+
+- `project_tools/test_p0_072_destructive_manual_resolution_operator.js`;
+- `project_tools/test_p1_164_revoke_trash_composition.js`.
+
+P1-164 remains **ACTIVE**. Successful/unknown real Yandex revoke+move settlement, visibility delay, auth expiry, account/root switch, source replacement and occupied immutable target still require authorized live qualification. P1-090 remains separately ACTIVE for exact destructive object settlement. Release readiness remains **NOT READY** and manifest version remains `0.9.8`.
