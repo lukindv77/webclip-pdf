@@ -111,6 +111,10 @@ No release-contract projection/root or builder contract is changed, so the curre
 
 The P1-231 S0-F/S0-G/S0-H source-spec fixtures are synchronized to the new RPF. Physical Chrome/Yandex QCF evidence is **not** advanced by this deterministic runtime change.
 
+## P0-072 adjacency
+
+This export endpoint is added to the existing P0-072 manual destructive-recovery control plane, so P0-072 is an adjacent affected owner. Its core semantics are unchanged: list/export/dismiss remain extension-page owned, export performs no provider mutation, and dismiss still deletes only the recovery receipt. P0-072 remains **ACTIVE** pending its existing physical restart/late-settlement evidence.
+
 ## Current boundary
 
 P1-164 remains **ACTIVE**.
