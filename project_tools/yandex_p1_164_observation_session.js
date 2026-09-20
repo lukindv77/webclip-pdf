@@ -6,7 +6,6 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const observer = require('./yandex_p1_164_live_observer.js');
 
@@ -315,18 +314,25 @@ function validateObservation(value) {
     source,
     target
   });
-  if (
-    recomputed.state !== value.classification.state
-    || recomputed.safeNextAction !== value.classification.safeNextAction
-    || recomputed.terminal !== value.classification.terminal
-  ) {
-    fail('SESSION_CLASSIFICATION_MISMATCH');
-  }
+  const windowExpired = value.classification.state === 'observation-window-expired';
+  const classificationMatches = windowExpired
+    ? (
+        recomputed.terminal === false
+        && recomputed.safeNextAction === value.classification.safeNextAction
+        && value.classification.terminal === true
+      )
+    : (
+        recomputed.state === value.classification.state
+        && recomputed.safeNextAction === value.classification.safeNextAction
+        && recomputed.terminal === value.classification.terminal
+      );
+  if (!classificationMatches) fail('SESSION_CLASSIFICATION_MISMATCH');
 
   exactKeys(value.watch, ['requestedSeconds', 'elapsedMs', 'attempts'], 'SESSION_WATCH_SHAPE_INVALID');
   const requestedSeconds = Number(value.watch.requestedSeconds);
   const elapsedMs = Number(value.watch.elapsedMs);
   if (!Number.isSafeInteger(requestedSeconds) || requestedSeconds < 0 || requestedSeconds > 120) fail('SESSION_WATCH_SECONDS_INVALID');
+  if (windowExpired && requestedSeconds === 0) fail('SESSION_WINDOW_EXPIRY_WITHOUT_WATCH');
   if (!Number.isSafeInteger(elapsedMs) || elapsedMs < 0 || elapsedMs > 10 * 60 * 1000) fail('SESSION_WATCH_ELAPSED_INVALID');
   if (!Array.isArray(value.watch.attempts) || value.watch.attempts.length < 1 || value.watch.attempts.length > MAX_ATTEMPTS) {
     fail('SESSION_WATCH_ATTEMPTS_INVALID');
