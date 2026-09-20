@@ -192,7 +192,11 @@ throwsCode(() => adapter.assertNoCredentialKeys({ nested: { refreshToken: 'secre
 throwsCode(() => adapter.validatePrivateExport({ ...JSON.parse(JSON.stringify(exported)), receiptId: 'other:publication-revoke-trash:fixture-1' }), 'PRIVATE_EXPORT_RECEIPT_ID_INVALID', 'adapter requires current destructive receipt namespace');
 ok(!adapterSource.includes('WEBCLIP_YANDEX_OAUTH_TOKEN'), 'adapter never consumes live observer OAuth token');
 ok(!adapterSource.includes('fetch('), 'adapter performs no network request');
-ok(adapterSource.includes("fs.openSync(output, 'wx', 0o600)"), 'adapter creates private output exclusively with restrictive mode');
+ok(adapterSource.includes("fs.openSync(resolvedOutput, 'wx', 0o600)"), 'adapter creates private output exclusively with restrictive mode');
+ok(adapterSource.includes('fs.realpathSync(input)'), 'adapter resolves input symlinks before reading private identity');
+ok(adapterSource.includes('fs.realpathSync(parent)'), 'adapter resolves output parent symlinks before creating private output');
+ok(adapterSource.includes('fs.unlinkSync(resolvedOutput)'), 'adapter removes a partial private output after write failure');
+throwsCode(() => adapter.assertResolvedOutsideRepo(ROOT), 'PRIVATE_PATH_INSIDE_REPOSITORY', 'resolved repository root rejected');
 ok(adapterSource.includes("'--untracked-files=no'"), 'adapter checks tracked checkout cleanliness');
 ok(adapterSource.includes('raw_identity_stdout=false'), 'adapter stdout explicitly excludes raw identity');
 
