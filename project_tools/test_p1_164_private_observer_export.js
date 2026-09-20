@@ -128,6 +128,7 @@ function inside(value, root) {
 const context = vm.createContext({
   Date, Object, String, Number, Boolean, Error,
   PUBLICATION_REVOKE_TRASH_KIND: 'publication-revoke-trash',
+  P1_164_PRIVATE_OBSERVER_EXPORT_SCHEMA: 'webclip-p1-164-private-observer-export/v1',
   MAX_IMPORTED_ENTRY_ID_CHARS: 180,
   MAX_OPERATION_ID_CHARS: 180,
   MAX_YANDEX_ACCOUNT_FIELD_CHARS: 1024,
