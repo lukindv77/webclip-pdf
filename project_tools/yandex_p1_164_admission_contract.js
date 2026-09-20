@@ -238,6 +238,7 @@ function bindObservation(contractValue, observationValue) {
     contractValue.testedSourceSha
   );
   if (contract.contractDigest !== contractValue.contractDigest) fail('ADMISSION_CONTRACT_DIGEST_MISMATCH');
+  if (ledger.canonicalJson(contract) !== ledger.canonicalJson(contractValue)) fail('ADMISSION_CONTRACT_CONTENT_MISMATCH');
 
   const observation = ledger.validateObservation(observationValue);
   if (observation.testedSourceSha !== contract.testedSourceSha) fail('ADMISSION_OBSERVATION_SOURCE_SHA_MISMATCH');
