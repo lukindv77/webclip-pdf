@@ -74,6 +74,13 @@ The checker fails closed if any of these are missing:
 - a negative fixture with the checkout `ref` removed;
 - a negative fixture with the actual HEAD verification removed.
 
+Two existing research-only reconciliation models are updated because the workflow change is now intentional canonical control-plane state:
+
+- `test_p1_231_s1d_migration_rehearsal_source_spec_model.js` advances only the Repository Integrity rollback-anchor blob to `aca16dbc49742881ffb7df34a7c7d0fab9bec80e` and additionally verifies the exact-head checkout semantics before accepting that anchor;
+- `test_runtime_production_entry_selective_adoption_reconciliation_model.js` classifies `.github/workflows/` as delivery/control-plane rather than product runtime, so a process-only workflow edit cannot be misreported as a production-entry runtime adoption.
+
+Neither refinement changes P1-231 release authority, package identity, QA contracts, or S2/release authorization.
+
 ## Release identity impact
 
 This tranche changes no runtime package member, so current RPF remains:
