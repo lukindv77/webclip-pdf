@@ -101,7 +101,7 @@ ok(!prepareSource.includes('getValidYandexAccessToken'), 'prepare never reads OA
 ok(renderSource.includes("receipt.kind === 'publication-revoke-trash'"), 'export button appears only on composite receipts');
 ok(renderSource.includes('receipt.hasAccountBinding'), 'UI requires account binding');
 ok(renderSource.includes('receipt.hasProviderIdentityBinding'), 'UI requires provider identity');
-ok(renderSource.includes('data') || renderSource.includes('manualReceiptExportId'), 'UI stores receipt export authority');
+ok(renderSource.includes('manualReceiptExportId'), 'UI stores receipt export authority');
 ok(exportUiSource.includes("type: 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_EXPORT_OBSERVER_PREPARE'"), 'UI invokes exact export preparation');
 ok(exportUiSource.includes('WebClipPreparedSaveAs.start(prepared)'), 'UI uses native Save As owner');
 ok(exportUiSource.includes('не OAuth-токен'), 'UI warns export contains private identity but no OAuth token');
@@ -142,7 +142,7 @@ const context = vm.createContext({
 vm.runInContext(buildSource + '\nthis.build=buildPendingPublicationRevokeTrashObserverPrivateExport;', context);
 
 const fixture = {
-  id: 'publication-revoke-trash:fixture-1',
+  id: 'destructive:publication-revoke-trash:fixture-1',
   kind: 'publication-revoke-trash',
   phase: 'manual-resolution',
   manualResolutionRequired: true,
@@ -189,6 +189,7 @@ throwsCode(() => adapter.buildObserverInput(normalized, 'b'.repeat(40), 121), 'W
 throwsCode(() => adapter.outsideRepoPath(path.join(ROOT, 'private.json')), 'PRIVATE_PATH_INSIDE_REPOSITORY', 'private files cannot live in repository');
 throwsCode(() => adapter.assertNoCredentialKeys({ accessToken: 'secret' }), 'PRIVATE_EXPORT_CREDENTIAL_FIELD_FORBIDDEN', 'credential fields rejected');
 throwsCode(() => adapter.assertNoCredentialKeys({ nested: { refreshToken: 'secret' } }), 'PRIVATE_EXPORT_CREDENTIAL_FIELD_FORBIDDEN', 'nested credential fields rejected');
+throwsCode(() => adapter.validatePrivateExport({ ...JSON.parse(JSON.stringify(exported)), receiptId: 'other:publication-revoke-trash:fixture-1' }), 'PRIVATE_EXPORT_RECEIPT_ID_INVALID', 'adapter requires current destructive receipt namespace');
 ok(!adapterSource.includes('WEBCLIP_YANDEX_OAUTH_TOKEN'), 'adapter never consumes live observer OAuth token');
 ok(!adapterSource.includes('fetch('), 'adapter performs no network request');
 ok(adapterSource.includes("fs.openSync(output, 'wx', 0o600)"), 'adapter creates private output exclusively with restrictive mode');
