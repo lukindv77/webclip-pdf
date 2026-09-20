@@ -101,4 +101,14 @@ Focused deterministic coverage is extended in:
 - `project_tools/test_p0_072_destructive_manual_resolution_operator.js`;
 - `project_tools/test_p1_164_revoke_trash_composition.js`.
 
+The S0-E identity engine on the changed runtime/source contract yields:
+
+- RPF: `sha256:bc84a3ae6508f61ff4c3bcb55e384f8484ad10338140f25e8e8f43c180e9239e`;
+- full RCF: `sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce`;
+- Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`;
+- Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`;
+- BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+The P1-231 source-spec fixtures that pin current RPF/RCF are synchronized to those deterministic values. This advances no physical Chrome or Yandex qualification fingerprint.
+
 P1-164 remains **ACTIVE**. Successful/unknown real Yandex revoke+move settlement, visibility delay, auth expiry, account/root switch, source replacement and occupied immutable target still require authorized live qualification. P1-090 remains separately ACTIVE for exact destructive object settlement. Release readiness remains **NOT READY** and manifest version remains `0.9.8`.
