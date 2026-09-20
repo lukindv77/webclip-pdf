@@ -83,7 +83,7 @@ Manifest remains `0.9.8`. Release readiness remains **NOT READY**. No build, tag
 
 ## Follow-up: phase-aware manual-resolution lineage
 
-A post-merge source audit of canonical `a30bf0e6e6636fdc6c34aa8159801054e7c2d7db` found one bounded operator-safety gap in the existing manual-resolution path: `markPendingDestructiveMoveManualResolution()` replaced a nonterminal receipt phase with `manual-resolution`. The durable receipt still retained paths, resource ids and the textual failure reason, but the Journal recovery UI could no longer distinguish whether the unknown admitted effect was the first `unpublish`, the second `move`, or whether revoke had already been verified while move had not yet been admitted.
+A post-merge source review of canonical `a30bf0e6e6636fdc6c34aa8159801054e7c2d7db` found one bounded operator-safety gap in the existing manual-resolution path: `markPendingDestructiveMoveManualResolution()` replaced a nonterminal receipt phase with `manual-resolution`. The durable receipt still retained paths, resource ids and the textual failure reason, but the Journal recovery UI could no longer distinguish whether the unknown admitted effect was the first `unpublish`, the second `move`, or whether revoke had already been verified while move had not yet been admitted.
 
 The follow-up preserves this lineage without adding any remote effect:
 
