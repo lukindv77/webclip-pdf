@@ -212,6 +212,11 @@ const rootSwitch = observation({
     state: 'root-conflict',
     safeNextAction: 'stop-no-retry',
     terminal: true
+  },
+  watch: {
+    requestedSeconds: 0,
+    elapsedMs: 6,
+    attempts: [{ attempt: 1, elapsedMs: 6, state: 'root-conflict' }]
   }
 });
 const third = ledger.makeEntry(header, second, rootSwitch, 'root-switch-check', {
