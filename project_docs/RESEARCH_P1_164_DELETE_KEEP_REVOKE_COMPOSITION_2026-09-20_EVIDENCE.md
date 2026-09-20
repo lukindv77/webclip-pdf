@@ -13,7 +13,7 @@ It composes one remote publication effect with one local Journal effect:
 5. delete only the exact Journal row through reset-generation + row-revision CAS while leaving the remote file in place;
 6. retire the receipt after local settlement.
 
-P0-069 and P1-164 remain **ACTIVE / IMPLEMENTATION-IN-PROGRESS**. This tranche does not claim real-provider qualification or `revoke + Trash` support.
+P0-069 and P1-164 remain **ACTIVE / IMPLEMENTATION-IN-PROGRESS**. This tranche does not claim real-provider qualification; the later two-admission `revoke + Trash` protocol is documented separately.
 
 ## Durable completion and recovery
 
@@ -35,7 +35,7 @@ The live and restart paths contain no second unpublish call site. A still-public
 
 The delete dialog enables “Отозвать публичный доступ” only when “Оставить файл на Яндекс Диске” is selected. Progress separately exposes locate, revoke, verify and exact Journal delete.
 
-Selecting Trash disables revoke. The worker independently rejects `publicationAction=revoke` with `diskAction=trash` using `WEBCLIP_PUBLICATION_REVOKE_TRASH_UNAVAILABLE` before OperationLog or remote/local destructive admission. This avoids silently treating two remote effects as atomic.
+The subsequent `RESEARCH_P1_164_REVOKE_TRASH_COMPOSITION_2026-09-20_EVIDENCE.md` replaces this original fail-closed boundary with an explicit composite receipt. The keep-file path remains a one-remote-effect protocol and does not acquire a move command site.
 
 ## Deterministic regression
 
@@ -66,7 +66,7 @@ Exact full release-contract fingerprint (P1-231):
 ## Remaining closure work
 
 - qualify success, timeout/unknown settlement, auth expiry, account switch and root switch against a real Yandex account;
-- design and prove the second-remote-effect `revoke + Trash` state machine;
+- qualify the implemented second-remote-effect `revoke + Trash` state machine against a real Yandex account;
 - preserve release gating: this evidence is not a build, tag, deployment or release authorization.
 
 Manifest remains `0.9.8`. Release readiness remains **NOT READY**. No build, tag, deploy or release state is created by this tranche.

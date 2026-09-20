@@ -62,6 +62,7 @@ function functionSource(source, name) {
 
 ok(worker.includes("const PUBLICATION_REVOKE_COMPLETION_CLEAR = 'clear-public-url';"), 'standalone completion has a stable value');
 ok(worker.includes("const PUBLICATION_REVOKE_COMPLETION_DELETE_KEEP = 'delete-journal-keep-file';"), 'composed completion has a stable value');
+ok(worker.includes("const PUBLICATION_REVOKE_COMPLETION_DELETE_TRASH = 'delete-journal-trash-file';"), 'two-effect completion has a stable value');
 
 const normalizeSource = functionSource(worker, 'normalizePublicationRevokeCompletionAction');
 const normalizeContext = vm.createContext({ String });
@@ -75,6 +76,7 @@ vm.runInContext(
 eq(normalizeContext.normalizeForTest(''), 'clear-public-url', 'legacy/standalone receipt defaults to clear-only completion');
 eq(normalizeContext.normalizeForTest('clear-public-url'), 'clear-public-url', 'clear-only completion is admitted');
 eq(normalizeContext.normalizeForTest('delete-journal-keep-file'), 'delete-journal-keep-file', 'bounded delete completion is admitted');
+eq(normalizeContext.normalizeForTest('delete-journal-trash-file'), 'delete-journal-trash-file', 'reviewed two-effect completion is admitted');
 eq(normalizeContext.normalizeForTest('move-to-trash'), '', 'unreviewed completion fails closed');
 
 const boundarySource = functionSource(worker, 'resolveJournalDeletePublicationOutcome');
@@ -87,7 +89,9 @@ const admitted = boundaryContext.resolveForTest(published, 'revoke', 'keep');
 eq(admitted.publicationAction, 'revoke', 'keep-file revoke is admitted');
 eq(admitted.publicationOutcome, 'revoke-requested', 'pre-admission outcome is truthful');
 ok(Object.isFrozen(admitted), 'publication decision is immutable');
-throwsCode(() => boundaryContext.resolveForTest(published, 'revoke', 'trash'), 'WEBCLIP_PUBLICATION_REVOKE_TRASH_UNAVAILABLE', 'revoke plus Trash stays fail-closed');
+const trashAdmitted = boundaryContext.resolveForTest(published, 'revoke', 'trash');
+eq(trashAdmitted.publicationAction, 'revoke', 'revoke plus Trash is admitted through the reviewed composite protocol');
+eq(trashAdmitted.publicationOutcome, 'revoke-and-trash-requested', 'two-effect outcome is explicit before admission');
 eq(boundaryContext.resolveForTest(privateEntry, 'revoke', 'trash').publicationAction, 'none', 'already-private entry needs no publication composition');
 
 const checkpoint = functionSource(worker, 'checkpointPendingPublicationRevokeIntent');
@@ -142,14 +146,15 @@ const routeAt = deleteFlow.indexOf('await revokeJournalEntryPublicAccess');
 const genericLogAt = deleteFlow.indexOf('await startOperationLog');
 ok(resolveAt >= 0 && resolveAt < routeAt, 'delete boundary settles composition before durable revoke');
 ok(routeAt < genericLogAt, 'composed path has one operation-log owner inside the revoke primitive');
-ok(deleteFlow.includes('completionAction: PUBLICATION_REVOKE_COMPLETION_DELETE_KEEP'), 'delete dispatcher requests the exact reviewed completion');
+ok(deleteFlow.includes('? PUBLICATION_REVOKE_COMPLETION_DELETE_TRASH')
+  && deleteFlow.includes(': PUBLICATION_REVOKE_COMPLETION_DELETE_KEEP'), 'delete dispatcher chooses the exact reviewed completion from the file outcome');
 
-ok(html.includes('Вместе с переносом в Trash этот вариант пока недоступен'), 'dialog discloses the remaining remote-effect boundary');
-ok(page.includes('deleteRevokePublicAccess.disabled = !revokeAllowed'), 'UI enables revoke only after keep-file selection');
+ok(html.includes('отдельно зафиксирована move admission'), 'dialog discloses the two separate remote admissions');
+ok(page.includes('deleteRevokePublicAccess.disabled = !revokeAllowed'), 'UI enables revoke only after an explicit file outcome');
 ok(page.includes('(revokeAllowed && deleteRevokePublicAccess.checked)'), 'UI proceed gate requires an admissible explicit revoke');
 ok(page.includes("deleteRevokePublicAccess.checked ? 'revoke' : ''"), 'runtime request carries deliberate revoke');
 ok(page.includes('const DELETE_REVOKE_KEEP_STAGES = ['), 'composed progress has truthful stages');
 ok(page.includes("['revoke', 'Отзыв публичного доступа']"), 'progress exposes the remote effect');
 ok(page.includes("['journal', 'Удаление exact записи локального журнала']"), 'progress exposes the post-verification local effect');
 
-console.log(`P1-164 revoke+keep delete composition: PASS ${checks} checks; remote_commands=1; revoke_trash=false; release_ready=false`);
+console.log(`P1-164 revoke+keep delete composition: PASS ${checks} checks; remote_commands=1; revoke_trash=true; release_ready=false`);

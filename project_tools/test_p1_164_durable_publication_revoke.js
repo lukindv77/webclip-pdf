@@ -1,7 +1,7 @@
 'use strict';
 
 // P1-164 direct production regression for durable per-entry Yandex unpublish.
-// P0-069 admits bounded revoke+keep deletion while revoke+Trash stays fail-closed.
+// P0-069 admits bounded revoke+keep deletion and an explicit two-admission revoke+Trash protocol.
 // P1-231 requires fresh exact-runtime evidence for these production bytes.
 
 const assert = require('node:assert/strict');
@@ -75,7 +75,7 @@ eq(resetContext.fn({ kind: 'publication-revoke', phase: 'admitted-unknown' }), '
 eq(resetContext.fn({ kind: 'publication-revoke', phase: 'manual-resolution' }), 'preserve', 'manual revoke evidence survives reset');
 
 const checkpoint = functionSource(worker, 'checkpointPendingPublicationRevokeIntent');
-ok(checkpoint.includes("kind: 'publication-revoke'"), 'durable receipt has a distinct kind');
+ok(checkpoint.includes("kind: compositeTrash ? 'publication-revoke-trash' : 'publication-revoke'"), 'durable receipt separates standalone and two-effect kinds');
 ok(checkpoint.includes("phase: 'prepared'"), 'receipt starts before remote admission');
 ok(checkpoint.includes("requestedPublicationOutcome: 'private'"), 'receipt binds the requested private outcome');
 ok(checkpoint.includes('completionAction: normalizedCompletionAction'), 'receipt durably binds the reviewed local completion');
@@ -84,13 +84,13 @@ ok(checkpoint.includes('sourceJournalEntryRevision'), 'receipt binds Journal row
 ok(checkpoint.includes('pendingDestructiveMoveRemoteIdentityFields'), 'receipt persists provider-observed identity authority');
 ok(checkpoint.includes("String(current?.publicUrl || '').trim() !== item.sourcePublicUrl"), 'receipt transaction revalidates exact Journal public URL');
 ok(checkpoint.includes('count >= MAX_PENDING_DESTRUCTIVE_MOVES'), 'revoke receipts share the bounded destructive ledger');
-ok(checkpoint.includes("['read-move', 'trash-move', 'publication-revoke'].includes(existing.kind)"), 'revoke cannot race another destructive effect for the same Journal row');
+ok(checkpoint.includes("['read-move', 'trash-move', 'publication-revoke', 'publication-revoke-trash'].includes(existing.kind)"), 'revoke cannot race another destructive effect for the same Journal row');
 ok(checkpoint.includes("error.code = 'WEBCLIP_PUBLICATION_REVOKE_ALREADY_PENDING'"), 'concurrent destructive receipt conflict has a stable code');
 ok(checkpoint.includes('activeDestructiveMoveReceipts.add(item.id)'), 'live ownership starts only after durable transaction commit');
 
 const identityStatus = functionSource(worker, 'pendingDestructiveMoveRemoteIdentityStatus');
 ok(identityStatus.includes("item.kind === 'publication-revoke' && targetPath !== sourcePath"), 'unpublish receipt cannot retarget its exact path');
-ok(identityStatus.includes("item.kind === 'publication-revoke' && String(item.verifiedPublicUrl || '').trim()"), 'terminal revoke rejects remaining public_url');
+ok(identityStatus.includes("['publication-revoke-trash', 'publication-revoke'].includes(item.kind)"), 'both terminal revoke kinds reject remaining public_url');
 
 const live = functionSource(worker, 'revokeJournalEntryPublicAccess');
 const checkpointAt = live.indexOf('await checkpointPendingPublicationRevokeIntent');
@@ -163,12 +163,12 @@ ok(page.includes("makeButton('Отозвать публичную ссылку'"
 ok(page.includes("type: 'WEBCLIP_JOURNAL_REVOKE_PUBLIC_ACCESS'"), 'page sends the dedicated command');
 ok(page.includes("result.publicationOutcome === 'already-private-verified'"), 'UI copy is driven by verified worker outcome');
 ok(html.includes('value="revoke" disabled'), 'revoke starts disabled until keep-file is deliberately selected');
-ok(html.includes('Вместе с переносом в Trash этот вариант пока недоступен'), 'delete dialog truthfully preserves the second-remote-effect boundary');
-ok(page.includes('deleteRevokePublicAccess.disabled = !revokeAllowed'), 'UI enables revoke only for keep-file composition');
+ok(html.includes('отдельно зафиксирована move admission'), 'delete dialog truthfully explains the second remote admission');
+ok(page.includes('deleteRevokePublicAccess.disabled = !revokeAllowed'), 'UI enables revoke only after an explicit file outcome');
 ok(page.includes("deleteRevokePublicAccess.checked ? 'revoke' : ''"), 'UI transmits only a deliberate revoke choice');
 
 const deleteBoundary = functionSource(worker, 'resolveJournalDeletePublicationOutcome');
-ok(deleteBoundary.includes("publicationOutcome: 'revoke-requested'"), 'P0-069 admits bounded revoke+keep composition');
-ok(deleteBoundary.includes("error.code = 'WEBCLIP_PUBLICATION_REVOKE_TRASH_UNAVAILABLE'"), 'revoke+Trash remains fail-closed');
+ok(deleteBoundary.includes("normalizedDiskAction === 'trash' ? 'revoke-and-trash-requested' : 'revoke-requested'"), 'P0-069 distinguishes keep and Trash revoke outcomes');
+ok(deleteBoundary.includes("publicationOutcome: normalizedDiskAction === 'trash' ? 'revoke-and-trash-requested' : 'revoke-requested'"), 'revoke+Trash has an explicit pre-admission outcome');
 
-console.log(`P1-164 durable publication revoke: PASS ${checks} checks; unpublish_retries=0; delete_keep_composition=true; delete_trash_composition=false; release_ready=false`);
+console.log(`P1-164 durable publication revoke: PASS ${checks} checks; unpublish_retries=0; delete_keep_composition=true; delete_trash_composition=true; release_ready=false`);
