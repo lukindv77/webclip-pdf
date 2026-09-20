@@ -251,3 +251,13 @@ The ledger fixes the tested source SHA, package RPF, Yandex QCF and receipt iden
 Operator labels are explicitly non-evidentiary and bounded; the ledger cannot emit a qualification PASS. Its local chain is not signed/authenticated provenance and cannot detect a fully consistent rewrite or tail truncation unless the emitted final digest is preserved independently. These limitations are durable in `RESEARCH_P1_164_OBSERVATION_SESSION_LEDGER_2026-09-20_EVIDENCE.md`.
 
 Deterministic coverage is `project_tools/test_p1_164_observation_session.js`. It is source/local evidence only: no network request, OAuth credential, provider mutation or live Yandex qualification occurs. P1-164 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Runtime RPF, Chrome/Yandex QCF, full RCF and BCF remain unchanged.
+
+## P1-164 receipt-version / provider-observation binding
+
+The private P1-164 qualification bridge now preserves the exact durable WebClip receipt snapshot through the GET-only observer without exposing raw receipt identity in sanitized evidence. Observer input/output advances to v2: private input carries raw `receiptId` + `receiptUpdatedAt` + `exportedAt`, while sanitized output carries only a domain-separated `receiptIdDigest` plus the exact revision/export time.
+
+The observation-session schemas also advance to v2. The immutable subject now includes the receipt-id digest, and checkpoint admission requires non-regressing receipt export time/revision. A change in effective destructive remote phase requires a strictly newer receipt revision; same-phase re-observation of the same revision remains allowed so auth/account/root/visibility observations do not fabricate a WebClip state transition.
+
+Deterministic coverage remains in `test_p1_164_private_observer_export.js`, `test_p1_164_live_observer.js`, and `test_p1_164_observation_session.js`. The new anchor is explicitly only a snapshot binding: it does not authenticate the private export, prove WebClip command admission, prove the running extension source SHA, close P1-164, or advance Yandex QCF.
+
+Durable rationale/evidence is `RESEARCH_P1_164_RECEIPT_OBSERVATION_BINDING_2026-09-20_EVIDENCE.md`. P1-164 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Runtime RPF, Chrome/Yandex QCF, full RCF and BCF remain unchanged.
