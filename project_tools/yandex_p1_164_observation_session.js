@@ -337,7 +337,6 @@ function validateObservation(value) {
   return Object.freeze({
     schema: OBSERVATION_SCHEMA,
     generatedAt: generated.text,
-    generatedAtMs: generated.ms,
     evidenceClass: 'live-provider-observation-only',
     testedSourceSha: String(value.testedSourceSha),
     subject: Object.freeze({ rpf: String(value.subject.rpf), yandexQcf: String(value.subject.yandexQcf) }),
@@ -365,9 +364,7 @@ function validateObservation(value) {
 }
 
 function publicObservation(value) {
-  const v = validateObservation(value);
-  const { generatedAtMs, ...safe } = v;
-  return safe;
+  return validateObservation(value);
 }
 
 function sessionSubject(observation) {
@@ -468,7 +465,7 @@ function makeEntry(header, previousEntry, observation, label, options = {}) {
   if (previousEntry) {
     const previous = validateEntry(previousEntry, h);
     const previousObservation = validateObservation(previous.observation);
-    if (value.generatedAtMs < previousObservation.generatedAtMs) fail('SESSION_OBSERVATION_TIME_REGRESSION');
+    if (Date.parse(value.generatedAt) < Date.parse(previousObservation.generatedAt)) fail('SESSION_OBSERVATION_TIME_REGRESSION');
     if (PHASE_RANK.get(value.effectivePhase) < PHASE_RANK.get(previousObservation.effectivePhase)) {
       fail('SESSION_PHASE_REGRESSION');
     }
@@ -647,7 +644,7 @@ function readSession(sessionDir) {
 
     entries.push(entry);
     previousDigest = digestObject(entry);
-    previousGeneratedAt = observation.generatedAtMs;
+    previousGeneratedAt = Date.parse(observation.generatedAt);
     previousRecordedAt = recordedAt;
     previousRank = rank;
   }
