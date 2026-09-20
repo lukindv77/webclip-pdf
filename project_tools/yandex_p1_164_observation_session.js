@@ -95,6 +95,7 @@ const NEXT_ACTIONS = new Set([
   'delay-then-observe-only',
   'retry-read-only-observation',
   'stop-no-retry',
+  'stop-no-retarget',
   'manual-resolution-no-retry',
   'manual-resolution-no-retarget',
   'manual-resolution-local-only',
