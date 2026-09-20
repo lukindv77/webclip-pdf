@@ -121,6 +121,7 @@ const header = ledger.makeHeader(prepared, {
 });
 eq(header.evidenceClass, 'local-observation-chain-only', 'session evidence class is local chain only');
 ok(header.limitations.includes('does-not-authenticate-observer-origin'), 'origin authentication is not overclaimed');
+ok(header.limitations.includes('does-not-detect-tail-truncation-without-external-final-digest'), 'tail truncation limit is explicit');
 ok(header.limitations.includes('operator-labels-are-non-evidentiary'), 'operator labels are explicitly non-evidentiary');
 
 const first = ledger.makeEntry(header, null, prepared, 'baseline', {
@@ -155,6 +156,31 @@ const second = ledger.makeEntry(header, first, revoke, 'revoke-settlement-check'
 });
 eq(second.sequence, 2, 'second checkpoint sequence');
 eq(second.predecessorDigest, ledger.digestObject(first), 'second checkpoint binds previous entry');
+
+const windowExpired = observation({
+  generatedAt: '2026-09-20T11:00:12.000Z',
+  phase: 'revoke-admitted-unknown',
+  effectivePhase: 'revoke-admitted-unknown',
+  classification: {
+    state: 'observation-window-expired',
+    safeNextAction: 'observe-only-never-repeat-unpublish',
+    terminal: true
+  },
+  watch: {
+    requestedSeconds: 5,
+    elapsedMs: 5000,
+    attempts: [{ attempt: 1, elapsedMs: 10, state: 'revoke-not-observed' }]
+  }
+});
+eq(ledger.validateObservation(windowExpired).classification.state, 'observation-window-expired', 'bounded watch expiry is a valid observer terminal wrapper');
+throwsCode(
+  () => ledger.validateObservation({
+    ...windowExpired,
+    watch: { ...windowExpired.watch, requestedSeconds: 0 }
+  }),
+  'SESSION_WINDOW_EXPIRY_WITHOUT_WATCH',
+  'window-expired cannot be fabricated without a watch interval'
+);
 
 const rootSwitch = observation({
   generatedAt: '2026-09-20T11:00:20.000Z',
@@ -197,6 +223,14 @@ throwsCode(
   () => ledger.makeEntry(header, first, prepared, 'other', { recordedAt: '2026-09-20T11:00:03.000Z' }),
   'SESSION_DUPLICATE_OBSERVATION',
   'same sanitized observation cannot append twice'
+);
+throwsCode(
+  () => ledger.validateObservation({
+    ...prepared,
+    classification: { ...prepared.classification, state: 'terminal-confirmed', safeNextAction: 'local-finalize-only' }
+  }),
+  'SESSION_CLASSIFICATION_MISMATCH',
+  'classification must match the pure observer classifier'
 );
 throwsCode(
   () => ledger.validateObservation({ ...prepared, accessToken: 'secret' }),
