@@ -215,3 +215,11 @@ The durable publication-revoke and revoke+Trash protocols preserve at-most-once 
 The current manual-resolution refinement additionally preserves the exact pre-manual remote phase in bounded `manualResolutionSourcePhase` metadata before the visible receipt phase becomes `manual-resolution`. Journal recovery UI distinguishes an unknown admitted unpublish, a verified-private source before move admission, and an unknown admitted move; legacy receipts without that lineage remain explicit unknown rather than inferring an admission state. The dangerous dismiss flow remains receipt-only and performs no Yandex or Journal mutation.
 
 Deterministic source coverage is in `test_p0_072_destructive_manual_resolution_operator.js` and `test_p1_164_revoke_trash_composition.js`. This is not live Yandex evidence. P1-164 and P1-090 remain ACTIVE, manifest version remains `0.9.8`, and release readiness remains **NOT READY**.
+
+## P1-164 live Yandex observer harness
+
+A repository-side qualification helper now exists at `project_tools/yandex_p1_164_live_observer.js`. It is intentionally GET-only, refuses CI, accepts the OAuth token only from `WEBCLIP_YANDEX_OAUTH_TOKEN`, requires private receipt input outside the repository, binds observation to an exact clean tested SHA plus current P1-231 RPF/Yandex-QCF identity, and emits sanitized digest-based observation output.
+
+Its deterministic contract test is `project_tools/test_p1_164_live_observer.js`. The test covers no-replay phase classification, visibility-watch bounds, auth/account/root conflicts, source/target replacement, immutable-target occupation, secret handling, and absence of mutating provider endpoints. This source-level harness is preparation for authorized real Yandex qualification; it is not itself live-provider evidence and does not advance Yandex QCF.
+
+P1-164 remains **ACTIVE**. Real revoke+move success/unknown settlement, visibility delay, auth expiry, account/root switching, replacement/collision, and real manual-resolution UX still require authorized physical Yandex evidence. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
