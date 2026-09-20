@@ -349,6 +349,12 @@ clearSiteButton.addEventListener('click', clearDomainJournal);
 clearAllButton.addEventListener('click', clearEntireJournal);
 refreshDestructiveRecoveryButton.addEventListener('click', () => void refreshDestructiveRecovery());
 destructiveRecoveryList.addEventListener('click', (event) => {
+  const exportTarget = event.target instanceof Element ? event.target.closest('button[data-manual-receipt-export-id]') : null;
+  if (exportTarget) {
+    const receipt = manualDestructiveReceipts.get(String(exportTarget.dataset.manualReceiptExportId || ''));
+    if (receipt) void exportManualDestructiveObserverInput(receipt, exportTarget);
+    return;
+  }
   const target = event.target instanceof Element ? event.target.closest('button[data-manual-receipt-id]') : null;
   if (!target) return;
   const receipt = manualDestructiveReceipts.get(String(target.dataset.manualReceiptId || ''));
@@ -1692,6 +1698,23 @@ function renderDestructiveRecovery(result) {
 
     const actions = document.createElement('div');
     actions.className = 'destructive-recovery-card-actions';
+    if (receipt.kind === 'publication-revoke-trash') {
+      const exportObserver = document.createElement('button');
+      exportObserver.type = 'button';
+      exportObserver.className = 'destructive-recovery-export';
+      exportObserver.dataset.manualReceiptExportId = String(receipt.id || '');
+      exportObserver.textContent = 'Экспортировать private observer input';
+      const exportReady = Boolean(
+        receipt.hasAccountBinding
+        && receipt.hasProviderIdentityBinding
+        && (receipt.phase !== 'manual-resolution' || receipt.manualResolutionSourcePhase)
+      );
+      exportObserver.disabled = !exportReady;
+      exportObserver.title = exportReady
+        ? 'Файл содержит private Yandex identity (без OAuth-токена) и предназначен только для локального qualification observer.'
+        : 'Exact account/provider identity или исходная remote phase недостаточны для безопасного observer export.';
+      actions.append(exportObserver);
+    }
     const dismiss = document.createElement('button');
     dismiss.type = 'button';
     dismiss.className = 'destructive-recovery-dismiss';
@@ -1738,6 +1761,39 @@ function refreshDestructiveRecovery() {
   });
   destructiveRecoveryRefreshInFlight = tracked;
   return tracked;
+}
+
+async function exportManualDestructiveObserverInput(receipt, button) {
+  const id = String(receipt?.id || '');
+  const updatedAt = Number(receipt?.updatedAt || 0);
+  if (!id || !Number.isSafeInteger(updatedAt) || updatedAt <= 0 || receipt?.kind !== 'publication-revoke-trash') {
+    setStatus('Private observer export недоступен для этого recovery receipt. Обновите список.', 'error');
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    const prepared = await readJournalExtensionApiBounded(
+      () => chrome.runtime.sendMessage({
+        type: 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_EXPORT_OBSERVER_PREPARE',
+        id,
+        updatedAt
+      }),
+      'Подготовка private Yandex observer input',
+      30_000
+    );
+    requireOk(prepared);
+    await WebClipPreparedSaveAs.start(prepared);
+    setStatus(
+      'Private observer input передан в стандартный Save As Chrome. Файл содержит account/path/resource/public-link identity, но не OAuth-токен. Храните его вне репозитория и перед запуском observer пропустите через project_tools/yandex_p1_164_private_export_adapter.js.',
+      'warn'
+    );
+  } catch (error) {
+    setStatus(error?.message || String(error), 'error');
+    await refreshDestructiveRecovery().catch(() => {});
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function dismissManualDestructiveReceipt(receipt, button) {

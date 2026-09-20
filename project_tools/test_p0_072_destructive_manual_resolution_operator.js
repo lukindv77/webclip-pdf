@@ -111,11 +111,11 @@ const dispatchWindow = worker.slice(
   worker.indexOf("case 'WEBCLIP_JOURNAL_GET_MANY'"),
   worker.indexOf("case 'WEBCLIP_OPEN_JOURNAL_SAVED_FILE'")
 );
-for (const type of ['WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_LIST', 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_DISMISS']) {
+for (const type of ['WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_LIST', 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_EXPORT_OBSERVER_PREPARE', 'WEBCLIP_JOURNAL_DESTRUCTIVE_MANUAL_DISMISS']) {
   ok(dispatchWindow.includes("case '" + type + "'"), type + ' runtime endpoint exists');
 }
-eq((dispatchWindow.match(/assertSaveAsOwnerPage\(sender, 'journal\.html'\)/g) || []).length, 2, 'both manual endpoints require journal.html owner page');
-eq((dispatchWindow.match(/senderKind !== 'extension'/g) || []).length, 3, 'GET_MANY plus both manual endpoints remain extension-only');
+eq((dispatchWindow.match(/assertSaveAsOwnerPage\(sender, 'journal\.html'\)/g) || []).length, 3, 'all three manual endpoints require journal.html owner page');
+eq((dispatchWindow.match(/senderKind !== 'extension'/g) || []).length, 4, 'GET_MANY plus all three manual endpoints remain extension-only');
 
 ok(html.includes('id="destructiveRecoveryPanel"'), 'Journal exposes manual backlog panel');
 ok(html.includes('WebClip не знает точный итог'), 'UI states unknown external outcome');
