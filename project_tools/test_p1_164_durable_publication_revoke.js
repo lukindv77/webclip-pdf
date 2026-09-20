@@ -1,7 +1,7 @@
 'use strict';
 
 // P1-164 direct production regression for durable per-entry Yandex unpublish.
-// P0-069 keeps delete-time revoke fail-closed until composition is proven.
+// P0-069 admits bounded revoke+keep deletion while revoke+Trash stays fail-closed.
 // P1-231 requires fresh exact-runtime evidence for these production bytes.
 
 const assert = require('node:assert/strict');
@@ -78,6 +78,7 @@ const checkpoint = functionSource(worker, 'checkpointPendingPublicationRevokeInt
 ok(checkpoint.includes("kind: 'publication-revoke'"), 'durable receipt has a distinct kind');
 ok(checkpoint.includes("phase: 'prepared'"), 'receipt starts before remote admission');
 ok(checkpoint.includes("requestedPublicationOutcome: 'private'"), 'receipt binds the requested private outcome');
+ok(checkpoint.includes('completionAction: normalizedCompletionAction'), 'receipt durably binds the reviewed local completion');
 ok(checkpoint.includes('sourceJournalResetGeneration'), 'receipt binds Journal reset generation');
 ok(checkpoint.includes('sourceJournalEntryRevision'), 'receipt binds Journal row revision');
 ok(checkpoint.includes('pendingDestructiveMoveRemoteIdentityFields'), 'receipt persists provider-observed identity authority');
@@ -148,16 +149,26 @@ ok(finalize.includes('remoteIdentityProvenance: WebClipYandexRemoteIdentityAutho
 ok(finalize.includes('publicationRevokedAt'), 'local finalizer records verified revoke time');
 ok(finalize.includes('pendingDestructiveMoveJournalAuthorityMatches'), 'local mutation is exact generation/revision CAS');
 ok(finalize.includes('supersededByJournalReset === true'), 'reset-superseded receipt cannot mutate replacement Journal state');
+ok(finalize.includes('PUBLICATION_REVOKE_COMPLETION_DELETE_KEEP'), 'verified receipt can select bounded keep-file Journal deletion');
+ok(finalize.includes("[JOURNAL_PENDING_DESTRUCTIVE_STORE, JOURNAL_STORE, JOURNAL_META_STORE]"), 'composed delete and receipt retirement share one IndexedDB transaction');
+ok(finalize.includes("beginJournalStatsMutation('delete')"), 'composed local delete opens the crash-repair stats marker first');
+ok(finalize.includes('pendingDestructiveMoveJournalAuthorityMatches(receipt, resetGeneration, current)'), 'composed local delete rechecks exact generation/revision CAS');
+ok(finalize.includes('entries.delete(current.id)'), 'composed completion deletes only the authority-matched row');
+ok(finalize.includes('receipts.delete(key)'), 'composed completion atomically retires its durable receipt');
+ok(finalize.indexOf('pendingDestructiveMoveRemoteIdentityStatus(preview, { requireTerminal: true })') < finalize.indexOf("beginJournalStatsMutation('delete')"), 'terminal private identity is rechecked before local mutation admission');
 
 ok(worker.includes("case 'WEBCLIP_JOURNAL_REVOKE_PUBLIC_ACCESS':"), 'runtime exposes a dedicated extension-only command');
 ok(worker.includes("assertSaveAsOwnerPage(sender, 'journal.html')"), 'command is restricted to the Journal owner page');
 ok(page.includes("makeButton('Отозвать публичную ссылку'"), 'published entry exposes explicit standalone revoke');
 ok(page.includes("type: 'WEBCLIP_JOURNAL_REVOKE_PUBLIC_ACCESS'"), 'page sends the dedicated command');
 ok(page.includes("result.publicationOutcome === 'already-private-verified'"), 'UI copy is driven by verified worker outcome');
-ok(html.includes('value="revoke" disabled'), 'delete-time composition remains disabled');
-ok(html.includes('нажмите «Отозвать публичную ссылку» у записи'), 'delete dialog points to the safe standalone flow');
+ok(html.includes('value="revoke" disabled'), 'revoke starts disabled until keep-file is deliberately selected');
+ok(html.includes('Вместе с переносом в Trash этот вариант пока недоступен'), 'delete dialog truthfully preserves the second-remote-effect boundary');
+ok(page.includes('deleteRevokePublicAccess.disabled = !revokeAllowed'), 'UI enables revoke only for keep-file composition');
+ok(page.includes("deleteRevokePublicAccess.checked ? 'revoke' : ''"), 'UI transmits only a deliberate revoke choice');
 
 const deleteBoundary = functionSource(worker, 'resolveJournalDeletePublicationOutcome');
-ok(deleteBoundary.includes("error.code = 'WEBCLIP_PUBLICATION_REVOKE_UNAVAILABLE'"), 'P0-069 delete composition remains fail-closed');
+ok(deleteBoundary.includes("publicationOutcome: 'revoke-requested'"), 'P0-069 admits bounded revoke+keep composition');
+ok(deleteBoundary.includes("error.code = 'WEBCLIP_PUBLICATION_REVOKE_TRASH_UNAVAILABLE'"), 'revoke+Trash remains fail-closed');
 
-console.log(`P1-164 durable publication revoke: PASS ${checks} checks; unpublish_retries=0; delete_composition=false; release_ready=false`);
+console.log(`P1-164 durable publication revoke: PASS ${checks} checks; unpublish_retries=0; delete_keep_composition=true; delete_trash_composition=false; release_ready=false`);

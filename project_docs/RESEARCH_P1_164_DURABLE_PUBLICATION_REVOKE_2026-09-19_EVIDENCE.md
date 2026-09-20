@@ -14,7 +14,7 @@ P1-164 remains **ACTIVE / IMPLEMENTATION-IN-PROGRESS**. The tranche implements a
 - the Journal row is updated only under exact reset-generation + row-revision CAS, preserving verified `resourceId` and `remotePath`;
 - a reset-superseded receipt cannot mutate replacement Journal state.
 
-P0-069 delete-time `revoke` remains fail-closed. The user first settles publication with the standalone action, then may delete the now-private entry through the ordinary keep/Trash flow.
+The 2026-09-20 follow-up composes this primitive with the bounded `keep-file + exact Journal delete` outcome. `Revoke + Trash` remains fail-closed because it would add a second remote effect. See `RESEARCH_P1_164_DELETE_KEEP_REVOKE_COMPOSITION_2026-09-20_EVIDENCE.md`.
 
 ## Durable settlement protocol
 
@@ -37,7 +37,7 @@ After worker restart, an admitted receipt is never replayed. Reconciliation capt
 
 ## UI and truthful boundaries
 
-The dedicated Journal action asks for confirmation and reports a verified worker outcome. The delete dialog continues to show its revoke radio as disabled and directs the user to the standalone action. It therefore does not represent a file move as privacy revocation and does not pretend that two independent remote effects are atomic.
+The dedicated Journal action remains available. The follow-up delete dialog enables revoke only after the user selects “keep file”; selecting Trash disables revoke. It therefore does not represent a file move as privacy revocation or pretend that two independent remote effects are atomic.
 
 The operation log records settlement and the no-retry rule without storing OAuth credentials or expanding public URL capability.
 
@@ -63,7 +63,8 @@ Exact candidate runtime production fingerprint (P1-231):
 ## Remaining closure work
 
 - qualify success, timeout/unknown settlement, auth expiry, account switch and root switch against a real Yandex account;
-- compose verified revoke with keep/Trash deletion under a durable two-effect state machine;
+- qualify the new keep-file delete completion against a real Yandex account;
+- design `revoke + Trash` as an explicit second-remote-effect protocol rather than extending the bounded keep-file composition implicitly;
 - decide the manual-resolution UI for an admitted receipt that remains public or cannot be observed;
 - preserve release gating: this evidence is not a build, tag, deployment or release authorization.
 
