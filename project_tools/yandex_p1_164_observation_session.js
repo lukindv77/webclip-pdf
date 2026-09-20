@@ -137,8 +137,9 @@ const OBSERVER_LIMITATIONS = Object.freeze([
   'does-not-advance-yandex-qcf-by-itself'
 ]);
 const SESSION_LIMITATIONS = Object.freeze([
-  'local-hash-chain-is-tamper-evident-not-authenticated',
+  'hash-chain-detects-internal-inconsistency-not-authenticity',
   'does-not-authenticate-observer-origin',
+  'does-not-detect-consistent-rewrite-without-external-final-digest',
   'does-not-detect-tail-truncation-without-external-final-digest',
   'operator-labels-are-non-evidentiary',
   'does-not-prove-webclip-command-admission',
@@ -352,6 +353,9 @@ function validateObservation(value) {
     previousElapsed = attemptElapsed;
     return Object.freeze({ attempt: number, elapsedMs: attemptElapsed, state: String(attempt.state) });
   });
+  const finalAttempt = attempts[attempts.length - 1];
+  if (finalAttempt.state !== recomputed.state) fail('SESSION_FINAL_ATTEMPT_CLASSIFICATION_MISMATCH');
+  if (windowExpired && elapsedMs < requestedSeconds * 1000) fail('SESSION_WINDOW_EXPIRY_TOO_EARLY');
 
   if (!Array.isArray(value.limitations)
     || value.limitations.length !== OBSERVER_LIMITATIONS.length
@@ -719,10 +723,8 @@ function appendSession(sessionDir, observation, label, options = {}) {
   return readSession(chain.dir);
 }
 
-function summarizeSession(chainValue) {
-  const chain = chainValue?.header && Array.isArray(chainValue?.entries)
-    ? chainValue
-    : readSession(chainValue);
+function summarizeSession(sessionDir) {
+  const chain = readSession(sessionDir);
   const header = validateHeader(chain.header);
   const checkpoints = chain.entries.map((raw) => {
     const entry = validateEntry(raw, header);
@@ -807,7 +809,7 @@ function main() {
   const chain = args.mode === 'init'
     ? initSession(args.sessionDir, observation, args.label)
     : appendSession(args.sessionDir, observation, args.label);
-  const summary = summarizeSession(chain);
+  const summary = summarizeSession(chain.dir);
   process.stdout.write(
     `P1-164 observation session: PASS; mode=${args.mode}; checkpoints=${summary.checkpointCount}; final_digest=${summary.finalDigest}; ` +
     'provider_calls=0; provider_mutations=0; oauth_credentials=0; raw_identity_stdout=false; qualification_pass=false\n'
