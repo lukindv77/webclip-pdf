@@ -63,8 +63,7 @@ function validatePrivateExport(value) {
   ], 'PRIVATE_EXPORT_SHAPE_INVALID');
   if (value.schema !== PRIVATE_SCHEMA) fail('PRIVATE_EXPORT_SCHEMA_INVALID');
   if (value.kind !== observer.KIND) fail('PRIVATE_EXPORT_KIND_INVALID');
-  if (!/^publication-revoke-trash-[A-Za-z0-9._:-]+$/.test(String(value.receiptId || ''))
-    && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,179}$/.test(String(value.receiptId || ''))) {
+  if (!/^destructive:publication-revoke-trash:[A-Za-z0-9._:-]{1,128}$/.test(String(value.receiptId || ''))) {
     fail('PRIVATE_EXPORT_RECEIPT_ID_INVALID');
   }
   if (!Number.isSafeInteger(Number(value.receiptUpdatedAt)) || Number(value.receiptUpdatedAt) <= 0) {
