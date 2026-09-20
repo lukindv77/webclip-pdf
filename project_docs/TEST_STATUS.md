@@ -241,3 +241,13 @@ The permanent Repository Integrity workflow now checks out the literal PR head S
 This closes the process ambiguity observed during PR #300: run #899 tested a synthetic merge commit whose tree was byte-identical to the PR head, and post-merge run #900 tested literal `main`. Future PR runs must now be literal exact-head runs rather than exact-tree-equivalent merge simulations.
 
 `project_tools/check_ci_pins.py` and `project_tools/test_ci_pins.py` enforce this workflow contract. Existing reconciliation models are synchronized so the new permanent workflow blob is an explicit P1-231 S1-D rollback anchor and `.github/workflows/` remains delivery/control-plane rather than product runtime in selective-adoption analysis. The change is structural only: runtime RPF, Chrome/Yandex QCF, full RCF and BCF remain unchanged. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+## P1-164 observation-session ledger
+
+A bounded local observation-session ledger now exists at `project_tools/yandex_p1_164_observation_session.js` for sequencing the sanitized outputs of the GET-only live Yandex observer across one exact destructive receipt/session.
+
+The ledger fixes the tested source SHA, package RPF, Yandex QCF and receipt identity digests in an immutable header, then appends numbered private checkpoints outside the repository with predecessor and observation SHA-256 digests. It independently re-runs the observer's pure classification logic, requires final-attempt/classification parity, rejects phase/time regression, credential-shaped fields, raw identity in digest slots, receipt retargeting, unexpected files and predecessor-chain tampering. Current-root digest is checkpoint-local so an actual root switch is visible without mutating the immutable receipt subject.
+
+Operator labels are explicitly non-evidentiary and bounded; the ledger cannot emit a qualification PASS. Its local chain is not signed/authenticated provenance and cannot detect a fully consistent rewrite or tail truncation unless the emitted final digest is preserved independently. These limitations are durable in `RESEARCH_P1_164_OBSERVATION_SESSION_LEDGER_2026-09-20_EVIDENCE.md`.
+
+Deterministic coverage is `project_tools/test_p1_164_observation_session.js`. It is source/local evidence only: no network request, OAuth credential, provider mutation or live Yandex qualification occurs. P1-164 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Runtime RPF, Chrome/Yandex QCF, full RCF and BCF remain unchanged.
