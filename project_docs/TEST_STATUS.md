@@ -302,3 +302,15 @@ S0-F now consumes the same S0-A membership authority and the current RPF only fr
 Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`; Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`; full RCF remains `sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce`; BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`. Their projections/contracts did not change.
 
 Durable rationale/evidence is `RESEARCH_P1_231_S0E_RPF_AUTHORITY_MIGRATION_2026-09-21_EVIDENCE.md`. P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. No product ZIP, physical QA advance, release-gate activation, tag, deployment or GitHub Release is created by this migration.
+
+### P1-231 S0-E migration exact-head CI #926
+
+Exact-head run #926 confirmed the new S0-E identity engine itself: 34-file current package, explicit
+33-file legacy control, `feab…` current RPF, `b65c…` legacy RPF, and Node/Python agreement.
+
+The run then exposed two stale downstream test assumptions: S0-F's unanchored `rpf=` parser matched
+the suffix inside `legacy_rpf=`, and the S0-A package-authority witness still interpreted S0-E
+`PACKAGE_FILES` as the historical 33-file literal. S0-F now parses exact semicolon-delimited
+tokens, and the package-authority witness explicitly validates canonical 34-file current membership
+plus the 33-file legacy subset. S0-G/H and S1-A/B/C/D require no separate semantic migration for
+this failure because their #926 failures were transitive through S0-F.
