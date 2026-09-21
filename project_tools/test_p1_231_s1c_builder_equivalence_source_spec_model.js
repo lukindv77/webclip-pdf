@@ -522,16 +522,16 @@ function evaluateEquivalence({ candidateSha, shadowIdentity, admission, loadProj
   test('S0-D golden SHA retained', () => assert.strictEqual(s0d.kv.fixture_zip_sha256, GOLDEN_ZIP_SHA256));
   test('S0-D raw local/central remains required', () => assert.strictEqual(s0d.kv.raw_local_central, 'true'));
   test('S0-E BCF exact', () => assert.strictEqual(CURRENT_IDS.bcf, 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'));
-  test('S0-F remains blocked on generation governance', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-generation'));
-  test('S0-H remains blocked before product load', () => assert.strictEqual(s0h.kv.current_product_build, 'blocked-before-load'));
+  test('S0-F generation gate passes', () => assert.strictEqual(s0f.kv.current_gate, 'pass'));
+  test('S0-H current product build remains unexecuted', () => assert.strictEqual(s0h.kv.current_product_build, 'not-executed'));
   test('S0-H product ZIP remains false', () => assert.strictEqual(s0h.kv.product_zip, 'false'));
   test('S0-H manual Node path matches golden SHA', () => assert.strictEqual(s0h.kv.fixture_zip_sha256, GOLDEN_ZIP_SHA256));
-  test('S1-A current identity remains ineligible', () => assert.strictEqual(s1a.kv.current_eligible, 'false'));
-  test('S1-A current state remains blocked generation', () => assert.strictEqual(s1a.kv.current_shadow, 'blocked-generation'));
+  test('S1-A current identity is generation-eligible', () => assert.strictEqual(s1a.kv.current_eligible, 'true'));
+  test('S1-A current state is eligible', () => assert.strictEqual(s1a.kv.current_shadow, 'eligible'));
   test('current head exact SHA', () => assert(validSha(currentHead)));
 
-  // Current real candidate must short-circuit before any product loading/building.
-  test('current ineligible shadow performs zero projection loads and zero builds', () => {
+  // Explicit ineligible negative control still short-circuits before any loading/building.
+  test('ineligible shadow negative control performs zero projection loads and zero builds', () => {
     let loads = 0; let buildsA = 0; let buildsB = 0;
     const result = evaluateEquivalence({
       candidateSha: currentHead,
@@ -718,7 +718,7 @@ function evaluateEquivalence({ candidateSha, shadowIdentity, admission, loadProj
 
   console.log(
     `P1-231 S1-C builder equivalence source-spec model: PASS; cases=${cases}; ` +
-    `schema=${RESULT_SCHEMA}; current_state=candidate-ineligible; current_equivalence_evaluated=false; ` +
+    `schema=${RESULT_SCHEMA}; current_state=not-evaluated; current_equivalence_evaluated=false; ` +
     `cross_language=node-python; fixture_members=4; fixture_zip_bytes=${GOLDEN_ZIP_BYTES}; ` +
     `fixture_zip_sha256=${GOLDEN_ZIP_SHA256}; raw_bytes_equal=true; extracted_rpf_equal=true; ` +
     `metadata_drift=fail-closed; current_product_load=false; product_zip=false; policy_mutation=false; ` +
