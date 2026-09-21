@@ -273,3 +273,14 @@ Deterministic coverage is `project_tools/test_p1_164_admission_contract.js`, inc
 External comparison research confirms the distinction between WebClip's at-most-once/no-replay protocol and APIs that provide server-recognized idempotency tokens/keys (AWS/Stripe). No equivalent client-token contract is claimed for the current WebClip Yandex unpublish/move path.
 
 Durable rationale/evidence is `RESEARCH_P1_164_ADMISSION_CONTRACT_WITNESS_2026-09-21_EVIDENCE.md`. P1-164 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Runtime RPF, Chrome/Yandex QCF, full RCF and BCF remain unchanged.
+## P1-231 S0-A passive package authority
+
+The repository now has a canonical passive package declaration in `release_package_manifest_v1.json` and a strict exact-Git resolver in `project_tools/release_package_authority.js`.
+
+The authority admits exactly the current 33 package files under `webclip-extension-package/v1` / `portable-ascii-v1`, rejects ambiguous/non-portable JSON/path forms, accepts only exact 40-hex commit IDs, and reads package bytes only from exact Git blob objects with mode `100644`. It does not scan the working tree for membership or bytes.
+
+`project_tools/test_release_package_authority.js` covers migration equality against both current S0-A and S0-E file censuses, representation-invariant topology digest, dirty-working-tree independence, missing/non-commit/executable/symlink/tree members, byte bounds, strict JSON/path failures, and requires current S0-E RPF to remain `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a`.
+
+This is a passive control only. No release gate, builder, ZIP, tag/deploy, browser QA or Yandex QA is activated. Durable rationale/evidence is `RESEARCH_P1_231_S0A_PACKAGE_AUTHORITY_IMPLEMENTATION_2026-09-21_EVIDENCE.md`.
+
+P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Chrome/Yandex QCF, full RCF and BCF remain unchanged.
