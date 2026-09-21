@@ -55,6 +55,7 @@ const NON_PACKAGE_ROOT_FILES = new Set([
   'GITHUB_REPOSITORY_STATE.md',
   'README.md',
   'public_suffix_list.dat',
+  'release_contract_inputs_v1.json',
   'release_package_manifest_v1.json',
   'release_source_generation_v1.json',
 ]);
@@ -174,6 +175,7 @@ function provePslRegeneration() {
 
   deepEq([...NON_PACKAGE_DIRS].sort(), ['.github', 'project_docs', 'project_tools'], 'known control dirs drift');
   eq(classifyPackagePath('public_suffix_list.dat'), 'non-package', 'PSL source data is source input, not package member');
+  eq(classifyPackagePath('release_contract_inputs_v1.json'), 'non-package', 'release-contract authority is control-plane, not package member');
   eq(classifyPackagePath('release_package_manifest_v1.json'), 'non-package', 'package authority source is control-plane, not package member');
   eq(classifyPackagePath('release_source_generation_v1.json'), 'non-package', 'source-generation authority is control-plane, not package member');
   eq(classifyPackagePath('public-suffix.js'), 'package', 'generated PSL JS is package member');
