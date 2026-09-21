@@ -31,6 +31,7 @@ const PACKAGE_TOPOLOGY = packageAuthority.readCanonicalManifest();
 const PACKAGE_FILES = Object.freeze([...PACKAGE_TOPOLOGY.files]);
 const LEGACY_PACKAGE_FILES = Object.freeze(PACKAGE_FILES.filter((rel) => rel !== 'application-generation.js'));
 const LEGACY_RPF = 'sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a';
+const CURRENT_RPF = 'sha256:feab25126c9d686062f8ed0da8c9d7ad39f468ebc819342bb34fbd2c47e0e843';
 
 const FULL_RCF_ROOTS = Object.freeze([
   '.github/workflows/release-gate.yml',
@@ -312,6 +313,7 @@ function crossLanguage(vectors, fingerprints) {
   const legacyRpf=rpf(head,{paths:LEGACY_PACKAGE_FILES});
   eq(legacyRpf,LEGACY_RPF,'legacy 33-file S0-E RPF remains reproducible');
   const currentRpf=rpf(head);
+  eq(currentRpf,CURRENT_RPF,'current canonical 34-file RPF exact');
   check(currentRpf!==legacyRpf,'34-file current RPF must differ from legacy 33-file RPF');
   const chromeQcf=qcf('unpacked-chrome');
   const yandexQcf=qcf('yandex-e2e');
@@ -409,7 +411,7 @@ function crossLanguage(vectors, fingerprints) {
 
   console.log(
     `P1-231 S0-E identity engine source-spec model: PASS; cases=${cases}; protocol=${PROTOCOL}; package_files=${PACKAGE_FILES.length}; full_inputs=${FULL_RCF_ROOTS.length}; `+
-    `legacy_package_files=${LEGACY_PACKAGE_FILES.length}; legacy_rpf=${legacyRpf}; current_package_complete=true; `+
+    `legacy_package_files=${LEGACY_PACKAGE_FILES.length}; legacy_rpf=${legacyRpf}; current_package_complete=true; topology_sha256=${packageAuthority.topologyDigest(PACKAGE_TOPOLOGY)}; `+
     `rpf=${currentRpf}; chrome_qcf=${chromeQcf}; yandex_qcf=${yandexQcf}; rcf=${currentRcf}; bcf=${currentBcf}; cross_language=node-python`
   );
 })();
