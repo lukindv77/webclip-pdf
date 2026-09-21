@@ -445,16 +445,18 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
   test('DAG predecessor remains 19 nodes', () => assert.strictEqual(dag.kv.nodes, '19'));
   test('DAG S0 count remains 9', () => assert.strictEqual(dag.kv.s0, '9'));
   test('S0-A current package count is 34', () => assert.strictEqual(s0a.kv.package_files, '34'));
-  test('legacy S0-E package input count remains 33 until dedicated migration', () => assert.strictEqual(s0e.kv.package_files, '33'));
-  test('S0-A exposes exactly one-member package census drift over legacy S0-E', () => {
-    assert.strictEqual(Number(s0a.kv.package_files) - Number(s0e.kv.package_files), 1);
-  });
+  test('S0-E current package count is 34', () => assert.strictEqual(s0e.kv.package_files, '34'));
+  test('S0-E current package identity is complete', () => assert.strictEqual(s0e.kv.current_package_complete, 'true'));
+  test('S0-E legacy package control remains 33', () => assert.strictEqual(s0e.kv.legacy_package_files, '33'));
+  test('S0-E legacy RPF remains exact historical control', () => assert.strictEqual(s0e.kv.legacy_rpf, 'sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a'));
+  test('S0-A and current S0-E package census agree', () => assert.strictEqual(s0a.kv.package_files, s0e.kv.package_files));
   test('S0-D fixture size exact', () => assert.strictEqual(s0d.kv.fixture_zip_bytes, String(GOLDEN_ZIP_BYTES)));
   test('S0-D fixture hash exact', () => assert.strictEqual(s0d.kv.fixture_zip_sha256, GOLDEN_ZIP_SHA256));
   test('S0-D raw local/central proof retained', () => assert.strictEqual(s0d.kv.raw_local_central, 'true'));
   test('S0-D ZIP64 remains forbidden', () => assert.strictEqual(s0d.kv.zip64, 'v1-forbidden'));
   test('S0-D toolchain provenance remains non-semantic', () => assert.strictEqual(s0d.kv.toolchain_provenance_only, 'true'));
-  test('S0-E exact RPF retained', () => assert.strictEqual(CURRENT_IDS.rpf, 'sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a'));
+  test('S0-E current RPF valid', () => assert(validDigest(CURRENT_IDS.rpf)));
+  test('S0-E current RPF differs from incomplete legacy control', () => assert.notStrictEqual(CURRENT_IDS.rpf, s0e.kv.legacy_rpf));
   test('S0-E exact BCF retained', () => assert.strictEqual(CURRENT_IDS.bcf, 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'));
   test('S0-F remains blocked portability', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-portability'));
   test('S0-F RPF agrees with S0-E', () => assert.strictEqual(s0f.kv.rpf, CURRENT_IDS.rpf));
@@ -739,7 +741,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
   console.log(
     `P1-231 S0-H passive-builder verifier source-spec model: PASS; cases=${cases}; ` +
     `current_gate=${s0f.kv.current_gate}; current_product_build=blocked-before-load; product_zip=false; ` +
-    `s0a_package_files=${s0a.kv.package_files}; legacy_s0e_package_files=${s0e.kv.package_files}; current_package_rpf_complete=false; ` +
+    `s0a_package_files=${s0a.kv.package_files}; s0e_package_files=${s0e.kv.package_files}; legacy_s0e_package_files=${s0e.kv.legacy_package_files}; current_package_rpf_complete=${s0e.kv.current_package_complete}; ` +
     `synthetic_identity_adapter=true; fixture_members=4; fixture_zip_bytes=${raw.length}; ` +
     `fixture_zip_sha256=${digest(raw)}; rpf=${CURRENT_IDS.rpf}; bcf=${CURRENT_IDS.bcf}; head=${currentHead}`
   );
