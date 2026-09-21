@@ -12,6 +12,8 @@ Canonical baseline at tranche start:
 
 `bae94fb2eb44ad45221a4f16d25c1f3118a88d4a`
 
+Durable integration PR: `#310`
+
 Owner:
 
 `P1-231 | ACTIVE`
