@@ -325,7 +325,7 @@ function gitEntry(commit, rel) {
 
   // Refinement is additive to #188, whose empirical blocker remains present.
   const predecessor = fs.readFileSync(path.join(ROOT, 'project_tools', 'test_p1_231_s0b_source_generation_authority_source_spec_model.js'), 'utf8');
-  check(predecessor.includes('current_psl_windows_portable=false'), '#188 portability-blocker marker must remain');
+  check(predecessor.includes('current_psl_windows_portable=true'), 'current S0-B portability proof marker must remain');
   check(!predecessor.includes('parseStrictManifest'), '#188 model intentionally did not prove raw parser boundary');
   const generator = fs.readFileSync(path.join(ROOT, 'project_tools', 'build_public_suffix_js.py'), 'utf8');
   check(!generator.includes("OUT.write_text(code, encoding='utf-8')"), 'text-mode PSL generator must remain retired');
@@ -337,5 +337,5 @@ function gitEntry(commit, rel) {
 
   const topo = digest(auth);
   check(/^[0-9a-f]{64}$/.test(topo), 'research topology digest shape');
-  console.log(`P1-231 S0-B strict parser/composition refinement model: PASS; cases=${cases}; relations=${auth.relations.length}; chaining=v1-forbidden; strict_raw_parser=true; topology_sha256=${topo}; current_psl_windows_portable=false; head=${head}`);
+  console.log(`P1-231 S0-B strict parser/composition refinement model: PASS; cases=${cases}; relations=${auth.relations.length}; chaining=v1-forbidden; strict_raw_parser=true; topology_sha256=${topo}; current_psl_windows_portable=true; head=${head}`);
 })();
