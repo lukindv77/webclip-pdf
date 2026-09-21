@@ -1,0 +1,149 @@
+{
+  "schema": "webclip-release-contract-inputs/v1",
+  "fingerprint_profile": "webclip-contract-fingerprint-v1",
+  "full_rcf": {
+    "blob_inputs": [
+      ".github/workflows/release-gate.yml",
+      "project_docs/BUILD_AND_RECOVERY_RULES.md",
+      "project_docs/CONTEXT_MANIFEST.json",
+      "project_docs/DECISIONS_AND_RATIONALE.md",
+      "project_docs/RESEARCH_REGISTRY.md",
+      "project_docs/TEST_PLAN.md",
+      "project_docs/USER_REQUIREMENTS.md",
+      "project_docs/WEBCLIP_PDF_FIDELITY_CONTRACT.md",
+      "project_tools/build_public_suffix_js.py",
+      "project_tools/check_pr_change_contract.py",
+      "project_tools/check_release_readiness.py"
+    ]
+  },
+  "projections": {
+    "unpacked-chrome": {
+      "schema": "webclip-qa-contract/unpacked-chrome/v1",
+      "subject": "staged-unpacked",
+      "environment_policy": [
+        "browser-meets-candidate-minimum",
+        "browser-version-recorded-in-receipt",
+        "chrome-or-chrome-for-testing",
+        "no-enterprise-policy-bypass",
+        "real-download-boundary",
+        "real-extension-debugger-path",
+        "real-unpacked-mv3",
+        "real-user-permission-ui"
+      ],
+      "cases": [
+        {
+          "id": "chrome.unpacked-load",
+          "assertions": [
+            "extension-startup-operational",
+            "manifest-v3",
+            "real-unpacked-extension-load",
+            "staged-bytes-equal-candidate-git-blobs",
+            "staged-file-set-equals-package",
+            "staged-rpf-equals-candidate-rpf"
+          ]
+        },
+        {
+          "id": "chrome.optional-host-permission",
+          "assertions": [
+            "cross-origin-frame",
+            "navigation",
+            "real-user-deny",
+            "real-user-grant",
+            "regrant",
+            "reload",
+            "revoke",
+            "stale-frame-or-document-fails-closed"
+          ]
+        },
+        {
+          "id": "chrome.debugger-print",
+          "assertions": [
+            "actual-extension-chrome-debugger",
+            "actual-page-print-to-pdf",
+            "bounded-failure-is-truthful",
+            "no-policy-bypass",
+            "render-fidelity-contract",
+            "selected-or-full-document-contract-as-applicable"
+          ]
+        },
+        {
+          "id": "chrome.download-save-as",
+          "assertions": [
+            "automatic-download",
+            "complete-and-interrupted-handling",
+            "late-settlement-reconciliation",
+            "native-save-as",
+            "no-duplicate-start-after-unknown",
+            "restart-recovery",
+            "terminal-downloaditem-truth"
+          ]
+        }
+      ]
+    },
+    "yandex-e2e": {
+      "schema": "webclip-qa-contract/yandex-e2e/v1",
+      "subject": "live-yandex-provider",
+      "environment_policy": [
+        "account-root-capability-recorded-without-secret",
+        "immutable-live-account-root-context",
+        "no-secret-in-receipt",
+        "no-signed-transfer-url-in-durable-evidence",
+        "real-oauth",
+        "real-yandex-rest-api",
+        "same-rpf-runtime-generation"
+      ],
+      "cases": [
+        {
+          "id": "yandex.oauth-context",
+          "assertions": [
+            "account-identity",
+            "account-switch-fails-stale-context",
+            "capability-identity",
+            "manual-resume-after-reauth",
+            "real-oauth",
+            "reauth-fencing",
+            "root-identity",
+            "root-switch-fails-stale-context"
+          ]
+        },
+        {
+          "id": "yandex.remote-effects",
+          "assertions": [
+            "delete",
+            "exact-object-reconciliation",
+            "exact-remote-byte-verification",
+            "move",
+            "namespace-ownership",
+            "publish",
+            "unpublish",
+            "upload"
+          ]
+        },
+        {
+          "id": "yandex.backup-restore",
+          "assertions": [
+            "backup",
+            "journal-generation-admission",
+            "no-destructive-retarget",
+            "restore",
+            "selected-object-binding",
+            "staging-receipt-binding"
+          ]
+        },
+        {
+          "id": "yandex.failure-settlement",
+          "assertions": [
+            "account-root-switching",
+            "auth-expiry",
+            "reconciliation",
+            "restart-recovery",
+            "retry-no-duplicate-effect",
+            "started-unknown",
+            "timeout",
+            "transport-failure"
+          ]
+        }
+      ]
+    }
+  }
+}
