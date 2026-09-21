@@ -185,7 +185,7 @@ function settlementFixture(candidateSha, slots = slotFixture()) {
   check(/S0-G evidence-settlement engine source-spec model: PASS; cases=132/.test(gOut), 'S0-G predecessor PASS missing');
   check(/current_real_settlement=blocked/.test(gOut), 'S0-G current blocked truth missing');
   check(/S1-A shadow identity source-spec model: PASS; cases=75/.test(aOut), 'S1-A predecessor PASS missing');
-  check(/current_shadow=blocked-portability/.test(aOut), 'S1-A current blocked-portability truth missing');
+  check(/current_shadow=blocked-generator-rcf/.test(aOut), 'S1-A current generator-RCF blocker truth missing');
   check(/current_eligible=false/.test(aOut), 'S1-A current ineligible truth missing');
 
   // Current real state: namespace check executes, semantic settlement must not.
@@ -204,7 +204,7 @@ function settlementFixture(candidateSha, slots = slotFixture()) {
   eq(current.namespaceValid, true);
   eq(current.settlementEvaluated, false);
   eq(current.shadowOutcome, 'candidate-ineligible');
-  eq(current.blockerReason, 'blocked-portability');
+  eq(current.blockerReason, 'blocked-generator-rcf');
   eq(current.allRequiredSlotsPass, false);
   for (const k of REQUIRED_SLOTS) eq(current.slots[k].state, 'not-evaluated', `${k} must not be mislabeled missing`);
 
