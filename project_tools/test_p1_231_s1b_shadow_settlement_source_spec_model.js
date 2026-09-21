@@ -143,7 +143,7 @@ function shadowFixture(candidateSha, eligible, outcome = eligible ? 'eligible' :
     eventKind: 'push',
     identityProtocol: 'WEBCLIP_RELEASE_IDENTITY_V1',
     ...CURRENT,
-    generationGate: eligible ? 'pass' : 'blocked-portability',
+    generationGate: eligible ? 'pass' : outcome,
     eligible,
     shadowOutcome: outcome,
     impactContext: { kind: 'push-main', candidateSha },
