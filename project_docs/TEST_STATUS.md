@@ -314,3 +314,10 @@ the suffix inside `legacy_rpf=`, and the S0-A package-authority witness still in
 tokens, and the package-authority witness explicitly validates canonical 34-file current membership
 plus the 33-file legacy subset. S0-G/H and S1-A/B/C/D require no separate semantic migration for
 this failure because their #926 failures were transitive through S0-F.
+### P1-231 S0-E migration exact-head CI #929
+
+Run #929 confirmed the migrated S0-E/F/G/H chain and package-authority witness. Its remaining four
+failures were stale predecessor case-count markers only: S1-A expected historical S0-E/S0-F counts
+201/224 instead of 249/272, and S1-B expected historical S0-G count 128 instead of 132; S1-C/D
+failed transitively through S1-A. Those markers are now synchronized without changing S1 semantics,
+identity values, blocked-portability truth or release authorization.
