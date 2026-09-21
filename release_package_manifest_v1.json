@@ -2,6 +2,7 @@
   "schema": "webclip-extension-package/v1",
   "path_profile": "portable-ascii-v1",
   "files": [
+    "application-generation.js",
     "content-injection-guard.js",
     "content.js",
     "frame-agent.js",
