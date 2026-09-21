@@ -257,8 +257,8 @@ function C(status,path) { return {status,path}; }
 
 (function main(){
   // Predecessor bootstrap facts are current and exact.
-  eq(CURRENT_PACKAGE_FILES.length,33,'S0-A bootstrap package census');
-  eq(new Set(CURRENT_PACKAGE_FILES).size,33,'S0-A package members unique');
+  eq(CURRENT_PACKAGE_FILES.length,34,'S0-A bootstrap package census');
+  eq(new Set(CURRENT_PACKAGE_FILES).size,34,'S0-A package members unique');
   eq(CURRENT_RELATIONS.length,1,'S0-B relation census');
   eq(CURRENT_RELATIONS[0].id,'public-suffix-js');
   check(CURRENT_PACKAGE_FILES.includes('public-suffix.js'),'generated target is package member');
