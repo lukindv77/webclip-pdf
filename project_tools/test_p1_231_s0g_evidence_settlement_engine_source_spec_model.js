@@ -432,18 +432,19 @@ test('current S0-E RPF is valid and distinct from legacy', () => {
 });
 test('current Chrome QCF exact', () => assert.strictEqual(currentIds.qcf['unpacked-chrome'], 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c'));
 test('current Yandex QCF exact', () => assert.strictEqual(currentIds.qcf['yandex-e2e'], 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1'));
-test('current full RCF exact', () => assert.strictEqual(currentIds.rcf, 'sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce'));
+test('current full RCF is generator-bound and advanced', () => { assert(validDigest(currentIds.rcf)); assert.notStrictEqual(currentIds.rcf, 'sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce'); });
 test('current BCF exact', () => assert.strictEqual(currentIds.bcf, 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'));
-test('current S0-F remains blocked on generation governance', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-generation'));
+test('current S0-F is admitted after generator binding', () => assert.strictEqual(s0f.kv.current_gate, 'pass'));
 test('current S0-F RPF agrees with S0-E', () => assert.strictEqual(s0f.kv.rpf, currentIds.rpf));
 test('current S0-F has no CGF axis', () => assert.strictEqual(s0f.kv.no_cgf, 'true'));
 test('current head is exact git SHA', () => assert(validSha(currentHead)));
 
-test('real current blocked candidate cannot settle', () => {
-  const blocked = makeAdmission(currentHead, { generationState: 'blocked' });
-  const out = settle({ candidateSha: currentHead, candidateAdmission: blocked, receipts: [], admissionBySha: new Map(), isAncestor: (x, y) => x === y });
-  assert.strictEqual(out.reason, 'CANDIDATE_GENERATION_NOT_ADMITTED');
+test('real current admitted candidate remains blocked by empty current evidence namespace', () => {
+  const admitted = makeAdmission(currentHead, { identities: currentIds });
+  const out = settle({ candidateSha: currentHead, candidateAdmission: admitted, receipts: [], admissionBySha: new Map([[currentHead, admitted]]), isAncestor: (x, y) => x === y });
+  assert.strictEqual(out.candidateGenerationState, 'pass');
   assert.strictEqual(out.allRequiredSlotsPass, false);
+  for (const kind of KINDS) assert.strictEqual(out.slots[kind].state, 'missing');
 });
 
 // Admission validation matrix.
@@ -875,7 +876,7 @@ test('settlement result carries only RPF/QCF/RCF evidence identities', () => {
 
 console.log(
   `P1-231 S0-G evidence-settlement engine source-spec model: PASS; cases=${cases}; ` +
-  `schema=${RECEIPT_SCHEMA}; current_gate=${s0f.kv.current_gate}; current_real_settlement=blocked; ` +
+  `schema=${RECEIPT_SCHEMA}; current_gate=${s0f.kv.current_gate}; current_real_settlement=blocked-evidence; ` +
   `synthetic_all_pass=true; tested_source_admission=required; ancestry=required; append_only=true; ` +
   `rpf=${currentIds.rpf}; chrome_qcf=${currentIds.qcf['unpacked-chrome']}; ` +
   `yandex_qcf=${currentIds.qcf['yandex-e2e']}; rcf=${currentIds.rcf}; head=${currentHead}`
