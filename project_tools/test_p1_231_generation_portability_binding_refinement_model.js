@@ -33,6 +33,7 @@ const CURRENT_FULL_RCF_INPUTS = Object.freeze([
   'project_docs/TEST_PLAN.md',
   'project_docs/USER_REQUIREMENTS.md',
   'project_docs/WEBCLIP_PDF_FIDELITY_CONTRACT.md',
+  'project_tools/build_public_suffix_js.py',
   'project_tools/check_pr_change_contract.py',
   'project_tools/check_release_readiness.py',
 ]);
@@ -120,13 +121,13 @@ test('historical S0-F spec records the former portability blocker', () => assert
 test('current physical proof closes the exact Windows portability defect', () => assert(portabilityProof.includes('PHYSICAL PORTABILITY PASS') && portabilityProof.includes('windows-2025') && portabilityProof.includes('72aea4d8a8505ad90d9070bca539dff7d49391f034d0dd41f76d64867efc0b26')));
 test('S0-F forbids verifier normalization', () => assert(s0fDoc.includes('No newline, Unicode, JSON, whitespace or text-mode normalization is allowed after execution.')));
 
-test('current S0-C model has ten full-RCF inputs', () => assert.strictEqual(CURRENT_FULL_RCF_INPUTS.length, 10));
-test('current S0-C bootstrap omits generator executable', () => assert(!CURRENT_FULL_RCF_INPUTS.includes(GENERATOR)));
+test('current S0-C model has eleven full-RCF inputs', () => assert.strictEqual(CURRENT_FULL_RCF_INPUTS.length, 11));
+test('current S0-C bootstrap binds generator executable', () => assert(CURRENT_FULL_RCF_INPUTS.includes(GENERATOR)));
 test('current S0-C source model also does not list generator executable', () => {
   const fixtureStart = s0cModel.indexOf('const AUTHORITY_FIXTURE');
   const fixtureEnd = s0cModel.indexOf('projections:', fixtureStart);
   assert(fixtureStart >= 0 && fixtureEnd > fixtureStart);
-  assert(!s0cModel.slice(fixtureStart, fixtureEnd).includes(GENERATOR));
+  assert(s0cModel.slice(fixtureStart, fixtureEnd).includes(GENERATOR));
 });
 
 test('S0-I already recognizes generationGenerator', () => assert(s0iDoc.includes('generationGenerator')));
@@ -180,13 +181,14 @@ test('generator-only repair leaves research package digest unchanged when output
 test('generator-only repair leaves Chrome research QCF unchanged', () => assert.strictEqual(oldChromeQcf, newChromeQcf));
 test('generator-only repair leaves Yandex research QCF unchanged', () => assert.strictEqual(oldYandexQcf, newYandexQcf));
 
-const proposedFullInputs = Object.freeze([...CURRENT_FULL_RCF_INPUTS, GENERATOR]);
-test('proposed governance coverage adds generator exactly once', () => assert.strictEqual(proposedFullInputs.filter((x) => x === GENERATOR).length, 1));
-test('proposed full input set has eleven roots', () => assert.strictEqual(proposedFullInputs.length, 11));
-test('current coverage fails closed for generator', () => {
-  assert.throws(() => coverageCheck([GENERATOR], CURRENT_FULL_RCF_INPUTS), (error) => error.code === 'SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND');
+const proposedFullInputs = CURRENT_FULL_RCF_INPUTS;
+test('current governance coverage includes generator exactly once', () => assert.strictEqual(proposedFullInputs.filter((x) => x === GENERATOR).length, 1));
+test('current full input set has eleven roots', () => assert.strictEqual(proposedFullInputs.length, 11));
+test('historical coverage fixture fails closed for generator', () => {
+  const historical = CURRENT_FULL_RCF_INPUTS.filter((x) => x !== GENERATOR);
+  assert.throws(() => coverageCheck([GENERATOR], historical), (error) => error.code === 'SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND');
 });
-test('proposed coverage accepts generator', () => assert.strictEqual(coverageCheck([GENERATOR], proposedFullInputs), true));
+test('current coverage accepts generator', () => assert.strictEqual(coverageCheck([GENERATOR], CURRENT_FULL_RCF_INPUTS), true));
 
 const oldGovernanceDigest = researchGovernanceBinding(proposedFullInputs, new Map([[GENERATOR, historicalTextGeneratorSource]]));
 const repairedGovernanceDigest = researchGovernanceBinding(proposedFullInputs);
@@ -250,4 +252,4 @@ test('tranche does not authorize S2', () => assert.strictEqual(tranche.s2Authori
 test('tranche does not build product ZIP', () => assert.strictEqual(tranche.productZip, false));
 test('tranche does not authorize release', () => assert.strictEqual(tranche.releaseAuthorized, false));
 
-console.log(`P1-231 generation portability/binding refinement model: PASS; cases=${cases}; current_full_rcf_inputs=${CURRENT_FULL_RCF_INPUTS.length}; proposed_full_rcf_inputs=${proposedFullInputs.length}; current_portability=pass; generator_rcf_binding=blocked; s2_authorized=false`);
+console.log(`P1-231 generation portability/binding refinement model: PASS; cases=${cases}; current_full_rcf_inputs=${CURRENT_FULL_RCF_INPUTS.length}; current_portability=pass; generator_rcf_binding=pass; s2_authorized=false`);
