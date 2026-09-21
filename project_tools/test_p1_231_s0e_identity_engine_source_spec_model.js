@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const { execFileSync, spawnSync } = require('child_process');
+const packageAuthority = require('./release_package_authority.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const PROTOCOL = 'WEBCLIP_RELEASE_IDENTITY_V1';
@@ -26,16 +27,10 @@ const TAG_RECORD = 0x05;
 const MAX_U32 = 0xffffffff;
 const MAX_U64 = (1n << 64n) - 1n;
 
-const PACKAGE_FILES = Object.freeze([
-  'content-injection-guard.js','content.js','frame-agent.js','frame-proxy-budget-guard.js',
-  'frame-proxy-inert-guard.js','host-control-activation-guard.js','journal-import-digest.js',
-  'journal-import-stream.js','journal-restore-envelope-guard.js','journal-text-filter.js',
-  'journal.css','journal.html','journal.js','local-download-identity.js','manifest.json',
-  'offscreen-blob-admission-guard.js','offscreen-bootstrap.js','offscreen.html','offscreen.js',
-  'operation-log-redaction-guard.js','options.css','options.html','options.js','pdf-print-guard.js',
-  'popup.css','popup.html','popup.js','prepared-save-as.js','public-suffix.js','service-worker.js',
-  'yandex-auth-help.css','yandex-auth-help.html','yandex-auth-help.js',
-]);
+const PACKAGE_TOPOLOGY = packageAuthority.readCanonicalManifest();
+const PACKAGE_FILES = Object.freeze([...PACKAGE_TOPOLOGY.files]);
+const LEGACY_PACKAGE_FILES = Object.freeze(PACKAGE_FILES.filter((rel) => rel !== 'application-generation.js'));
+const LEGACY_RPF = 'sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a';
 
 const FULL_RCF_ROOTS = Object.freeze([
   '.github/workflows/release-gate.yml',
@@ -273,8 +268,13 @@ function crossLanguage(vectors, fingerprints) {
 (function main() {
   const head = git('rev-parse','HEAD');
   eq(git('cat-file','-t',head),'commit','research proof must run at exact commit');
-  eq(PACKAGE_FILES.length,33,'S0-A package count drift');
-  eq(new Set(PACKAGE_FILES).size,33,'package list duplicates');
+  eq(PACKAGE_TOPOLOGY.schema,PACKAGE_SCHEMA,'S0-A package schema');
+  eq(PACKAGE_TOPOLOGY.path_profile,PATH_PROFILE,'S0-A path profile');
+  eq(PACKAGE_FILES.length,34,'S0-A current package count drift');
+  eq(new Set(PACKAGE_FILES).size,34,'package list duplicates');
+  check(PACKAGE_FILES.includes('application-generation.js'),'current package must include application-generation.js');
+  eq(LEGACY_PACKAGE_FILES.length,33,'legacy S0-E package control must remain exactly 33 files');
+  check(!LEGACY_PACKAGE_FILES.includes('application-generation.js'),'legacy control must omit only application-generation.js');
   eq(FULL_RCF_ROOTS.length,10,'S0-C full-root count drift');
 
   // Primitive framing and ambiguity controls.
@@ -293,14 +293,26 @@ function crossLanguage(vectors, fingerprints) {
   eq(parseFingerprint('sha256:'+'0'.repeat(64)).length,32,'parsed digest must be raw 32 bytes');
 
   // Exact Git admission controls for current RPF and full RCF roots.
-  for (const rel of PACKAGE_FILES) {
-    const e=gitEntry(head,rel); eq(e.type,'blob',`${rel} type`); eq(e.mode,'100644',`${rel} mode`); check(/^[0-9a-f]{40}$/.test(e.oid),`${rel} oid`);
+  const resolvedPackage = packageAuthority.resolvePackage(head, PACKAGE_TOPOLOGY);
+  eq(resolvedPackage.candidate_sha,head,'S0-A resolver candidate SHA');
+  eq(resolvedPackage.members.length,PACKAGE_FILES.length,'S0-A resolver member count');
+  eq(resolvedPackage.topology_digest,packageAuthority.topologyDigest(PACKAGE_TOPOLOGY),'S0-A topology digest');
+  for (const member of resolvedPackage.members) {
+    const rel=member.path;
+    const e=gitEntry(head,rel);
+    eq(e.type,'blob',`${rel} type`);
+    eq(e.mode,'100644',`${rel} mode`);
+    eq(e.oid,member.git_oid,`${rel} S0-A OID`);
+    eq(sha256(gitBlob(head,rel)),member.sha256,`${rel} S0-A byte digest`);
   }
   for (const rel of FULL_RCF_ROOTS) {
     const e=gitEntry(head,rel); eq(e.type,'blob',`${rel} full-RCF type`); eq(e.mode,'100644',`${rel} full-RCF mode`);
   }
 
+  const legacyRpf=rpf(head,{paths:LEGACY_PACKAGE_FILES});
+  eq(legacyRpf,LEGACY_RPF,'legacy 33-file S0-E RPF remains reproducible');
   const currentRpf=rpf(head);
+  check(currentRpf!==legacyRpf,'34-file current RPF must differ from legacy 33-file RPF');
   const chromeQcf=qcf('unpacked-chrome');
   const yandexQcf=qcf('yandex-e2e');
   const currentRcf=rcf(head);
@@ -397,6 +409,7 @@ function crossLanguage(vectors, fingerprints) {
 
   console.log(
     `P1-231 S0-E identity engine source-spec model: PASS; cases=${cases}; protocol=${PROTOCOL}; package_files=${PACKAGE_FILES.length}; full_inputs=${FULL_RCF_ROOTS.length}; `+
+    `legacy_package_files=${LEGACY_PACKAGE_FILES.length}; legacy_rpf=${legacyRpf}; current_package_complete=true; `+
     `rpf=${currentRpf}; chrome_qcf=${chromeQcf}; yandex_qcf=${yandexQcf}; rcf=${currentRcf}; bcf=${currentBcf}; cross_language=node-python`
   );
 })();
