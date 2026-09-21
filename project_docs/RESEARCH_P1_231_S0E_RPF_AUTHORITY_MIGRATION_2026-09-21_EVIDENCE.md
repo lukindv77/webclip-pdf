@@ -212,3 +212,22 @@ The witness now verifies:
 - current/legacy counts are 34/33 and the identities differ.
 
 No runtime/package byte, QA contract, RCF root or builder contract changed in these corrections.
+## Exact-head CI #929 downstream predecessor-marker reconciliation
+
+After the #926 parser/authority corrections, exact-head run #929 showed:
+
+- S0-E PASS (cases=249) with 34-file current RPF `feab…`;
+- S0-F PASS (cases=272) with exact token parsing;
+- S0-G PASS (cases=132);
+- S0-H PASS with current 34 / legacy 33 membership and product build still blocked-before-load;
+- package-authority witness PASS.
+
+The only remaining failures were S1-A/B/C/D. Root cause was not identity math:
+
+- S1-A still required historical predecessor stdout markers `S0-E cases=201` and `S0-F cases=224`;
+- S1-B still required historical `S0-G cases=128`;
+- S1-C and S1-D failed transitively because they execute S1-A.
+
+The bounded correction updates only those predecessor case-count markers to the current migrated values
+(249 / 272 / 132). S1-A/B/C/D semantics, schemas, current blocked-portability state and release
+authorization remain unchanged.
