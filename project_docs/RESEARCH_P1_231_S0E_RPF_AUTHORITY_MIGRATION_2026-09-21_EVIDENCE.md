@@ -168,3 +168,47 @@ This tranche settles current package-membership identity only. It does not:
 - create a tag, deployment or GitHub Release.
 
 Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+## Exact-head CI #926 discovery and bounded correction
+
+Initial exact-head Repository Integrity run #926 proved that the migrated S0-E engine itself was correct:
+
+- exact checkout / repository / change-contract / readiness / syntax gates PASS;
+- S0-E PASS with 34 current package files;
+- legacy 33-file subset reproduced `b65c…`;
+- current 34-file RPF reproduced `feab…`;
+- Node/Python cross-language identity agreement PASS.
+
+The full deterministic suite then exposed two stale downstream assumptions.
+
+### S0-F token parser collision
+
+S0-F parsed the semicolon-delimited S0-E summary with an unanchored expression for `rpf=`.
+After `legacy_rpf=` was added, that parser could match the `rpf=` suffix inside
+`legacy_rpf=`, causing the current RPF to be read as the legacy value.
+
+The parser now requires an exact token boundary:
+
+`(?:^|;\\s*)<name>=...(?=;|$)`
+
+so `rpf` and `legacy_rpf` are distinct fields.
+
+The S0-G/S0-H and S1-A/B/C/D failures in #926 were transitive through S0-F and are not repaired
+individually.
+
+### Package-authority witness migration
+
+`test_release_package_authority.js` still treated S0-E `PACKAGE_FILES` as the historical literal
+33-file array. After migration, `PACKAGE_FILES` is intentionally the canonical S0-A 34-file
+authority, while `LEGACY_PACKAGE_FILES` is the explicit 33-file control.
+
+The witness now verifies:
+
+- S0-E consumes `release_package_authority.js`;
+- current membership comes from the canonical manifest;
+- legacy subset excludes only `application-generation.js`;
+- current RPF is exactly `feab…`;
+- legacy RPF is exactly `b65c…`;
+- current/legacy counts are 34/33 and the identities differ.
+
+No runtime/package byte, QA contract, RCF root or builder contract changed in these corrections.
