@@ -169,7 +169,7 @@ function verifyRelation({
   });
 }
 
-function admitCandidate({ candidateSha, portabilityReady, regeneratedOutputs, identities }) {
+function admitCandidate({ candidateSha, portabilityReady, generatorRcfBound, regeneratedOutputs, identities }) {
   if (typeof candidateSha !== 'string' || !/^[0-9a-f]{40}$/.test(candidateSha)) fail('CANDIDATE_SHA_INVALID');
   let type = '';
   try { type = gitText('cat-file', '-t', candidateSha); } catch { fail('CANDIDATE_NOT_COMMIT'); }
@@ -177,6 +177,7 @@ function admitCandidate({ candidateSha, portabilityReady, regeneratedOutputs, id
 
   for (const rel of PACKAGE_FILES) exactBlob(candidateSha, rel);
   const relationResult = verifyRelation({ candidateSha, regeneratedOutputs, portabilityReady });
+  if (!generatorRcfBound) fail('SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND');
   const requiredIdentityFields = ['rpf', 'chromeQcf', 'yandexQcf', 'rcf', 'bcf'];
   if (!identities || requiredIdentityFields.some((key) => !/^sha256:[0-9a-f]{64}$/.test(identities[key] || ''))) {
     fail('IDENTITY_COMPUTATION_FAILED');
@@ -249,12 +250,12 @@ function diagnosticPackageHash(overrides = new Map()) {
   deepEq(CURRENT_RELATION.inputs, ['public_suffix_list.dat']);
   deepEq(CURRENT_RELATION.outputs, ['public-suffix.js']);
 
-  // Existing S0-B authority remains blocked on portability proof even after the generator byte-write correction.
+  // Corrected exact generation roots are now physically portable; governance binding remains the current blocker.
   const s0b = fs.readFileSync(path.join(ROOT, 'project_tools', 'test_p1_231_s0b_source_generation_authority_source_spec_model.js'), 'utf8');
   const s0bStrict = fs.readFileSync(path.join(ROOT, 'project_tools', 'test_p1_231_s0b_strict_parser_composition_refinement_model.js'), 'utf8');
-  check(s0b.includes('current_psl_windows_portable=false'), 'S0-B portability blocker marker');
+  check(s0b.includes('current_psl_windows_portable=true'), 'S0-B portability PASS marker');
   check(s0bStrict.includes('SOURCE_GENERATION_CHAIN_FORBIDDEN'), 'S0-B chain prohibition marker');
-  check(s0bStrict.includes('current_psl_windows_portable=false'), 'strict refinement retains portability blocker');
+  check(s0bStrict.includes('current_psl_windows_portable=true'), 'strict refinement retains portability PASS');
   const generatorSource = exactBlob(head, CURRENT_RELATION.generator).toString('utf8');
   check(!generatorSource.includes("OUT.write_text(code, encoding='utf-8')"), 'text-mode generator must remain retired');
   check(!generatorSource.includes("newline='\\n'"), 'binary output must not depend on text newline policy');
@@ -269,12 +270,13 @@ function diagnosticPackageHash(overrides = new Map()) {
   eq(sha256(run.generated), sha256(candidateOutput), 'regenerated/candidate digest');
   deepEq(run.top, ['project_tools', 'public-suffix.js', 'public_suffix_list.dat'], 'minimal workspace top-level set');
 
-  // The Linux match and byte-write correction are necessary but not sufficient: Windows exact-blob re-proof is still pending.
-  throwsCode(() => verifyRelation({
+  // The corrected exact roots now satisfy the cross-platform prerequisite; current-runner regeneration must therefore admit.
+  const currentRelation = verifyRelation({
     candidateSha: head,
-    portabilityReady: false,
+    portabilityReady: true,
     regeneratedOutputs: new Map([['public-suffix.js', run.generated]]),
-  }), 'SOURCE_GENERATION_PORTABILITY_UNPROVEN');
+  });
+  eq(currentRelation.state, 'match', 'current portable relation state');
 
   // S0-E composition: use the predecessor model as the identity owner rather than redefining it here.
   const identities = parseS0EOutput();
@@ -295,19 +297,21 @@ function diagnosticPackageHash(overrides = new Map()) {
   try {
     blockedResult = admitCandidate({
       candidateSha: head,
-      portabilityReady: false,
+      portabilityReady: true,
+      generatorRcfBound: false,
       regeneratedOutputs: new Map([['public-suffix.js', run.generated]]),
       identities,
     });
   } catch (e) {
-    eq(e.code, 'SOURCE_GENERATION_PORTABILITY_UNPROVEN', 'current gate blocker');
+    eq(e.code, 'SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND', 'current gate blocker');
   }
   eq(blockedResult, null, 'blocked candidate must publish no admitted tuple');
 
-  // Synthetic future state: once portability prerequisite is closed, exact matching output admits identities.
+  // Synthetic future state: once the remaining generator/full-RCF binding is closed, exact matching output admits identities.
   const admitted = admitCandidate({
     candidateSha: head,
     portabilityReady: true,
+    generatorRcfBound: true,
     regeneratedOutputs: new Map([['public-suffix.js', run.generated]]),
     identities,
   });
@@ -395,9 +399,9 @@ function diagnosticPackageHash(overrides = new Map()) {
   }), 'SOURCE_GENERATION_ADMISSION_FAILED');
 
   // Candidate identity boundary.
-  throwsCode(() => admitCandidate({ candidateSha: 'HEAD', portabilityReady: true, regeneratedOutputs: new Map(), identities }), 'CANDIDATE_SHA_INVALID');
-  throwsCode(() => admitCandidate({ candidateSha: '0'.repeat(40), portabilityReady: true, regeneratedOutputs: new Map(), identities }), 'CANDIDATE_NOT_COMMIT');
-  throwsCode(() => admitCandidate({ candidateSha: head, portabilityReady: true, regeneratedOutputs: new Map([['public-suffix.js', run.generated]]), identities: null }), 'IDENTITY_COMPUTATION_FAILED');
+  throwsCode(() => admitCandidate({ candidateSha: 'HEAD', portabilityReady: true, generatorRcfBound: true, regeneratedOutputs: new Map(), identities }), 'CANDIDATE_SHA_INVALID');
+  throwsCode(() => admitCandidate({ candidateSha: '0'.repeat(40), portabilityReady: true, generatorRcfBound: true, regeneratedOutputs: new Map(), identities }), 'CANDIDATE_NOT_COMMIT');
+  throwsCode(() => admitCandidate({ candidateSha: head, portabilityReady: true, generatorRcfBound: true, regeneratedOutputs: new Map([['public-suffix.js', run.generated]]), identities: null }), 'IDENTITY_COMPUTATION_FAILED');
   eq(consumeExact(admitted, head), true, 'exact candidate result consumption');
   throwsCode(() => consumeExact(admitted, 'f'.repeat(40)), 'CANDIDATE_RESULT_SHA_MISMATCH');
   throwsCode(() => consumeExact({ ...admitted, generationState: 'blocked' }, head), 'CANDIDATE_RESULT_INVALID');
@@ -423,5 +427,5 @@ function diagnosticPackageHash(overrides = new Map()) {
     'S0-C must be revisited as part of the implementation package',
   ]) check(s0fSpec.includes(marker), `S0-F source-spec marker missing: ${marker}`);
 
-  console.log(`P1-231 S0-F candidate-generation verifier source-spec model: PASS; cases=${cases}; package_files=${PACKAGE_FILES.length}; relations=1; linux_regen=match; current_gate=blocked-portability; admitted_after_portability=${admitted.generationState}; rpf=${admitted.identities.rpf}; no_cgf=true; head=${head}`);
+  console.log(`P1-231 S0-F candidate-generation verifier source-spec model: PASS; cases=${cases}; package_files=${PACKAGE_FILES.length}; relations=1; linux_regen=match; current_gate=blocked-generation; current_blocker=SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND; portability=pass; admitted_after_binding=${admitted.generationState}; rpf=${admitted.identities.rpf}; no_cgf=true; head=${head}`);
 })();
