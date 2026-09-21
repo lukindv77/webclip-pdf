@@ -155,7 +155,7 @@ function expectBlocked(r, state) { assert.strictEqual(r.state, 'shadow-observed'
   test('baseline HEAD is SHA', () => assert(sha(head)));
   test('DAG includes four S1 nodes', () => assert.strictEqual(dag.kv.s1, '4'));
   for (const [p, b] of Object.entries(ANCHORS)) test(`rollback anchor ${p}`, () => assert.strictEqual(git('rev-parse', `HEAD:${p}`), b));
-  test('S0-F remains blocked portability', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-portability'));
+  test('S0-F remains blocked on generation governance', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-generation'));
   test('S0-G current real settlement blocked', () => assert.strictEqual(s0g.kv.current_real_settlement, 'blocked'));
   test('S0-I synthetic merge required', () => assert.strictEqual(s0i.kv.synthetic_merge_identity, 'required'));
   test('S1-A current eligible false', () => assert.strictEqual(s1a.kv.current_eligible, 'false'));
