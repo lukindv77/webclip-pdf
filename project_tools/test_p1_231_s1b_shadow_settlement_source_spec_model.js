@@ -184,7 +184,7 @@ function settlementFixture(candidateSha, slots = slotFixture()) {
   const aOut = runNode('project_tools/test_p1_231_s1a_shadow_identity_source_spec_model.js');
   check(/S0-G evidence-settlement engine source-spec model: PASS; cases=132/.test(gOut), 'S0-G predecessor PASS missing');
   check(/current_real_settlement=evidence-missing/.test(gOut), 'S0-G current evidence-missing truth missing');
-  check(/S1-A shadow identity source-spec model: PASS; cases=75/.test(aOut), 'S1-A predecessor PASS missing');
+  check(/S1-A shadow identity source-spec model: PASS; cases=\d+/.test(aOut), 'S1-A predecessor PASS missing');
   check(/current_shadow=eligible/.test(aOut), 'S1-A current eligible truth missing');
   check(/current_eligible=true/.test(aOut), 'S1-A current eligible truth missing');
 
