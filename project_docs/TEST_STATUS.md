@@ -38,6 +38,8 @@ S0-I current-authority reconciliation now also aligns the PR-impact research mod
 
 The P1-231 PSL runtime-profile reconciliation additionally proves the exact corrected generator under current Linux Repository Integrity CPython 3.12.14 while retaining `cpython-3.12.10-v1` as the executable Linux/Windows S0-B portability authority. Python 3.12.14 is a source-only security release with no official Windows installer; hosted Windows exact-version setup therefore cannot be used as a truthful 3.12.14 cross-platform claim. A fresh evidence matrix instead passed Ubuntu 24.04 / CPython 3.12.14 and Windows 2025 / CPython 3.12.10 against the same exact Git generator/input/output blobs and the same committed output SHA-256. The temporary evidence workflow is removed from the mergeable tree. See `RESEARCH_P1_231_PSL_RUNTIME_PROFILE_RECONCILIATION_2026-09-21_EVIDENCE.md`.
 
+S1-A execution semantics are now reconciled with the current hardened Repository Integrity checkout. On pull requests, the primary delivery workspace remains pinned to the literal PR head, while the future S1-A shadow candidate is the GitHub synthetic merge SHA in a separate exact workspace. The deterministic source-spec fails closed if either identity is substituted for the other; the permanent shadow step is still not installed. See `RESEARCH_P1_231_S1A_DUAL_CHECKOUT_RECONCILIATION_2026-09-21_EVIDENCE.md`.
+
 ## Current P0-080 implementation evidence
 
 P0-080 is being implemented in bounded application-generation tranches while keeping same-document application generation distinct from browser `documentId` identity.
