@@ -102,3 +102,11 @@ Chrome/Yandex QCF, full RCF and BCF are not advanced by this correction.
 P1-231 remains **ACTIVE**. Manifest remains `0.9.8`. Release readiness remains **NOT READY**.
 
 No build, ZIP, tag, deployment, GitHub Release, release-gate execution, version bump, Chrome qualification or Yandex mutation/qualification is authorized or performed by this tranche.
+
+## Exact-head CI discovery #937
+
+Exact-head Repository Integrity run #937 on `09f7bd8f1b8b4dcd200b41c00a3083739258e966` passed exact checkout, repository consistency/hygiene, research/context contracts, PR change contract, release-readiness checks and JavaScript syntax. The deterministic suite then exposed one stale research-only assumption in `test_p1_231_generation_portability_binding_refinement_model.js`: that refinement still asserted the pre-correction `OUT.write_text(...)` generator source.
+
+The failure did not contradict the byte-portability correction: S0-B, S0-F and the package-authority/identity chain all passed on the exact head, including the unchanged canonical 34-file RPF. The stale refinement is now reconciled to model the historical text-mode generator as an explicit fixture versus the current binary UTF-8 writer, while preserving its separate finding that the generator executable is not yet included in the current full-RCF input set.
+
+Run #937 is therefore retained as discovery evidence only and is **not** merge authority. A later exact-head Repository Integrity run must pass on the corrected head.
