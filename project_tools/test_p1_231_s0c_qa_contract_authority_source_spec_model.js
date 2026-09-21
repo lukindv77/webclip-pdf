@@ -263,6 +263,7 @@ const AUTHORITY_FIXTURE = {
       'project_docs/TEST_PLAN.md',
       'project_docs/USER_REQUIREMENTS.md',
       'project_docs/WEBCLIP_PDF_FIDELITY_CONTRACT.md',
+      'project_tools/build_public_suffix_js.py',
       'project_tools/check_pr_change_contract.py',
       'project_tools/check_release_readiness.py',
     ],
@@ -303,7 +304,7 @@ const AUTHORITY_FIXTURE = {
 (function main() {
   const raw = Buffer.from(JSON.stringify(AUTHORITY_FIXTURE), 'utf8');
   const authority = parseStrictManifest(raw);
-  eq(authority.full_rcf.blob_inputs.length, 10, 'full RCF input count');
+  eq(authority.full_rcf.blob_inputs.length, 11, 'full RCF input count');
   eq(authority.projections['unpacked-chrome'].cases.length, 4, 'Chrome case-family count');
   eq(authority.projections['yandex-e2e'].cases.length, 4, 'Yandex case-family count');
 
@@ -438,6 +439,7 @@ const AUTHORITY_FIXTURE = {
   const harness = fs.readFileSync(path.join(ROOT, 'project_tools', 'test_p1_007_browser_harness.js'), 'utf8');
   check(harness.includes("Extensions.loadUnpacked"), 'unpacked harness positive control drift');
   check(harness.includes('mocked external boundaries'), 'managed harness boundary marker drift');
+  check(authority.full_rcf.blob_inputs.includes('project_tools/build_public_suffix_js.py'), 'declared executable generator must be full-RCF bound');
   check(!authority.full_rcf.blob_inputs.includes('project_tools/test_p1_007_browser_harness.js'), 'browser harness must not be raw full-RCF input');
   check(!JSON.stringify(authority.projections).includes('browser_p1_007_unpacked_integration.js'), 'QCF must not own executor path');
 
