@@ -343,3 +343,18 @@ Durable rationale/evidence: `RESEARCH_P1_231_S0B_GENERATOR_BYTE_PORTABILITY_FIX_
 ### P1-231 S0-B byte-portability exact-head CI discovery #937
 
 Repository Integrity #937 on `09f7bd8f1b8b4dcd200b41c00a3083739258e966` failed only because `test_p1_231_generation_portability_binding_refinement_model.js` still asserted the historical text-mode generator source. S0-B, S0-F, S0-E identity, package authority and downstream blocked-portability models had already passed on that exact head. The stale refinement now treats the pre-fix writer as a historical comparison fixture and the current binary writer as current source, without advancing portability admission or full-RCF generator binding. #937 is not merge evidence; a new exact-head success is required.
+
+## P1-231 S0-B corrected PSL cross-platform portability proof
+
+Temporary PR #309 evidence run #1 (`35566109810`) executed the exact corrected generation roots under CPython `3.12.10` on both `ubuntu-24.04` and `windows-2025`.
+
+Both jobs regenerated the exact committed `public-suffix.js` blob `541a0833e4731e3513d327208904661cc3d3e990` / SHA-256 `72aea4d8a8505ad90d9070bca539dff7d49391f034d0dd41f76d64867efc0b26` from generator blob `79b279fdc90dce39acb671d294dd814357dce380` and input blob `7658ddd3081291afbb4090c1caa136707ff71d25`.
+
+The Windows observation reported platform line separator `0d0a` while the generated/committed output had `crlfCount=0` and exact raw byte equality. This physically closes the historical newline-portability defect for these exact generation roots.
+
+The temporary workflow is evidence-only and is removed before the final mergeable PR head. Current S0-B/S0-F status markers are intentionally not rewritten inside this evidence-collection tranche: a dedicated authority-reconciliation tranche must retire the portability blocker and expose the already-recorded full-RCF generator-binding gap without conflating physical proof with release authority.
+
+Durable evidence: `RESEARCH_P1_231_S0B_PSL_PORTABILITY_REPROOF_2026-09-21_EVIDENCE.md`.
+
+P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. No product build/ZIP, version bump, release gate, tag, deployment, GitHub Release, Chrome QA or Yandex mutation/qualification is performed.
+
