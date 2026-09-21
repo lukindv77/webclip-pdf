@@ -179,7 +179,17 @@ try {
     path_profile: packageAuthority.PATH_PROFILE,
     files: ['manifest.json', 'public-suffix.js']
   };
-  throwsCode(() => authority.resolveGeneration(fixtureSha, manifest, {
+  const missingInputAuthority = {
+    schema: authority.SCHEMA,
+    relations: [{
+      id: 'public-suffix-js',
+      runtime_profile: authority.RUNTIME_PROFILE,
+      generator: 'project_tools/build_public_suffix_js.py',
+      inputs: ['missing.dat'],
+      outputs: ['public-suffix.js']
+    }]
+  };
+  throwsCode(() => authority.resolveGeneration(fixtureSha, missingInputAuthority, {
     repoRoot: tempRepo,
     packageTopology: fixturePackage
   }), 'SOURCE_GENERATION_MEMBER_MISSING');
