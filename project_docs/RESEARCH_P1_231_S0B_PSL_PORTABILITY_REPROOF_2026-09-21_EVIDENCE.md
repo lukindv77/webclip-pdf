@@ -1,6 +1,6 @@
 # P1-231 S0-B PSL cross-platform portability re-proof — 2026-09-21
 
-Status: **PHYSICAL PORTABILITY PASS / AUTHORITY RECONCILIATION PENDING**
+Status: **PHYSICAL PORTABILITY PASS / AUTHORITY RECONCILED; GENERATOR-RCF BLOCKER ACTIVE**
 
 ## Scope
 
@@ -148,3 +148,23 @@ This physical proof does not advance Chrome QCF, Yandex QCF, current full RCF or
 P1-231 remains **ACTIVE**. Manifest remains `0.9.8`. Release readiness remains **NOT READY**.
 
 No product ZIP/build, version bump, tag, deployment, GitHub Release, release-gate execution, Chrome qualification, Yandex mutation/qualification or release decision was performed.
+
+
+## Authority reconciliation on current P1-231 models
+
+A follow-on bounded tranche consumes this exact physical proof without changing the generator/input/output roots.
+
+Current authority interpretation is now:
+
+- S0-B portability marker: `current_psl_windows_portable=true`;
+- S0-F exact source-generation portability prerequisite: satisfied for the current exact roots;
+- current S0-F gate: `blocked-generator-rcf`;
+- current fail-closed reason: `SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND`;
+- S0-H remains blocked before package load/build;
+- S1 shadow stages remain candidate-ineligible.
+
+This does not turn the portability observation into release authority. The executable generator `project_tools/build_public_suffix_js.py` is still outside the current full-RCF input set, so the candidate cannot be admitted until the release-contract authority is reconciled and affected RCF-dependent evidence is settled under the existing rules.
+
+The historical `SOURCE_GENERATION_PORTABILITY_UNPROVEN` branch remains a negative fail-closed contract for future candidates without required portability proof. It is no longer the current blocker for the exact roots above.
+
+P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. No build/ZIP, version bump, release gate, tag, deployment, GitHub Release, Chrome qualification, Yandex mutation/qualification or release decision is authorized by this reconciliation.
