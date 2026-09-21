@@ -54,7 +54,7 @@ function sameIdentity(a, b) {
 function validateGate(gate, candidateSha) {
   if (!gate || typeof gate !== 'object' || Array.isArray(gate)) fail('S1A_GATE_INVALID');
   if (!isSha(gate.candidateSha) || gate.candidateSha !== candidateSha) fail('S1A_GATE_CANDIDATE_MISMATCH');
-  if (!['pass', 'blocked-portability', 'blocked-generation'].includes(gate.status)) fail('S1A_GATE_STATUS_UNSUPPORTED');
+  if (!['pass', 'blocked-portability', 'blocked-generation', 'blocked-generator-rcf'].includes(gate.status)) fail('S1A_GATE_STATUS_UNSUPPORTED');
   if (gate.status === 'pass') {
     if (!gate.identities) fail('S1A_GATE_PASS_IDENTITY_MISSING');
     validateIdentity(gate.identities);
