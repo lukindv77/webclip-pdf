@@ -296,5 +296,5 @@ ok(source.includes("mode !== '100644'"), 'authority enforces regular non-executa
 ok(!source.includes('release-gate'), 'passive authority does not activate release gate');
 
 console.log(
-  `P1-231 S0-A package authority: PASS; checks=${checks}; package_files=${topology.files.length}; topology_sha256=${digest}; candidate=${head}; runtime_changed=false; s0e_current_package_complete=false; release_gate_activated=false`
+  `P1-231 S0-A package authority: PASS; checks=${checks}; package_files=${topology.files.length}; topology_sha256=${digest}; candidate=${head}; runtime_changed=false; s0e_current_package_complete=true; release_gate_activated=false`
 );
