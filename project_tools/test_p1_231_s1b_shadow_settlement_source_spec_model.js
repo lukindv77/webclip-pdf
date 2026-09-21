@@ -331,8 +331,8 @@ function settlementFixture(candidateSha, slots = slotFixture()) {
 
   console.log(
     `P1-231 S1-B shadow settlement source-spec model: PASS; cases=${cases}; schema=${SHADOW_SETTLEMENT_SCHEMA}; ` +
-    `current_outcome=candidate-ineligible; current_identity_eligible=false; namespace_before_short_circuit=true; ` +
-    `semantic_settlement_current=false; structural_errors=fail-closed; synthetic_all_pass=true; ` +
+    `current_outcome=settled-blocked; current_identity_eligible=true; namespace_before_short_circuit=true; ` +
+    `semantic_settlement_current=true; structural_errors=fail-closed; synthetic_all_pass=true; ` +
     `policy_mutation=false; receipt_mutation=false; product_zip=false; permanent_workflow_unchanged=true; head=${head}`
   );
 })();
