@@ -36,6 +36,8 @@ The corrected PSL generator has already reproduced the exact committed `public-s
 
 S0-I current-authority reconciliation now also aligns the PR-impact research model with the canonical 34-member package (including `application-generation.js`) and the current S0-F `pass` admission state. S1-A explicitly fences on those current S0-I predecessor facts while the production PR checker and permanent Repository Integrity shadow workflow remain unchanged. See `RESEARCH_P1_231_S0I_CURRENT_AUTHORITY_RECONCILIATION_2026-09-21_EVIDENCE.md`.
 
+S1-A execution semantics are now reconciled with the current hardened Repository Integrity checkout. On pull requests, the primary delivery workspace remains pinned to the literal PR head, while the future S1-A shadow candidate is the GitHub synthetic merge SHA in a separate exact workspace. The deterministic source-spec now fails closed if either identity is substituted for the other; the permanent shadow step is still not installed. See `RESEARCH_P1_231_S1A_DUAL_CHECKOUT_RECONCILIATION_2026-09-21_EVIDENCE.md`.
+
 ## Current P0-080 implementation evidence
 
 P0-080 is being implemented in bounded application-generation tranches while keeping same-document application generation distinct from browser `documentId` identity.
