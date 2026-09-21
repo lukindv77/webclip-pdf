@@ -182,7 +182,7 @@ function settlementFixture(candidateSha, slots = slotFixture()) {
 
   const gOut = runNode('project_tools/test_p1_231_s0g_evidence_settlement_engine_source_spec_model.js');
   const aOut = runNode('project_tools/test_p1_231_s1a_shadow_identity_source_spec_model.js');
-  check(/S0-G evidence-settlement engine source-spec model: PASS; cases=128/.test(gOut), 'S0-G predecessor PASS missing');
+  check(/S0-G evidence-settlement engine source-spec model: PASS; cases=132/.test(gOut), 'S0-G predecessor PASS missing');
   check(/current_real_settlement=blocked/.test(gOut), 'S0-G current blocked truth missing');
   check(/S1-A shadow identity source-spec model: PASS; cases=75/.test(aOut), 'S1-A predecessor PASS missing');
   check(/current_shadow=blocked-portability/.test(aOut), 'S1-A current blocked-portability truth missing');
