@@ -444,7 +444,11 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
   // Predecessor composition / exact current facts.
   test('DAG predecessor remains 19 nodes', () => assert.strictEqual(dag.kv.nodes, '19'));
   test('DAG S0 count remains 9', () => assert.strictEqual(dag.kv.s0, '9'));
-  test('S0-A package count remains 33', () => assert.strictEqual(s0a.kv.package_files, '33'));
+  test('S0-A current package count is 34', () => assert.strictEqual(s0a.kv.package_files, '34'));
+  test('legacy S0-E package input count remains 33 until dedicated migration', () => assert.strictEqual(s0e.kv.package_files, '33'));
+  test('S0-A exposes exactly one-member package census drift over legacy S0-E', () => {
+    assert.strictEqual(Number(s0a.kv.package_files) - Number(s0e.kv.package_files), 1);
+  });
   test('S0-D fixture size exact', () => assert.strictEqual(s0d.kv.fixture_zip_bytes, String(GOLDEN_ZIP_BYTES)));
   test('S0-D fixture hash exact', () => assert.strictEqual(s0d.kv.fixture_zip_sha256, GOLDEN_ZIP_SHA256));
   test('S0-D raw local/central proof retained', () => assert.strictEqual(s0d.kv.raw_local_central, 'true'));
@@ -735,6 +739,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
   console.log(
     `P1-231 S0-H passive-builder verifier source-spec model: PASS; cases=${cases}; ` +
     `current_gate=${s0f.kv.current_gate}; current_product_build=blocked-before-load; product_zip=false; ` +
+    `s0a_package_files=${s0a.kv.package_files}; legacy_s0e_package_files=${s0e.kv.package_files}; current_package_rpf_complete=false; ` +
     `synthetic_identity_adapter=true; fixture_members=4; fixture_zip_bytes=${raw.length}; ` +
     `fixture_zip_sha256=${digest(raw)}; rpf=${CURRENT_IDS.rpf}; bcf=${CURRENT_IDS.bcf}; head=${currentHead}`
   );

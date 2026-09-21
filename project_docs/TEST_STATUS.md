@@ -273,3 +273,18 @@ Deterministic coverage is `project_tools/test_p1_164_admission_contract.js`, inc
 External comparison research confirms the distinction between WebClip's at-most-once/no-replay protocol and APIs that provide server-recognized idempotency tokens/keys (AWS/Stripe). No equivalent client-token contract is claimed for the current WebClip Yandex unpublish/move path.
 
 Durable rationale/evidence is `RESEARCH_P1_164_ADMISSION_CONTRACT_WITNESS_2026-09-21_EVIDENCE.md`. P1-164 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Runtime RPF, Chrome/Yandex QCF, full RCF and BCF remain unchanged.
+## P1-231 S0-A passive package authority
+
+The repository now has a canonical passive package declaration in `release_package_manifest_v1.json` and a strict exact-Git resolver in `project_tools/release_package_authority.js`.
+
+The authority admits the **current 34-file package** under `webclip-extension-package/v1` / `portable-ascii-v1`. Exact-head CI #914 exposed that the older S0-A/S0-E 33-file research census had become stale after `application-generation.js` entered the runtime injection path. The current S0-A model and production manifest now include that file; the authority manifest itself remains known non-package control source.
+
+`project_tools/test_release_package_authority.js` covers strict JSON/path admission, representation-invariant topology digest, exact Git blob/mode/OID resolution, dirty-working-tree independence, missing/non-commit/executable/symlink/tree members, and byte bounds. It also records the bounded downstream drift: historical S0-E `PACKAGE_FILES` still omits exactly `application-generation.js`.
+
+Therefore the recorded S0-E RPF `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` remains reproducible but is **not a complete current-package RPF**. The correct 34-file RPF is intentionally UNSETTLED until the next S0-E migration tranche; no replacement fingerprint is fabricated in S0-A.
+
+Exact-head CI #921 later exposed one more stale downstream assertion: S0-H still expected S0-A package count 33, causing S1-C/S1-D predecessor failures. S0-H now distinguishes current S0-A `package_files=34` from legacy S0-E `package_files=33`, keeps the one-member drift explicit, and remains `blocked-before-load`; no S0-E/RPF migration is performed here.
+
+This is a passive control only. No release gate, builder, ZIP, tag/deploy, browser QA or Yandex QA is activated. Durable rationale/evidence is `RESEARCH_P1_231_S0A_PACKAGE_AUTHORITY_IMPLEMENTATION_2026-09-21_EVIDENCE.md`.
+
+P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Chrome/Yandex QCF, full RCF and BCF recorded projections are not advanced by this tranche and do not repair the incomplete legacy RPF.

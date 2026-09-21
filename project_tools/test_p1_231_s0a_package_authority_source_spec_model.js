@@ -22,6 +22,7 @@ const RESERVED = new Set([
 ]);
 
 const CURRENT_FILES = Object.freeze([
+  'application-generation.js',
   'content-injection-guard.js',
   'content.js',
   'frame-agent.js',
@@ -229,13 +230,13 @@ function parseLsTree(commit) {
 }
 
 (function main() {
-  eq(CURRENT_FILES.length, 33, 'bootstrap census must be 33 files');
-  eq(new Set(CURRENT_FILES).size, 33, 'bootstrap census must have no duplicates');
+  eq(CURRENT_FILES.length, 34, 'current migration census must be 34 files');
+  eq(new Set(CURRENT_FILES).size, 34, 'current migration census must have no duplicates');
 
   const topo = parseStrictManifest(canonicalManifest());
   eq(topo.schema, SCHEMA);
   eq(topo.path_profile, PROFILE);
-  eq(topo.files.length, 33);
+  eq(topo.files.length, 34);
   eq(topo.files.filter((p) => p === 'manifest.json').length, 1);
 
   // Source parser fail-closed matrix.
