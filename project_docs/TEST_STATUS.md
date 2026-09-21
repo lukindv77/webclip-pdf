@@ -34,6 +34,8 @@ The current full-RCF authority now includes eleven blob roots, adding `project_t
 
 The corrected PSL generator has already reproduced the exact committed `public-suffix.js` bytes on independent Linux and Windows runners. With the generator executable now covered by full-RCF authority, S0-F generation admission can pass for the exact current source. That does **not** supply current physical Chrome/Yandex receipts, governance approval, product-build authorization, or release authority: S0-G remains evidence-missing for the current candidate, while S0-H/S1-C keep current product package loading/building unexecuted. See `RESEARCH_P1_231_GENERATOR_FULL_RCF_BINDING_2026-09-21_EVIDENCE.md`.
 
+S0-I current-authority reconciliation now also aligns the PR-impact research model with the canonical 34-member package (including `application-generation.js`) and the current S0-F `pass` admission state. S1-A explicitly fences on those current S0-I predecessor facts while the production PR checker and permanent Repository Integrity shadow workflow remain unchanged. See `RESEARCH_P1_231_S0I_CURRENT_AUTHORITY_RECONCILIATION_2026-09-21_EVIDENCE.md`.
+
 ## Current P0-080 implementation evidence
 
 P0-080 is being implemented in bounded application-generation tranches while keeping same-document application generation distinct from browser `documentId` identity.

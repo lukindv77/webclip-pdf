@@ -32,6 +32,7 @@ const CHECKER_CONTROL_PLANE = Object.freeze([
 ]);
 
 const CURRENT_PACKAGE_FILES = Object.freeze([
+  'application-generation.js',
   'content-injection-guard.js','content.js','frame-agent.js','frame-proxy-budget-guard.js',
   'frame-proxy-inert-guard.js','host-control-activation-guard.js','journal-import-digest.js',
   'journal-import-stream.js','journal-restore-envelope-guard.js','journal-text-filter.js','journal.css',
@@ -256,8 +257,8 @@ function C(status,path) { return {status,path}; }
 
 (function main(){
   // Predecessor bootstrap facts are current and exact.
-  eq(CURRENT_PACKAGE_FILES.length,33,'S0-A bootstrap package census');
-  eq(new Set(CURRENT_PACKAGE_FILES).size,33,'S0-A package members unique');
+  eq(CURRENT_PACKAGE_FILES.length,34,'S0-A bootstrap package census');
+  eq(new Set(CURRENT_PACKAGE_FILES).size,34,'S0-A package members unique');
   eq(CURRENT_RELATIONS.length,1,'S0-B relation census');
   eq(CURRENT_RELATIONS[0].id,'public-suffix-js');
   check(CURRENT_PACKAGE_FILES.includes('public-suffix.js'),'generated target is package member');
@@ -425,30 +426,35 @@ function C(status,path) { return {status,path}; }
   }
   check(!Object.prototype.hasOwnProperty.call(sample,'currentGate'),'S0-F current gate not copied into S0-I result');
 
-  // Current known S0-F portability blocker remains separate truth.
-  const currentS0fGate='blocked-portability';
-  eq(currentS0fGate,'blocked-portability');
+  // Current S0-A package truth stays explicit in this fixture while package authority remains separate.
+  eq(CURRENT_PACKAGE_FILES.length,34,'current package file count');
+  check(CURRENT_PACKAGE_FILES.includes('application-generation.js'),'current package includes application-generation.js');
 
   // Research result digest is diagnostic only.
   const diagDigest=sha256(stable(sample));
   check(/^[0-9a-f]{64}$/.test(diagDigest),'diagnostic digest shape');
 
   // Run predecessor models as composition smoke tests on this exact checkout.
+  const predecessorOutputs=new Map();
   for (const test of [
     'test_p1_231_s0a_package_authority_source_spec_model.js',
     'test_p1_231_s0b_source_generation_authority_source_spec_model.js',
     'test_p1_231_s0b_strict_parser_composition_refinement_model.js',
+    'test_p1_231_s0f_candidate_generation_verifier_source_spec_model.js',
   ]) {
     const p=spawnSync(process.execPath,[path.join(ROOT,'project_tools',test)],{encoding:'utf8'});
     eq(p.status,0,`${test} predecessor status`);
     check(/PASS/.test(p.stdout),`${test} predecessor PASS`);
+    predecessorOutputs.set(test,p.stdout);
   }
+  check(/package_files=34/.test(predecessorOutputs.get('test_p1_231_s0a_package_authority_source_spec_model.js')),'S0-A current 34-file package truth');
+  check(/current_gate=pass/.test(predecessorOutputs.get('test_p1_231_s0f_candidate_generation_verifier_source_spec_model.js')),'S0-F current admission truth');
 
   console.log(
     `P1-231 S0-I PR checker integration source-spec model: PASS; cases=${cases}; schema=${SCHEMA}; `+
     `package_files=${CURRENT_PACKAGE_FILES.length}; relations=${CURRENT_RELATIONS.length}; `+
     `base_candidate_union=true; synthetic_merge_identity=required; no_renames=true; `+
-    `self_change=fail-closed; admission_owner=s0f; current_s0f_gate=blocked-portability; `+
+    `self_change=fail-closed; admission_owner=s0f; current_s0f_gate=pass; `+
     `production_checker_unchanged=true; head=${exactHead}`
   );
 })();
