@@ -108,6 +108,30 @@ Deterministic checker self-tests cover:
 - valid dual-profile Repository Integrity;
 - forbidden use of CPython 3.12.10 in another permanent workflow.
 
+## S1-D rollback-anchor reconciliation
+
+Exact-head Repository Integrity #990 proved the new S0-B job itself successfully under CPython 3.12.10, then the primary deterministic sweep failed only because the S1-D migration-rehearsal model still pinned the prior Repository Integrity workflow blob.
+
+That failure is valid discovery evidence: S1-D deliberately anchors the permanent control-plane baseline.
+
+The reconciliation advances only:
+
+`.github/workflows/repository-integrity.yml`
+
+from the prior blob anchor to the exact new passive-workflow blob:
+
+`ac24d0cf1b2626b1b4c595281538d4c3c5e23f87`
+
+The rollback anchors for:
+
+- `project_docs/RELEASE_READINESS.md`;
+- `project_tools/check_release_readiness.py`;
+- `.github/workflows/release-gate.yml`
+
+remain unchanged.
+
+Therefore the rollback/control-plane baseline now includes the read-only S0-B delivery verifier but still excludes permanent S1 shadow behavior and all S2 release-policy activation.
+
 ## Security/release boundary
 
 Workflow permissions remain:
