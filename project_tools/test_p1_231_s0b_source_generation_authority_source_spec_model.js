@@ -167,5 +167,5 @@ function gitEntry(commit,rel){
 
   const digest=topologyDigest(auth);
   check(/^[0-9a-f]{64}$/.test(digest),'topology digest shape');
-  console.log(`P1-231 S0-B source-generation authority source-spec model: PASS; cases=${cases}; relations=${auth.relations.length}; topology_sha256=${digest}; current_psl_windows_portable=false; head=${head}`);
+  console.log(`P1-231 S0-B source-generation authority source-spec model: PASS; cases=${cases}; relations=${auth.relations.length}; topology_sha256=${digest}; current_psl_windows_portable=true; head=${head}`);
 })();
