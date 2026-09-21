@@ -1,8 +1,9 @@
 'use strict';
 
 // P1-231 S0-C passive release-contract projection authority.
-// Owns the semantic inputs for per-kind QCF and full RCF. It reads exact Git blobs
-// for candidate-bound full-RCF computation and never interprets QA receipts/outcomes.
+// Owns canonical QCF projection semantics and the exact full-RCF blob-root set.
+// It deliberately does NOT own the WEBCLIP_RELEASE_IDENTITY_V1 hash/framing
+// algorithm; production S0-E remains the future fingerprint owner.
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -14,8 +15,6 @@ const ROOT = path.resolve(__dirname, '..');
 const MANIFEST_PATH = path.join(ROOT, 'release_contract_inputs_v1.json');
 const SCHEMA = 'webclip-release-contract-inputs/v1';
 const FP_PROFILE = 'webclip-contract-fingerprint-v1';
-const QCF_PREFIX = 'WEBCLIP_QCF_V1';
-const RCF_PREFIX = 'WEBCLIP_RCF_V1';
 const MAX_MANIFEST_BYTES = 512 * 1024;
 const MAX_FULL_INPUTS = 128;
 const MAX_CASES = 128;
@@ -70,25 +69,6 @@ function asciiSort(values) {
 function sameKeys(raw, expected) {
   const keys = Object.keys(raw).sort();
   return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
-}
-function u32(value) {
-  const out = Buffer.alloc(4);
-  out.writeUInt32BE(value);
-  return out;
-}
-function u64(value) {
-  const out = Buffer.alloc(8);
-  out.writeBigUInt64BE(BigInt(value));
-  return out;
-}
-function pushString(hash, value) {
-  const bytes = Buffer.from(value, 'utf8');
-  hash.update(u32(bytes.length));
-  hash.update(bytes);
-}
-function pushList(hash, values) {
-  hash.update(u32(values.length));
-  for (const value of values) pushString(hash, value);
 }
 
 function forbiddenJsonConstantOutsideString(text) {
@@ -298,32 +278,16 @@ function readCanonicalManifest() {
   return parseManifestBytes(bytes);
 }
 
-function qcf(kind, authorityValue) {
+function qcfPayload(kind, authorityValue) {
   const authority = validateAuthority(authorityValue);
   const projection = authority.projections[kind];
   if (!projection) fail('RELEASE_CONTRACT_PROJECTION_INVALID', kind);
-  const hash = crypto.createHash('sha256');
-  pushString(hash, QCF_PREFIX + ':' + kind);
-  pushString(hash, projection.schema);
-  pushString(hash, projection.subject);
-  pushList(hash, projection.environment_policy);
-  hash.update(u32(projection.cases.length));
-  for (const item of projection.cases) {
-    pushString(hash, item.id);
-    pushList(hash, item.assertions);
-  }
-  return 'sha256:' + hash.digest('hex');
-}
-
-function semanticAuthorityDigest(authorityValue) {
-  const authority = validateAuthority(authorityValue);
-  const hash = crypto.createHash('sha256');
-  pushString(hash, 'WEBCLIP_RELEASE_CONTRACT_AUTHORITY_SEMANTICS_V1');
-  pushString(hash, authority.schema);
-  pushString(hash, authority.fingerprint_profile);
-  pushList(hash, authority.full_rcf.blob_inputs);
-  for (const kind of [...PROJECTION_NAMES].sort()) pushString(hash, qcf(kind, authority));
-  return hash.digest('hex');
+  return Object.freeze({
+    release_contract_schema: authority.schema,
+    fingerprint_profile: authority.fingerprint_profile,
+    kind,
+    projection
+  });
 }
 
 function git(repoRoot, args, options) {
@@ -405,35 +369,23 @@ function resolveCandidate(candidateSha, authorityValue, options) {
   });
 }
 
-function fullRcfFromResolved(resolved) {
-  if (!resolved || !resolved.authority || !Array.isArray(resolved.inputs)) {
-    fail('RELEASE_CONTRACT_RESOLUTION_INVALID');
-  }
-  const authority = validateAuthority(resolved.authority);
-  if (resolved.inputs.length !== authority.full_rcf.blob_inputs.length) fail('RELEASE_CONTRACT_RESOLUTION_INVALID');
-  const hash = crypto.createHash('sha256');
-  pushString(hash, RCF_PREFIX);
-  pushString(hash, semanticAuthorityDigest(authority));
-  for (let index = 0; index < authority.full_rcf.blob_inputs.length; index += 1) {
-    const rel = authority.full_rcf.blob_inputs[index];
-    const input = resolved.inputs[index];
-    if (!input || input.path !== rel || !Buffer.isBuffer(input.bytes)) fail('RELEASE_CONTRACT_RESOLUTION_INVALID');
-    pushString(hash, rel);
-    hash.update(u64(input.bytes.length));
-    hash.update(input.bytes);
-  }
-  return 'sha256:' + hash.digest('hex');
-}
-
-function fingerprints(candidateSha, authorityValue, options) {
+function identityInputs(candidateSha, authorityValue, options) {
   const authority = validateAuthority(authorityValue);
   const resolved = resolveCandidate(candidateSha, authority, options);
   return Object.freeze({
-    schema: 'webclip-release-contract-fingerprints/v1',
+    schema: 'webclip-release-contract-identity-inputs/v1',
     candidate_sha: resolved.candidate_sha,
-    chrome_qcf: qcf('unpacked-chrome', authority),
-    yandex_qcf: qcf('yandex-e2e', authority),
-    full_rcf: fullRcfFromResolved(resolved),
+    qcf_payloads: Object.freeze({
+      'unpacked-chrome': qcfPayload('unpacked-chrome', authority),
+      'yandex-e2e': qcfPayload('yandex-e2e', authority)
+    }),
+    full_rcf_blob_inputs: Object.freeze(resolved.inputs.map((item) => Object.freeze({
+      path: item.path,
+      git_oid: item.git_oid,
+      byte_length: item.byte_length,
+      sha256: item.sha256,
+      bytes: item.bytes
+    }))),
     policy_mutation: false,
     receipt_interpretation: false,
     release_authorized: false
@@ -462,8 +414,22 @@ function main() {
     return;
   }
   if (!args.candidate) fail('RELEASE_CONTRACT_CANDIDATE_SHA_REQUIRED');
-  const result = fingerprints(args.candidate, readCanonicalManifest());
-  process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  const result = identityInputs(args.candidate, readCanonicalManifest());
+  const printable = {
+    schema: result.schema,
+    candidate_sha: result.candidate_sha,
+    qcf_payloads: result.qcf_payloads,
+    full_rcf_blob_inputs: result.full_rcf_blob_inputs.map((item) => ({
+      path: item.path,
+      git_oid: item.git_oid,
+      byte_length: item.byte_length,
+      sha256: item.sha256
+    })),
+    policy_mutation: result.policy_mutation,
+    receipt_interpretation: result.receipt_interpretation,
+    release_authorized: result.release_authorized
+  };
+  process.stdout.write(JSON.stringify(printable, null, 2) + '\n');
 }
 
 if (require.main === module) {
@@ -484,11 +450,9 @@ module.exports = Object.freeze({
   parseManifestBytes,
   readCanonicalManifest,
   validateAuthority,
-  qcf,
-  semanticAuthorityDigest,
+  qcfPayload,
   normalizeCandidateSha,
   resolveCandidate,
-  fullRcfFromResolved,
-  fingerprints,
+  identityInputs,
   parseArgs
 });
