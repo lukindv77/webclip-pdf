@@ -358,3 +358,14 @@ Durable evidence: `RESEARCH_P1_231_S0B_PSL_PORTABILITY_REPROOF_2026-09-21_EVIDEN
 
 P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. No product build/ZIP, version bump, release gate, tag, deployment, GitHub Release, Chrome QA or Yandex mutation/qualification is performed.
 
+
+
+## P1-231 portability authority reconciliation
+
+The exact PSL generation roots physically re-proved by PR #309 / workflow run `35566109810` are now consumed as current portability truth. S0-B reports `current_psl_windows_portable=true`; S0-F no longer treats portability as the current blocker.
+
+Candidate admission nevertheless remains fail-closed. The executable generator `project_tools/build_public_suffix_js.py` is not covered by the current full-RCF input set, so S0-F now reports `current_gate=blocked-generator-rcf` and rejects current admission with `SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND`. S0-G/H/I and S1-A/B/C/D propagate that current ineligible state; S0-H still blocks before package load/build.
+
+The portability failure path remains covered as a negative contract for future candidates without required cross-platform proof. This reconciliation changes no extension package/runtime bytes and does not advance Chrome/Yandex QCF, the currently recorded full RCF, BCF, release readiness, or any physical Chrome/Yandex qualification.
+
+P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**.
