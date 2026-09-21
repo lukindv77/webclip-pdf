@@ -111,9 +111,9 @@ test('current generator relation is documented', () => {
   assert(s0bDoc.includes(`source input: ${SOURCE}`));
   assert(s0bDoc.includes(`tracked generated output: ${OUTPUT}`));
 });
-test('current generator still uses text write', () => assert(generatorSource.includes("OUT.write_text(code, encoding='utf-8')")));
-test('current generator has no binary write repair', () => assert(!generatorSource.includes('OUT.write_bytes(')));
-test('current generator has no explicit newline override', () => assert(!generatorSource.includes("newline='\\n'")));
+test('current generator has retired text-mode write', () => assert(!generatorSource.includes("OUT.write_text(code, encoding='utf-8')")));
+test('current generator uses exact binary UTF-8 write', () => assert(generatorSource.includes("OUT.write_bytes(code.encode('utf-8'))")));
+test('current generator binary write needs no text newline override', () => assert(!generatorSource.includes("newline='\\n'")));
 test('S0-B records Windows portability false', () => assert(s0bDoc.includes('generated_matches_git_blob = false')));
 test('S0-F keeps portability gate blocked', () => assert(s0fDoc.includes('candidateGenerationAdmission = BLOCKED')));
 test('S0-F names portability reason', () => assert(s0fDoc.includes('SOURCE_GENERATION_PORTABILITY_UNPROVEN')));
@@ -159,11 +159,11 @@ test('real committed package output has no CRLF', () => assert(!outputBytes.incl
 test('real output Windows-style translation changes exact bytes', () => assert(!translateLfToWindowsText(outputBytes).equals(outputBytes)));
 test('real output Windows-style translation changes digest', () => assert.notStrictEqual(sha256(translateLfToWindowsText(outputBytes)), sha256(outputBytes)));
 
-// Minimal repair simulation: generator implementation changes while package output remains exact.
-const repairedGeneratorSource = Buffer.from(generatorSource.replace("OUT.write_text(code, encoding='utf-8')", "OUT.write_bytes(code.encode('utf-8'))"), 'utf8');
+// Historical-to-current portability correction model: generator implementation changes while package output remains exact.
 const currentGeneratorBytes = Buffer.from(generatorSource, 'utf8');
-test('repair simulation changes generator bytes', () => assert(!repairedGeneratorSource.equals(currentGeneratorBytes)));
-test('repair simulation introduces binary write', () => assert(repairedGeneratorSource.includes(Buffer.from('OUT.write_bytes('))));
+const historicalTextGeneratorSource = Buffer.from(generatorSource.replace("OUT.write_bytes(code.encode('utf-8'))", "OUT.write_text(code, encoding='utf-8')"), 'utf8');
+test('byte-portability correction differs from historical text-mode generator fixture', () => assert(!historicalTextGeneratorSource.equals(currentGeneratorBytes)));
+test('current correction uses binary write', () => assert(currentGeneratorBytes.includes(Buffer.from('OUT.write_bytes('))));
 test('repair simulation need not change current package bytes', () => {
   assert.strictEqual(researchPackageDigest(outputBytes), researchPackageDigest(Buffer.from(outputBytes)));
 });
@@ -187,8 +187,8 @@ test('current coverage fails closed for generator', () => {
 });
 test('proposed coverage accepts generator', () => assert.strictEqual(coverageCheck([GENERATOR], proposedFullInputs), true));
 
-const oldGovernanceDigest = researchGovernanceBinding(proposedFullInputs);
-const repairedGovernanceDigest = researchGovernanceBinding(proposedFullInputs, new Map([[GENERATOR, repairedGeneratorSource]]));
+const oldGovernanceDigest = researchGovernanceBinding(proposedFullInputs, new Map([[GENERATOR, historicalTextGeneratorSource]]));
+const repairedGovernanceDigest = researchGovernanceBinding(proposedFullInputs);
 test('generator implementation change changes research governance binding', () => assert.notStrictEqual(oldGovernanceDigest, repairedGovernanceDigest));
 test('generator implementation change does not change research package digest', () => assert.strictEqual(oldResearchRpf, newResearchRpf));
 test('governance digest is distinct from package digest', () => assert.notStrictEqual(oldGovernanceDigest, oldResearchRpf));

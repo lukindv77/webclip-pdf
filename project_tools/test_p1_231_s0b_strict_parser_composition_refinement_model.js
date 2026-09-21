@@ -328,9 +328,9 @@ function gitEntry(commit, rel) {
   check(predecessor.includes('current_psl_windows_portable=false'), '#188 portability-blocker marker must remain');
   check(!predecessor.includes('parseStrictManifest'), '#188 model intentionally did not prove raw parser boundary');
   const generator = fs.readFileSync(path.join(ROOT, 'project_tools', 'build_public_suffix_js.py'), 'utf8');
-  check(generator.includes("OUT.write_text(code, encoding='utf-8')"), 'current PSL generator baseline drift');
-  check(!generator.includes("newline='\\n'"), 'PSL portability fix unexpectedly present');
-  check(!generator.includes('OUT.write_bytes('), 'PSL binary portability fix unexpectedly present');
+  check(!generator.includes("OUT.write_text(code, encoding='utf-8')"), 'text-mode PSL generator must remain retired');
+  check(!generator.includes("newline='\\n'"), 'binary output must not depend on text newline policy');
+  check(generator.includes("OUT.write_bytes(code.encode('utf-8'))"), 'PSL exact-byte portability fix must remain present');
   const recovery = fs.readFileSync(path.join(ROOT, 'project_tools', 'build_recovery_archive.py'), 'utf8');
   check(recovery.includes('offline/disaster-recovery'), 'recovery builder role drift');
   check(!auth.relations.some((r) => r.generator === 'project_tools/build_recovery_archive.py'), 'recovery builder must stay outside extension generation authority');
