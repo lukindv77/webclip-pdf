@@ -36,6 +36,8 @@ The corrected PSL generator has already reproduced the exact committed `public-s
 
 S0-I current-authority reconciliation now also aligns the PR-impact research model with the canonical 34-member package (including `application-generation.js`) and the current S0-F `pass` admission state. S1-A explicitly fences on those current S0-I predecessor facts while the production PR checker and permanent Repository Integrity shadow workflow remain unchanged. See `RESEARCH_P1_231_S0I_CURRENT_AUTHORITY_RECONCILIATION_2026-09-21_EVIDENCE.md`.
 
+The P1-231 PSL runtime-profile reconciliation additionally proves the exact corrected generator under current Linux Repository Integrity CPython 3.12.14 while retaining `cpython-3.12.10-v1` as the executable Linux/Windows S0-B portability authority. Python 3.12.14 is a source-only security release with no official Windows installer; hosted Windows exact-version setup therefore cannot be used as a truthful 3.12.14 cross-platform claim. A fresh evidence matrix instead passed Ubuntu 24.04 / CPython 3.12.14 and Windows 2025 / CPython 3.12.10 against the same exact Git generator/input/output blobs and the same committed output SHA-256. The temporary evidence workflow is removed from the mergeable tree. See `RESEARCH_P1_231_PSL_RUNTIME_PROFILE_RECONCILIATION_2026-09-21_EVIDENCE.md`.
+
 ## Current P0-080 implementation evidence
 
 P0-080 is being implemented in bounded application-generation tranches while keeping same-document application generation distinct from browser `documentId` identity.
