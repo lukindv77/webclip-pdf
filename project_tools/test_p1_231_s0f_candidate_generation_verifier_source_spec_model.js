@@ -249,16 +249,16 @@ function diagnosticPackageHash(overrides = new Map()) {
   deepEq(CURRENT_RELATION.inputs, ['public_suffix_list.dat']);
   deepEq(CURRENT_RELATION.outputs, ['public-suffix.js']);
 
-  // Existing S0-B authority remains flat and explicitly blocked on Windows portability.
+  // Existing S0-B authority remains blocked on portability proof even after the generator byte-write correction.
   const s0b = fs.readFileSync(path.join(ROOT, 'project_tools', 'test_p1_231_s0b_source_generation_authority_source_spec_model.js'), 'utf8');
   const s0bStrict = fs.readFileSync(path.join(ROOT, 'project_tools', 'test_p1_231_s0b_strict_parser_composition_refinement_model.js'), 'utf8');
   check(s0b.includes('current_psl_windows_portable=false'), 'S0-B portability blocker marker');
   check(s0bStrict.includes('SOURCE_GENERATION_CHAIN_FORBIDDEN'), 'S0-B chain prohibition marker');
   check(s0bStrict.includes('current_psl_windows_portable=false'), 'strict refinement retains portability blocker');
   const generatorSource = exactBlob(head, CURRENT_RELATION.generator).toString('utf8');
-  check(generatorSource.includes("OUT.write_text(code, encoding='utf-8')"), 'current generator text-write baseline');
-  check(!generatorSource.includes("newline='\\n'"), 'current generator must still lack explicit LF policy');
-  check(!generatorSource.includes('OUT.write_bytes('), 'current generator must still lack binary output fix');
+  check(!generatorSource.includes("OUT.write_text(code, encoding='utf-8')"), 'text-mode generator must remain retired');
+  check(!generatorSource.includes("newline='\\n'"), 'binary output must not depend on text newline policy');
+  check(generatorSource.includes("OUT.write_bytes(code.encode('utf-8'))"), 'current generator must emit exact UTF-8 bytes');
 
   // Linux/current-runner positive control uses only exact candidate generator+input blobs.
   const generatorBytes = exactBlob(head, CURRENT_RELATION.generator);
@@ -269,7 +269,7 @@ function diagnosticPackageHash(overrides = new Map()) {
   eq(sha256(run.generated), sha256(candidateOutput), 'regenerated/candidate digest');
   deepEq(run.top, ['project_tools', 'public-suffix.js', 'public_suffix_list.dat'], 'minimal workspace top-level set');
 
-  // The current one-platform match is necessary but not sufficient: portability is known false.
+  // The Linux match and byte-write correction are necessary but not sufficient: Windows exact-blob re-proof is still pending.
   throwsCode(() => verifyRelation({
     candidateSha: head,
     portabilityReady: false,
