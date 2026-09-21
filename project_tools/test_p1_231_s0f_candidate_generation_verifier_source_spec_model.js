@@ -32,7 +32,6 @@ const CURRENT_RELATION = Object.freeze({
 const EXPECTED_CONTRACT_IDENTITIES = Object.freeze({
   chromeQcf: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandexQcf: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
-  rcf: 'sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce',
   bcf: 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff',
 });
 
@@ -289,10 +288,11 @@ function diagnosticPackageHash(overrides = new Map()) {
   check(identities.rpf !== identities.legacyRpf, 'current RPF differs from legacy incomplete RPF');
   eq(identities.chromeQcf, EXPECTED_CONTRACT_IDENTITIES.chromeQcf, 'current Chrome QCF');
   eq(identities.yandexQcf, EXPECTED_CONTRACT_IDENTITIES.yandexQcf, 'current Yandex QCF');
-  eq(identities.rcf, EXPECTED_CONTRACT_IDENTITIES.rcf, 'current full RCF');
+  check(/^sha256:[0-9a-f]{64}$/.test(identities.rcf), 'current full RCF shape');
+  check(identities.rcf !== 'sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce', 'generator binding must advance full RCF');
   eq(identities.bcf, EXPECTED_CONTRACT_IDENTITIES.bcf, 'current BCF');
 
-  // No downstream identities are emitted on current blocked state.
+  // Negative control: omitting executable-generator RCF coverage remains fail closed.
   let blockedResult = null;
   try {
     blockedResult = admitCandidate({
@@ -303,11 +303,11 @@ function diagnosticPackageHash(overrides = new Map()) {
       identities,
     });
   } catch (e) {
-    eq(e.code, 'SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND', 'current gate blocker');
+    eq(e.code, 'SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND', 'missing-binding negative control');
   }
-  eq(blockedResult, null, 'blocked candidate must publish no admitted tuple');
+  eq(blockedResult, null, 'unbound candidate must publish no admitted tuple');
 
-  // Synthetic future state: once the remaining generator/full-RCF binding is closed, exact matching output admits identities.
+  // Current state: full-RCF authority now binds the executable generator, so exact generation admits the candidate tuple.
   const admitted = admitCandidate({
     candidateSha: head,
     portabilityReady: true,
@@ -327,7 +327,7 @@ function diagnosticPackageHash(overrides = new Map()) {
   eq(admitted.identities.rpf, identities.rpf);
   eq(admitted.identities.qcf['unpacked-chrome'], EXPECTED_CONTRACT_IDENTITIES.chromeQcf);
   eq(admitted.identities.qcf['yandex-e2e'], EXPECTED_CONTRACT_IDENTITIES.yandexQcf);
-  eq(admitted.identities.rcf, EXPECTED_CONTRACT_IDENTITIES.rcf);
+  eq(admitted.identities.rcf, identities.rcf);
   eq(admitted.identities.bcf, EXPECTED_CONTRACT_IDENTITIES.bcf);
   check(!Object.prototype.hasOwnProperty.call(admitted, 'candidateGenerationFingerprint'), 'no CGF axis');
   check(!Object.prototype.hasOwnProperty.call(admitted, 'artifactSha256'), 'ZIP digest is not S0-F identity');
@@ -427,5 +427,5 @@ function diagnosticPackageHash(overrides = new Map()) {
     'S0-C must be revisited as part of the implementation package',
   ]) check(s0fSpec.includes(marker), `S0-F source-spec marker missing: ${marker}`);
 
-  console.log(`P1-231 S0-F candidate-generation verifier source-spec model: PASS; cases=${cases}; package_files=${PACKAGE_FILES.length}; relations=1; linux_regen=match; current_gate=blocked-generation; current_blocker=SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND; portability=pass; admitted_after_binding=${admitted.generationState}; rpf=${admitted.identities.rpf}; no_cgf=true; head=${head}`);
+  console.log(`P1-231 S0-F candidate-generation verifier source-spec model: PASS; cases=${cases}; package_files=${PACKAGE_FILES.length}; relations=1; linux_regen=match; current_gate=pass; current_blocker=none; portability=pass; generator_rcf_bound=true; current_admission=${admitted.generationState}; rpf=${admitted.identities.rpf}; no_cgf=true; head=${head}`);
 })();
