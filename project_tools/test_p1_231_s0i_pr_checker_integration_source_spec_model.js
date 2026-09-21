@@ -425,9 +425,9 @@ function C(status,path) { return {status,path}; }
   }
   check(!Object.prototype.hasOwnProperty.call(sample,'currentGate'),'S0-F current gate not copied into S0-I result');
 
-  // Current known S0-F portability blocker remains separate truth.
-  const currentS0fGate='blocked-portability';
-  eq(currentS0fGate,'blocked-portability');
+  // Current known S0-F generator-RCF blocker remains separate truth.
+  const currentS0fGate='blocked-generator-rcf';
+  eq(currentS0fGate,'blocked-generator-rcf');
 
   // Research result digest is diagnostic only.
   const diagDigest=sha256(stable(sample));
@@ -448,7 +448,7 @@ function C(status,path) { return {status,path}; }
     `P1-231 S0-I PR checker integration source-spec model: PASS; cases=${cases}; schema=${SCHEMA}; `+
     `package_files=${CURRENT_PACKAGE_FILES.length}; relations=${CURRENT_RELATIONS.length}; `+
     `base_candidate_union=true; synthetic_merge_identity=required; no_renames=true; `+
-    `self_change=fail-closed; admission_owner=s0f; current_s0f_gate=blocked-portability; `+
+    `self_change=fail-closed; admission_owner=s0f; current_s0f_gate=blocked-generator-rcf; `+
     `production_checker_unchanged=true; head=${exactHead}`
   );
 })();
