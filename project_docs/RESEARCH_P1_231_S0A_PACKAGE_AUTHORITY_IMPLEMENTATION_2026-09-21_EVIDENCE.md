@@ -113,6 +113,18 @@ The correction is explicit rather than heuristic:
 
 No suffix rule or implicit package admission is introduced.
 
+A later exact-head run #921 exposed one additional downstream stale assumption in S0-H: the passive-builder verifier still asserted that S0-A itself had 33 package files. S1-C and S1-D then failed only transitively because they execute S0-H as a predecessor.
+
+The correction remains bounded to S0-A reconciliation:
+
+- S0-H now requires S0-A to report the current 34-file package;
+- S0-H simultaneously requires legacy S0-E to remain at 33 inputs until its dedicated migration;
+- the one-member census drift remains explicit;
+- current product build remains `blocked-before-load`;
+- the historical S0-E RPF is still not accepted as a complete current-package RPF.
+
+S1-C and S1-D require no semantic change for this correction; once S0-H represents both current S0-A authority and legacy S0-E drift, their predecessor composition can proceed without pretending the RPF migration has occurred.
+
 ## Release identity impact
 
 No runtime package byte changes in this PR.
