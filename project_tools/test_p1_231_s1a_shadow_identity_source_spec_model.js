@@ -155,8 +155,8 @@ function runNode(rel) {
   const eOut = runNode('project_tools/test_p1_231_s0e_identity_engine_source_spec_model.js');
   const fOut = runNode('project_tools/test_p1_231_s0f_candidate_generation_verifier_source_spec_model.js');
   const iOut = runNode('project_tools/test_p1_231_s0i_pr_checker_integration_source_spec_model.js');
-  check(/S0-E identity engine source-spec model: PASS; cases=201/.test(eOut), 'S0-E predecessor PASS missing');
-  check(/S0-F candidate-generation verifier source-spec model: PASS; cases=224/.test(fOut), 'S0-F predecessor PASS missing');
+  check(/S0-E identity engine source-spec model: PASS; cases=249/.test(eOut), 'S0-E predecessor PASS missing');
+  check(/S0-F candidate-generation verifier source-spec model: PASS; cases=272/.test(fOut), 'S0-F predecessor PASS missing');
   check(/current_gate=blocked-portability/.test(fOut), 'current S0-F gate must remain blocked-portability');
   check(/S0-I PR checker integration source-spec model: PASS; cases=161/.test(iOut), 'S0-I predecessor PASS missing');
   check(/synthetic_merge_identity=required/.test(iOut), 'S0-I synthetic merge requirement missing');
