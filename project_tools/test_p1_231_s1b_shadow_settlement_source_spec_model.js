@@ -193,7 +193,7 @@ function settlementFixture(candidateSha, slots = slotFixture()) {
   let settlementCalls = 0;
   const current = shadowSettlement({
     candidateSha: head,
-    shadowIdentity: shadowFixture(head, false),
+    shadowIdentity: shadowFixture(head, false, 'blocked-generator-rcf'),
     namespaceValidator: () => { nsCalls += 1; return { schema: NAMESPACE_SCHEMA, valid: true, receiptCount: 0 }; },
     settlementProvider: () => { settlementCalls += 1; return settlementFixture(head); },
   });
@@ -212,14 +212,14 @@ function settlementFixture(candidateSha, slots = slotFixture()) {
   settlementCalls = 0;
   throwsCode(() => shadowSettlement({
     candidateSha: head,
-    shadowIdentity: shadowFixture(head, false),
+    shadowIdentity: shadowFixture(head, false, 'blocked-generator-rcf'),
     namespaceValidator: () => ({ schema: NAMESPACE_SCHEMA, valid: false, receiptCount: 0 }),
     settlementProvider: () => { settlementCalls += 1; return settlementFixture(head); },
   }), 'S1B_RECEIPT_NAMESPACE_INVALID');
   eq(settlementCalls, 0, 'corrupt namespace must fail before semantic settlement');
   throwsCode(() => shadowSettlement({
     candidateSha: head,
-    shadowIdentity: shadowFixture(head, false),
+    shadowIdentity: shadowFixture(head, false, 'blocked-generator-rcf'),
     namespaceValidator: () => ({ schema: 'bad', valid: true, receiptCount: 0 }),
     settlementProvider: () => settlementFixture(head),
   }), 'S1B_NAMESPACE_RESULT_INVALID');
