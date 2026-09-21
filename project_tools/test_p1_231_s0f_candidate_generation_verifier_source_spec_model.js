@@ -10,47 +10,16 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const packageAuthority = require('./release_package_authority.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const S0E_MODEL = path.join(ROOT, 'project_tools', 'test_p1_231_s0e_identity_engine_source_spec_model.js');
 const PROFILE = 'cpython-3.12.10-v1';
 const RESULT_SCHEMA = 'webclip-candidate-generation-result/v1';
 
-const PACKAGE_FILES = Object.freeze([
-  'content-injection-guard.js',
-  'content.js',
-  'frame-agent.js',
-  'frame-proxy-budget-guard.js',
-  'frame-proxy-inert-guard.js',
-  'host-control-activation-guard.js',
-  'journal-import-digest.js',
-  'journal-import-stream.js',
-  'journal-restore-envelope-guard.js',
-  'journal-text-filter.js',
-  'journal.css',
-  'journal.html',
-  'journal.js',
-  'local-download-identity.js',
-  'manifest.json',
-  'offscreen-blob-admission-guard.js',
-  'offscreen-bootstrap.js',
-  'offscreen.html',
-  'offscreen.js',
-  'operation-log-redaction-guard.js',
-  'options.css',
-  'options.html',
-  'options.js',
-  'pdf-print-guard.js',
-  'popup.css',
-  'popup.html',
-  'popup.js',
-  'prepared-save-as.js',
-  'public-suffix.js',
-  'service-worker.js',
-  'yandex-auth-help.css',
-  'yandex-auth-help.html',
-  'yandex-auth-help.js',
-]);
+const PACKAGE_TOPOLOGY = packageAuthority.readCanonicalManifest();
+const PACKAGE_FILES = Object.freeze([...PACKAGE_TOPOLOGY.files]);
+const LEGACY_RPF = 'sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a';
 
 const CURRENT_RELATION = Object.freeze({
   id: 'public-suffix-js',
@@ -60,8 +29,7 @@ const CURRENT_RELATION = Object.freeze({
   outputs: Object.freeze(['public-suffix.js']),
 });
 
-const EXPECTED_IDENTITIES = Object.freeze({
-  rpf: 'sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a',
+const EXPECTED_CONTRACT_IDENTITIES = Object.freeze({
   chromeQcf: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandexQcf: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
   rcf: 'sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce',
@@ -100,14 +68,24 @@ function exactBlob(commit, rel) {
 
 function parseS0EOutput() {
   const line = execFileSync(process.execPath, [S0E_MODEL], { cwd: ROOT, encoding: 'utf8' }).trim().split(/\r?\n/).pop();
-  function pick(name) {
-    const m = line.match(new RegExp(`${name}=(sha256:[0-9a-f]{64})`));
+  function token(name, pattern) {
+    const m = line.match(new RegExp(`(?:^|;\\s*)${name}=${pattern}(?=;|$)`));
     if (!m) fail('IDENTITY_COMPUTATION_FAILED', `${name} missing`);
     return m[1];
   }
+  function pick(name) {
+    return token(name, '(sha256:[0-9a-f]{64})');
+  }
+  function text(name) {
+    return token(name, '([^;]+)').trim();
+  }
   return {
     line,
-    protocol: /protocol=([^;]+)/.exec(line)?.[1] || '',
+    protocol: text('protocol'),
+    packageFiles: Number(text('package_files')),
+    legacyPackageFiles: Number(text('legacy_package_files')),
+    legacyRpf: pick('legacy_rpf'),
+    currentPackageComplete: text('current_package_complete') === 'true',
     rpf: pick('rpf'),
     chromeQcf: pick('chrome_qcf'),
     yandexQcf: pick('yandex_qcf'),
@@ -238,19 +216,26 @@ function diagnosticPackageHash(overrides = new Map()) {
   const head = gitText('rev-parse', 'HEAD');
   eq(gitText('cat-file', '-t', head), 'commit', 'HEAD must be exact commit');
   check(/^[0-9a-f]{40}$/.test(head), 'HEAD sha shape');
-  eq(PACKAGE_FILES.length, 33, 'S0-A package count');
-  eq(new Set(PACKAGE_FILES).size, 33, 'package paths unique');
+  eq(PACKAGE_TOPOLOGY.schema, packageAuthority.SCHEMA, 'S0-A package schema');
+  eq(PACKAGE_TOPOLOGY.path_profile, packageAuthority.PATH_PROFILE, 'S0-A path profile');
+  eq(PACKAGE_FILES.length, 34, 'S0-A package count');
+  eq(new Set(PACKAGE_FILES).size, 34, 'package paths unique');
+  check(PACKAGE_FILES.includes('application-generation.js'), 'application-generation is current package member');
   check(PACKAGE_FILES.includes('public-suffix.js'), 'generated output remains package member');
   check(!PACKAGE_FILES.includes('public_suffix_list.dat'), 'generation input remains outside package');
   check(!PACKAGE_FILES.includes('project_tools/build_public_suffix_js.py'), 'generator remains outside package');
 
   // Exact Git-object census: package + generation roots.
-  for (const rel of PACKAGE_FILES) {
-    const e = gitEntry(head, rel);
-    check(Boolean(e), `missing package blob ${rel}`);
-    eq(e.type, 'blob', `${rel} git type`);
-    eq(e.mode, '100644', `${rel} git mode`);
-    check(/^[0-9a-f]{40}$/.test(e.oid), `${rel} oid`);
+  const resolvedPackage = packageAuthority.resolvePackage(head, PACKAGE_TOPOLOGY);
+  eq(resolvedPackage.candidate_sha, head, 'S0-A resolved candidate');
+  eq(resolvedPackage.members.length, PACKAGE_FILES.length, 'S0-A resolved package count');
+  for (const member of resolvedPackage.members) {
+    const e = gitEntry(head, member.path);
+    check(Boolean(e), `missing package blob ${member.path}`);
+    eq(e.type, 'blob', `${member.path} git type`);
+    eq(e.mode, '100644', `${member.path} git mode`);
+    eq(e.oid, member.git_oid, `${member.path} S0-A oid`);
+    eq(sha256(exactBlob(head, member.path)), `sha256:${member.sha256}`, `${member.path} S0-A bytes`);
   }
   for (const rel of [CURRENT_RELATION.generator, ...CURRENT_RELATION.inputs, ...CURRENT_RELATION.outputs]) {
     const e = gitEntry(head, rel);
@@ -291,6 +276,20 @@ function diagnosticPackageHash(overrides = new Map()) {
     regeneratedOutputs: new Map([['public-suffix.js', run.generated]]),
   }), 'SOURCE_GENERATION_PORTABILITY_UNPROVEN');
 
+  // S0-E composition: use the predecessor model as the identity owner rather than redefining it here.
+  const identities = parseS0EOutput();
+  eq(identities.protocol, 'WEBCLIP_RELEASE_IDENTITY_V1', 'S0-E protocol');
+  eq(identities.packageFiles, PACKAGE_FILES.length, 'S0-E current package count agrees with S0-A');
+  eq(identities.legacyPackageFiles, 33, 'S0-E retains explicit legacy package count');
+  eq(identities.legacyRpf, LEGACY_RPF, 'S0-E legacy RPF control');
+  eq(identities.currentPackageComplete, true, 'S0-E current package identity is complete');
+  check(/^sha256:[0-9a-f]{64}$/.test(identities.rpf), 'current RPF shape');
+  check(identities.rpf !== identities.legacyRpf, 'current RPF differs from legacy incomplete RPF');
+  eq(identities.chromeQcf, EXPECTED_CONTRACT_IDENTITIES.chromeQcf, 'current Chrome QCF');
+  eq(identities.yandexQcf, EXPECTED_CONTRACT_IDENTITIES.yandexQcf, 'current Yandex QCF');
+  eq(identities.rcf, EXPECTED_CONTRACT_IDENTITIES.rcf, 'current full RCF');
+  eq(identities.bcf, EXPECTED_CONTRACT_IDENTITIES.bcf, 'current BCF');
+
   // No downstream identities are emitted on current blocked state.
   let blockedResult = null;
   try {
@@ -298,21 +297,12 @@ function diagnosticPackageHash(overrides = new Map()) {
       candidateSha: head,
       portabilityReady: false,
       regeneratedOutputs: new Map([['public-suffix.js', run.generated]]),
-      identities: EXPECTED_IDENTITIES,
+      identities,
     });
   } catch (e) {
     eq(e.code, 'SOURCE_GENERATION_PORTABILITY_UNPROVEN', 'current gate blocker');
   }
   eq(blockedResult, null, 'blocked candidate must publish no admitted tuple');
-
-  // S0-E composition: use the predecessor model as the identity owner rather than redefining it here.
-  const identities = parseS0EOutput();
-  eq(identities.protocol, 'WEBCLIP_RELEASE_IDENTITY_V1', 'S0-E protocol');
-  eq(identities.rpf, EXPECTED_IDENTITIES.rpf, 'current RPF');
-  eq(identities.chromeQcf, EXPECTED_IDENTITIES.chromeQcf, 'current Chrome QCF');
-  eq(identities.yandexQcf, EXPECTED_IDENTITIES.yandexQcf, 'current Yandex QCF');
-  eq(identities.rcf, EXPECTED_IDENTITIES.rcf, 'current full RCF');
-  eq(identities.bcf, EXPECTED_IDENTITIES.bcf, 'current BCF');
 
   // Synthetic future state: once portability prerequisite is closed, exact matching output admits identities.
   const admitted = admitCandidate({
@@ -330,11 +320,11 @@ function diagnosticPackageHash(overrides = new Map()) {
   eq(admitted.relations[0].outputs.length, 1);
   eq(admitted.relations[0].outputs[0].path, 'public-suffix.js');
   eq(admitted.relations[0].outputs[0].candidateSha256, admitted.relations[0].outputs[0].regeneratedSha256);
-  eq(admitted.identities.rpf, EXPECTED_IDENTITIES.rpf);
-  eq(admitted.identities.qcf['unpacked-chrome'], EXPECTED_IDENTITIES.chromeQcf);
-  eq(admitted.identities.qcf['yandex-e2e'], EXPECTED_IDENTITIES.yandexQcf);
-  eq(admitted.identities.rcf, EXPECTED_IDENTITIES.rcf);
-  eq(admitted.identities.bcf, EXPECTED_IDENTITIES.bcf);
+  eq(admitted.identities.rpf, identities.rpf);
+  eq(admitted.identities.qcf['unpacked-chrome'], EXPECTED_CONTRACT_IDENTITIES.chromeQcf);
+  eq(admitted.identities.qcf['yandex-e2e'], EXPECTED_CONTRACT_IDENTITIES.yandexQcf);
+  eq(admitted.identities.rcf, EXPECTED_CONTRACT_IDENTITIES.rcf);
+  eq(admitted.identities.bcf, EXPECTED_CONTRACT_IDENTITIES.bcf);
   check(!Object.prototype.hasOwnProperty.call(admitted, 'candidateGenerationFingerprint'), 'no CGF axis');
   check(!Object.prototype.hasOwnProperty.call(admitted, 'artifactSha256'), 'ZIP digest is not S0-F identity');
   check(!Object.prototype.hasOwnProperty.call(admitted, 'outcome'), 'S0-F result is not S0-G evidence receipt');
@@ -414,7 +404,7 @@ function diagnosticPackageHash(overrides = new Map()) {
 
   // A docs-only commit could share RPF, but exact candidate SHA must remain distinct pipeline authority.
   const sameRpfOtherSha = 'f'.repeat(40);
-  eq(admitted.identities.rpf, EXPECTED_IDENTITIES.rpf, 'RPF fixture stable');
+  eq(admitted.identities.rpf, identities.rpf, 'RPF fixture follows S0-E current identity');
   check(admitted.candidateSha !== sameRpfOtherSha, 'candidate SHA axis stays explicit even for hypothetical same RPF');
   throwsCode(() => consumeExact(admitted, sameRpfOtherSha), 'CANDIDATE_RESULT_SHA_MISMATCH');
 
