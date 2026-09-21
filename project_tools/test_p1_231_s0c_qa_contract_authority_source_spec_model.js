@@ -378,6 +378,8 @@ const AUTHORITY_FIXTURE = {
 };
 
 (function main() {
+  const head = git('rev-parse', 'HEAD');
+  eq(git('cat-file', '-t', head), 'commit', 'HEAD must be exact commit for research proof');
   const raw = Buffer.from(JSON.stringify(AUTHORITY_FIXTURE), 'utf8');
   const authority = parseStrictManifest(raw);
   eq(authority.full_rcf.blob_inputs.length, 11, 'full RCF input count');
@@ -494,8 +496,6 @@ const AUTHORITY_FIXTURE = {
   eq(rcf(head, reorderedAuthority), fullRcf, 'full RCF representation order invariant');
 
   // Exact candidate Git objects for full-RCF blob roots.
-  const head = git('rev-parse', 'HEAD');
-  eq(git('cat-file', '-t', head), 'commit', 'HEAD must be exact commit for research proof');
   for (const rel of authority.full_rcf.blob_inputs) {
     const e = gitEntry(head, rel);
     check(Boolean(e), `missing full-RCF input ${rel}`);
