@@ -1,6 +1,6 @@
 # P1-231 generator / full-RCF authority binding — 2026-09-21
 
-Status: **RECONCILIATION IN PROGRESS**
+Status: **DETERMINISTIC AUTHORITY RECONCILED; PHYSICAL/RELEASE EVIDENCE PENDING**
 
 ## Scope
 
@@ -48,16 +48,24 @@ The pre-binding full RCF
 
 is historical for the ten-root authority once this tranche is accepted.
 
-The new eleven-root full RCF is intentionally not asserted in this in-progress checkpoint until the exact-head S0-C/S0-E models independently reproduce it. A failing/intermediate CI run is discovery evidence only and cannot be used as merge evidence.
+The independently reproduced eleven-root full RCF is:
+
+`sha256:0806e70942b17db36b400b5a4fda9f3e68b9695157e4d861f4bb3c431927836c`
+
+Repository Integrity #949 on exact intermediate head `c8aaaee78236f5b88dbacc9672f9ebbda7437086` independently executed the updated S0-C/S0-E identity models and exposed this value through the downstream S0-F fail-closed mismatch. S0-E itself passed with `full_inputs=11`, package count 34, the unchanged RPF/QCF/BCF axes above, and this exact full RCF.
+
+The old `sha256:df6709...` value is therefore retained only as the historical ten-root control; it is not current full-RCF authority after this tranche.
 
 ## Downstream contract
 
-Once exact current generator bytes are covered by full-RCF authority and the corrected generation relation continues to reproduce the exact committed `public-suffix.js` bytes:
+With exact current generator bytes covered by full-RCF authority and the corrected generation relation still reproducing the exact committed `public-suffix.js` bytes:
 
-- S0-F may pass its generation-governance admission instead of failing with `SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND`;
+- S0-F now passes candidate-generation admission for the exact current source; the missing-generator path remains a fail-closed regression control;
+- S0-G therefore advances from generation-blocked to **evidence-missing** for the current candidate when no current receipt namespace entries exist;
 - physical Chrome/Yandex evidence identity remains keyed by RPF + the applicable unchanged QCF;
 - governance evidence keyed by RPF + full RCF cannot silently carry across the full-RCF change;
-- downstream S0-G/S0-H/S1 models must remain fail-closed for missing physical/governance evidence and for absent build/release authorization.
+- S0-H/S1-C do **not** infer product-build permission from generation admission: current product package loading/building remains intentionally unexecuted in this research tranche;
+- S1-A can describe the current identity as generation-eligible while S1-B/S1-D remain blocked by missing evidence and all release-authority flags remain false.
 
 This authority change alone does not create physical Chrome/Yandex PASS, a product build, a release decision, or release readiness.
 
@@ -67,7 +75,9 @@ Repository Integrity #948 on intermediate exact head
 `04ebd4c400145f076754c85e432217f9e63719ba`
 stopped at the PR change-contract layer because the owner-impact branch did not yet contain durable P1-231 evidence. No deterministic identity result from that skipped test phase is treated as evidence.
 
-This file supplies the required durable owner evidence so a later exact-head run can execute the deterministic identity/reconciliation models. The final accepted evidence must replace this in-progress section with the exact new RCF and final exact-head/post-merge CI references.
+Repository Integrity #949 established the new full-RCF value and showed exactly seven downstream stale assumptions. After S0-F was reconciled, Repository Integrity #950 on exact head `71b6c367d43ad63db2a0c85d7ed017840277283a` showed S0-F PASS with `cases=271`, `current_gate=pass`, `generator_rcf_binding=bound`, and the exact new RCF above; the remaining deterministic failures were reduced to the six downstream S0-G/S0-H/S1 models whose current-state semantics depended on the old generation blocker.
+
+Those six models are reconciled in this tranche to distinguish generation admission from missing evidence and from absent build/release authorization. Merge acceptance still requires a fresh exact-head Repository Integrity SUCCESS and the normal post-merge SUCCESS on literal new `main`; intermediate failing runs are discovery evidence only.
 
 ## Release boundary
 
