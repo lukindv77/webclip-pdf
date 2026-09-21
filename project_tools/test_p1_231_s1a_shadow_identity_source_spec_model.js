@@ -15,10 +15,10 @@ const IDENTITY_PROTOCOL = 'WEBCLIP_RELEASE_IDENTITY_V1';
 const PR_IMPACT_SCHEMA = 'webclip-pr-impact/v1';
 
 const CURRENT = Object.freeze({
-  rpf: 'sha256:1a9551f839b70410c834ba0f040b9c285de58965771a927cef2d95700c86e792',
+  rpf: 'sha256:feab25126c9d686062f8ed0da8c9d7ad39f468ebc819342bb34fbd2c47e0e843',
   chromeQcf: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandexQcf: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
-  rcf: 'sha256:e6119c800c60513405541bfae552f424985e13fa109e28390ae1bac7ba075f13',
+  rcf: 'sha256:0806e70942b17db36b400b5a4fda9f3e68b9695157e4d861f4bb3c431927836c',
   bcf: 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff',
 });
 
@@ -155,15 +155,34 @@ function runNode(rel) {
   const eOut = runNode('project_tools/test_p1_231_s0e_identity_engine_source_spec_model.js');
   const fOut = runNode('project_tools/test_p1_231_s0f_candidate_generation_verifier_source_spec_model.js');
   const iOut = runNode('project_tools/test_p1_231_s0i_pr_checker_integration_source_spec_model.js');
-  check(/S0-E identity engine source-spec model: PASS; cases=249/.test(eOut), 'S0-E predecessor PASS missing');
-  check(/S0-F candidate-generation verifier source-spec model: PASS; cases=272/.test(fOut), 'S0-F predecessor PASS missing');
-  check(/current_gate=blocked-generation/.test(fOut), 'current S0-F gate must remain blocked-generation');
+  check(/S0-E identity engine source-spec model: PASS; cases=251/.test(eOut), 'S0-E predecessor PASS missing');
+  check(/S0-F candidate-generation verifier source-spec model: PASS; cases=271/.test(fOut), 'S0-F predecessor PASS missing');
+  check(/current_gate=pass/.test(fOut), 'current S0-F gate must pass after generator RCF binding');
   check(/S0-I PR checker integration source-spec model: PASS; cases=161/.test(iOut), 'S0-I predecessor PASS missing');
   check(/synthetic_merge_identity=required/.test(iOut), 'S0-I synthetic merge requirement missing');
 
   for (const fp of Object.values(CURRENT)) check(isFp(fp), `current identity must be typed fingerprint: ${fp}`);
 
-  // Current real push-like shadow state: valid execution, ineligible candidate.
+  // Current real push-like shadow state: generation identity is admitted, but this
+  // shadow layer remains non-authoritative and performs no build/receipt mutation.
+  const current = shadowIdentity({
+    eventKind: 'push',
+    headSha: head,
+    githubSha: head,
+    identities: CURRENT,
+    generationGate: { candidateSha: head, status: 'pass', identities: CURRENT },
+  });
+  eq(current.schema, SCHEMA);
+  eq(current.candidateSha, head);
+  eq(current.generationGate, 'pass');
+  eq(current.eligible, true);
+  eq(current.shadowOutcome, 'eligible');
+  eq(current.impactContext.kind, 'push-main');
+  eq(current.policyMutation, false);
+  eq(current.receiptMutation, false);
+  eq(current.artifactBuild, false);
+
+  // Blocked-generation remains an explicit negative control.
   const blocked = shadowIdentity({
     eventKind: 'push',
     headSha: head,
@@ -171,26 +190,8 @@ function runNode(rel) {
     identities: CURRENT,
     generationGate: { candidateSha: head, status: 'blocked-generation', identities: CURRENT },
   });
-  eq(blocked.schema, SCHEMA);
-  eq(blocked.candidateSha, head);
-  eq(blocked.generationGate, 'blocked-generation');
   eq(blocked.eligible, false);
   eq(blocked.shadowOutcome, 'blocked-generation');
-  eq(blocked.impactContext.kind, 'push-main');
-  eq(blocked.policyMutation, false);
-  eq(blocked.receiptMutation, false);
-  eq(blocked.artifactBuild, false);
-
-  // Future admitted candidate positive control.
-  const admitted = shadowIdentity({
-    eventKind: 'push',
-    headSha: head,
-    githubSha: head,
-    identities: CURRENT,
-    generationGate: { candidateSha: head, status: 'pass', identities: CURRENT },
-  });
-  eq(admitted.eligible, true);
-  eq(admitted.shadowOutcome, 'eligible');
 
   // PR path: candidate is synthetic merge SHA, while branch head is separate provenance.
   const baseSha = '1'.repeat(40);
@@ -315,7 +316,7 @@ function runNode(rel) {
   }), 'S1A_PUSH_PR_CONTEXT_FORBIDDEN');
 
   // Policy/side-effect surface remains absent.
-  for (const result of [blocked, admitted, prResult]) {
+  for (const result of [current, blocked, prResult]) {
     const json = JSON.stringify(result);
     for (const forbidden of ['releaseReadiness', 'approvedForRelease', 'receiptId', 'artifactSha256', 'releaseId', 'deploymentId', 'tagName']) {
       check(!Object.prototype.hasOwnProperty.call(result, forbidden), `shadow result must not expose ${forbidden}`);
@@ -330,14 +331,14 @@ function runNode(rel) {
   check(!workflow.includes('Shadow release identity'), 'research tranche must not install permanent shadow step');
 
   // Stable framing sanity for bounded diagnostic output; this is not a new release fingerprint.
-  const diagnostic = JSON.stringify({ schema: blocked.schema, candidateSha: blocked.candidateSha, eligible: blocked.eligible, shadowOutcome: blocked.shadowOutcome });
+  const diagnostic = JSON.stringify({ schema: current.schema, candidateSha: current.candidateSha, eligible: current.eligible, shadowOutcome: current.shadowOutcome });
   const diagnosticSha = crypto.createHash('sha256').update(diagnostic).digest('hex');
   check(/^[0-9a-f]{64}$/.test(diagnosticSha), 'diagnostic hash sanity');
-  check(!Object.prototype.hasOwnProperty.call(blocked, 'shadowFingerprint'), 'no aggregate shadow fingerprint may be introduced');
+  check(!Object.prototype.hasOwnProperty.call(current, 'shadowFingerprint'), 'no aggregate shadow fingerprint may be introduced');
 
   console.log(
     `P1-231 S1-A shadow identity source-spec model: PASS; cases=${cases}; schema=${SCHEMA}; ` +
-    `current_shadow=blocked-generation; current_eligible=false; structural_errors=fail-closed; ` +
+    `current_shadow=eligible; current_eligible=true; structural_errors=fail-closed; ` +
     `pr_candidate=github-sha; synthetic_merge_required=true; s0f_owner=true; policy_mutation=false; ` +
     `receipt_mutation=false; product_zip=false; permanent_workflow_unchanged=true; rpf=${CURRENT.rpf}; head=${head}`
   );
