@@ -87,13 +87,12 @@ ok(!topology.files.some((item) => item.startsWith('.github/')), 'GitHub control 
 const s0aSource = fs.readFileSync(path.join(ROOT, 'project_tools', 'test_p1_231_s0a_package_authority_source_spec_model.js'), 'utf8');
 const s0eSource = fs.readFileSync(path.join(ROOT, 'project_tools', 'test_p1_231_s0e_identity_engine_source_spec_model.js'), 'utf8');
 const currentS0a = extractFrozenArray(s0aSource, 'CURRENT_FILES');
-const legacyS0e = extractFrozenArray(s0eSource, 'PACKAGE_FILES');
 deep([...topology.files], authority.asciiSort(currentS0a), 'production manifest migration equals current S0-A census');
-const s0eMissing = topology.files.filter((item) => !legacyS0e.includes(item));
-const s0eExtra = legacyS0e.filter((item) => !topology.files.includes(item));
-deep(s0eMissing, ['application-generation.js'], 'legacy S0-E package census is missing only current application-generation runtime');
-deep(s0eExtra, [], 'legacy S0-E package census has no extra package member');
-ok(!legacyS0e.includes('application-generation.js'), 'legacy S0-E RPF input is explicitly incomplete for current package');
+ok(s0eSource.includes("const PACKAGE_TOPOLOGY = packageAuthority.readCanonicalManifest();"), 'S0-E consumes canonical package authority');
+ok(s0eSource.includes("const PACKAGE_FILES = Object.freeze([...PACKAGE_TOPOLOGY.files]);"), 'S0-E current package membership comes from S0-A authority');
+ok(s0eSource.includes("const LEGACY_PACKAGE_FILES = Object.freeze(PACKAGE_FILES.filter((rel) => rel !== 'application-generation.js'));"), 'S0-E retains explicit 33-file legacy subset control');
+ok(s0eSource.includes("const CURRENT_RPF = 'sha256:feab25126c9d686062f8ed0da8c9d7ad39f468ebc819342bb34fbd2c47e0e843';"), 'S0-E pins corrected current 34-file RPF');
+ok(s0eSource.includes("const LEGACY_RPF = 'sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a';"), 'S0-E retains exact legacy incomplete RPF control');
 
 const digest = authority.topologyDigest(topology);
 ok(/^[0-9a-f]{64}$/.test(digest), 'topology digest is SHA-256 hex');
@@ -186,15 +185,17 @@ const rpfRun = execFileSync(
   [path.join(ROOT, 'project_tools', 'test_p1_231_s0e_identity_engine_source_spec_model.js')],
   { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
 );
-const rpfMatch = /\brpf=(sha256:[0-9a-f]{64})\b/.exec(rpfRun);
-ok(Boolean(rpfMatch), 'legacy S0-E output exposes its recorded RPF');
-eq(
-  rpfMatch[1],
-  'sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a',
-  'legacy S0-E RPF value remains reproducible before its dedicated migration'
-);
-ok(s0eMissing.length === 1, 'S0-A exposes a bounded downstream S0-E package-identity drift');
-ok(rpfMatch[1] !== '', 'S0-E drift is recorded without fabricating a replacement RPF in S0-A');
+const currentRpfMatch = /(?:^|;\s*)rpf=(sha256:[0-9a-f]{64})(?=;|$)/m.exec(rpfRun);
+const legacyRpfMatch = /(?:^|;\s*)legacy_rpf=(sha256:[0-9a-f]{64})(?=;|$)/m.exec(rpfRun);
+const packageCountMatch = /(?:^|;\s*)package_files=(\d+)(?=;|$)/m.exec(rpfRun);
+const legacyCountMatch = /(?:^|;\s*)legacy_package_files=(\d+)(?=;|$)/m.exec(rpfRun);
+ok(Boolean(currentRpfMatch), 'current S0-E output exposes corrected RPF');
+ok(Boolean(legacyRpfMatch), 'S0-E output exposes explicit legacy RPF control');
+eq(currentRpfMatch[1], 'sha256:feab25126c9d686062f8ed0da8c9d7ad39f468ebc819342bb34fbd2c47e0e843', 'current S0-E RPF equals canonical 34-file identity');
+eq(legacyRpfMatch[1], 'sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a', 'legacy S0-E RPF remains reproducible control');
+eq(packageCountMatch && Number(packageCountMatch[1]), 34, 'S0-E output current package count');
+eq(legacyCountMatch && Number(legacyCountMatch[1]), 33, 'S0-E output legacy package count');
+ok(currentRpfMatch[1] !== legacyRpfMatch[1], 'current and legacy RPFs remain distinct');
 
 const tmp = initRepo();
 try {
