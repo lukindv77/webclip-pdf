@@ -339,3 +339,7 @@ This is **not yet** cross-platform S0-B closure. The prior Windows failure remai
 The generator itself is not an extension package member and `public-suffix.js` is not modified by this tranche, so the canonical current 34-file RPF remains `sha256:feab25126c9d686062f8ed0da8c9d7ad39f468ebc819342bb34fbd2c47e0e843`; the old `b65c…` value remains legacy 33-file control only. P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**.
 
 Durable rationale/evidence: `RESEARCH_P1_231_S0B_GENERATOR_BYTE_PORTABILITY_FIX_2026-09-21_EVIDENCE.md`.
+
+### P1-231 S0-B byte-portability exact-head CI discovery #937
+
+Repository Integrity #937 on `09f7bd8f1b8b4dcd200b41c00a3083739258e966` failed only because `test_p1_231_generation_portability_binding_refinement_model.js` still asserted the historical text-mode generator source. S0-B, S0-F, S0-E identity, package authority and downstream blocked-portability models had already passed on that exact head. The stale refinement now treats the pre-fix writer as a historical comparison fixture and the current binary writer as current source, without advancing portability admission or full-RCF generator binding. #937 is not merge evidence; a new exact-head success is required.
