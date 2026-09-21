@@ -176,7 +176,7 @@ def main() -> None:
     if not any("S0-B authority job marker missing" in error and "3.12.10" in error for error in lane_errors):
         raise AssertionError(f"repository-integrity-s0b-no-python: expected profile failure, got {lane_errors}")
 
-    no_s0b_ref = GOOD_REPOSITORY_INTEGRITY_WITH_S0B.replace(
+    no_s0b_ref = GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB.replace(
         "          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}\n",
         "",
         1,
