@@ -20,6 +20,10 @@ EXPECTED_TOOL_VERSIONS = {
     "python-version": "3.12.14",
     "node-version": "22.23.2",
 }
+GENERIC_PYTHON_VERSION = "3.12.14"
+S0B_PYTHON_VERSION = "3.12.10"
+NODE_VERSION = "22.23.2"
+PYTHON_VERSION = re.compile(r"python-version:\\s*['\"]([^'\"]+)['\"]")
 
 REPOSITORY_INTEGRITY_WORKFLOW = ".github/workflows/repository-integrity.yml"
 EXACT_CHECKOUT_MARKERS = (
@@ -63,7 +67,21 @@ def evaluate(workflows: Mapping[str, str]) -> list[str]:
         for key, expected in EXPECTED_TOOL_VERSIONS.items():
             marker = f"{key}: '{expected}'"
             if key in text and marker not in text:
-                errors.append(f"{name}: {key} must be exact {expected}")
+                errors.append(f"{name}: {key} must include exact generic profile {expected}")
+
+        python_versions = PYTHON_VERSION.findall(text)
+        allowed_python = {GENERIC_PYTHON_VERSION}
+        if name == REPOSITORY_INTEGRITY_WORKFLOW:
+            allowed_python.add(S0B_PYTHON_VERSION)
+        unexpected_python = sorted(set(python_versions) - allowed_python)
+        if unexpected_python:
+            errors.append(
+                f"{name}: unsupported python-version value(s): {', '.join(unexpected_python)}"
+            )
+        if name != REPOSITORY_INTEGRITY_WORKFLOW and S0B_PYTHON_VERSION in python_versions:
+            errors.append(
+                f"{name}: S0-B CPython {S0B_PYTHON_VERSION} is allowed only in Repository Integrity"
+            )
 
     return errors
 
@@ -79,6 +97,47 @@ def evaluate_repository_integrity_exact_checkout(workflows: Mapping[str, str]) -
             errors.append(
                 f"{REPOSITORY_INTEGRITY_WORKFLOW}: exact PR-head checkout marker missing: {marker}"
             )
+    return errors
+
+
+def evaluate_repository_integrity_s0b_lane(workflows: Mapping[str, str]) -> list[str]:
+    text = workflows.get(REPOSITORY_INTEGRITY_WORKFLOW, "")
+    if not text:
+        return [f"{REPOSITORY_INTEGRITY_WORKFLOW}: workflow is missing"]
+
+    marker = "\n  p1-231-source-generation-authority:\n"
+    if marker not in text:
+        return [f"{REPOSITORY_INTEGRITY_WORKFLOW}: P1-231 S0-B authority job is missing"]
+
+    tail = text.split(marker, 1)[1]
+    next_job = re.search(r"\n  [A-Za-z0-9_-]+:\n", tail)
+    job = tail[: next_job.start()] if next_job else tail
+
+    required = (
+        "name: p1-231-source-generation-authority",
+        "runs-on: ubuntu-24.04",
+        "uses: actions/checkout@",
+        "fetch-depth: 0",
+        "ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}",
+        "EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}",
+        'actual="$(git rev-parse HEAD)"',
+        f"python-version: '{S0B_PYTHON_VERSION}'",
+        f"node-version: '{NODE_VERSION}'",
+        'node project_tools/release_source_generation_authority.js --candidate "$EXPECTED_SHA"',
+    )
+    errors: list[str] = []
+    for item in required:
+        if item not in job:
+            errors.append(
+                f"{REPOSITORY_INTEGRITY_WORKFLOW}: S0-B authority job marker missing: {item}"
+            )
+
+    if "continue-on-error:" in job:
+        errors.append(f"{REPOSITORY_INTEGRITY_WORKFLOW}: S0-B authority job must fail closed")
+    if text.count(f"python-version: '{S0B_PYTHON_VERSION}'") != 1:
+        errors.append(
+            f"{REPOSITORY_INTEGRITY_WORKFLOW}: S0-B Python {S0B_PYTHON_VERSION} must appear exactly once"
+        )
     return errors
 
 
@@ -117,6 +176,7 @@ def main() -> int:
 
     errors = evaluate(workflows)
     errors.extend(evaluate_repository_integrity_exact_checkout(workflows))
+    errors.extend(evaluate_repository_integrity_s0b_lane(workflows))
 
     if not DEPENDABOT.is_file():
         errors.append(".github/dependabot.yml is missing")
@@ -132,7 +192,7 @@ def main() -> int:
     print(
         f"CI/supply-chain hygiene PASS: {len(workflows)} workflow(s), "
         "external actions immutable, permissions read-only, Repository Integrity exact-head checkout enforced, "
-        "Dependabot low-noise."
+        "P1-231 S0-B profile lane pinned, Dependabot low-noise."
     )
     return 0
 
