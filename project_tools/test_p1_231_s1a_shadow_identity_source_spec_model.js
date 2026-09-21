@@ -1,8 +1,10 @@
 'use strict';
 
 // Research-only deterministic source-spec model for P1-231 S1-A.
-// It models permanent-CI shadow identity semantics but does not modify the
-// permanent workflow, build a WebClip product ZIP, write readiness, or mint receipts.
+// It models permanent-CI shadow identity semantics, including the current dual-checkout
+// PR contract: delivery verification stays on the literal PR head while the S1-A shadow
+// candidate is the GitHub synthetic merge SHA in a separate execution workspace. It does
+// not modify the permanent workflow, build a WebClip product ZIP, write readiness, or mint receipts.
 
 const assert = require('assert');
 const crypto = require('crypto');
@@ -147,6 +149,35 @@ function runNode(rel) {
   return `${proc.stdout || ''}${proc.stderr || ''}`;
 }
 
+function validateWorkflowExecutionContext({
+  eventKind,
+  deliveryHeadSha,
+  githubSha,
+  shadowHeadSha,
+  baseSha = null,
+  prHeadSha = null,
+}) {
+  for (const value of [deliveryHeadSha, githubSha, shadowHeadSha]) {
+    if (!isSha(value)) fail('S1A_WORKFLOW_SHA_INVALID');
+  }
+  if (eventKind === 'push') {
+    if (baseSha !== null || prHeadSha !== null) fail('S1A_PUSH_PR_CONTEXT_FORBIDDEN');
+    if (deliveryHeadSha !== githubSha || shadowHeadSha !== githubSha) fail('S1A_WORKFLOW_CONTEXT_MISMATCH');
+    return Object.freeze({ eventKind, deliveryHeadSha, shadowCandidateSha: shadowHeadSha });
+  }
+  if (eventKind !== 'pull_request') fail('S1A_EVENT_UNSUPPORTED');
+  if (!isSha(baseSha) || !isSha(prHeadSha)) fail('S1A_PR_PROVENANCE_INVALID');
+  if (deliveryHeadSha !== prHeadSha) fail('S1A_DELIVERY_HEAD_MISMATCH');
+  if (shadowHeadSha !== githubSha) fail('S1A_SHADOW_CANDIDATE_MISMATCH');
+  return Object.freeze({
+    eventKind,
+    deliveryHeadSha,
+    baseSha,
+    prHeadSha,
+    shadowCandidateSha: shadowHeadSha,
+  });
+}
+
 (function main() {
   const head = git('rev-parse', 'HEAD');
   check(isSha(head), 'HEAD must be exact SHA');
@@ -193,10 +224,23 @@ function runNode(rel) {
   eq(blocked.eligible, false);
   eq(blocked.shadowOutcome, 'blocked-generation');
 
-  // PR path: candidate is synthetic merge SHA, while branch head is separate provenance.
+  // PR path is deliberately dual-checkout. Repository Integrity delivery verification
+  // stays on the literal PR head, while S1-A evaluates the GitHub synthetic merge SHA
+  // in a separate shadow workspace.
   const baseSha = '1'.repeat(40);
   const prHeadSha = '2'.repeat(40);
   const candidateSha = '3'.repeat(40);
+  const prExecution = validateWorkflowExecutionContext({
+    eventKind: 'pull_request',
+    deliveryHeadSha: prHeadSha,
+    githubSha: candidateSha,
+    shadowHeadSha: candidateSha,
+    baseSha,
+    prHeadSha,
+  });
+  eq(prExecution.deliveryHeadSha, prHeadSha);
+  eq(prExecution.shadowCandidateSha, candidateSha);
+  check(prExecution.deliveryHeadSha !== prExecution.shadowCandidateSha, 'delivery PR head must remain distinct from synthetic merge shadow candidate');
   const prResult = shadowIdentity({
     eventKind: 'pull_request',
     headSha: candidateSha,
@@ -220,7 +264,33 @@ function runNode(rel) {
   check(prResult.candidateSha !== prResult.impactContext.prHeadSha, 'synthetic merge candidate must remain distinct from PR head');
   eq(prResult.eligible, true);
 
-  // HEAD/GITHUB_SHA and stale candidate fences.
+  // Delivery/shadow workspace provenance fails closed before identity evaluation.
+  throwsCode(() => validateWorkflowExecutionContext({
+    eventKind: 'pull_request',
+    deliveryHeadSha: candidateSha,
+    githubSha: candidateSha,
+    shadowHeadSha: candidateSha,
+    baseSha,
+    prHeadSha,
+  }), 'S1A_DELIVERY_HEAD_MISMATCH');
+  throwsCode(() => validateWorkflowExecutionContext({
+    eventKind: 'pull_request',
+    deliveryHeadSha: prHeadSha,
+    githubSha: candidateSha,
+    shadowHeadSha: prHeadSha,
+    baseSha,
+    prHeadSha,
+  }), 'S1A_SHADOW_CANDIDATE_MISMATCH');
+  const pushExecution = validateWorkflowExecutionContext({
+    eventKind: 'push',
+    deliveryHeadSha: head,
+    githubSha: head,
+    shadowHeadSha: head,
+  });
+  eq(pushExecution.deliveryHeadSha, head);
+  eq(pushExecution.shadowCandidateSha, head);
+
+  // Shadow-workspace HEAD/GITHUB_SHA and stale candidate fences.
   throwsCode(() => shadowIdentity({
     eventKind: 'push', headSha: '4'.repeat(40), githubSha: '5'.repeat(40), identities: CURRENT,
     generationGate: { candidateSha: '5'.repeat(40), status: 'blocked-portability', identities: CURRENT },
@@ -325,8 +395,10 @@ function runNode(rel) {
     check(!json.includes('signedUrl'), 'shadow result must not contain signed URL material');
   }
 
-  // Research tranche must not already modify permanent Repository Integrity workflow.
+  // Current Repository Integrity delivery invariant is explicit PR-head checkout. This
+  // research tranche must preserve it and must not yet install the permanent shadow step.
   const workflow = git('show', `HEAD:.github/workflows/repository-integrity.yml`);
+  check(workflow.includes("ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"), 'delivery workflow must keep literal PR-head checkout');
   check(!workflow.includes('check_release_shadow_identity.py'), 'research tranche must not install production shadow checker');
   check(!workflow.includes('Shadow release identity'), 'research tranche must not install permanent shadow step');
 
@@ -339,7 +411,7 @@ function runNode(rel) {
   console.log(
     `P1-231 S1-A shadow identity source-spec model: PASS; cases=${cases}; schema=${SCHEMA}; ` +
     `current_shadow=eligible; current_eligible=true; structural_errors=fail-closed; ` +
-    `pr_candidate=github-sha; synthetic_merge_required=true; s0f_owner=true; policy_mutation=false; ` +
+    `delivery_checkout=pr-head; pr_candidate=github-sha; shadow_workspace=synthetic-merge; synthetic_merge_required=true; s0f_owner=true; policy_mutation=false; ` +
     `receipt_mutation=false; product_zip=false; permanent_workflow_unchanged=true; rpf=${CURRENT.rpf}; head=${head}`
   );
 })();
