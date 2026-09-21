@@ -68,15 +68,16 @@ function exactBlob(commit, rel) {
 
 function parseS0EOutput() {
   const line = execFileSync(process.execPath, [S0E_MODEL], { cwd: ROOT, encoding: 'utf8' }).trim().split(/\r?\n/).pop();
-  function pick(name) {
-    const m = line.match(new RegExp(`${name}=(sha256:[0-9a-f]{64})`));
+  function token(name, pattern) {
+    const m = line.match(new RegExp(`(?:^|;\\s*)${name}=${pattern}(?=;|$)`));
     if (!m) fail('IDENTITY_COMPUTATION_FAILED', `${name} missing`);
     return m[1];
   }
+  function pick(name) {
+    return token(name, '(sha256:[0-9a-f]{64})');
+  }
   function text(name) {
-    const m = line.match(new RegExp(`${name}=([^;]+)`));
-    if (!m) fail('IDENTITY_COMPUTATION_FAILED', `${name} missing`);
-    return m[1].trim();
+    return token(name, '([^;]+)').trim();
   }
   return {
     line,
