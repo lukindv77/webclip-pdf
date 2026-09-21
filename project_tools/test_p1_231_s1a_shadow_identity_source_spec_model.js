@@ -156,8 +156,8 @@ function runNode(rel) {
   const fOut = runNode('project_tools/test_p1_231_s0f_candidate_generation_verifier_source_spec_model.js');
   const iOut = runNode('project_tools/test_p1_231_s0i_pr_checker_integration_source_spec_model.js');
   check(/S0-E identity engine source-spec model: PASS; cases=249/.test(eOut), 'S0-E predecessor PASS missing');
-  check(/S0-F candidate-generation verifier source-spec model: PASS; cases=272/.test(fOut), 'S0-F predecessor PASS missing');
-  check(/current_gate=blocked-portability/.test(fOut), 'current S0-F gate must remain blocked-portability');
+  check(/S0-F candidate-generation verifier source-spec model: PASS; cases=273/.test(fOut), 'S0-F predecessor PASS missing');
+  check(/current_gate=blocked-generator-rcf/.test(fOut), 'current S0-F gate must expose generator RCF blocker');
   check(/S0-I PR checker integration source-spec model: PASS; cases=161/.test(iOut), 'S0-I predecessor PASS missing');
   check(/synthetic_merge_identity=required/.test(iOut), 'S0-I synthetic merge requirement missing');
 
@@ -169,13 +169,13 @@ function runNode(rel) {
     headSha: head,
     githubSha: head,
     identities: CURRENT,
-    generationGate: { candidateSha: head, status: 'blocked-portability', identities: CURRENT },
+    generationGate: { candidateSha: head, status: 'blocked-generator-rcf', identities: CURRENT },
   });
   eq(blocked.schema, SCHEMA);
   eq(blocked.candidateSha, head);
-  eq(blocked.generationGate, 'blocked-portability');
+  eq(blocked.generationGate, 'blocked-generator-rcf');
   eq(blocked.eligible, false);
-  eq(blocked.shadowOutcome, 'blocked-portability');
+  eq(blocked.shadowOutcome, 'blocked-generator-rcf');
   eq(blocked.impactContext.kind, 'push-main');
   eq(blocked.policyMutation, false);
   eq(blocked.receiptMutation, false);
@@ -337,7 +337,7 @@ function runNode(rel) {
 
   console.log(
     `P1-231 S1-A shadow identity source-spec model: PASS; cases=${cases}; schema=${SCHEMA}; ` +
-    `current_shadow=blocked-portability; current_eligible=false; structural_errors=fail-closed; ` +
+    `current_shadow=blocked-generator-rcf; current_eligible=false; structural_errors=fail-closed; ` +
     `pr_candidate=github-sha; synthetic_merge_required=true; s0f_owner=true; policy_mutation=false; ` +
     `receipt_mutation=false; product_zip=false; permanent_workflow_unchanged=true; rpf=${CURRENT.rpf}; head=${head}`
   );
