@@ -417,12 +417,12 @@ function makeFixtureProjection(reverse = false, mutate = false) {
   if (reverse) members.reverse();
   return { schema: PACKAGE_SCHEMA, pathProfile: PATH_PROFILE, members };
 }
-function makeShadow(candidateSha, eligible, rpf, bcf = CURRENT_IDS.bcf) {
+function makeShadow(candidateSha, eligible, rpf, bcf = CURRENT_IDS.bcf, state = eligible ? 'eligible' : 'blocked-portability') {
   return {
     schema: SHADOW_SCHEMA,
     candidateSha,
     eligible,
-    state: eligible ? 'eligible' : 'blocked-portability',
+    state,
     identities: { rpf, bcf, qcf: clone(CURRENT_IDS.qcf), rcf: CURRENT_IDS.rcf },
   };
 }
@@ -535,7 +535,7 @@ function evaluateEquivalence({ candidateSha, shadowIdentity, admission, loadProj
     let loads = 0; let buildsA = 0; let buildsB = 0;
     const result = evaluateEquivalence({
       candidateSha: currentHead,
-      shadowIdentity: makeShadow(currentHead, false, CURRENT_IDS.rpf),
+      shadowIdentity: makeShadow(currentHead, false, CURRENT_IDS.rpf, CURRENT_IDS.bcf, 'blocked-generator-rcf'),
       admission: null,
       loadProjection: () => { loads += 1; return makeFixtureProjection(); },
       builderA: (entries) => { buildsA += 1; return buildNodeRawZip(entries); },
