@@ -13,8 +13,20 @@ const { execFileSync } = require('child_process');
 const ROOT = path.resolve(__dirname, '..');
 const SCHEMA = 'webclip-release-contract-inputs/v1';
 const FP_PROFILE = 'webclip-contract-fingerprint-v1';
-const QCF_PREFIX = 'WEBCLIP_QCF_V1';
-const RCF_PREFIX = 'WEBCLIP_RCF_V1';
+const IDENTITY_PROTOCOL = 'WEBCLIP_RELEASE_IDENTITY_V1';
+const TAG_TEXT = 0x01;
+const TAG_BYTES = 0x02;
+const TAG_UINT64 = 0x03;
+const TAG_LIST = 0x04;
+const TAG_RECORD = 0x05;
+const MAX_U32 = 0xffffffff;
+const MAX_U64 = (1n << 64n) - 1n;
+const EXPECTED_CHROME_QCF = 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c';
+const EXPECTED_YANDEX_QCF = 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1';
+const EXPECTED_FULL_RCF = 'sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb';
+const LEGACY_DIRECT_CHROME_QCF = 'sha256:2f0e5a3b13978bfd2aa9fdb3e190a4ca8b0939933130c1597c8277e9b490d73f';
+const LEGACY_DIRECT_YANDEX_QCF = 'sha256:4466159045692aced32f50e92c356985b0e9b1a61adc338858036da5f63d3283';
+const LEGACY_DIRECT_FULL_RCF_11_ROOT = 'sha256:fcb3705e37aafd849610669215fd70c93b407b1912b5b735f1934b5228c205ba';
 const MAX_MANIFEST_BYTES = 512 * 1024;
 const MAX_FULL_INPUTS = 128;
 const MAX_CASES = 128;
@@ -53,9 +65,51 @@ function fail(code, detail) { const e = new Error(detail || code); e.code = code
 function throwsCode(fn, code, msg) { cases += 1; assert.throws(fn, (e) => e && e.code === code, msg || `expected ${code}`); }
 function lowerAscii(s) { return s.replace(/[A-Z]/g, (c) => c.toLowerCase()); }
 function git(...args) { return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim(); }
-function u32(n) { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; }
-function u64(n) { const b = Buffer.alloc(8); b.writeBigUInt64BE(BigInt(n)); return b; }
 function sha256(buf) { return crypto.createHash('sha256').update(buf).digest('hex'); }
+function asciiSort(values) { return [...values].sort((a, b) => Buffer.from(a, 'utf8').compare(Buffer.from(b, 'utf8'))); }
+function u32(n) {
+  if (!Number.isSafeInteger(n) || n < 0 || n > MAX_U32) throw new Error('IDENTITY_U32_RANGE');
+  const b = Buffer.alloc(4); b.writeUInt32BE(n); return b;
+}
+function u64(n) {
+  const value = typeof n === 'bigint' ? n : BigInt(n);
+  if (value < 0n || value > MAX_U64) throw new Error('IDENTITY_U64_RANGE');
+  const b = Buffer.alloc(8); b.writeBigUInt64BE(value); return b;
+}
+function withTag(tag, ...parts) { return Buffer.concat([Buffer.from([tag]), ...parts]); }
+function encodeText(value) {
+  if (typeof value !== 'string') throw new Error('IDENTITY_TEXT_REQUIRED');
+  const bytes = Buffer.from(value, 'utf8');
+  return withTag(TAG_TEXT, u32(bytes.length), bytes);
+}
+function encodeBytes(value) {
+  if (!Buffer.isBuffer(value)) throw new Error('IDENTITY_BYTES_REQUIRED');
+  return withTag(TAG_BYTES, u64(value.length), value);
+}
+function encodeValue(value) {
+  if (typeof value === 'string') return encodeText(value);
+  if (Buffer.isBuffer(value)) return encodeBytes(value);
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0) throw new Error('IDENTITY_UINT64_REQUIRED');
+    return withTag(TAG_UINT64, u64(value));
+  }
+  if (typeof value === 'bigint') return withTag(TAG_UINT64, u64(value));
+  if (Array.isArray(value)) return withTag(TAG_LIST, u32(value.length), ...value.map(encodeValue));
+  if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    const keys = asciiSort(Object.keys(value));
+    return withTag(TAG_RECORD, u32(keys.length), ...keys.flatMap((key) => [encodeText(key), encodeValue(value[key])]));
+  }
+  throw new Error('IDENTITY_TYPE_UNSUPPORTED');
+}
+function preimage(domain, payload) {
+  if (typeof domain !== 'string' || !domain) throw new Error('IDENTITY_DOMAIN_INVALID');
+  return Buffer.concat([encodeText(IDENTITY_PROTOCOL), encodeText(domain), encodeValue(payload)]);
+}
+function fingerprint(domain, payload) { return `sha256:${sha256(preimage(domain, payload))}`; }
+function parseFingerprint(value) {
+  if (typeof value !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(value)) throw new Error('IDENTITY_FINGERPRINT_INVALID');
+  return Buffer.from(value.slice(7), 'hex');
+}
 
 function rejectDuplicateObjectKeys(text) {
   const stack = [];
@@ -201,43 +255,65 @@ function parseStrictManifest(bytes) {
   return validateAuthority(value);
 }
 
-function pushString(h, value) { const b = Buffer.from(value, 'utf8'); h.update(u32(b.length)); h.update(b); }
-function pushList(h, list) { h.update(u32(list.length)); for (const x of list) pushString(h, x); }
+function canonicalProjection(projection) {
+  return {
+    schema: projection.schema,
+    subject: projection.subject,
+    environment_policy: [...projection.environment_policy],
+    cases: projection.cases.map((item) => ({
+      id: item.id,
+      assertions: [...item.assertions],
+    })),
+  };
+}
+
+function qcfPayload(kind, authority) {
+  const projection = authority.projections[kind];
+  if (!projection) fail('RELEASE_CONTRACT_PROJECTION_INVALID');
+  return {
+    release_contract_schema: authority.schema,
+    fingerprint_profile: authority.fingerprint_profile,
+    kind,
+    projection: canonicalProjection(projection),
+  };
+}
 
 function qcf(kind, authority) {
-  const p = authority.projections[kind];
-  if (!p) fail('RELEASE_CONTRACT_PROJECTION_INVALID');
-  const h = crypto.createHash('sha256');
-  pushString(h, `${QCF_PREFIX}:${kind}`);
-  pushString(h, p.schema);
-  pushString(h, p.subject);
-  pushList(h, p.environment_policy);
-  h.update(u32(p.cases.length));
-  for (const c of p.cases) { pushString(h, c.id); pushList(h, c.assertions); }
-  return `sha256:${h.digest('hex')}`;
+  return fingerprint(`QCF_V1:${kind}`, qcfPayload(kind, authority));
 }
 
-function semanticAuthorityDigest(authority) {
-  const h = crypto.createHash('sha256');
-  pushString(h, 'WEBCLIP_RELEASE_CONTRACT_AUTHORITY_SEMANTICS_V1');
-  pushString(h, authority.schema);
-  pushString(h, authority.fingerprint_profile);
-  pushList(h, authority.full_rcf.blob_inputs);
-  for (const kind of [...PROJECTION_NAMES].sort()) pushString(h, qcf(kind, authority));
-  return h.digest('hex');
-}
-
-function rcf(authority, overrides = new Map()) {
-  const h = crypto.createHash('sha256');
-  pushString(h, RCF_PREFIX);
-  pushString(h, semanticAuthorityDigest(authority));
-  for (const rel of authority.full_rcf.blob_inputs) {
-    const data = overrides.has(rel) ? overrides.get(rel) : fs.readFileSync(path.join(ROOT, rel));
-    if (!Buffer.isBuffer(data)) fail('RELEASE_CONTRACT_INPUT_INVALID', rel);
-    pushString(h, rel);
-    h.update(u64(data.length)); h.update(data);
+function gitBlob(ref, rel) {
+  try {
+    return execFileSync('git', ['show', `${ref}:${rel}`], {
+      cwd: ROOT,
+      encoding: null,
+      maxBuffer: 16 * 1024 * 1024,
+    });
+  } catch (_) {
+    fail('RELEASE_CONTRACT_INPUT_INVALID', rel);
   }
-  return `sha256:${h.digest('hex')}`;
+}
+
+function rcfPayload(ref, authority, overrides = new Map()) {
+  const qcfEntries = asciiSort(PROJECTION_NAMES).map((kind) => ({
+    kind,
+    digest: parseFingerprint(qcf(kind, authority)),
+  }));
+  const blob_inputs = authority.full_rcf.blob_inputs.map((rel) => ({
+    path: rel,
+    bytes: overrides.has(rel) ? overrides.get(rel) : gitBlob(ref, rel),
+  }));
+  for (const item of blob_inputs) if (!Buffer.isBuffer(item.bytes)) fail('RELEASE_CONTRACT_INPUT_INVALID', item.path);
+  return {
+    release_contract_schema: authority.schema,
+    fingerprint_profile: authority.fingerprint_profile,
+    qcf: qcfEntries,
+    blob_inputs,
+  };
+}
+
+function rcf(ref, authority, overrides = new Map()) {
+  return fingerprint('RCF_V1', rcfPayload(ref, authority, overrides));
 }
 
 function gitEntry(commit, rel) {
@@ -357,30 +433,36 @@ const AUTHORITY_FIXTURE = {
   // Fingerprint independence matrix.
   const chromeQcf = qcf('unpacked-chrome', authority);
   const yandexQcf = qcf('yandex-e2e', authority);
-  const fullRcf = rcf(authority);
+  const fullRcf = rcf(head, authority);
   check(/^sha256:[0-9a-f]{64}$/.test(chromeQcf), 'Chrome QCF shape');
   check(/^sha256:[0-9a-f]{64}$/.test(yandexQcf), 'Yandex QCF shape');
   check(/^sha256:[0-9a-f]{64}$/.test(fullRcf), 'full RCF shape');
   check(chromeQcf !== yandexQcf, 'physical projections must be independently addressable');
+  eq(chromeQcf, EXPECTED_CHROME_QCF, 'S0-C semantic projection must reproduce current S0-E Chrome QCF');
+  eq(yandexQcf, EXPECTED_YANDEX_QCF, 'S0-C semantic projection must reproduce current S0-E Yandex QCF');
+  eq(fullRcf, EXPECTED_FULL_RCF, 'S0-C semantic authority must reproduce current S0-E full RCF');
+  check(chromeQcf !== LEGACY_DIRECT_CHROME_QCF, 'legacy direct S0-C Chrome framing is non-canonical');
+  check(yandexQcf !== LEGACY_DIRECT_YANDEX_QCF, 'legacy direct S0-C Yandex framing is non-canonical');
+  check(fullRcf !== LEGACY_DIRECT_FULL_RCF_11_ROOT, 'legacy direct S0-C full-RCF framing is non-canonical');
 
   const chromeChangedRaw = clone(AUTHORITY_FIXTURE);
   chromeChangedRaw.projections['unpacked-chrome'].cases[0].assertions.push('synthetic-new-release-assertion');
   const chromeChanged = validateAuthority(chromeChangedRaw);
   check(qcf('unpacked-chrome', chromeChanged) !== chromeQcf, 'Chrome contract change must change Chrome QCF');
   eq(qcf('yandex-e2e', chromeChanged), yandexQcf, 'Chrome contract change must not change Yandex QCF');
-  check(rcf(chromeChanged) !== fullRcf, 'Chrome contract change must change full RCF');
+  check(rcf(head, chromeChanged) !== fullRcf, 'Chrome contract change must change full RCF');
 
   const yandexChangedRaw = clone(AUTHORITY_FIXTURE);
   yandexChangedRaw.projections['yandex-e2e'].cases[1].assertions.push('synthetic-new-provider-assertion');
   const yandexChanged = validateAuthority(yandexChangedRaw);
   eq(qcf('unpacked-chrome', yandexChanged), chromeQcf, 'Yandex contract change must not change Chrome QCF');
   check(qcf('yandex-e2e', yandexChanged) !== yandexQcf, 'Yandex contract change must change Yandex QCF');
-  check(rcf(yandexChanged) !== fullRcf, 'Yandex contract change must change full RCF');
+  check(rcf(head, yandexChanged) !== fullRcf, 'Yandex contract change must change full RCF');
 
   const gateOverride = new Map([[ '.github/workflows/release-gate.yml', Buffer.from('synthetic gate change') ]]);
   eq(qcf('unpacked-chrome', authority), chromeQcf, 'full-only blob override must not change Chrome QCF');
   eq(qcf('yandex-e2e', authority), yandexQcf, 'full-only blob override must not change Yandex QCF');
-  check(rcf(authority, gateOverride) !== fullRcf, 'release gate byte change must change full RCF');
+  check(rcf(head, authority, gateOverride) !== fullRcf, 'release gate byte change must change full RCF');
 
   // Evidence/status/package/attempt values are not QCF/full-RCF direct inputs.
   const statusText = fs.readFileSync(path.join(ROOT, 'project_docs', 'TEST_STATUS.md'));
@@ -388,14 +470,14 @@ const AUTHORITY_FIXTURE = {
   check(sha256(statusText) !== sha256(mutatedStatus), 'status fixture must physically differ');
   eq(qcf('unpacked-chrome', authority), chromeQcf, 'status evidence mutation must not change Chrome QCF');
   eq(qcf('yandex-e2e', authority), yandexQcf, 'status evidence mutation must not change Yandex QCF');
-  eq(rcf(authority), fullRcf, 'status evidence mutation must not change full RCF because TEST_STATUS is excluded');
+  eq(rcf(head, authority), fullRcf, 'status evidence mutation must not change full RCF because TEST_STATUS is excluded');
 
   const receiptMetadataA = JSON.stringify({ browser: '152.0.7977.54', runId: 1, account: 'acct-A', attemptSeq: 1, outcome: 'pass' });
   const receiptMetadataB = JSON.stringify({ browser: '153.0.8000.1', runId: 2, account: 'acct-B', attemptSeq: 2, outcome: 'fail' });
   check(receiptMetadataA !== receiptMetadataB, 'attempt metadata fixture must differ');
   eq(qcf('unpacked-chrome', authority), chromeQcf, 'actual attempt metadata not in Chrome QCF');
   eq(qcf('yandex-e2e', authority), yandexQcf, 'actual attempt metadata not in Yandex QCF');
-  eq(rcf(authority), fullRcf, 'attempt metadata not in full RCF');
+  eq(rcf(head, authority), fullRcf, 'attempt metadata not in full RCF');
 
   // Set-like representation order must not matter.
   const reordered = clone(AUTHORITY_FIXTURE);
@@ -409,7 +491,7 @@ const AUTHORITY_FIXTURE = {
   const reorderedAuthority = validateAuthority(reordered);
   eq(qcf('unpacked-chrome', reorderedAuthority), chromeQcf, 'Chrome QCF representation order invariant');
   eq(qcf('yandex-e2e', reorderedAuthority), yandexQcf, 'Yandex QCF representation order invariant');
-  eq(rcf(reorderedAuthority), fullRcf, 'full RCF representation order invariant');
+  eq(rcf(head, reorderedAuthority), fullRcf, 'full RCF representation order invariant');
 
   // Exact candidate Git objects for full-RCF blob roots.
   const head = git('rev-parse', 'HEAD');
@@ -448,5 +530,5 @@ const AUTHORITY_FIXTURE = {
     check(!projectionText.includes(forbiddenToken), `${forbiddenToken} must not be QCF semantic field`);
   }
 
-  console.log(`P1-231 S0-C QA contract authority source-spec model: PASS; cases=${cases}; full_inputs=${authority.full_rcf.blob_inputs.length}; chrome_cases=${authority.projections['unpacked-chrome'].cases.length}; yandex_cases=${authority.projections['yandex-e2e'].cases.length}; chrome_qcf=${chromeQcf}; yandex_qcf=${yandexQcf}; full_rcf=${fullRcf}; head=${head}`);
+  console.log(`P1-231 S0-C QA contract authority source-spec model: PASS; cases=${cases}; full_inputs=${authority.full_rcf.blob_inputs.length}; chrome_cases=${authority.projections['unpacked-chrome'].cases.length}; yandex_cases=${authority.projections['yandex-e2e'].cases.length}; identity_owner=s0e; protocol=${IDENTITY_PROTOCOL}; chrome_qcf=${chromeQcf}; yandex_qcf=${yandexQcf}; full_rcf=${fullRcf}; legacy_direct_framing=retired; head=${head}`);
 })();
