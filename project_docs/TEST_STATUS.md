@@ -277,10 +277,12 @@ Durable rationale/evidence is `RESEARCH_P1_164_ADMISSION_CONTRACT_WITNESS_2026-0
 
 The repository now has a canonical passive package declaration in `release_package_manifest_v1.json` and a strict exact-Git resolver in `project_tools/release_package_authority.js`.
 
-The authority admits exactly the current 33 package files under `webclip-extension-package/v1` / `portable-ascii-v1`, rejects ambiguous/non-portable JSON/path forms, accepts only exact 40-hex commit IDs, and reads package bytes only from exact Git blob objects with mode `100644`. It does not scan the working tree for membership or bytes.
+The authority admits the **current 34-file package** under `webclip-extension-package/v1` / `portable-ascii-v1`. Exact-head CI #914 exposed that the older S0-A/S0-E 33-file research census had become stale after `application-generation.js` entered the runtime injection path. The current S0-A model and production manifest now include that file; the authority manifest itself remains known non-package control source.
 
-`project_tools/test_release_package_authority.js` covers migration equality against both current S0-A and S0-E file censuses, representation-invariant topology digest, dirty-working-tree independence, missing/non-commit/executable/symlink/tree members, byte bounds, strict JSON/path failures, and requires current S0-E RPF to remain `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a`.
+`project_tools/test_release_package_authority.js` covers strict JSON/path admission, representation-invariant topology digest, exact Git blob/mode/OID resolution, dirty-working-tree independence, missing/non-commit/executable/symlink/tree members, and byte bounds. It also records the bounded downstream drift: historical S0-E `PACKAGE_FILES` still omits exactly `application-generation.js`.
+
+Therefore the recorded S0-E RPF `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` remains reproducible but is **not a complete current-package RPF**. The correct 34-file RPF is intentionally UNSETTLED until the next S0-E migration tranche; no replacement fingerprint is fabricated in S0-A.
 
 This is a passive control only. No release gate, builder, ZIP, tag/deploy, browser QA or Yandex QA is activated. Durable rationale/evidence is `RESEARCH_P1_231_S0A_PACKAGE_AUTHORITY_IMPLEMENTATION_2026-09-21_EVIDENCE.md`.
 
-P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Chrome/Yandex QCF, full RCF and BCF remain unchanged.
+P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Chrome/Yandex QCF, full RCF and BCF recorded projections are not advanced by this tranche and do not repair the incomplete legacy RPF.
