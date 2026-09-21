@@ -281,10 +281,24 @@ The authority admits the **current 34-file package** under `webclip-extension-pa
 
 `project_tools/test_release_package_authority.js` covers strict JSON/path admission, representation-invariant topology digest, exact Git blob/mode/OID resolution, dirty-working-tree independence, missing/non-commit/executable/symlink/tree members, and byte bounds. It also records the bounded downstream drift: historical S0-E `PACKAGE_FILES` still omits exactly `application-generation.js`.
 
-Therefore the recorded S0-E RPF `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` remains reproducible but is **not a complete current-package RPF**. The correct 34-file RPF is intentionally UNSETTLED until the next S0-E migration tranche; no replacement fingerprint is fabricated in S0-A.
+At the S0-A-only checkpoint the recorded S0-E RPF `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` remained reproducible but incomplete for the 34-file package. That bounded drift is now resolved by the later S0-E migration section below; `b65c…` remains only the exact 33-file legacy control.
 
-Exact-head CI #921 later exposed one more stale downstream assertion: S0-H still expected S0-A package count 33, causing S1-C/S1-D predecessor failures. S0-H now distinguishes current S0-A `package_files=34` from legacy S0-E `package_files=33`, keeps the one-member drift explicit, and remains `blocked-before-load`; no S0-E/RPF migration is performed here.
+Exact-head CI #921 also exposed one stale downstream S0-H assertion that still expected S0-A package count 33. S0-H was first made explicit about the 34-vs-33 drift and kept `blocked-before-load`; the later S0-E migration below removes that drift without changing the portability blocker.
 
 This is a passive control only. No release gate, builder, ZIP, tag/deploy, browser QA or Yandex QA is activated. Durable rationale/evidence is `RESEARCH_P1_231_S0A_PACKAGE_AUTHORITY_IMPLEMENTATION_2026-09-21_EVIDENCE.md`.
 
 P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Chrome/Yandex QCF, full RCF and BCF recorded projections are not advanced by this tranche and do not repair the incomplete legacy RPF.
+
+## P1-231 S0-E canonical 34-file RPF migration
+
+S0-E now consumes the canonical S0-A package topology instead of owning a second hard-coded package list. The current package remains `webclip-extension-package/v1` / `portable-ascii-v1`, with 34 exact Git blob members and topology SHA-256 `7804ab54cff64ae40c16f348c747381b3e13af7f8d36a22da1a48ad839d9dc69`.
+
+The historical 33-file subset is retained only as a negative/control identity. It omits exactly `application-generation.js` and must still reproduce legacy RPF `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a`.
+
+The corrected **current 34-file RPF** is `sha256:feab25126c9d686062f8ed0da8c9d7ad39f468ebc819342bb34fbd2c47e0e843`. It was independently recomputed from exact GitHub package blobs with the existing typed `WEBCLIP_RELEASE_IDENTITY_V1 / RPF_V1` framing and is pinned only in S0-E; exact-head CI must reproduce it through the existing Node/Python cross-language check.
+
+S0-F now consumes the same S0-A membership authority and the current RPF only from S0-E predecessor output. S0-G/S0-H likewise consume the new current RPF dynamically while keeping the legacy 33-file digest explicit. S0-H real product build remains `blocked-before-load` because the existing S0-F source-generation portability blocker is unchanged.
+
+Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`; Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`; full RCF remains `sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce`; BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`. Their projections/contracts did not change.
+
+Durable rationale/evidence is `RESEARCH_P1_231_S0E_RPF_AUTHORITY_MIGRATION_2026-09-21_EVIDENCE.md`. P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. No product ZIP, physical QA advance, release-gate activation, tag, deployment or GitHub Release is created by this migration.
