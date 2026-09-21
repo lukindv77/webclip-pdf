@@ -152,11 +152,11 @@ function gitEntry(commit,rel){
   check(!PACKAGE_FILES.has('public_suffix_list.dat'),'source data must not be package member');
   check(!PACKAGE_FILES.has('project_tools/build_public_suffix_js.py'),'generator must not be package member');
 
-  // Current generator portability defect is an expected baseline fact, not normalized away.
+  // The generator now emits exact UTF-8 bytes, but prior Windows failure remains the current physical baseline until re-proved.
   const generator=fs.readFileSync(path.join(ROOT,'project_tools','build_public_suffix_js.py'),'utf8');
-  check(generator.includes("OUT.write_text(code, encoding='utf-8')"),'current generator write_text contract drift');
-  check(!generator.includes("newline='\\n'"),'current generator unexpectedly fixed newline policy');
-  check(!generator.includes('OUT.write_bytes('),'current generator unexpectedly switched to binary output');
+  check(!generator.includes("OUT.write_text(code, encoding='utf-8')"),'text-mode generator must remain retired');
+  check(!generator.includes("newline='\\n'"),'binary output must not depend on text newline policy');
+  check(generator.includes("OUT.write_bytes(code.encode('utf-8'))"),'current generator exact-byte contract');
 
   // Behavioral PSL test is complementary, not source-generation proof.
   const pslTest=fs.readFileSync(path.join(ROOT,'project_tools','test_public_suffix.js'),'utf8');
