@@ -154,9 +154,10 @@ function gitEntry(commit,rel){
 
   // The generator now emits exact UTF-8 bytes, but prior Windows failure remains the current physical baseline until re-proved.
   const generator=fs.readFileSync(path.join(ROOT,'project_tools','build_public_suffix_js.py'),'utf8');
+  const portabilityProof=fs.readFileSync(path.join(ROOT,'project_docs','RESEARCH_P1_231_S0B_PSL_PORTABILITY_REPROOF_2026-09-21_EVIDENCE.md'),'utf8');
   check(!generator.includes("OUT.write_text(code, encoding='utf-8')"),'text-mode generator must remain retired');
   check(!generator.includes("newline='\\n'"),'binary output must not depend on text newline policy');
-  check(generator.includes("OUT.write_bytes(code.encode('utf-8'))"),'current generator exact-byte contract');
+  check(generator.includes("OUT.write_bytes(code.encode('utf-8'))") && portabilityProof.includes('PHYSICAL PORTABILITY PASS') && portabilityProof.includes('35566109810') && portabilityProof.includes('72aea4d8a8505ad90d9070bca539dff7d49391f034d0dd41f76d64867efc0b26'),'current generator exact-byte portability proof');
 
   // Behavioral PSL test is complementary, not source-generation proof.
   const pslTest=fs.readFileSync(path.join(ROOT,'project_tools','test_public_suffix.js'),'utf8');
