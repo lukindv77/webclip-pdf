@@ -22,6 +22,7 @@ const s0fDoc = fs.readFileSync(path.join(ROOT, 'project_docs/RESEARCH_P1_231_S0F
 const s0gDoc = fs.readFileSync(path.join(ROOT, 'project_docs/RESEARCH_P1_231_S0G_EVIDENCE_SETTLEMENT_ENGINE_SOURCE_SPEC_2026-09-10_EVIDENCE.md'), 'utf8');
 const s0iDoc = fs.readFileSync(path.join(ROOT, 'project_docs/RESEARCH_P1_231_S0I_PR_CHECKER_INTEGRATION_SOURCE_SPEC_2026-09-10_EVIDENCE.md'), 'utf8');
 const reconcileDoc = fs.readFileSync(path.join(ROOT, 'project_docs/RESEARCH_POST_P1_231_PRODUCTION_ENTRY_RECONCILIATION_2026-09-10_EVIDENCE.md'), 'utf8');
+const portabilityProof = fs.readFileSync(path.join(ROOT, 'project_docs/RESEARCH_P1_231_S0B_PSL_PORTABILITY_REPROOF_2026-09-21_EVIDENCE.md'), 'utf8');
 
 const CURRENT_FULL_RCF_INPUTS = Object.freeze([
   '.github/workflows/release-gate.yml',
@@ -114,9 +115,9 @@ test('current generator relation is documented', () => {
 test('current generator has retired text-mode write', () => assert(!generatorSource.includes("OUT.write_text(code, encoding='utf-8')")));
 test('current generator uses exact binary UTF-8 write', () => assert(generatorSource.includes("OUT.write_bytes(code.encode('utf-8'))")));
 test('current generator binary write needs no text newline override', () => assert(!generatorSource.includes("newline='\\n'")));
-test('S0-B records Windows portability false', () => assert(s0bDoc.includes('generated_matches_git_blob = false')));
-test('S0-F keeps portability gate blocked', () => assert(s0fDoc.includes('candidateGenerationAdmission = BLOCKED')));
-test('S0-F names portability reason', () => assert(s0fDoc.includes('SOURCE_GENERATION_PORTABILITY_UNPROVEN')));
+test('historical S0-B spec records original Windows portability failure', () => assert(s0bDoc.includes('generated_matches_git_blob = false')));
+test('historical S0-F spec records the former portability blocker', () => assert(s0fDoc.includes('candidateGenerationAdmission = BLOCKED') && s0fDoc.includes('SOURCE_GENERATION_PORTABILITY_UNPROVEN')));
+test('current physical proof closes the exact Windows portability defect', () => assert(portabilityProof.includes('PHYSICAL PORTABILITY PASS') && portabilityProof.includes('windows-2025') && portabilityProof.includes('72aea4d8a8505ad90d9070bca539dff7d49391f034d0dd41f76d64867efc0b26')));
 test('S0-F forbids verifier normalization', () => assert(s0fDoc.includes('No newline, Unicode, JSON, whitespace or text-mode normalization is allowed after execution.')));
 
 test('current S0-C model has ten full-RCF inputs', () => assert.strictEqual(CURRENT_FULL_RCF_INPUTS.length, 10));
@@ -249,4 +250,4 @@ test('tranche does not authorize S2', () => assert.strictEqual(tranche.s2Authori
 test('tranche does not build product ZIP', () => assert.strictEqual(tranche.productZip, false));
 test('tranche does not authorize release', () => assert.strictEqual(tranche.releaseAuthorized, false));
 
-console.log(`P1-231 generation portability/binding refinement model: PASS; cases=${cases}; current_full_rcf_inputs=${CURRENT_FULL_RCF_INPUTS.length}; proposed_full_rcf_inputs=${proposedFullInputs.length}; current_portability=blocked; generator_rcf_binding=required; s2_authorized=false`);
+console.log(`P1-231 generation portability/binding refinement model: PASS; cases=${cases}; current_full_rcf_inputs=${CURRENT_FULL_RCF_INPUTS.length}; proposed_full_rcf_inputs=${proposedFullInputs.length}; current_portability=pass; generator_rcf_binding=blocked; s2_authorized=false`);

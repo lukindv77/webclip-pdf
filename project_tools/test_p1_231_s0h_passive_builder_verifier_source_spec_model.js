@@ -458,7 +458,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
   test('S0-E current RPF valid', () => assert(validDigest(CURRENT_IDS.rpf)));
   test('S0-E current RPF differs from incomplete legacy control', () => assert.notStrictEqual(CURRENT_IDS.rpf, s0e.kv.legacy_rpf));
   test('S0-E exact BCF retained', () => assert.strictEqual(CURRENT_IDS.bcf, 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'));
-  test('S0-F remains blocked portability', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-portability'));
+  test('S0-F remains blocked on generation governance', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-generation'));
   test('S0-F RPF agrees with S0-E', () => assert.strictEqual(s0f.kv.rpf, CURRENT_IDS.rpf));
   test('S0-F retains no CGF axis', () => assert.strictEqual(s0f.kv.no_cgf, 'true'));
   test('current head is exact SHA', () => assert(validSha(currentHead)));

@@ -358,3 +358,23 @@ Durable evidence: `RESEARCH_P1_231_S0B_PSL_PORTABILITY_REPROOF_2026-09-21_EVIDEN
 
 P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. No product build/ZIP, version bump, release gate, tag, deployment, GitHub Release, Chrome QA or Yandex mutation/qualification is performed.
 
+## P1-231 portability / generator-RCF authority reconciliation
+
+The corrected PSL generation roots are now physically portable across the required Linux/Windows pair under CPython `3.12.10`. Current S0-B therefore records `current_psl_windows_portable=true`; the former false marker is historical only.
+
+This does **not** make the real current candidate S0-F admitted. The existing generation-portability binding refinement separately requires every executable S0-B generator to be covered by current full-RCF authority, while the current ten-root S0-C full-RCF bootstrap still omits `project_tools/build_public_suffix_js.py`.
+
+Current generation state is therefore:
+
+```text
+portability=pass
+current_gate=blocked-generation
+current_blocker=SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND
+```
+
+S0-G remains blocked from real settlement, S0-H remains blocked before product load/build, and S1 current shadow eligibility remains false. No package/runtime bytes or recorded RPF/QCF/RCF/BCF values are advanced by this reconciliation.
+
+Durable rationale/evidence: `RESEARCH_P1_231_PORTABILITY_AUTHORITY_RECONCILIATION_2026-09-21_EVIDENCE.md`; integration PR: `#310`.
+
+P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. The next bounded P1-231 tranche is explicit generator coverage in full-RCF authority plus the resulting full-RCF/downstream governance reconciliation, not a release/build action.
+
