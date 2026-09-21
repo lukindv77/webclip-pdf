@@ -321,3 +321,8 @@ failures were stale predecessor case-count markers only: S1-A expected historica
 201/224 instead of 249/272, and S1-B expected historical S0-G count 128 instead of 132; S1-C/D
 failed transitively through S1-A. Those markers are now synchronized without changing S1 semantics,
 identity values, blocked-portability truth or release authorization.
+### P1-231 package-authority migrated completeness marker
+
+The package-authority witness PASS summary now reports `s0e_current_package_complete=true`, matching
+its migrated 34-file assertions and current `feab…` RPF. This is a truth-marker correction only;
+runtime/package bytes, QCF/RCF/BCF and release authorization are unchanged.
