@@ -136,14 +136,14 @@ function shadowSettlement({ candidateSha, shadowIdentity, namespaceValidator, se
   });
 }
 
-function shadowFixture(candidateSha, eligible, outcome = eligible ? 'eligible' : 'blocked-portability') {
+function shadowFixture(candidateSha, eligible, outcome = eligible ? 'eligible' : 'blocked-generation') {
   return {
     schema: SHADOW_IDENTITY_SCHEMA,
     candidateSha,
     eventKind: 'push',
     identityProtocol: 'WEBCLIP_RELEASE_IDENTITY_V1',
     ...CURRENT,
-    generationGate: eligible ? 'pass' : 'blocked-portability',
+    generationGate: eligible ? 'pass' : 'blocked-generation',
     eligible,
     shadowOutcome: outcome,
     impactContext: { kind: 'push-main', candidateSha },
@@ -185,7 +185,7 @@ function settlementFixture(candidateSha, slots = slotFixture()) {
   check(/S0-G evidence-settlement engine source-spec model: PASS; cases=132/.test(gOut), 'S0-G predecessor PASS missing');
   check(/current_real_settlement=blocked/.test(gOut), 'S0-G current blocked truth missing');
   check(/S1-A shadow identity source-spec model: PASS; cases=75/.test(aOut), 'S1-A predecessor PASS missing');
-  check(/current_shadow=blocked-portability/.test(aOut), 'S1-A current blocked-portability truth missing');
+  check(/current_shadow=blocked-generation/.test(aOut), 'S1-A current blocked-generation truth missing');
   check(/current_eligible=false/.test(aOut), 'S1-A current ineligible truth missing');
 
   // Current real state: namespace check executes, semantic settlement must not.
@@ -204,7 +204,7 @@ function settlementFixture(candidateSha, slots = slotFixture()) {
   eq(current.namespaceValid, true);
   eq(current.settlementEvaluated, false);
   eq(current.shadowOutcome, 'candidate-ineligible');
-  eq(current.blockerReason, 'blocked-portability');
+  eq(current.blockerReason, 'blocked-generation');
   eq(current.allRequiredSlotsPass, false);
   for (const k of REQUIRED_SLOTS) eq(current.slots[k].state, 'not-evaluated', `${k} must not be mislabeled missing`);
 
