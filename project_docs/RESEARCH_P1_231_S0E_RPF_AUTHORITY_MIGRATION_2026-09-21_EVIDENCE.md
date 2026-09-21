@@ -231,3 +231,11 @@ The only remaining failures were S1-A/B/C/D. Root cause was not identity math:
 The bounded correction updates only those predecessor case-count markers to the current migrated values
 (249 / 272 / 132). S1-A/B/C/D semantics, schemas, current blocked-portability state and release
 authorization remain unchanged.
+### Package-authority PASS marker reconciliation
+
+Final review after #929 found one non-asserting but machine-readable stale output marker:
+`test_release_package_authority.js` already validates the migrated current 34-file S0-E identity,
+but its PASS line still reported `s0e_current_package_complete=false`.
+
+The marker is corrected to `true`. This changes no package membership, RPF bytes, release policy,
+or authority semantics; it only makes the emitted PASS summary agree with the assertions.
