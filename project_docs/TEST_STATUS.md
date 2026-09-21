@@ -283,6 +283,8 @@ The authority admits the **current 34-file package** under `webclip-extension-pa
 
 Therefore the recorded S0-E RPF `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` remains reproducible but is **not a complete current-package RPF**. The correct 34-file RPF is intentionally UNSETTLED until the next S0-E migration tranche; no replacement fingerprint is fabricated in S0-A.
 
+Exact-head CI #921 later exposed one more stale downstream assertion: S0-H still expected S0-A package count 33, causing S1-C/S1-D predecessor failures. S0-H now distinguishes current S0-A `package_files=34` from legacy S0-E `package_files=33`, keeps the one-member drift explicit, and remains `blocked-before-load`; no S0-E/RPF migration is performed here.
+
 This is a passive control only. No release gate, builder, ZIP, tag/deploy, browser QA or Yandex QA is activated. Durable rationale/evidence is `RESEARCH_P1_231_S0A_PACKAGE_AUTHORITY_IMPLEMENTATION_2026-09-21_EVIDENCE.md`.
 
 P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Chrome/Yandex QCF, full RCF and BCF recorded projections are not advanced by this tranche and do not repair the incomplete legacy RPF.
