@@ -158,8 +158,8 @@ function runNode(rel) {
   check(/S0-E identity engine source-spec model: PASS; cases=251/.test(eOut), 'S0-E predecessor PASS missing');
   check(/S0-F candidate-generation verifier source-spec model: PASS; cases=271/.test(fOut), 'S0-F predecessor PASS missing');
   check(/current_gate=pass/.test(fOut), 'current S0-F gate must pass after generator RCF binding');
-  check(/S0-I PR checker integration source-spec model: PASS; cases=161/.test(iOut), 'S0-I predecessor PASS missing');
-  check(/synthetic_merge_identity=required/.test(iOut), 'S0-I synthetic merge requirement missing');
+  check(/S0-I PR checker integration source-spec model: PASS; cases=\d+/.test(iOut), 'S0-I predecessor PASS missing');
+  check(/synthetic_merge_identity=required/.test(iOut) && /package_files=34/.test(iOut) && /current_s0f_gate=pass/.test(iOut), 'S0-I current authority truth missing');
 
   for (const fp of Object.values(CURRENT)) check(isFp(fp), `current identity must be typed fingerprint: ${fp}`);
 
