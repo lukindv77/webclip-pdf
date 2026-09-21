@@ -48,13 +48,13 @@ The pre-binding full RCF
 
 is historical for the ten-root authority once this tranche is accepted.
 
-The independently reproduced eleven-root full RCF is:
+The final eleven-root full RCF for this reconciled authority state is:
 
-`sha256:0806e70942b17db36b400b5a4fda9f3e68b9695157e4d861f4bb3c431927836c`
+`sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb`
 
-Repository Integrity #949 on exact intermediate head `c8aaaee78236f5b88dbacc9672f9ebbda7437086` independently executed the updated S0-C/S0-E identity models and exposed this value through the downstream S0-F fail-closed mismatch. S0-E itself passed with `full_inputs=11`, package count 34, the unchanged RPF/QCF/BCF axes above, and this exact full RCF.
+Repository Integrity #949 on exact intermediate head `c8aaaee78236f5b88dbacc9672f9ebbda7437086` first proved that adding the generator changes the identity axis; at that intermediate authority state it reproduced `sha256:0806e70942b17db36b400b5a4fda9f3e68b9695157e4d861f4bb3c431927836c`. Later synchronization of the full-RCF-root `project_docs/RESEARCH_REGISTRY.md` correctly changed the fingerprint again. Repository Integrity #959 on exact head `e3911d8e002e187080bc71eb6cc55c6038b097a1` independently reproduced the resulting final authority bytes as `sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb`.
 
-The old `sha256:df6709...` value is therefore retained only as the historical ten-root control; it is not current full-RCF authority after this tranche.
+The old `sha256:df6709...` value is retained only as the historical ten-root control, and `sha256:0806e709...` is retained only as an intermediate eleven-root discovery value. Neither is current full-RCF authority after this tranche.
 
 ## Downstream contract
 
@@ -75,9 +75,9 @@ Repository Integrity #948 on intermediate exact head
 `04ebd4c400145f076754c85e432217f9e63719ba`
 stopped at the PR change-contract layer because the owner-impact branch did not yet contain durable P1-231 evidence. No deterministic identity result from that skipped test phase is treated as evidence.
 
-Repository Integrity #949 established the new full-RCF value and showed exactly seven downstream stale assumptions. After S0-F was reconciled, Repository Integrity #950 on exact head `71b6c367d43ad63db2a0c85d7ed017840277283a` showed S0-F PASS with `cases=271`, `current_gate=pass`, `generator_rcf_binding=bound`, and the exact new RCF above; the remaining deterministic failures were reduced to the six downstream S0-G/S0-H/S1 models whose current-state semantics depended on the old generation blocker.
+Repository Integrity #949 established the first eleven-root discovery value and showed exactly seven downstream stale assumptions. After S0-F was reconciled, Repository Integrity #950 on exact head `71b6c367d43ad63db2a0c85d7ed017840277283a` showed S0-F PASS with `cases=271`, `current_gate=pass`, and `generator_rcf_binding=bound`; the remaining deterministic failures were reduced to six downstream S0-G/S0-H/S1 current-state assumptions.
 
-Those six models are reconciled in this tranche to distinguish generation admission from missing evidence and from absent build/release authorization. Merge acceptance still requires a fresh exact-head Repository Integrity SUCCESS and the normal post-merge SUCCESS on literal new `main`; intermediate failing runs are discovery evidence only.
+Those six models were then reconciled to distinguish generation admission from missing evidence and from absent build/release authorization. Repository Integrity #959 subsequently caught the intentional full-RCF change caused by synchronizing `RESEARCH_REGISTRY.md`, a full-RCF root, and independently produced the final `cb34076d...` fingerprint above. The fingerprint expectations are now bound to that exact final authority state. Merge acceptance still requires a fresh exact-head Repository Integrity SUCCESS and the normal post-merge SUCCESS on literal new `main`; intermediate failing runs are discovery evidence only.
 
 ## Release boundary
 
