@@ -1,6 +1,6 @@
 # P1-231 S0-C passive production release-contract authority — 2026-09-21
 
-Status: **PASSIVE PRODUCTION AUTHORITY IMPLEMENTED / IDENTITY-ENGINE INTEGRATION PENDING**
+Status: **PASSIVE PRODUCTION INPUT AUTHORITY IMPLEMENTED / IDENTITY-ENGINE INTEGRATION PENDING**
 
 Owner:
 
@@ -75,15 +75,22 @@ For an exact candidate commit, production resolution requires every full-RCF roo
 
 The deterministic witness temporarily dirties `project_docs/USER_REQUIREMENTS.md` and proves the candidate full RCF is unchanged, then restores the file.
 
-## Current fingerprint reproduction
+## Identity-framing reconciliation
 
-The production authority uses the existing typed framing:
+Exact-head Repository Integrity #994 exposed an important authority split before merge.
 
-- `WEBCLIP_QCF_V1`
-- `WEBCLIP_RCF_V1`
-- `WEBCLIP_RELEASE_CONTRACT_AUTHORITY_SEMANTICS_V1`
+The historical S0-C research source-spec contains an earlier local framing (`WEBCLIP_QCF_V1` / `WEBCLIP_RCF_V1`) and, for the same current projection semantics, produces research-only values such as Chrome `2f0e5a...`. The later S0-E identity-engine source-spec is the current owner of the typed `WEBCLIP_RELEASE_IDENTITY_V1` framing and produces the recorded current identities.
 
-Against the exact current candidate semantics it must reproduce:
+Promoting the old S0-C hash functions would therefore create a second fingerprint authority. This tranche explicitly does **not** do that.
+
+Production S0-C now owns only:
+
+- canonical projection semantics;
+- canonical full-RCF root paths;
+- exact candidate Git-object resolution;
+- identity-engine input payloads.
+
+The deterministic production witness independently applies the current S0-E typed framing to those S0-C inputs and requires:
 
 - Chrome QCF:
   `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`
@@ -92,13 +99,13 @@ Against the exact current candidate semantics it must reproduce:
 - full RCF:
   `sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb`
 
-Chrome semantic changes affect Chrome QCF and full RCF but not Yandex QCF.
-Yandex semantic changes affect Yandex QCF and full RCF but not Chrome QCF.
-Representation order of set-like fields does not affect fingerprints.
+That test is a compatibility witness, not a second production hash owner. Production S0-E remains responsible for the eventual typed fingerprint engine.
+
+Chrome semantic changes alter the typed Chrome QCF while leaving typed Yandex QCF unchanged; Yandex semantic changes behave symmetrically. Representation order of set-like fields remains normalized by S0-C before S0-E consumes the payload.
 
 ## Separation from receipts and release decisions
 
-The production S0-C authority does not interpret:
+The production S0-C input authority does not interpret:
 
 - attempt sequence;
 - receipt id;
