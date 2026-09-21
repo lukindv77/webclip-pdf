@@ -155,9 +155,15 @@ function gitEntry(commit,rel){
   // The generator now emits exact UTF-8 bytes, but prior Windows failure remains the current physical baseline until re-proved.
   const generator=fs.readFileSync(path.join(ROOT,'project_tools','build_public_suffix_js.py'),'utf8');
   const portabilityProof=fs.readFileSync(path.join(ROOT,'project_docs','RESEARCH_P1_231_S0B_PSL_PORTABILITY_REPROOF_2026-09-21_EVIDENCE.md'),'utf8');
+  const runtimeProfileProof=fs.readFileSync(path.join(ROOT,'project_docs','RESEARCH_P1_231_PSL_RUNTIME_PROFILE_RECONCILIATION_2026-09-21_EVIDENCE.md'),'utf8');
+  const portabilityWitness=fs.readFileSync(path.join(ROOT,'project_tools','check_p1_231_psl_portability.py'),'utf8');
   check(!generator.includes("OUT.write_text(code, encoding='utf-8')"),'text-mode generator must remain retired');
   check(!generator.includes("newline='\\n'"),'binary output must not depend on text newline policy');
   check(generator.includes("OUT.write_bytes(code.encode('utf-8'))") && portabilityProof.includes('PHYSICAL PORTABILITY PASS') && portabilityProof.includes('35566109810') && portabilityProof.includes('72aea4d8a8505ad90d9070bca539dff7d49391f034d0dd41f76d64867efc0b26'),'current generator exact-byte portability proof');
+  check(runtimeProfileProof.includes('CURRENT CI COMPATIBILITY PROVEN') && runtimeProfileProof.includes('35577180521'),'current generic-CI compatibility evidence');
+  check(runtimeProfileProof.includes('CPython 3.12.14') && runtimeProfileProof.includes('CPython 3.12.10'),'Linux compatibility and Windows authority profiles must remain distinct');
+  check(runtimeProfileProof.includes('cpython-3.12.10-v1'),'canonical cross-platform profile must remain explicit');
+  check(portabilityWitness.includes('--expected-python') && !portabilityWitness.includes('EXPECTED_PYTHON = (3, 12, 14)'),'physical witness must require an explicit exact Python profile');
 
   // Behavioral PSL test is complementary, not source-generation proof.
   const pslTest=fs.readFileSync(path.join(ROOT,'project_tools','test_public_suffix.js'),'utf8');
@@ -168,5 +174,5 @@ function gitEntry(commit,rel){
 
   const digest=topologyDigest(auth);
   check(/^[0-9a-f]{64}$/.test(digest),'topology digest shape');
-  console.log(`P1-231 S0-B source-generation authority source-spec model: PASS; cases=${cases}; relations=${auth.relations.length}; topology_sha256=${digest}; current_psl_windows_portable=true; head=${head}`);
+  console.log(`P1-231 S0-B source-generation authority source-spec model: PASS; cases=${cases}; relations=${auth.relations.length}; topology_sha256=${digest}; current_psl_windows_portable=true; cross_platform_profile=${PROFILE}; linux_ci_compatibility=cpython-3.12.14; head=${head}`);
 })();
