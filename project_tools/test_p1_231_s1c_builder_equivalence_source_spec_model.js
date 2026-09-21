@@ -522,12 +522,12 @@ function evaluateEquivalence({ candidateSha, shadowIdentity, admission, loadProj
   test('S0-D golden SHA retained', () => assert.strictEqual(s0d.kv.fixture_zip_sha256, GOLDEN_ZIP_SHA256));
   test('S0-D raw local/central remains required', () => assert.strictEqual(s0d.kv.raw_local_central, 'true'));
   test('S0-E BCF exact', () => assert.strictEqual(CURRENT_IDS.bcf, 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'));
-  test('S0-F remains blocked portability', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-portability'));
+  test('S0-F exposes generator RCF blocker', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-generator-rcf'));
   test('S0-H remains blocked before product load', () => assert.strictEqual(s0h.kv.current_product_build, 'blocked-before-load'));
   test('S0-H product ZIP remains false', () => assert.strictEqual(s0h.kv.product_zip, 'false'));
   test('S0-H manual Node path matches golden SHA', () => assert.strictEqual(s0h.kv.fixture_zip_sha256, GOLDEN_ZIP_SHA256));
   test('S1-A current identity remains ineligible', () => assert.strictEqual(s1a.kv.current_eligible, 'false'));
-  test('S1-A current state remains blocked portability', () => assert.strictEqual(s1a.kv.current_shadow, 'blocked-portability'));
+  test('S1-A current state exposes generator RCF blocker', () => assert.strictEqual(s1a.kv.current_shadow, 'blocked-generator-rcf'));
   test('current head exact SHA', () => assert(validSha(currentHead)));
 
   // Current real candidate must short-circuit before any product loading/building.
