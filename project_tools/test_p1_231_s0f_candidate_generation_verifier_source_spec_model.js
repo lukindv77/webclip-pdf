@@ -403,7 +403,7 @@ function diagnosticPackageHash(overrides = new Map()) {
 
   // A docs-only commit could share RPF, but exact candidate SHA must remain distinct pipeline authority.
   const sameRpfOtherSha = 'f'.repeat(40);
-  eq(admitted.identities.rpf, EXPECTED_IDENTITIES.rpf, 'RPF fixture stable');
+  eq(admitted.identities.rpf, identities.rpf, 'RPF fixture follows S0-E current identity');
   check(admitted.candidateSha !== sameRpfOtherSha, 'candidate SHA axis stays explicit even for hypothetical same RPF');
   throwsCode(() => consumeExact(admitted, sameRpfOtherSha), 'CANDIDATE_RESULT_SHA_MISMATCH');
 
