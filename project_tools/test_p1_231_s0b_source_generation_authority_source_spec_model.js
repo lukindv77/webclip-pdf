@@ -152,7 +152,7 @@ function gitEntry(commit,rel){
   check(!PACKAGE_FILES.has('public_suffix_list.dat'),'source data must not be package member');
   check(!PACKAGE_FILES.has('project_tools/build_public_suffix_js.py'),'generator must not be package member');
 
-  // The generator now emits exact UTF-8 bytes, but prior Windows failure remains the current physical baseline until re-proved.
+  // The exact corrected generator/input/output roots were physically re-proved on Linux and Windows in PR #309.
   const generator=fs.readFileSync(path.join(ROOT,'project_tools','build_public_suffix_js.py'),'utf8');
   check(!generator.includes("OUT.write_text(code, encoding='utf-8')"),'text-mode generator must remain retired');
   check(!generator.includes("newline='\\n'"),'binary output must not depend on text newline policy');
@@ -167,5 +167,5 @@ function gitEntry(commit,rel){
 
   const digest=topologyDigest(auth);
   check(/^[0-9a-f]{64}$/.test(digest),'topology digest shape');
-  console.log(`P1-231 S0-B source-generation authority source-spec model: PASS; cases=${cases}; relations=${auth.relations.length}; topology_sha256=${digest}; current_psl_windows_portable=false; head=${head}`);
+  console.log(`P1-231 S0-B source-generation authority source-spec model: PASS; cases=${cases}; relations=${auth.relations.length}; topology_sha256=${digest}; current_psl_windows_portable=true; head=${head}`);
 })();
