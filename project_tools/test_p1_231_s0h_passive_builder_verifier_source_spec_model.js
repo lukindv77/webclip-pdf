@@ -458,13 +458,24 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
   test('S0-E current RPF valid', () => assert(validDigest(CURRENT_IDS.rpf)));
   test('S0-E current RPF differs from incomplete legacy control', () => assert.notStrictEqual(CURRENT_IDS.rpf, s0e.kv.legacy_rpf));
   test('S0-E exact BCF retained', () => assert.strictEqual(CURRENT_IDS.bcf, 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'));
-  test('S0-F remains blocked on generation governance', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-generation'));
+  test('S0-F generation gate passes after generator RCF binding', () => assert.strictEqual(s0f.kv.current_gate, 'pass'));
   test('S0-F RPF agrees with S0-E', () => assert.strictEqual(s0f.kv.rpf, CURRENT_IDS.rpf));
   test('S0-F retains no CGF axis', () => assert.strictEqual(s0f.kv.no_cgf, 'true'));
   test('current head is exact SHA', () => assert(validSha(currentHead)));
 
-  // Current real candidate MUST be blocked before package load/build.
-  test('current blocked candidate stops before package loader and builder', () => {
+  // Current real candidate is generation-admitted, but this research tranche is not
+  // authorized to load/package product bytes. Admission is validated without invoking
+  // the product loader or builder.
+  test('current admitted candidate does not imply product build authorization', () => {
+    let loads = 0;
+    let builds = 0;
+    const admission = makeAdmission(currentHead, CURRENT_IDS.rpf, CURRENT_IDS.bcf, 'pass');
+    assert.strictEqual(validateAdmission(currentHead, admission), admission);
+    assert.strictEqual(loads, 0);
+    assert.strictEqual(builds, 0);
+  });
+
+  test('blocked admission negative control stops before package loader and builder', () => {
     let loads = 0;
     let builds = 0;
     const admission = makeAdmission(currentHead, CURRENT_IDS.rpf, CURRENT_IDS.bcf, 'blocked');
@@ -732,7 +743,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
     assert.notStrictEqual(digest(changed), GOLDEN_ZIP_SHA256);
   });
 
-  // No product ZIP path exists in this model; product build remained blocked before loading.
+  // No product ZIP path exists in this model; current product build is intentionally not executed.
   const forbiddenProductPaths = ['WebClip.zip', 'webclip.zip', 'dist/WebClip.zip', 'release/WebClip.zip'];
   test('model has no official product archive output path', () => {
     for (const p of forbiddenProductPaths) assert(!Object.values(positive.result).includes(p));
@@ -740,7 +751,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
 
   console.log(
     `P1-231 S0-H passive-builder verifier source-spec model: PASS; cases=${cases}; ` +
-    `current_gate=${s0f.kv.current_gate}; current_product_build=blocked-before-load; product_zip=false; ` +
+    `current_gate=${s0f.kv.current_gate}; current_product_build=not-executed; product_zip=false; ` +
     `s0a_package_files=${s0a.kv.package_files}; s0e_package_files=${s0e.kv.package_files}; legacy_s0e_package_files=${s0e.kv.legacy_package_files}; current_package_rpf_complete=${s0e.kv.current_package_complete}; ` +
     `synthetic_identity_adapter=true; fixture_members=4; fixture_zip_bytes=${raw.length}; ` +
     `fixture_zip_sha256=${digest(raw)}; rpf=${CURRENT_IDS.rpf}; bcf=${CURRENT_IDS.bcf}; head=${currentHead}`
