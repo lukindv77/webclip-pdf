@@ -14,10 +14,10 @@ const S0G_RESULT_SCHEMA = 'webclip-evidence-settlement-result/v1';
 const NAMESPACE_SCHEMA = 'webclip-evidence-namespace-validation/v1';
 const REQUIRED_SLOTS = Object.freeze(['unpacked-chrome', 'yandex-e2e', 'blocker-review', 'release-decision']);
 const CURRENT = Object.freeze({
-  rpf: 'sha256:1a9551f839b70410c834ba0f040b9c285de58965771a927cef2d95700c86e792',
+  rpf: 'sha256:feab25126c9d686062f8ed0da8c9d7ad39f468ebc819342bb34fbd2c47e0e843',
   chromeQcf: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandexQcf: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
-  rcf: 'sha256:e6119c800c60513405541bfae552f424985e13fa109e28390ae1bac7ba075f13',
+  rcf: 'sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb',
   bcf: 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff',
 });
 
@@ -183,38 +183,45 @@ function settlementFixture(candidateSha, slots = slotFixture()) {
   const gOut = runNode('project_tools/test_p1_231_s0g_evidence_settlement_engine_source_spec_model.js');
   const aOut = runNode('project_tools/test_p1_231_s1a_shadow_identity_source_spec_model.js');
   check(/S0-G evidence-settlement engine source-spec model: PASS; cases=132/.test(gOut), 'S0-G predecessor PASS missing');
-  check(/current_real_settlement=blocked/.test(gOut), 'S0-G current blocked truth missing');
+  check(/current_real_settlement=evidence-missing/.test(gOut), 'S0-G current evidence-missing truth missing');
   check(/S1-A shadow identity source-spec model: PASS; cases=75/.test(aOut), 'S1-A predecessor PASS missing');
-  check(/current_shadow=blocked-generation/.test(aOut), 'S1-A current blocked-generation truth missing');
-  check(/current_eligible=false/.test(aOut), 'S1-A current ineligible truth missing');
+  check(/current_shadow=eligible/.test(aOut), 'S1-A current eligible truth missing');
+  check(/current_eligible=true/.test(aOut), 'S1-A current eligible truth missing');
 
-  // Current real state: namespace check executes, semantic settlement must not.
+  // Current real state: generation is eligible, namespace validation executes,
+  // and absence of current receipts settles as blocked/missing evidence.
   let nsCalls = 0;
   let settlementCalls = 0;
+  const currentSlots = slotFixture({
+    'unpacked-chrome': 'missing',
+    'yandex-e2e': 'missing',
+    'blocker-review': 'missing',
+    'release-decision': 'missing',
+  });
   const current = shadowSettlement({
     candidateSha: head,
-    shadowIdentity: shadowFixture(head, false),
+    shadowIdentity: shadowFixture(head, true),
     namespaceValidator: () => { nsCalls += 1; return { schema: NAMESPACE_SCHEMA, valid: true, receiptCount: 0 }; },
-    settlementProvider: () => { settlementCalls += 1; return settlementFixture(head); },
+    settlementProvider: () => { settlementCalls += 1; return settlementFixture(head, currentSlots); },
   });
-  eq(nsCalls, 1, 'namespace validator must execute before candidate short circuit');
-  eq(settlementCalls, 0, 'semantic settlement must not execute for ineligible candidate');
+  eq(nsCalls, 1, 'namespace validator must execute before semantic settlement');
+  eq(settlementCalls, 1, 'semantic settlement must execute for eligible current candidate');
   eq(current.schema, SHADOW_SETTLEMENT_SCHEMA);
-  eq(current.identityEligible, false);
+  eq(current.identityEligible, true);
   eq(current.namespaceValid, true);
-  eq(current.settlementEvaluated, false);
-  eq(current.shadowOutcome, 'candidate-ineligible');
-  eq(current.blockerReason, 'blocked-generation');
+  eq(current.settlementEvaluated, true);
+  eq(current.shadowOutcome, 'settled-blocked');
+  eq(current.blockerReason, null);
   eq(current.allRequiredSlotsPass, false);
-  for (const k of REQUIRED_SLOTS) eq(current.slots[k].state, 'not-evaluated', `${k} must not be mislabeled missing`);
+  for (const k of REQUIRED_SLOTS) eq(current.slots[k].state, 'missing', `${k} must remain evidence-missing`);
 
-  // Corrupt canonical receipt control plane is structural failure even while candidate is ineligible.
+  // Corrupt canonical receipt control plane is structural failure before semantic settlement.
   settlementCalls = 0;
   throwsCode(() => shadowSettlement({
     candidateSha: head,
-    shadowIdentity: shadowFixture(head, false),
+    shadowIdentity: shadowFixture(head, true),
     namespaceValidator: () => ({ schema: NAMESPACE_SCHEMA, valid: false, receiptCount: 0 }),
-    settlementProvider: () => { settlementCalls += 1; return settlementFixture(head); },
+    settlementProvider: () => { settlementCalls += 1; return settlementFixture(head, currentSlots); },
   }), 'S1B_RECEIPT_NAMESPACE_INVALID');
   eq(settlementCalls, 0, 'corrupt namespace must fail before semantic settlement');
   throwsCode(() => shadowSettlement({
@@ -324,8 +331,8 @@ function settlementFixture(candidateSha, slots = slotFixture()) {
 
   console.log(
     `P1-231 S1-B shadow settlement source-spec model: PASS; cases=${cases}; schema=${SHADOW_SETTLEMENT_SCHEMA}; ` +
-    `current_outcome=candidate-ineligible; current_identity_eligible=false; namespace_before_short_circuit=true; ` +
-    `semantic_settlement_current=false; structural_errors=fail-closed; synthetic_all_pass=true; ` +
+    `current_outcome=settled-blocked; current_identity_eligible=true; namespace_before_short_circuit=true; ` +
+    `semantic_settlement_current=true; structural_errors=fail-closed; synthetic_all_pass=true; ` +
     `policy_mutation=false; receipt_mutation=false; product_zip=false; permanent_workflow_unchanged=true; head=${head}`
   );
 })();

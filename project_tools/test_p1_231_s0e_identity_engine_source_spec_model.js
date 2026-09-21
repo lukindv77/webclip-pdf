@@ -42,6 +42,7 @@ const FULL_RCF_ROOTS = Object.freeze([
   'project_docs/TEST_PLAN.md',
   'project_docs/USER_REQUIREMENTS.md',
   'project_docs/WEBCLIP_PDF_FIDELITY_CONTRACT.md',
+  'project_tools/build_public_suffix_js.py',
   'project_tools/check_pr_change_contract.py',
   'project_tools/check_release_readiness.py',
 ]);
@@ -276,7 +277,7 @@ function crossLanguage(vectors, fingerprints) {
   check(PACKAGE_FILES.includes('application-generation.js'),'current package must include application-generation.js');
   eq(LEGACY_PACKAGE_FILES.length,33,'legacy S0-E package control must remain exactly 33 files');
   check(!LEGACY_PACKAGE_FILES.includes('application-generation.js'),'legacy control must omit only application-generation.js');
-  eq(FULL_RCF_ROOTS.length,10,'S0-C full-root count drift');
+  eq(FULL_RCF_ROOTS.length,11,'S0-C full-root count drift');
 
   // Primitive framing and ambiguity controls.
   check(!encodeText('abc').equals(encodeBytes(Buffer.from('abc'))),'TEXT/BYTES must be type-separated');

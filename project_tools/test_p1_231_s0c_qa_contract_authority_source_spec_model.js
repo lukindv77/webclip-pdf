@@ -263,6 +263,7 @@ const AUTHORITY_FIXTURE = {
       'project_docs/TEST_PLAN.md',
       'project_docs/USER_REQUIREMENTS.md',
       'project_docs/WEBCLIP_PDF_FIDELITY_CONTRACT.md',
+      'project_tools/build_public_suffix_js.py',
       'project_tools/check_pr_change_contract.py',
       'project_tools/check_release_readiness.py',
     ],
@@ -303,7 +304,7 @@ const AUTHORITY_FIXTURE = {
 (function main() {
   const raw = Buffer.from(JSON.stringify(AUTHORITY_FIXTURE), 'utf8');
   const authority = parseStrictManifest(raw);
-  eq(authority.full_rcf.blob_inputs.length, 10, 'full RCF input count');
+  eq(authority.full_rcf.blob_inputs.length, 11, 'full RCF input count');
   eq(authority.projections['unpacked-chrome'].cases.length, 4, 'Chrome case-family count');
   eq(authority.projections['yandex-e2e'].cases.length, 4, 'Yandex case-family count');
 

@@ -155,13 +155,13 @@ function expectBlocked(r, state) { assert.strictEqual(r.state, 'shadow-observed'
   test('baseline HEAD is SHA', () => assert(sha(head)));
   test('DAG includes four S1 nodes', () => assert.strictEqual(dag.kv.s1, '4'));
   for (const [p, b] of Object.entries(ANCHORS)) test(`rollback anchor ${p}`, () => assert.strictEqual(git('rev-parse', `HEAD:${p}`), b));
-  test('S0-F remains blocked on generation governance', () => assert.strictEqual(s0f.kv.current_gate, 'blocked-generation'));
-  test('S0-G current real settlement blocked', () => assert.strictEqual(s0g.kv.current_real_settlement, 'blocked'));
+  test('S0-F generation gate passes', () => assert.strictEqual(s0f.kv.current_gate, 'pass'));
+  test('S0-G current real settlement is evidence-missing', () => assert.strictEqual(s0g.kv.current_real_settlement, 'evidence-missing'));
   test('S0-I synthetic merge required', () => assert.strictEqual(s0i.kv.synthetic_merge_identity, 'required'));
-  test('S1-A current eligible false', () => assert.strictEqual(s1a.kv.current_eligible, 'false'));
-  test('S1-B candidate ineligible', () => assert.strictEqual(s1b.kv.current_outcome, 'candidate-ineligible'));
+  test('S1-A current eligible true', () => assert.strictEqual(s1a.kv.current_eligible, 'true'));
+  test('S1-B current settlement is blocked by missing evidence', () => assert.strictEqual(s1b.kv.current_outcome, 'settled-blocked'));
   test('S1-B namespace first', () => assert.strictEqual(s1b.kv.namespace_before_short_circuit, 'true'));
-  test('S1-C candidate ineligible', () => assert.strictEqual(s1c.kv.current_state, 'candidate-ineligible'));
+  test('S1-C current equivalence remains not evaluated', () => assert.strictEqual(s1c.kv.current_state, 'not-evaluated'));
   test('S1-C product load false', () => assert.strictEqual(s1c.kv.current_product_load, 'false'));
   for (const d of Object.values(CURRENT)) test('current identity digest valid', () => assert(validDig(d)));
 
@@ -184,9 +184,20 @@ function expectBlocked(r, state) { assert.strictEqual(r.state, 'shadow-observed'
 
   const base = identity(); const ancestor = (src) => src === SHA.source;
   const green = tuple(SHA.candidate, base, allPass(SHA.source, base), ancestor);
-  const current = rehearse({ candidate: head, t: ineligible(head, { rpf: CURRENT.rpf, chrome: CURRENT.chrome, yandex: CURRENT.yandex, rcf: CURRENT.rcf, bcf: CURRENT.bcf }) });
-  test('current candidate-ineligible is valid shadow observation', () => assert.strictEqual(current.state, 'shadow-observed'));
-  test('current ineligible is not evidence-missing', () => assert.strictEqual(current.shadow.settlement, 'candidate-ineligible'));
+  const currentId = { rpf: CURRENT.rpf, chrome: CURRENT.chrome, yandex: CURRENT.yandex, rcf: CURRENT.rcf, bcf: CURRENT.bcf };
+  const currentTuple = {
+    identity: shadowId(head, currentId),
+    settlement: settle({ candidate: head, id: currentId, receipts: [], ancestry: (src, candidate) => src === candidate }),
+    equivalence: equiv(head, currentId, {
+      state: 'not-evaluated',
+      equivalenceEvaluated: false,
+      rawBytesEqual: null,
+    }),
+  };
+  const current = rehearse({ candidate: head, t: currentTuple });
+  test('current generation-eligible candidate is valid shadow observation', () => assert.strictEqual(current.state, 'shadow-observed'));
+  test('current settlement is evidence-missing', () => assert.strictEqual(current.shadow.settlement, 'evidence-missing'));
+  test('current builder equivalence remains not evaluated', () => assert.strictEqual(current.shadow.builderEquivalence, 'not-evaluated'));
   test('current product ZIP false', () => assert.strictEqual(current.productZip, false));
 
   test('M01 evidence-only identity axes unchanged', () => { const d = clone(base); assert.deepStrictEqual(d, base); });
@@ -283,7 +294,7 @@ function expectBlocked(r, state) { assert.strictEqual(r.state, 'shadow-observed'
   console.log(
     `P1-231 S1-D migration rehearsal source-spec model: PASS; cases=${cases}; schema=${SCHEMA}; ` +
     `matrix=M01-M22; cross_cases=C01-C14; current_state=shadow-observed; ` +
-    `current_identity=candidate-ineligible; current_settlement=candidate-ineligible; current_equivalence=candidate-ineligible; ` +
+    `current_identity=eligible; current_settlement=evidence-missing; current_equivalence=not-evaluated; ` +
     `namespace_before_short_circuit=true; candidate_ineligible_not_missing=true; latest_attempt_ordering=true; append_only=true; ` +
     `main_movement=fail-closed; workflow_binding=fail-closed; metadata_drift=fail-closed; rollback=v1-only; ` +
     `v1_authority=unchanged; v1_blockers=5; repository_integrity_exact_head=true; s2_authorized=false; release_authorized=false; product_zip=false; ` +

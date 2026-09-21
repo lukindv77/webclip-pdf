@@ -32,7 +32,7 @@ const CURRENT_RELATION = Object.freeze({
 const EXPECTED_CONTRACT_IDENTITIES = Object.freeze({
   chromeQcf: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandexQcf: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
-  rcf: 'sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce',
+  rcf: 'sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb',
   bcf: 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff',
 });
 
@@ -292,22 +292,16 @@ function diagnosticPackageHash(overrides = new Map()) {
   eq(identities.rcf, EXPECTED_CONTRACT_IDENTITIES.rcf, 'current full RCF');
   eq(identities.bcf, EXPECTED_CONTRACT_IDENTITIES.bcf, 'current BCF');
 
-  // No downstream identities are emitted on current blocked state.
-  let blockedResult = null;
-  try {
-    blockedResult = admitCandidate({
-      candidateSha: head,
-      portabilityReady: true,
-      generatorRcfBound: false,
-      regeneratedOutputs: new Map([['public-suffix.js', run.generated]]),
-      identities,
-    });
-  } catch (e) {
-    eq(e.code, 'SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND', 'current gate blocker');
-  }
-  eq(blockedResult, null, 'blocked candidate must publish no admitted tuple');
+  // Generator/full-RCF binding is current authority. Keep the old fail-closed path as a regression control.
+  throwsCode(() => admitCandidate({
+    candidateSha: head,
+    portabilityReady: true,
+    generatorRcfBound: false,
+    regeneratedOutputs: new Map([['public-suffix.js', run.generated]]),
+    identities,
+  }), 'SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND', 'missing generator RCF binding must fail closed');
 
-  // Synthetic future state: once the remaining generator/full-RCF binding is closed, exact matching output admits identities.
+  // Current exact candidate is admitted after portable regeneration plus current generator/full-RCF binding.
   const admitted = admitCandidate({
     candidateSha: head,
     portabilityReady: true,
@@ -427,5 +421,5 @@ function diagnosticPackageHash(overrides = new Map()) {
     'S0-C must be revisited as part of the implementation package',
   ]) check(s0fSpec.includes(marker), `S0-F source-spec marker missing: ${marker}`);
 
-  console.log(`P1-231 S0-F candidate-generation verifier source-spec model: PASS; cases=${cases}; package_files=${PACKAGE_FILES.length}; relations=1; linux_regen=match; current_gate=blocked-generation; current_blocker=SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND; portability=pass; admitted_after_binding=${admitted.generationState}; rpf=${admitted.identities.rpf}; no_cgf=true; head=${head}`);
+  console.log(`P1-231 S0-F candidate-generation verifier source-spec model: PASS; cases=${cases}; package_files=${PACKAGE_FILES.length}; relations=1; linux_regen=match; current_gate=pass; current_blocker=none; portability=pass; generator_rcf_binding=bound; admitted_after_binding=${admitted.generationState}; rpf=${admitted.identities.rpf}; rcf=${admitted.identities.rcf}; no_cgf=true; head=${head}`);
 })();
