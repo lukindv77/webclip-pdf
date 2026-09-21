@@ -261,3 +261,15 @@ The observation-session schemas also advance to v2. The immutable subject now in
 Deterministic coverage remains in `test_p1_164_private_observer_export.js`, `test_p1_164_live_observer.js`, and `test_p1_164_observation_session.js`. The new anchor is explicitly only a snapshot binding: it does not authenticate the private export, prove WebClip command admission, prove the running extension source SHA, close P1-164, or advance Yandex QCF.
 
 Durable rationale/evidence is `RESEARCH_P1_164_RECEIPT_OBSERVATION_BINDING_2026-09-20_EVIDENCE.md`. P1-164 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Runtime RPF, Chrome/Yandex QCF, full RCF and BCF remain unchanged.
+
+## P1-164 destructive admission source-contract witness
+
+`project_tools/yandex_p1_164_admission_contract.js` now derives a machine-readable source-only contract for the existing two-admission `publication-revoke-trash` protocol on one exact clean tracked checkout. It verifies durable admission before each destructive Yandex command, one command site per effect, exact HTTP methods, immutable move target, identity/Journal authority rechecks, and observation-only recovery after admitted-unknown states.
+
+The same tool can bind that source contract to a sanitized P1-164 observer v2 output only when `testedSourceSha` matches exactly. The binding maps effective remote phase to the admissions that source requires to be durable, but permanently reports `commandExecutionProven=false`, `providerMutationCausalityProven=false`, `runningExtensionSourceProven=false`, and `qualificationPass=false`.
+
+Deterministic coverage is `project_tools/test_p1_164_admission_contract.js`, including negative admission-order/method/durable-write/recovery-replay fixtures and source-SHA/contract-tamper binding checks. The witness itself has no network client, OAuth credential access or provider mutation authority.
+
+External comparison research confirms the distinction between WebClip's at-most-once/no-replay protocol and APIs that provide server-recognized idempotency tokens/keys (AWS/Stripe). No equivalent client-token contract is claimed for the current WebClip Yandex unpublish/move path.
+
+Durable rationale/evidence is `RESEARCH_P1_164_ADMISSION_CONTRACT_WITNESS_2026-09-21_EVIDENCE.md`. P1-164 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Runtime RPF, Chrome/Yandex QCF, full RCF and BCF remain unchanged.
