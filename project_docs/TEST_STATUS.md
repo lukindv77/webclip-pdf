@@ -374,7 +374,7 @@ current_blocker=SOURCE_GENERATION_GENERATOR_NOT_RCF_BOUND
 
 S0-G remains blocked from real settlement, S0-H remains blocked before product load/build, and S1 current shadow eligibility remains false. No package/runtime bytes or recorded RPF/QCF/RCF/BCF values are advanced by this reconciliation.
 
-Durable rationale/evidence: `RESEARCH_P1_231_PORTABILITY_AUTHORITY_RECONCILIATION_2026-09-21_EVIDENCE.md`.
+Durable rationale/evidence: `RESEARCH_P1_231_PORTABILITY_AUTHORITY_RECONCILIATION_2026-09-21_EVIDENCE.md`; integration PR: `#310`.
 
 P1-231 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. The next bounded P1-231 tranche is explicit generator coverage in full-RCF authority plus the resulting full-RCF/downstream governance reconciliation, not a release/build action.
 
