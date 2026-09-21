@@ -42,6 +42,7 @@ const FULL_RCF_ROOTS = Object.freeze([
   'project_docs/TEST_PLAN.md',
   'project_docs/USER_REQUIREMENTS.md',
   'project_docs/WEBCLIP_PDF_FIDELITY_CONTRACT.md',
+  'project_tools/build_public_suffix_js.py',
   'project_tools/check_pr_change_contract.py',
   'project_tools/check_release_readiness.py',
 ]);
@@ -276,7 +277,7 @@ function crossLanguage(vectors, fingerprints) {
   check(PACKAGE_FILES.includes('application-generation.js'),'current package must include application-generation.js');
   eq(LEGACY_PACKAGE_FILES.length,33,'legacy S0-E package control must remain exactly 33 files');
   check(!LEGACY_PACKAGE_FILES.includes('application-generation.js'),'legacy control must omit only application-generation.js');
-  eq(FULL_RCF_ROOTS.length,10,'S0-C full-root count drift');
+  eq(FULL_RCF_ROOTS.length,11,'S0-C full-root count drift');
 
   // Primitive framing and ambiguity controls.
   check(!encodeText('abc').equals(encodeBytes(Buffer.from('abc'))),'TEXT/BYTES must be type-separated');
@@ -360,6 +361,7 @@ function crossLanguage(vectors, fingerprints) {
   check(rcfFullOnly!==currentRcf,'full-only blob change must change RCF');
   eq(qcf('unpacked-chrome'),chromeQcf,'full-only blob change cannot alter Chrome QCF');
   eq(qcf('yandex-e2e'),yandexQcf,'full-only blob change cannot alter Yandex QCF');
+  check(FULL_RCF_ROOTS.includes('project_tools/build_public_suffix_js.py'),'executable generation authority must be RCF-bound');
   check(!FULL_RCF_ROOTS.includes('project_docs/TEST_STATUS.md'),'mutable TEST_STATUS must be excluded from full RCF');
   check(!FULL_RCF_ROOTS.includes('project_docs/RELEASE_READINESS.md'),'mutable readiness must be excluded from full RCF');
   eq(rcf(head),currentRcf,'mutable evidence/status is not an implicit RCF input');
