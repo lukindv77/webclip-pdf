@@ -23,7 +23,7 @@ EXPECTED_TOOL_VERSIONS = {
 GENERIC_PYTHON_VERSION = "3.12.14"
 S0B_PYTHON_VERSION = "3.12.10"
 NODE_VERSION = "22.23.2"
-PYTHON_VERSION = re.compile(r"python-version:\\s*['\"]([^'\"]+)['\"]")
+PYTHON_VERSION = re.compile(r"python-version:\s*['\"]([^'\"]+)['\"]")
 
 REPOSITORY_INTEGRITY_WORKFLOW = ".github/workflows/repository-integrity.yml"
 EXACT_CHECKOUT_MARKERS = (
