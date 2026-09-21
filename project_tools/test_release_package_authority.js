@@ -76,8 +76,8 @@ const manifestBytes = fs.readFileSync(authority.MANIFEST_PATH);
 const topology = authority.parseManifestBytes(manifestBytes);
 eq(topology.schema, 'webclip-extension-package/v1', 'canonical package schema');
 eq(topology.path_profile, 'portable-ascii-v1', 'canonical path profile');
-eq(topology.files.length, 33, 'canonical package count');
-eq(new Set(topology.files).size, 33, 'canonical package has no duplicates');
+eq(topology.files.length, 34, 'canonical package count');
+eq(new Set(topology.files).size, 34, 'canonical package has no duplicates');
 eq(topology.files.filter((item) => item === 'manifest.json').length, 1, 'manifest.json admitted exactly once');
 ok(!topology.files.includes('release_package_manifest_v1.json'), 'package authority file does not package itself');
 ok(!topology.files.some((item) => item.startsWith('project_tools/')), 'project tools stay outside package');
@@ -86,10 +86,14 @@ ok(!topology.files.some((item) => item.startsWith('.github/')), 'GitHub control 
 
 const s0aSource = fs.readFileSync(path.join(ROOT, 'project_tools', 'test_p1_231_s0a_package_authority_source_spec_model.js'), 'utf8');
 const s0eSource = fs.readFileSync(path.join(ROOT, 'project_tools', 'test_p1_231_s0e_identity_engine_source_spec_model.js'), 'utf8');
-const legacyS0a = extractFrozenArray(s0aSource, 'CURRENT_FILES');
+const currentS0a = extractFrozenArray(s0aSource, 'CURRENT_FILES');
 const legacyS0e = extractFrozenArray(s0eSource, 'PACKAGE_FILES');
-deep([...topology.files], authority.asciiSort(legacyS0a), 'production manifest migration equals S0-A current census');
-deep([...topology.files], authority.asciiSort(legacyS0e), 'production manifest migration equals S0-E RPF census');
+deep([...topology.files], authority.asciiSort(currentS0a), 'production manifest migration equals current S0-A census');
+const s0eMissing = topology.files.filter((item) => !legacyS0e.includes(item));
+const s0eExtra = legacyS0e.filter((item) => !topology.files.includes(item));
+deep(s0eMissing, ['application-generation.js'], 'legacy S0-E package census is missing only current application-generation runtime');
+deep(s0eExtra, [], 'legacy S0-E package census has no extra package member');
+ok(!legacyS0e.includes('application-generation.js'), 'legacy S0-E RPF input is explicitly incomplete for current package');
 
 const digest = authority.topologyDigest(topology);
 ok(/^[0-9a-f]{64}$/.test(digest), 'topology digest is SHA-256 hex');
@@ -166,10 +170,10 @@ const head = git(ROOT, ['rev-parse', 'HEAD']).trim();
 ok(/^[0-9a-f]{40}$/.test(head), 'test HEAD is exact commit');
 const resolved = authority.resolvePackage(head, topology);
 eq(resolved.candidate_sha, head, 'resolver returns exact candidate SHA');
-eq(resolved.canonical_files.length, 33, 'resolver returns exact package membership');
+eq(resolved.canonical_files.length, 34, 'resolver returns exact package membership');
 eq(resolved.topology_digest, digest, 'resolver returns semantic topology digest');
 ok(resolved.aggregate_bytes > 0 && resolved.aggregate_bytes < authority.MAX_TOTAL_BYTES, 'current aggregate bytes are bounded');
-eq(resolved.members.length, 33, 'resolver returns one member record per package file');
+eq(resolved.members.length, 34, 'resolver returns one member record per package file');
 for (const member of resolved.members) {
   ok(/^[0-9a-f]{40}$/.test(member.git_oid), member.path + ' has exact Git blob OID');
   ok(Number.isSafeInteger(member.byte_length) && member.byte_length >= 0, member.path + ' has bounded byte length');
@@ -183,12 +187,14 @@ const rpfRun = execFileSync(
   { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
 );
 const rpfMatch = /\brpf=(sha256:[0-9a-f]{64})\b/.exec(rpfRun);
-ok(Boolean(rpfMatch), 'S0-E output exposes current RPF');
+ok(Boolean(rpfMatch), 'legacy S0-E output exposes its recorded RPF');
 eq(
   rpfMatch[1],
   'sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a',
-  'passive S0-A migration leaves current RPF unchanged'
+  'legacy S0-E RPF value remains reproducible before its dedicated migration'
 );
+ok(s0eMissing.length === 1, 'S0-A exposes a bounded downstream S0-E package-identity drift');
+ok(rpfMatch[1] !== '', 'S0-E drift is recorded without fabricating a replacement RPF in S0-A');
 
 const tmp = initRepo();
 try {
@@ -289,5 +295,5 @@ ok(source.includes("mode !== '100644'"), 'authority enforces regular non-executa
 ok(!source.includes('release-gate'), 'passive authority does not activate release gate');
 
 console.log(
-  `P1-231 S0-A package authority: PASS; checks=${checks}; package_files=${topology.files.length}; topology_sha256=${digest}; candidate=${head}; runtime_changed=false; release_gate_activated=false`
+  `P1-231 S0-A package authority: PASS; checks=${checks}; package_files=${topology.files.length}; topology_sha256=${digest}; candidate=${head}; runtime_changed=false; s0e_current_package_complete=false; release_gate_activated=false`
 );
