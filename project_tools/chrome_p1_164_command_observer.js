@@ -74,6 +74,7 @@ function parseDestructiveRequest(event) {
   if (url.pathname !== unpublishPath && url.pathname !== movePath) return null;
 
   const method = String(request.method || '').toUpperCase();
+  if (method === 'OPTIONS') return null;
   const requestId = String(params.requestId || '');
   const sequenceTime = Number(params.timestamp);
   if (!Number.isFinite(sequenceTime) || sequenceTime < 0) {
