@@ -22,7 +22,8 @@ function changedPaths(base, head = 'HEAD') {
   return text ? text.split(/\r?\n/).filter(Boolean) : [];
 }
 function isResearchControlPath(path) {
-  return path.startsWith('project_docs/')
+  return path === 'GITHUB_REPOSITORY_STATE.md'
+    || path.startsWith('project_docs/')
     || path.startsWith('project_tools/')
     || path.startsWith('.github/workflows/')
     || path === 'release_builder_contract_v1.json'

@@ -1,6 +1,6 @@
 # Восстановление контекста проекта WebClip PDF
 
-Актуальный проект находится в приватном GitHub-репозитории `lukindv77/webclip-pdf`, canonical branch `main`.
+Актуальный проект находится в публичном GitHub-репозитории `lukindv77/webclip-pdf`, canonical branch `main`; `main` защищён active repository ruleset, а write/integration authority определяется fresh GitHub administrative state.
 
 **Fresh GitHub `main` — единственный source of truth для текущего дерева.** Exact SHA из старого чата/handoff — только checkpoint для сверки.
 

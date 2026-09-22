@@ -47,7 +47,9 @@ Normal development, research, docs and maintenance changes follow:
 
 `fresh main -> work branch -> bounded change -> PR -> exact-head Repository Integrity -> fresh TOCTOU -> expected-head squash merge -> exact new main -> post-merge Repository Integrity`.
 
-`main` intentionally remains `protected=false`; the repository remains private. This is an accepted administrative posture and does not authorize direct normal writes to `main`.
+`lukindv77/webclip-pdf` is public, while write authority remains restricted by GitHub repository permissions. `main` is protected by an active repository ruleset targeting the default branch. The current rules require PR integration, strict required status checks, resolved review conversations and linear history, and block branch deletion and non-fast-forward updates; administrator bypass is limited to pull requests.
+
+Repository visibility/protection/ruleset settings can change outside Git, so their current state is verified fresh through GitHub before write/integration operations instead of being inferred from this document alone.
 
 Normal integration is squash-only; force-updating `main` is not part of normal work.
 
