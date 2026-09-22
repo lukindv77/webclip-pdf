@@ -317,8 +317,8 @@ def main() -> None:
         raise AssertionError(f"repository-integrity-s1a-no-python: expected profile failure, got {s1a_errors}")
 
     no_s1a_verifier = GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB + GOOD_S1A_JOB.replace(
-        "          node project_tools/release_shadow_identity.js \\\n",
-        "          node --version \\\n",
+        "node project_tools/release_shadow_identity.js",
+        "node --version",
     )
     s1a_errors = module.evaluate_repository_integrity_s1a_lane(
         {module.REPOSITORY_INTEGRITY_WORKFLOW: no_s1a_verifier}
