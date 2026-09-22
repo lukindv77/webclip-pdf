@@ -55,6 +55,10 @@ def evaluate(workflows: Mapping[str, str]) -> list[str]:
         if MUTATING_GH_API.search(text):
             errors.append(f"{name}: mutating 'gh api --method ...' command is forbidden in permanent workflows")
 
+        if "\\${{" in text:
+            errors.append(f"{name}: escaped GitHub expression syntax '\\${{{{' is forbidden")
+
+
         for use in USES.findall(text):
             if use.startswith("./"):
                 continue
