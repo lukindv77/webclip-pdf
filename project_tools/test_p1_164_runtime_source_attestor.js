@@ -56,7 +56,7 @@ for (const item of contract.loadedWorkerScripts) {
 
 deep(
   attestor.parseStaticImportScripts(
-    "importScripts('a.js', \" + '"b.js"' + ");\nimportScripts('c.js');"
+    "importScripts('a.js', \"b.js\");\nimportScripts('c.js');"
   ),
   ['a.js', 'b.js', 'c.js'],
   'static importScripts parser'
