@@ -198,3 +198,136 @@ jobs:
         run: |
           set -euo pipefail
           node project_tools/release_evidence_settlement.js --candidate "$EXPECTED_SHA"
+
+
+  p1-231-shadow-identity:
+    name: p1-231-shadow-identity
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact S1-A candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Verify exact S1-A checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [[ "$actual" != "$EXPECTED_SHA" ]]; then
+            echo "::error title=S1-A exact checkout mismatch::expected $EXPECTED_SHA, got $actual"
+            exit 1
+          fi
+          echo "S1-A exact checkout verified: $actual"
+
+      - name: Set up S1-A Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+
+      - name: Set up S1-A Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.2'
+
+      - name: Evaluate P1-231 S1-A shadow identity
+        shell: bash
+        env:
+          EVENT_KIND: ${{ github.event_name }}
+          CANDIDATE_SHA: ${{ github.sha }}
+          PR_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          PR_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/webclip-s1a-shadow.json"
+
+          if [[ "$EVENT_KIND" == "pull_request" ]]; then
+            node project_tools/release_shadow_identity.js \
+              --event pull_request \
+              --candidate "$CANDIDATE_SHA" \
+              --base "$PR_BASE_SHA" \
+              --pr-head "$PR_HEAD_SHA" > "$result"
+          elif [[ "$EVENT_KIND" == "push" ]]; then
+            node project_tools/release_shadow_identity.js \
+              --event push \
+              --candidate "$CANDIDATE_SHA" > "$result"
+          else
+            echo "::error title=S1-A unsupported event::$EVENT_KIND"
+            exit 1
+          fi
+
+          cat "$result"
+
+          RESULT_PATH="$result" node - <<'NODE'
+          const fs = require('node:fs');
+          const result = JSON.parse(fs.readFileSync(process.env.RESULT_PATH, 'utf8'));
+
+          function fail(message) {
+            console.error('S1-A result invariant failed: ' + message);
+            process.exit(1);
+          }
+
+          if (
+            result.schema !== 'webclip-shadow-identity/v1'
+            || result.candidate_sha !== process.env.CANDIDATE_SHA
+            || result.generation_gate !== 'pass'
+            || result.policy_mutation !== false
+            || result.receipt_mutation !== false
+            || result.evidence_settlement !== false
+            || result.artifact_build !== false
+            || result.release_authorized !== false
+          ) {
+            fail('passive result envelope');
+          }
+
+          if (process.env.EVENT_KIND === 'push') {
+            if (
+              result.eligible !== true
+              || result.shadow_outcome !== 'eligible'
+              || !result.impact_context
+              || result.impact_context.kind !== 'push-main'
+              || result.impact_context.trustedControlPlaneReview !== false
+              || result.impact_context.automaticClassificationTrusted !== true
+            ) {
+              fail('push-main eligibility');
+            }
+          } else {
+            const impact = result.impact_context;
+            if (
+              !impact
+              || impact.kind !== 'pull-request-synthetic-merge'
+              || impact.baseSha !== process.env.PR_BASE_SHA
+              || impact.prHeadSha !== process.env.PR_HEAD_SHA
+              || impact.candidateSha !== process.env.CANDIDATE_SHA
+            ) {
+              fail('pull-request provenance');
+            }
+
+            if (impact.trustedControlPlaneReview === true) {
+              if (
+                impact.automaticClassificationTrusted !== false
+                || result.eligible !== false
+                || result.shadow_outcome !== 'control-plane-review-required'
+              ) {
+                fail('control-plane review state');
+              }
+            } else if (
+              impact.automaticClassificationTrusted !== true
+              || result.eligible !== true
+              || result.shadow_outcome !== 'eligible'
+            ) {
+              fail('ordinary pull-request eligibility');
+            }
+          }
+
+          console.log(
+            'S1-A permanent shadow result verified: outcome=' + result.shadow_outcome
+            + '; eligible=' + result.eligible
+            + '; release_authorized=' + result.release_authorized
+          );
+          NODE

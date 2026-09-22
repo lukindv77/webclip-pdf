@@ -216,12 +216,14 @@ for (const pathValue of [
 const workflow = require('node:fs').readFileSync(
   path.join(ROOT,'.github','workflows','repository-integrity.yml'),'utf8'
 );
-ok(!workflow.includes('release_shadow_identity.js'),'bootstrap tranche does not self-install workflow');
-ok(!workflow.includes('p1-231-shadow-identity'),'bootstrap tranche has no permanent S1-A job');
+ok(workflow.includes('p1-231-shadow-identity'),'permanent S1-A job installed');
+ok(workflow.includes('release_shadow_identity.js'),'permanent S1-A production verifier installed');
+ok(workflow.includes('ref: ${{ github.sha }}'),'S1-A permanent job uses exact github.sha candidate');
+ok(!workflow.includes('p1-231-shadow-settlement'),'S1-B remains inactive');
 
 console.log(
   'P1-231 S1-A passive shadow identity: PASS; checks=' + checks +
   '; candidate=' + head +
-  '; push=eligible; pr_control_plane=review-required; malformed_trust=fail-closed; workflow_activation=false; ' +
+  '; push=eligible; pr_control_plane=review-required; malformed_trust=fail-closed; workflow_activation=true; ' +
   'policy_mutation=false; receipt_mutation=false; artifact_build=false; release_authorized=false'
 );

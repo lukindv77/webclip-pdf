@@ -418,12 +418,14 @@ function validateWorkflowExecutionContext({
     check(!json.includes('signedUrl'), 'shadow result must not contain signed URL material');
   }
 
-  // Current Repository Integrity delivery invariant is explicit PR-head checkout. This
-  // research tranche must preserve it and must not yet install the permanent shadow step.
+  // Delivery jobs remain explicit PR-head checkout while permanent S1-A uses a
+  // separate exact github.sha synthetic-merge/push workspace.
   const workflow = git('show', `HEAD:.github/workflows/repository-integrity.yml`);
   check(workflow.includes("ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"), 'delivery workflow must keep literal PR-head checkout');
-  check(!workflow.includes('check_release_shadow_identity.py'), 'research tranche must not install production shadow checker');
-  check(!workflow.includes('Shadow release identity'), 'research tranche must not install permanent shadow step');
+  check(workflow.includes('p1-231-shadow-identity'), 'permanent S1-A job must be installed');
+  check(workflow.includes('ref: ${{ github.sha }}'), 'permanent S1-A must use exact github.sha candidate');
+  check(workflow.includes('release_shadow_identity.js'), 'permanent S1-A must invoke production shadow library');
+  check(!workflow.includes('p1-231-shadow-settlement'), 'S1-B must remain inactive');
 
   // Stable framing sanity for bounded diagnostic output; this is not a new release fingerprint.
   const diagnostic = JSON.stringify({ schema: current.schema, candidateSha: current.candidateSha, eligible: current.eligible, shadowOutcome: current.shadowOutcome });
@@ -435,6 +437,6 @@ function validateWorkflowExecutionContext({
     `P1-231 S1-A shadow identity source-spec model: PASS; cases=${cases}; schema=${SCHEMA}; ` +
     `current_shadow=eligible; current_eligible=true; control_plane_review=report-only-ineligible; structural_errors=fail-closed; ` +
     `delivery_checkout=pr-head; pr_candidate=github-sha; shadow_workspace=synthetic-merge; synthetic_merge_required=true; s0f_owner=true; policy_mutation=false; ` +
-    `receipt_mutation=false; product_zip=false; permanent_workflow_unchanged=true; rpf=${CURRENT.rpf}; head=${head}`
+    `receipt_mutation=false; product_zip=false; permanent_workflow_active=true; rpf=${CURRENT.rpf}; head=${head}`
   );
 })();

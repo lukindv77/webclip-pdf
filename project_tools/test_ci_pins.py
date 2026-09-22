@@ -95,6 +95,50 @@ GOOD_S0B_JOB = """
 """
 GOOD_REPOSITORY_INTEGRITY_WITH_S0B = GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB
 
+GOOD_S1A_JOB = """
+  p1-231-shadow-identity:
+    name: p1-231-shadow-identity
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact S1-A candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Verify exact S1-A checkout
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          actual="$(git rev-parse HEAD)"
+      - name: Set up S1-A Python
+        with:
+          python-version: '3.12.10'
+      - name: Set up S1-A Node.js
+        with:
+          node-version: '22.23.2'
+      - name: Evaluate P1-231 S1-A shadow identity
+        env:
+          EVENT_KIND: ${{ github.event_name }}
+          CANDIDATE_SHA: ${{ github.sha }}
+          PR_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          PR_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+        run: |
+          node project_tools/release_shadow_identity.js \
+            --event pull_request \
+            --candidate "$CANDIDATE_SHA" \
+            --base "$PR_BASE_SHA" \
+            --pr-head "$PR_HEAD_SHA"
+          node project_tools/release_shadow_identity.js \
+            --event push \
+            --candidate "$CANDIDATE_SHA"
+          if (result.shadow_outcome !== 'control-plane-review-required') fail()
+          if (result.release_authorized !== false) fail()
+"""
+GOOD_REPOSITORY_INTEGRITY_WITH_S0B_AND_S1A = (
+    GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB + GOOD_S1A_JOB
+)
+
 
 def expect_pass(name: str, text: str) -> None:
     errors = module.evaluate({".github/workflows/test.yml": text})
@@ -224,6 +268,73 @@ def main() -> None:
     )
     if not any("release_evidence_settlement.js" in error for error in lane_errors):
         raise AssertionError(f"repository-integrity-s0g-no-settlement: expected S0-G failure, got {lane_errors}")
+
+    combined_s0b_errors = module.evaluate_repository_integrity_s0b_lane(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: GOOD_REPOSITORY_INTEGRITY_WITH_S0B_AND_S1A}
+    )
+    if combined_s0b_errors:
+        raise AssertionError(
+            f"repository-integrity-s0b-with-s1a: expected PASS, got {combined_s0b_errors}"
+        )
+
+    s1a_errors = module.evaluate_repository_integrity_s1a_lane(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: GOOD_REPOSITORY_INTEGRITY_WITH_S0B_AND_S1A}
+    )
+    if s1a_errors:
+        raise AssertionError(f"repository-integrity-s1a-good: expected PASS, got {s1a_errors}")
+
+    no_s1a_ref = GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB + GOOD_S1A_JOB.replace(
+        "          ref: ${{ github.sha }}\n",
+        "",
+        1,
+    )
+    s1a_errors = module.evaluate_repository_integrity_s1a_lane(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: no_s1a_ref}
+    )
+    if not any("S1-A shadow job marker missing" in error and "ref:" in error for error in s1a_errors):
+        raise AssertionError(f"repository-integrity-s1a-no-ref: expected exact-ref failure, got {s1a_errors}")
+
+    delivery_ref_s1a = GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB + GOOD_S1A_JOB.replace(
+        "          ref: ${{ github.sha }}\n",
+        "          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}\n",
+        1,
+    )
+    s1a_errors = module.evaluate_repository_integrity_s1a_lane(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: delivery_ref_s1a}
+    )
+    if not any("synthetic merge github.sha" in error for error in s1a_errors):
+        raise AssertionError(f"repository-integrity-s1a-delivery-ref: expected synthetic-merge failure, got {s1a_errors}")
+
+    no_s1a_python = GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB + GOOD_S1A_JOB.replace(
+        "          python-version: '3.12.10'\n",
+        "",
+        1,
+    )
+    s1a_errors = module.evaluate_repository_integrity_s1a_lane(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: no_s1a_python}
+    )
+    if not any("S1-A shadow job marker missing" in error and "3.12.10" in error for error in s1a_errors):
+        raise AssertionError(f"repository-integrity-s1a-no-python: expected profile failure, got {s1a_errors}")
+
+    no_s1a_verifier = GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB + GOOD_S1A_JOB.replace(
+        "node project_tools/release_shadow_identity.js",
+        "node --version",
+    )
+    s1a_errors = module.evaluate_repository_integrity_s1a_lane(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: no_s1a_verifier}
+    )
+    if not any("release_shadow_identity.js" in error for error in s1a_errors):
+        raise AssertionError(f"repository-integrity-s1a-no-verifier: expected verifier failure, got {s1a_errors}")
+
+    no_review_invariant = GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB + GOOD_S1A_JOB.replace(
+        "          if (result.shadow_outcome !== 'control-plane-review-required') fail()\n",
+        "",
+    )
+    s1a_errors = module.evaluate_repository_integrity_s1a_lane(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: no_review_invariant}
+    )
+    if not any("control-plane-review-required" in error for error in s1a_errors):
+        raise AssertionError(f"repository-integrity-s1a-no-review-invariant: expected review failure, got {s1a_errors}")
 
     profile_errors = module.evaluate(
         {

@@ -22,6 +22,7 @@ EXPECTED_TOOL_VERSIONS = {
 }
 GENERIC_PYTHON_VERSION = "3.12.14"
 S0B_PYTHON_VERSION = "3.12.10"
+S1A_PYTHON_VERSION = "3.12.10"
 NODE_VERSION = "22.23.2"
 PYTHON_VERSION = re.compile(r"python-version:\s*['\"]([^'\"]+)['\"]")
 
@@ -136,9 +137,66 @@ def evaluate_repository_integrity_s0b_lane(workflows: Mapping[str, str]) -> list
 
     if "continue-on-error:" in job:
         errors.append(f"{REPOSITORY_INTEGRITY_WORKFLOW}: S0-B authority job must fail closed")
-    if text.count(f"python-version: '{S0B_PYTHON_VERSION}'") != 1:
+    if job.count(f"python-version: '{S0B_PYTHON_VERSION}'") != 1:
         errors.append(
-            f"{REPOSITORY_INTEGRITY_WORKFLOW}: S0-B Python {S0B_PYTHON_VERSION} must appear exactly once"
+            f"{REPOSITORY_INTEGRITY_WORKFLOW}: S0-B Python {S0B_PYTHON_VERSION} must appear exactly once in S0-B job"
+        )
+    return errors
+
+
+def evaluate_repository_integrity_s1a_lane(workflows: Mapping[str, str]) -> list[str]:
+    text = workflows.get(REPOSITORY_INTEGRITY_WORKFLOW, "")
+    if not text:
+        return [f"{REPOSITORY_INTEGRITY_WORKFLOW}: workflow is missing"]
+
+    marker = "\n  p1-231-shadow-identity:\n"
+    if marker not in text:
+        return [f"{REPOSITORY_INTEGRITY_WORKFLOW}: P1-231 S1-A shadow job is missing"]
+
+    tail = text.split(marker, 1)[1]
+    next_job = re.search(r"\n  [A-Za-z0-9_-]+:\n", tail)
+    job = tail[: next_job.start()] if next_job else tail
+
+    required = (
+        "name: p1-231-shadow-identity",
+        "if: github.event_name == 'push' || github.event_name == 'pull_request'",
+        "runs-on: ubuntu-24.04",
+        "uses: actions/checkout@",
+        "fetch-depth: 0",
+        "ref: ${{ github.sha }}",
+        "EXPECTED_SHA: ${{ github.sha }}",
+        'actual="$(git rev-parse HEAD)"',
+        f"python-version: '{S1A_PYTHON_VERSION}'",
+        f"node-version: '{NODE_VERSION}'",
+        "EVENT_KIND: ${{ github.event_name }}",
+        "CANDIDATE_SHA: ${{ github.sha }}",
+        "PR_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}",
+        "PR_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}",
+        "node project_tools/release_shadow_identity.js",
+        "--event pull_request",
+        '--candidate "$CANDIDATE_SHA"',
+        '--base "$PR_BASE_SHA"',
+        '--pr-head "$PR_HEAD_SHA"',
+        "--event push",
+        "control-plane-review-required",
+        "release_authorized !== false",
+    )
+    errors: list[str] = []
+    for item in required:
+        if item not in job:
+            errors.append(
+                f"{REPOSITORY_INTEGRITY_WORKFLOW}: S1-A shadow job marker missing: {item}"
+            )
+
+    if "continue-on-error:" in job:
+        errors.append(f"{REPOSITORY_INTEGRITY_WORKFLOW}: S1-A shadow job must fail closed")
+    if job.count(f"python-version: '{S1A_PYTHON_VERSION}'") != 1:
+        errors.append(
+            f"{REPOSITORY_INTEGRITY_WORKFLOW}: S1-A Python {S1A_PYTHON_VERSION} must appear exactly once in S1-A job"
+        )
+    if "github.event.pull_request.head.sha || github.sha" in job:
+        errors.append(
+            f"{REPOSITORY_INTEGRITY_WORKFLOW}: S1-A must use synthetic merge github.sha, not delivery PR-head checkout"
         )
     return errors
 
@@ -179,6 +237,7 @@ def main() -> int:
     errors = evaluate(workflows)
     errors.extend(evaluate_repository_integrity_exact_checkout(workflows))
     errors.extend(evaluate_repository_integrity_s0b_lane(workflows))
+    errors.extend(evaluate_repository_integrity_s1a_lane(workflows))
 
     if not DEPENDABOT.is_file():
         errors.append(".github/dependabot.yml is missing")
@@ -194,7 +253,7 @@ def main() -> int:
     print(
         f"CI/supply-chain hygiene PASS: {len(workflows)} workflow(s), "
         "external actions immutable, permissions read-only, Repository Integrity exact-head checkout enforced, "
-        "P1-231 S0-B profile lane pinned, Dependabot low-noise."
+        "P1-231 S0-B delivery lane and S1-A synthetic-merge shadow lane pinned, Dependabot low-noise."
     )
     return 0
 
