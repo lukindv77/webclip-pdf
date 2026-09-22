@@ -30,7 +30,7 @@ const MAX_U64 = (1n << 64n) - 1n;
 const PACKAGE_TOPOLOGY = packageAuthority.readCanonicalManifest();
 const PACKAGE_FILES = Object.freeze([...PACKAGE_TOPOLOGY.files]);
 const LEGACY_PACKAGE_FILES = Object.freeze(PACKAGE_FILES.filter((rel) => rel !== 'application-generation.js'));
-const LEGACY_RPF = 'sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a';
+const LEGACY_RPF = 'sha256:7bb37622f1ead5ba477116afb53ca5f35d57b918350525aa62d966ad493a730f';
 const CURRENT_RPF = 'sha256:cb04a3cb5dc684c3e4804f63847c4b4f00d93df2db47475091b91701a04727ee';
 
 const FULL_RCF_ROOTS = Object.freeze([

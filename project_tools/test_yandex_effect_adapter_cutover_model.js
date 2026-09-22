@@ -92,8 +92,8 @@ check('S01 generic yandexApi exists', () => has(SOURCE, 'async function yandexAp
 check('S02 current token helper exists', () => has(SOURCE, 'getValidYandexAccessToken()'));
 check('S03 current caller-header spread exists', () => has(SOURCE, '...(options.headers || {})'));
 check('S04 current OAuth header exists', () => has(SOURCE, "'Authorization': `OAuth ${token}`"));
-check('S05 current source pre-cutover authRecordId', () => lacks(SOURCE, 'authRecordId'));
-check('S06 current source pre-cutover authGeneration', () => lacks(SOURCE, 'authGeneration'));
+check('S05 current source now exposes authRecordId control identity substrate', () => has(SOURCE, 'authRecordId'));
+check('S06 current source now exposes authGeneration control identity substrate', () => has(SOURCE, 'authGeneration'));
 check('S07 manifest version unchanged research tranche', () => assert.equal(MANIFEST.version, '0.9.8'));
 
 // Control-plane semantics.

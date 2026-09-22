@@ -34,7 +34,7 @@ function sliceBetween(text, startNeedle, endNeedle) {
 }
 
 const MANUAL = sliceBetween(SOURCE, 'async function setManualYandexToken(token)', 'async function getValidYandexAccessToken()');
-const PKCE_FINISH = sliceBetween(SOURCE, 'async function finishYandexOAuth(code)', 'async function exchangeAuthorizationCode');
+const PKCE_FINISH = sliceBetween(SOURCE, 'async function finishYandexOAuth(authAttemptId, code)', 'async function exchangeAuthorizationCode');
 
 function makeState(auth = null, generation = 1, disconnected = false) {
   return { auth, generation, disconnected };
@@ -164,17 +164,14 @@ check('S03 manual candidate contains access token before validation', () => has(
 check('S04 manual candidate scope remains empty', () => has(MANUAL, "scope: ''"));
 check('S05 candidate global write exists', () => has(MANUAL, 'await writeYandexAuth(yandexAuth);'));
 check('S06 ordinary global yandexApi validation exists', () => has(MANUAL, "const info = await yandexApi('');"));
-check('S07 failure global clear exists', () => has(MANUAL, 'await writeYandexAuth(null);'));
+check('S07 failure exact-record clear exists after candidate publication', () => has(MANUAL, 'await compareClearYandexAuthRecord(yandexAuth);'));
 check('S08 write precedes validation', () => assert.ok(MANUAL.indexOf('await writeYandexAuth(yandexAuth);') < MANUAL.indexOf("const info = await yandexApi('');")));
-check('S09 validation precedes catch clear', () => assert.ok(MANUAL.indexOf("const info = await yandexApi('');") < MANUAL.indexOf('await writeYandexAuth(null);')));
-check('S10 account enrichment second write exists', () => {
-  const matches = MANUAL.match(/await writeYandexAuth\(yandexAuth\);/g) || [];
-  assert.equal(matches.length, 2);
-});
+check('S09 validation precedes exact-record catch clear', () => assert.ok(MANUAL.indexOf("const info = await yandexApi('');") < MANUAL.indexOf('await compareClearYandexAuthRecord(yandexAuth);')));
+check('S10 account enrichment is exact-record fenced', () => has(MANUAL, 'await compareUpdateYandexAuthRecord(yandexAuth, { account: extractDiskAccount(info) });'));
 check('S11 candidate-bound helper absent current', () => lacks(SOURCE, 'validateManualYandexTokenCandidate'));
 check('S12 generic candidate helper absent current', () => lacks(SOURCE, 'validateYandexAuthCandidate'));
 check('S13 manual generation-CAS helper absent current', () => lacks(SOURCE, 'commitManualYandexAuthIfGeneration'));
-check('S14 PKCE finish still writes auth directly', () => has(PKCE_FINISH, 'await writeYandexAuth(yandexAuth);'));
+check('S14 PKCE finish now uses P1-178 exact-attempt CAS', () => has(PKCE_FINISH, 'commitYandexOAuthAttemptControl(captured, yandexAuth)'));
 check('S15 input length positive control', () => has(MANUAL, 'MAX_YANDEX_ACCESS_TOKEN_CHARS'));
 check('S16 empty candidate positive control', () => has(MANUAL, "throw new Error('Вставьте OAuth-токен.');"));
 

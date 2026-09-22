@@ -190,8 +190,8 @@ function statusDto(s) {
   const manualInstall = worker.indexOf('await writeYandexAuth(yandexAuth)');
   const manualValidate = worker.indexOf("await yandexApi('')", manualInstall);
   check(manualInstall >= 0 && manualValidate > manualInstall, 'current manual candidate is installed before provider validation');
-  const clearAfterManual = worker.indexOf('await writeYandexAuth(null)', manualValidate);
-  check(clearAfterManual > manualValidate, 'current failed manual validation can clear auth after candidate install');
+  const clearAfterManual = worker.indexOf('await compareClearYandexAuthRecord(yandexAuth)', manualValidate);
+  check(clearAfterManual > manualValidate, 'current failed manual validation exact-clears its candidate after the candidate was already published');
   const authHeader = worker.indexOf("'Authorization': `OAuth ${token}`");
   const callerSpread = worker.indexOf('...(options.headers || {})', authHeader);
   check(authHeader >= 0 && callerSpread > authHeader, 'current caller headers are spread after worker Authorization');

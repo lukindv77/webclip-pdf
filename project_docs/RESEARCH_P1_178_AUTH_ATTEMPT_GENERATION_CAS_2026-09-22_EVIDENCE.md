@@ -220,7 +220,7 @@ The existing W5 fixed-redirect refinement model is updated so its current-source
 
 `service-worker.js` and `options.js` are members of the canonical 34-file extension package. Their byte changes therefore advance the current RPF.
 
-The dedicated P1-231 source-generation/candidate-admission job in Repository Integrity #1059 ran on exact head `8ef5af8202e571e060b55c9db5d00414738bccfa` and independently derived current RPF `sha256:cb04a3cb5dc684c3e4804f63847c4b4f00d93df2db47475091b91701a04727ee`. Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff` because their canonical input projections did not change.
+The dedicated P1-231 source-generation/candidate-admission job in Repository Integrity #1059 ran on exact head `8ef5af8202e571e060b55c9db5d00414738bccfa` and independently derived current RPF `sha256:cb04a3cb5dc684c3e4804f63847c4b4f00d93df2db47475091b91701a04727ee`. The same identity model now derives current 33-file legacy-subset control `sha256:7bb37622f1ead5ba477116afb53ca5f35d57b918350525aa62d966ad493a730f`; historical `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` remains predecessor evidence, not the current subset fingerprint. Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff` because their canonical input projections did not change.
 
 The overall #1059 workflow is not merge evidence: its repository-integrity job failed earlier at the PR change-contract gate and therefore skipped syntax/deterministic tests. The successful source-generation lane is used here only as exact-head identity computation; a later complete exact-head SUCCESS is still required.
 
@@ -265,3 +265,8 @@ live Yandex proof                        = NOT PERFORMED
 manifest version                         = 0.9.8
 release readiness                        = NOT READY
 ```
+
+
+## 16. Exact-head deterministic reconciliation #1061
+
+Repository Integrity #1061 reached the complete deterministic suite after the PR-contract correction. The new P1-178 runtime test and the reconciled P1-178 refinement model passed. The remaining failures were stale source-census assertions and a transitive release-identity predecessor pin: current auth source now legitimately contains `authAttemptId`, `authGeneration` and `authRecordId`, Disconnect routes through the shared-generation helper, and the 33-file subset fingerprint changes whenever shared package members `service-worker.js` or `options.js` change. Those witnesses are synchronized without promoting adjacent unresolved behavior to closure. #1061 remains non-merge evidence because the full generic deterministic suite did not pass.
