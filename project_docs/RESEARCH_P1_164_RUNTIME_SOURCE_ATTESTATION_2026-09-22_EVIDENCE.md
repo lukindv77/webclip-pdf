@@ -111,7 +111,7 @@ The expected contract is derived from current production P1-231 authorities for 
 3. exact `manifest.json` bytes provide the service-worker path/version;
 4. the worker's static `importScripts(...)` graph is derived recursively from exact package bytes.
 
-The current worker execution-script set is therefore:
+The exact recursive worker execution-script set is therefore:
 
 - `service-worker.js`
 - `public-suffix.js`
@@ -119,6 +119,12 @@ The current worker execution-script set is therefore:
 - `journal-text-filter.js`
 - `local-download-identity.js`
 - `journal-import-digest.js`
+- `pdf-print-guard.js`
+- `content-injection-guard.js`
+- `operation-log-redaction-guard.js`
+- `journal-restore-envelope-guard.js`
+
+The extra four scripts are imported by `journal-text-filter.js`; the attestor derives this recursively from exact package bytes rather than hardcoding only the worker's first-level imports.
 
 Dynamic/non-literal `importScripts` syntax fails closed rather than being guessed.
 
@@ -197,7 +203,7 @@ It covers:
 
 - current exact 34-member package contract;
 - current RPF and Yandex QCF;
-- current six-script worker/importScripts graph;
+- current ten-script recursive worker/importScripts graph;
 - static import parser and dynamic-import fail-closed behavior;
 - package-member length/digest equality;
 - service-worker URL / extension-id consistency;
