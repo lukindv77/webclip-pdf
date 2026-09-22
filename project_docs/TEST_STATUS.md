@@ -48,6 +48,8 @@ S0-D now has a passive production builder-contract **input** authority. `release
 
 S0-E now has the passive production typed identity engine `project_tools/release_identity.js`. It consumes production S0-A exact package bytes, S0-C canonical QCF/full-RCF inputs and S0-D builder semantics while owning only `WEBCLIP_RELEASE_IDENTITY_V1` framing/domain-separated SHA-256. The composed engine must reproduce the current 34-file RPF, Chrome/Yandex QCFs, 11-root full RCF and BCF exactly; the 33-file `b65c…` RPF remains a legacy negative control. The existing independent Node/Python S0-E predecessor proof remains in the deterministic suite, and no receipt settlement, product build or release authorization is activated. See `RESEARCH_P1_231_S0E_PASSIVE_PRODUCTION_IDENTITY_2026-09-22_EVIDENCE.md`.
 
+S0-F now has the passive production candidate-generation admission `project_tools/release_candidate_generation.js`. It composes one exact candidate SHA across S0-A package admission, S0-B regeneration, S0-C generator/full-RCF binding and S0-E identity computation. Successful `generation_state=pass` carries the current RPF/QCF/RCF/BCF tuple but creates no CGF axis and explicitly performs no receipt interpretation, evidence settlement, artifact build or release authorization. The permanent CPython 3.12.10 Repository Integrity lane runs this gate after S0-B on the same exact delivery SHA. See `RESEARCH_P1_231_S0F_PASSIVE_PRODUCTION_CANDIDATE_ADMISSION_2026-09-22_EVIDENCE.md`.
+
 ## Current P0-080 implementation evidence
 
 P0-080 is being implemented in bounded application-generation tranches while keeping same-document application generation distinct from browser `documentId` identity.
