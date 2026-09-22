@@ -160,3 +160,12 @@ This document does not guess those digests. No QA-contract, Registry/full-RCF ro
 No live Yandex credential/request, provider mutation, real Chrome qualification, physical release receipt, product ZIP/build, manifest version bump, release-policy activation, tag, deployment, GitHub Release or release decision is performed.
 
 Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+
+## 12. CI discovery #1074
+
+Repository Integrity #1074 / run `35747481769` on exact preliminary head `dc6ec0150a3b58e7d0adf0fc718e28a240410296` stopped at the PR change-contract metadata gate before JavaScript syntax/deterministic execution. The failure was caused by PR wording that named an additional owner code in descriptive boundary text; the body is corrected to declare only P1-196.
+
+The independent source-generation lane completed successfully and derived current 34-file RPF `sha256:363e8df53233e035a079f5e2a26b124de8cf2b623749d6e4f457d5a94e0f8368`. Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`, and BCF remains unchanged.
+
+Because the generic deterministic identity engine did not run, this tranche does not invent a current 33-file control digest. A later exact-head run must derive it and must pass the complete suite before merge. #1074 is discovery evidence only, not merge evidence.

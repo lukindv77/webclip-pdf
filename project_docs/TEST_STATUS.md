@@ -552,3 +552,8 @@ A second bounded P1-196 runtime tranche removes unconditional post-read `writeYa
 Deterministic coverage is `project_tools/test_p1_196_account_enrichment_runtime.js`. The existing P1-196 refinement model is updated only to mark positive enrichment as implemented; known-expiry transition, explicit presence/validity/usability status axes, and per-child recovery auth recheck remain current gaps.
 
 P1-196 remains **ACTIVE**. The runtime change modifies `service-worker.js`, so current RPF/current 33-file control must be re-derived by exact-head P1-231 authority before merge. No live Yandex call, provider mutation, real Chrome qualification, product build/ZIP, manifest bump, release-policy activation, tag, deployment or release decision is performed. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+
+### P1-196 account-enrichment CI discovery #1074
+
+Repository Integrity #1074 / run `35747481769` on exact preliminary head `dc6ec0150a3b58e7d0adf0fc718e28a240410296` stopped at the PR change-contract metadata gate before syntax/deterministic execution. The independent source-generation lane succeeded and derived current 34-file RPF `sha256:363e8df53233e035a079f5e2a26b124de8cf2b623749d6e4f457d5a94e0f8368`; Chrome/Yandex QCF and full RCF remain unchanged. The 33-file control is intentionally not guessed because the deterministic identity engine did not run. #1074 is discovery evidence only; a new exact-head run is required.
