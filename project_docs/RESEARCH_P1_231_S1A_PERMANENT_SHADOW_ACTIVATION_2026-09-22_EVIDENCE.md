@@ -1,6 +1,6 @@
 # P1-231 S1-A permanent shadow workflow activation — 2026-09-22
 
-Status: **INTEGRATION PENDING EXACT-HEAD / POST-MERGE CI**
+Status: **PERMANENT READ-ONLY S1-A LANE IMPLEMENTED / RELEASE AUTHORITY UNCHANGED**
 
 Owner:
 
@@ -168,6 +168,16 @@ S1-A remains observational.
 This tranche does not write/settle receipts, reinterpret missing S0-G evidence as PASS, build the current WebClip ZIP, activate S1-B/S1-C/S1-D, mutate readiness, run the release gate, bump version, tag/deploy, publish a GitHub Release, perform physical Chrome/Yandex qualification, or authorize S2/release.
 
 P1-231 remains **ACTIVE**.
+
+## Exact-head discovery history
+
+Intermediate exact-head runs are retained only as discovery evidence:
+
+- #1016 / head `869e4ee9d5f05a634a76a5215acd6d774cd104f7` failed before S1-A evaluation because the workflow accidentally contained literal backslashes before GitHub expressions; the pin checker independently rejected the same malformed markers.
+- #1017 / head `b1e1fc761d7b8fc398370f1c05839a7dfde84065` proved the actual S1-A synthetic-merge execution path: candidate `3b26455b90faab8be7ae8d23776316ec7fb78e21` completed with `shadow_outcome=control-plane-review-required`, `eligible=false`, and `release_authorized=false`. The run remained non-mergeable because one negative pin self-test did not remove both CLI invocations.
+- #1018 / head `0e3c0f8cbcc8c5e692765f65978c1380693023a8` passed both the S0-B/F/G delivery job and the S1-A synthetic-merge job, including the corrected pin self-tests. The primary deterministic suite then exposed two expected stale bootstrap controls: the S1-D workflow rollback blob anchor and the production S1-A witness still asserted that permanent workflow activation was absent.
+
+Those stale controls are reconciled in the same tranche. None of #1016/#1017/#1018 is reused as final merge authority for a later head.
 
 ## Acceptance
 
