@@ -105,7 +105,8 @@ check('S09 caller headers are spread after OAuth header', () => {
   const spreadAt = api.indexOf('...(options.headers || {})');
   assert.ok(authAt >= 0 && spreadAt > authAt);
 });
-check('S10 runtime has no authGeneration field yet', () => lacks(SOURCE, 'authGeneration'));
+check('S10 runtime now carries shared authGeneration substrate from P1-178', () => has(SOURCE, 'authGeneration'));
+check('S10b runtime now carries authRecordId substrate from P1-178', () => has(SOURCE, 'authRecordId'));
 check('S11 OAuth unknown expiry stored as zero', () => has(SOURCE, 'expiresAt: expiresInSeconds ? now + expiresInSeconds * 1000 : 0'));
 const recovery = asyncSection("async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6)");
 check('S12 recovery snapshots authAvailable before loop', () => {

@@ -178,16 +178,20 @@ function statusDto(s) {
   check(!worker.includes('chrome.identity.getRedirectURL'), 'current worker does not derive chromiumapp redirect');
   check(!manifest.permissions.includes('identity'), 'current manifest has no identity permission');
 
-  // Current source gaps that motivate this research-only target.
-  check(worker.includes('yandexOAuthPending'), 'current worker has one pending OAuth authority slot');
-  check(!worker.includes('authAttemptId'), 'current production worker lacks explicit authAttemptId');
-  check(!options.includes('authAttemptId'), 'current production Options protocol lacks authAttemptId');
-  check(!worker.includes('authGeneration'), 'current production worker lacks shared authGeneration');
+  // Current source now implements the P1-178 attempt/generation subset while
+  // adjacent P1-191/P1-195/P1-196 gaps remain independently owned.
+  check(worker.includes('yandexOAuthPending'), 'current worker retains one pending OAuth authority slot');
+  check(worker.includes('authAttemptId'), 'current production worker carries explicit authAttemptId');
+  check(options.includes('authAttemptId: activeYandexAuthAttemptId'), 'current Options finish carries exact page attempt identity');
+  check(worker.includes('authGeneration'), 'current production worker carries shared auth generation');
+  check(worker.includes('commitYandexOAuthAttemptControl(captured, yandexAuth)'), 'current OAuth finish uses post-network generation CAS');
+  check(worker.includes("advanceYandexAuthControlGeneration('Поколение manual-token intent Яндекс Диска')"), 'manual intent fences older OAuth attempt');
+  check(worker.includes('await disconnectYandexAuthControl()'), 'disconnect is a shared-generation barrier');
   const manualInstall = worker.indexOf('await writeYandexAuth(yandexAuth)');
   const manualValidate = worker.indexOf("await yandexApi('')", manualInstall);
   check(manualInstall >= 0 && manualValidate > manualInstall, 'current manual candidate is installed before provider validation');
-  const clearAfterManual = worker.indexOf('await writeYandexAuth(null)', manualValidate);
-  check(clearAfterManual > manualValidate, 'current failed manual validation can clear auth after candidate install');
+  const clearAfterManual = worker.indexOf('await compareClearYandexAuthRecord(yandexAuth)', manualValidate);
+  check(clearAfterManual > manualValidate, 'current failed manual validation exact-clears its candidate after the candidate was already published');
   const authHeader = worker.indexOf("'Authorization': `OAuth ${token}`");
   const callerSpread = worker.indexOf('...(options.headers || {})', authHeader);
   check(authHeader >= 0 && callerSpread > authHeader, 'current caller headers are spread after worker Authorization');

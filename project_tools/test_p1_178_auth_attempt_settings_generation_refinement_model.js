@@ -82,32 +82,32 @@ check('S01 pending key exists', () => has(SOURCE, 'yandexOAuthPending'));
 check('S02 auth storage serialization exists', () => has(SOURCE, 'runYandexAuthStorageOperation'));
 check('S03 config serializer exists', () => has(SOURCE, 'updateYandexConfig'));
 const start = asyncSection('async function startYandexOAuth(clientId, sourceTabId = 0)');
-check('S04 start creates pending state', () => has(start, 'yandexOAuthPending'));
+check('S04 start claims exact pending generation', () => has(start, 'beginYandexOAuthAttemptControl'));
 check('S05 start has PKCE verifier', () => has(start, 'codeVerifier'));
 check('S06 start has oauth state', () => has(start, 'state'));
-check('S07 start pending lacks attemptId', () => lacks(start, 'attemptId'));
-check('S08 start pending lacks auth generation', () => lacks(start, 'authGeneration'));
-check('S09 start cleanup removes shared pending key', () => has(start, "chrome.storage.session.remove('yandexOAuthPending')"));
+check('S07 start returns exact authAttemptId', () => has(start, 'authAttemptId: pending.authAttemptId'));
+check('S08 start binds logical tab request to attempt', () => has(start, '`yandex-oauth:${pending.authAttemptId}`'));
+check('S09 start cleanup compare-removes exact attempt', () => has(start, 'compareRemoveYandexOAuthPendingControl'));
 
-const finish = asyncSection('async function finishYandexOAuth(code)');
-check('S10 finish reads pending', () => has(finish, 'yandexOAuthPending'));
+const finish = asyncSection('async function finishYandexOAuth(authAttemptId, code)');
+check('S10 finish captures exact attempt', () => has(finish, 'captureYandexOAuthAttemptControl(authAttemptId)'));
 check('S11 finish exchanges code', () => has(finish, 'exchangeAuthorizationCode'));
-check('S12 finish updates config after capture', () => has(finish, 'updateYandexConfig'));
-check('S13 finish writes auth', () => has(finish, 'writeYandexAuth'));
-check('S14 finish removes pending', () => has(finish, "chrome.storage.session.remove('yandexOAuthPending')"));
-check('S15 finish has no attemptId check', () => lacks(finish, 'attemptId'));
-check('S16 finish has no auth generation check', () => lacks(finish, 'authGeneration'));
+check('S12 finish has no stale post-network config rewrite', () => lacks(finish, 'updateYandexConfig'));
+check('S13 finish commits through exact CAS', () => has(finish, 'commitYandexOAuthAttemptControl(captured, yandexAuth)'));
+check('S14 finish auth record keeps captured generation', () => has(finish, 'authGeneration: normalizeYandexAuthGeneration(captured.authGeneration)'));
+check('S15 finish owns attemptId', () => has(finish, 'authAttemptId'));
+check('S16 finish uses auth generation', () => has(finish, 'authGeneration'));
 
 const manual = asyncSection('async function setManualYandexToken(token)');
 check('S17 manual writes auth', () => has(manual, 'writeYandexAuth(yandexAuth)'));
 check('S18 manual performs provider read', () => has(manual, "await yandexApi('')"));
-check('S19 manual failure clears auth', () => has(manual, 'writeYandexAuth(null)'));
-check('S20 manual has no auth generation guard', () => lacks(manual, 'authGeneration'));
+check('S19 manual failure compare-clears exact record', () => has(manual, 'compareClearYandexAuthRecord(yandexAuth)'));
+check('S20 manual advances shared auth generation', () => has(manual, 'advanceYandexAuthControlGeneration'));
 
 check('S21 disconnect case exists', () => has(SOURCE, 'WEBCLIP_YANDEX_DISCONNECT'));
-check('S22 disconnect clears auth', () => has(SOURCE, 'await writeYandexAuth(null)'));
+check('S22 disconnect uses shared generation barrier', () => has(SOURCE, 'await disconnectYandexAuthControl()'));
 check('S23 status observes pending', () => has(SOURCE, 'yandexOAuthPending'));
-check('S24 source lacks shared authGeneration symbol', () => lacks(SOURCE, 'authGeneration'));
+check('S24 source has shared authGeneration symbol', () => has(SOURCE, 'authGeneration'));
 
 const s0 = { generation: 0, pending: null, auth: { tokenTag: 'old', generation: 0 }, clientId: 'old' };
 const sA = begin(s0, 'oauth', 'client-A');
@@ -176,4 +176,4 @@ check('N24 no runtime/L5/S2/release action', () => {
   'cross-storage partial commit has explicit recoverable semantics'
 ].forEach((needle, i) => check(`E${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
 
-console.log(`P1-178 auth attempt/settings generation refinement model: PASS; cases=${cases}; schema=webclip-auth-attempt-settings-generation/v1; baseline=d09ec5cbb4666636c983fb3385481d3c6eb5d9e3; pending_attempt_generation=current-gap; start_cleanup_compare_remove=required; expiry_cleanup_compare_remove=required; finish_post_exchange_cas=required; disconnect_generation_barrier=required; manual_late_failure_guard=required; account_enrichment_guard=required; storage_serialization=preserved; returned_state_owner=P1-165; scheduler_generation_owner=P1-177; namespace_owner=P1-179; auth_validity_owner=P1-196; runtime_modified=false; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-178 auth attempt/settings generation refinement model: PASS; cases=${cases}; schema=webclip-auth-attempt-settings-generation/v1; baseline=d09ec5cbb4666636c983fb3385481d3c6eb5d9e3; pending_attempt_generation=implemented; start_cleanup_compare_remove=implemented; expiry_cleanup_compare_remove=implemented; finish_post_exchange_cas=implemented; disconnect_generation_barrier=implemented; manual_late_failure_guard=partial-exact-record; account_enrichment_guard=implemented-exact-record; storage_serialization=preserved; returned_state_owner=P1-165; scheduler_generation_owner=P1-177; namespace_owner=P1-179; auth_validity_owner=P1-196; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);

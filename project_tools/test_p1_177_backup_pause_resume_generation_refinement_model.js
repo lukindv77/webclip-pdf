@@ -126,8 +126,12 @@ check('S05 no backupSchedulerGeneration runtime symbol', () => lacks(SOURCE, 'ba
 check('S06 no scheduledGeneration runtime symbol', () => lacks(SOURCE, 'scheduledGeneration'));
 
 const disconnectCase = switchCase('WEBCLIP_YANDEX_DISCONNECT');
-check('S07 Disconnect clears auth', () => has(disconnectCase, 'await writeYandexAuth(null);'));
-check('S08 Disconnect clears pending PKCE', () => has(disconnectCase, "chrome.storage.session.remove(['yandexOAuthPending'])"));
+const disconnectAuth = asyncSection('async function disconnectYandexAuthControl()');
+check('S07 Disconnect enters shared auth-generation barrier', () => has(disconnectCase, 'await disconnectYandexAuthControl()'));
+check('S08 Disconnect helper clears auth + pending PKCE in one session mutation', () => {
+  has(disconnectAuth, '[YANDEX_OAUTH_PENDING_KEY]: null');
+  has(disconnectAuth, '[YANDEX_AUTH_KEY]: null');
+});
 check('S09 Disconnect lacks scheduler init', () => lacks(disconnectCase, 'initializeJournalBackupScheduler'));
 check('S10 Disconnect lacks pending-backup deletion', () => lacks(disconnectCase, 'JOURNAL_BACKUP_PENDING_KEY'));
 
@@ -153,8 +157,8 @@ check('S24 non-worker init clears periodic alarm', () => has(init, 'chrome.alarm
 check('S25 non-worker init clears retry alarm', () => has(init, 'chrome.alarms.clear(JOURNAL_BACKUP_RETRY_ALARM)'));
 check('S26 init lacks generation receipt check', () => lacks(init, 'schedulerGeneration'));
 
-const finishAuth = asyncSection('async function finishYandexOAuth(code)');
-check('S27 OAuth success writes auth', () => has(finishAuth, 'await writeYandexAuth(yandexAuth);'));
+const finishAuth = asyncSection('async function finishYandexOAuth(authAttemptId, code)');
+check('S27 OAuth success commits exact auth attempt through CAS', () => has(finishAuth, 'commitYandexOAuthAttemptControl(captured, yandexAuth)'));
 check('S28 OAuth success lacks explicit scheduler resume', () => lacks(finishAuth, 'initializeJournalBackupScheduler'));
 const manualAuth = asyncSection('async function setManualYandexToken(token)');
 check('S29 manual auth writes auth', () => has(manualAuth, 'await writeYandexAuth(yandexAuth);'));
