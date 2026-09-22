@@ -543,3 +543,12 @@ The runtime change modifies a package member, so candidate RPF/current 33-file c
 ### P1-196 exact-auth 401 identity discovery #1071
 
 Repository Integrity #1071 / run `35742838788` on exact preliminary PR head `c4deb01d4a439bd104d00e700e078394b8bee45d` passed both dedicated release-control jobs and the new P1-196 runtime/model tests. The generic deterministic suite failed only on stale current package identity pins. Exact authority derived current 34-file RPF `sha256:880ad517fda59415bfcfcb476e29139718d386db708bd652b67c3c10aa38ecff` and current 33-file control `sha256:710d9a44279541adb6ef609b9cad4b34beba17610fb585e668fc1376c362b623`; Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`. #1071 is discovery evidence only, not merge evidence. P1-196 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+
+## P1-196 exact account-enrichment CAS — 2026-09-22
+
+A second bounded P1-196 runtime tranche removes unconditional post-read `writeYandexAuth(...)` account enrichment from `testYandexConnection()` and `getCurrentYandexAccountUid()`. Those callers now opt in to the secret-free exact current-auth request receipt and update account metadata only through record/auth/control-generation CAS. A late successful A response cannot overwrite B, and a superseded connection-test response stops before service-folder continuation.
+
+Deterministic coverage is `project_tools/test_p1_196_account_enrichment_runtime.js`. The existing P1-196 refinement model is updated only to mark positive enrichment as implemented; known-expiry transition, explicit presence/validity/usability status axes, and per-child recovery auth recheck remain current gaps.
+
+P1-196 remains **ACTIVE**. The runtime change modifies `service-worker.js`, so current RPF/current 33-file control must be re-derived by exact-head P1-231 authority before merge. No live Yandex call, provider mutation, real Chrome qualification, product build/ZIP, manifest bump, release-policy activation, tag, deployment or release decision is performed. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
