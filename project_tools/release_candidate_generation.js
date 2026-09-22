@@ -156,7 +156,6 @@ function admitCandidate(candidateSha, options = {}) {
       rcf: identities.rcf,
       bcf: identities.bcf
     }),
-    candidate_generation_fingerprint: null,
     policy_mutation: false,
     receipt_interpretation: false,
     evidence_settlement: false,
