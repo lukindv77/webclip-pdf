@@ -180,6 +180,15 @@ def evaluate_repository_integrity_s1a_lane(workflows: Mapping[str, str]) -> list
         "--event push",
         "control-plane-review-required",
         "release_authorized !== false",
+        "Evaluate P1-231 S1-B/C/D pre-S2 shadow",
+        "release_shadow_settlement.js",
+        "release_builder_equivalence.js",
+        "release_migration_rehearsal.js",
+        "product-build-not-authorized",
+        "release_ready !== false",
+        "s2_authorized !== false",
+        "product_zip !== false",
+        "candidate-ineligible",
     )
     errors: list[str] = []
     for item in required:
