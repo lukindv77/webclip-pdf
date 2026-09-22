@@ -522,3 +522,8 @@ Repository Integrity #1066 / run `35723132459` completed **SUCCESS** on exact he
 ### P1-191 Registry-transition discovery #1067
 
 Repository Integrity #1067 / run `35723534761` on exact head `9af2b0a80224ad6fbd0afa9e83c38529a3004bb0` passed both dedicated release-control jobs but failed the generic deterministic suite on stale witnesses created by the Registry transition. Removing the P1-191 ACTIVE row changed a full-RCF root, so exact authority advanced full RCF from `sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb` to `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`. RPF remains `sha256:0bb0e71547169d2f02bed1ee3cbe5dab4db30aa439d053d8fda1ee73ed0bd396`; current 33-file control remains `sha256:7dc0be48b7b97063c2da2c2680ca0920f00418e8141ded98db442e4bfeffd957`; Chrome/Yandex QCF and BCF remain unchanged. The remaining direct failures were stale P1-191 ACTIVE assertions. #1067 is discovery evidence only, not merge evidence.
+
+
+### P1-191 exact-head reconciliation #1068
+
+Repository Integrity #1068 / run `35740532573` on `abc9330b5113e2bf548d24744a5eaf69760ea5d5` reduced the remaining deterministic failures to two direct stale witnesses: the P1-191 refinement test still required the historical ACTIVE-row wording to live in Registry, and S0-G still pinned the pre-transition full RCF. S1-B/S1-D failures were transitive through S0-G. Runtime, RPF, QCF and BCF were already coherent. #1068 is discovery evidence only; the final reconciliation moves the preserved acceptance wording check to durable P1-191 evidence and updates S0-G to current full RCF `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`.
