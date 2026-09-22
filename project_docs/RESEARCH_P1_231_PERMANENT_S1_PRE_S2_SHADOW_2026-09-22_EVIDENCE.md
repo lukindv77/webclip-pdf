@@ -110,7 +110,7 @@ This applies even if a future synthetic S1 tuple becomes all-green: the shadow p
 
 Because the permanent Repository Integrity workflow itself changes in this tranche, the S1-D workflow rollback anchor advances to the exact new workflow blob:
 
-`fe5ab64d618a02e4f4cb9881f8f5c5ebc2f90e7f`
+`4c60ecad7bcd525eb8da502e61c0cbc2857a6f31`
 
 The other V1 rollback anchors remain unchanged:
 
