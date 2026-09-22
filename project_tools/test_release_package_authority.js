@@ -91,8 +91,8 @@ deep([...topology.files], authority.asciiSort(currentS0a), 'production manifest 
 ok(s0eSource.includes("const PACKAGE_TOPOLOGY = packageAuthority.readCanonicalManifest();"), 'S0-E consumes canonical package authority');
 ok(s0eSource.includes("const PACKAGE_FILES = Object.freeze([...PACKAGE_TOPOLOGY.files]);"), 'S0-E current package membership comes from S0-A authority');
 ok(s0eSource.includes("const LEGACY_PACKAGE_FILES = Object.freeze(PACKAGE_FILES.filter((rel) => rel !== 'application-generation.js'));"), 'S0-E retains explicit 33-file legacy subset control');
-ok(s0eSource.includes("const CURRENT_RPF = 'sha256:0bb0e71547169d2f02bed1ee3cbe5dab4db30aa439d053d8fda1ee73ed0bd396';"), 'S0-E pins corrected current 34-file RPF');
-ok(s0eSource.includes("const LEGACY_RPF = 'sha256:7dc0be48b7b97063c2da2c2680ca0920f00418e8141ded98db442e4bfeffd957';"), 'S0-E retains exact legacy incomplete RPF control');
+ok(s0eSource.includes("const CURRENT_RPF = 'sha256:880ad517fda59415bfcfcb476e29139718d386db708bd652b67c3c10aa38ecff';"), 'S0-E pins corrected current 34-file RPF');
+ok(s0eSource.includes("const LEGACY_RPF = 'sha256:710d9a44279541adb6ef609b9cad4b34beba17610fb585e668fc1376c362b623';"), 'S0-E retains exact legacy incomplete RPF control');
 
 const digest = authority.topologyDigest(topology);
 ok(/^[0-9a-f]{64}$/.test(digest), 'topology digest is SHA-256 hex');
@@ -204,8 +204,8 @@ const packageCountMatch = /(?:^|;\s*)package_files=(\d+)(?=;|$)/m.exec(rpfRun);
 const legacyCountMatch = /(?:^|;\s*)legacy_package_files=(\d+)(?=;|$)/m.exec(rpfRun);
 ok(Boolean(currentRpfMatch), 'current S0-E output exposes corrected RPF');
 ok(Boolean(legacyRpfMatch), 'S0-E output exposes explicit legacy RPF control');
-eq(currentRpfMatch[1], 'sha256:0bb0e71547169d2f02bed1ee3cbe5dab4db30aa439d053d8fda1ee73ed0bd396', 'current S0-E RPF equals canonical 34-file identity');
-eq(legacyRpfMatch[1], 'sha256:7dc0be48b7b97063c2da2c2680ca0920f00418e8141ded98db442e4bfeffd957', 'legacy S0-E RPF remains reproducible control');
+eq(currentRpfMatch[1], 'sha256:880ad517fda59415bfcfcb476e29139718d386db708bd652b67c3c10aa38ecff', 'current S0-E RPF equals canonical 34-file identity');
+eq(legacyRpfMatch[1], 'sha256:710d9a44279541adb6ef609b9cad4b34beba17610fb585e668fc1376c362b623', 'legacy S0-E RPF remains reproducible control');
 eq(packageCountMatch && Number(packageCountMatch[1]), 34, 'S0-E output current package count');
 eq(legacyCountMatch && Number(legacyCountMatch[1]), 33, 'S0-E output legacy package count');
 ok(currentRpfMatch[1] !== legacyRpfMatch[1], 'current and legacy RPFs remain distinct');

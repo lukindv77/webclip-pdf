@@ -218,11 +218,20 @@ P1-196 stays **ACTIVE** after this tranche because these acceptance items remain
 
 ## 12. Release identity impact
 
-`service-worker.js` is a current package member, so the exact 34-file RPF and the current 33-file negative/control projection will advance.
+`service-worker.js` is a current package member, so both source package identities advance.
 
-This document does not guess their final values. Exact-head P1-231 source-generation authority must derive them from the PR head, after which current identity pins will be synchronized.
+Repository Integrity #1071 / run `35742838788` on exact preliminary head `c4deb01d4a439bd104d00e700e078394b8bee45d` independently derived:
 
-No QA-contract input, full-RCF root, or builder-contract input is intentionally changed by the runtime/test/evidence tranche. QCF/full-RCF/BCF changes are not claimed absent exact authority output.
+```text
+current 34-file RPF     = sha256:880ad517fda59415bfcfcb476e29139718d386db708bd652b67c3c10aa38ecff
+current 33-file control = sha256:710d9a44279541adb6ef609b9cad4b34beba17610fb585e668fc1376c362b623
+Chrome QCF              = sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c
+Yandex QCF              = sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1
+full RCF                = sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed
+BCF                     = sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff
+```
+
+The unchanged QCF/full-RCF/BCF axes match this tranche: runtime package bytes change, but no canonical QA-contract, full-RCF root, or builder-contract input changes. #1071 itself is not merge evidence because the generic deterministic suite still contained predecessor RPF/33-file pins; those current-source witnesses are synchronized on the following exact head.
 
 ## 13. Non-actions
 
