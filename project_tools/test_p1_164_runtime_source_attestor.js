@@ -42,7 +42,11 @@ deep(
     'journal-import-stream.js',
     'journal-text-filter.js',
     'local-download-identity.js',
-    'journal-import-digest.js'
+    'journal-import-digest.js',
+    'pdf-print-guard.js',
+    'content-injection-guard.js',
+    'operation-log-redaction-guard.js',
+    'journal-restore-envelope-guard.js'
   ],
   'current parsed worker/importScripts graph'
 );
@@ -91,7 +95,7 @@ const baseSnapshot = {
 const valid = attestor.validateRuntimeSnapshot(contract, baseSnapshot);
 eq(valid.matchesExpected, true, 'matching runtime snapshot');
 eq(valid.packageMemberCount, 34, 'validated package member count');
-eq(valid.loadedScriptCount, 6, 'validated loaded script count');
+eq(valid.loadedScriptCount, 10, 'validated loaded script count');
 eq(valid.extensionId, extensionId, 'validated extension id');
 
 const live = attestor.finalizeLiveAttestation(contract, baseSnapshot, 'Chrome/153.0.0.0');
@@ -101,7 +105,7 @@ eq(live.testedSourceSha, head, 'attestation source');
 eq(live.subject.rpf, contract.subject.rpf, 'attestation RPF');
 eq(live.subject.yandexQcf, contract.subject.yandexQcf, 'attestation Yandex QCF');
 eq(live.package.memberCount, 34, 'attestation package member count');
-eq(live.runningWorker.loadedScriptCount, 6, 'attestation parsed script count');
+eq(live.runningWorker.loadedScriptCount, 10, 'attestation parsed script count');
 eq(live.runningExtensionSourceProven, true, 'live attestation proves runtime source match');
 eq(live.commandExecutionProven, false, 'runtime source does not prove command execution');
 eq(live.providerMutationCausalityProven, false, 'runtime source does not prove provider causality');
