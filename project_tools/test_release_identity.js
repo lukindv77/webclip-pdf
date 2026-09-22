@@ -63,11 +63,23 @@ const changedMembers = packageInputs.members.map(item=>{
 });
 ok(identity.fingerprintRpf({...packageInputs,members:changedMembers})!==currentRpf,'package byte changes RPF');
 throwsCode(()=>identity.computeIdentities('HEAD'),'PACKAGE_CANDIDATE_SHA_INVALID');
+throwsCode(
+  ()=>identity.fingerprintRpf({...packageInputs,package_schema:'webclip-extension-package/v2'}),
+  'IDENTITY_PACKAGE_INPUTS_INVALID'
+);
 
 const contractManifest = contractAuthority.readCanonicalManifest();
 const contractInputs = contractAuthority.identityInputs(head,contractManifest);
 eq(contractInputs.candidate_sha,head,'S0-C candidate');
 eq(contractInputs.full_rcf_blob_inputs.length,11,'full RCF inputs');
+const badContractInputs = {
+  ...contractInputs,
+  qcf_payloads: {
+    ...contractInputs.qcf_payloads,
+    'unpacked-chrome': {...contractInputs.qcf_payloads['unpacked-chrome'],kind:'yandex-e2e'}
+  }
+};
+throwsCode(()=>identity.fingerprintQcf('unpacked-chrome',badContractInputs),'IDENTITY_CONTRACT_INPUTS_INVALID');
 const chrome = identity.fingerprintQcf('unpacked-chrome',contractInputs);
 const yandex = identity.fingerprintQcf('yandex-e2e',contractInputs);
 eq(chrome,CURRENT.chrome,'Chrome QCF');
