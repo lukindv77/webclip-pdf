@@ -210,12 +210,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Verify exact S1-A checkout
         shell: bash
         env:
-          EXPECTED_SHA: \${{ github.sha }}
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
@@ -238,10 +238,10 @@ jobs:
       - name: Evaluate P1-231 S1-A shadow identity
         shell: bash
         env:
-          EVENT_KIND: \${{ github.event_name }}
-          CANDIDATE_SHA: \${{ github.sha }}
-          PR_BASE_SHA: \${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
-          PR_HEAD_SHA: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+          EVENT_KIND: ${{ github.event_name }}
+          CANDIDATE_SHA: ${{ github.sha }}
+          PR_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          PR_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
         run: |
           set -euo pipefail
           result="$RUNNER_TEMP/webclip-s1a-shadow.json"
