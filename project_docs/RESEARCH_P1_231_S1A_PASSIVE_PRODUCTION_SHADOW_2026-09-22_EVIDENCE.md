@@ -53,9 +53,9 @@ For one exact candidate it requires:
 3. S0-E returns a valid exact-candidate identity tuple;
 4. S0-F returns `generation_state=pass`, `generator_rcf_binding=bound`, and the identical RPF/QCF/RCF/BCF tuple;
 5. on a pull request, S0-I provenance binds exact base SHA + PR-head SHA + synthetic-merge candidate SHA;
-6. on a pull request, S0-I automatic classification is trusted and no trusted control-plane review is required.
+6. on a pull request, S0-I trust state is structurally valid.
 
-Any tuple/provenance/trust mismatch fails closed.
+The later control-plane-review reconciliation refines the initial bootstrap rule: ordinary automatically trusted PRs may be shadow-eligible, while the exact valid control-plane pair `trustedControlPlaneReview=true / automaticClassificationTrusted=false` is report-only `control-plane-review-required` with `eligible=false`. Impossible/malformed trust combinations still fail closed. See `RESEARCH_P1_231_S1A_CONTROL_PLANE_REVIEW_RECONCILIATION_2026-09-22_EVIDENCE.md`.
 
 ## Dual-checkout contract
 
