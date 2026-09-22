@@ -192,3 +192,12 @@ live provider qualification              = NOT PERFORMED
 manifest version                         = 0.9.8
 release readiness                        = NOT READY
 ```
+
+
+## 13. Exact-head implementation gate and Registry transition
+
+Repository Integrity #1066 / run `35723132459` completed **SUCCESS** on exact implementation head `946cd957cae35dc574aee930e777e0972d5a23a4`. All three required jobs passed, including the complete deterministic JavaScript suite and the exact source-generation/shadow authorities.
+
+That exact-head gate proves the registered P1-191 source/runtime acceptance contract: candidate-bound validation precedes commit; invalid/unknown candidates preserve the last committed auth; valid candidates commit only under exact shared generation; stale PKCE/manual settlement cannot overwrite the newer intent; candidate account metadata is exact-response-bound; and manual capability remains unproven rather than fabricated.
+
+No separate P1-191 acceptance clause requires a live destructive/provider mutation. Real release regression remains applicable at the broader release/physical qualification layer. Under the Registry status model, P1-191 therefore leaves the ACTIVE table and returns to the default **IMPLEMENTED / RELEASE-REGRESSION** state. This is not `DONE` and does not alter any adjacent ACTIVE capability, validity, OAuth-state, scheduler, account/root or release-evidence owner.

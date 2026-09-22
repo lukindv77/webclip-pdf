@@ -127,7 +127,6 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 | P1-188 | ACTIVE | Imported locator cssPath must use versioned WebClip grammar or be ignored; arbitrary native selector semantics cannot be executed from backup. |
 | P1-189 | ACTIVE | Imported hostname/site identity must be derived from normalized URL before privileged Yandex routing; duplicate raw hostname is not authority. |
 | P1-190 | ACTIVE | Imported operationId is historical/unverified provenance and must not automatically link to an unrelated live local OperationLog record. |
-| P1-191 | ACTIVE | Manual-token replacement must validate candidate before generation-fenced commit and preserve last proven auth on failure/unknown; old PKCE cannot later overwrite it. |
 | P1-192 | ACTIVE | Long alarm-started background operations need explicit MV3 lifecycle ownership **and durable fair progress across maintenance phases/wakes**. |
 | P1-193 | ACTIVE | Optional host permission flow must preserve transient user activation: discovery first, separate immediate grant click, exact candidate document generation. |
 | P1-194 | ACTIVE | Recovery durability class must be truthful about browser storage eviction; ordinary IDB commit cannot be reported as guaranteed recovery unless protection is proven. |
