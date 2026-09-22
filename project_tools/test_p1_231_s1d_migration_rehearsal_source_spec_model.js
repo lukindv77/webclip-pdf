@@ -19,7 +19,7 @@ const ANCHORS = Object.freeze({
   'project_docs/RELEASE_READINESS.md': '165766b248ffa48fc88f0140283adf0e855df22f',
   'project_tools/check_release_readiness.py': 'd3569428a3ea4e5d90be24426fd09c233c75b882',
   '.github/workflows/release-gate.yml': 'f6813f364d39932fb32a1cc2d527d2d7a489ed02',
-  '.github/workflows/repository-integrity.yml': 'fe5ab64d618a02e4f4cb9881f8f5c5ebc2f90e7f',
+  '.github/workflows/repository-integrity.yml': '4c60ecad7bcd525eb8da502e61c0cbc2857a6f31',
 });
 const KINDS = ['unpacked-chrome', 'yandex-e2e', 'blocker-review', 'release-decision'];
 const SHA = Object.freeze({
