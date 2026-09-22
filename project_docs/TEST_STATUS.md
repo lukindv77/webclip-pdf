@@ -322,6 +322,16 @@ A successful **future live** invocation may emit `runningExtensionSourceProven=t
 
 Durable rationale/evidence is `RESEARCH_P1_164_RUNTIME_SOURCE_ATTESTATION_2026-09-22_EVIDENCE.md`. P1-164 remains **ACTIVE** pending the authorized physical browser/Yandex matrix; manifest remains `0.9.8`, release readiness remains **NOT READY**, and current RPF/QCF/RCF/BCF identities remain unchanged.
 
+## P1-164 passive browser command-execution observation tooling
+
+`project_tools/chrome_p1_164_command_observer.js` now prepares the next physical qualification layer without issuing a Yandex request itself. A future live invocation attaches only to the same loopback DevTools / exact source-attested MV3 service-worker target, arms CDP Network observation, and passively recognizes the current destructive request shapes: exact `PUT /resources/unpublish` and exact `POST /resources/move` with `overwrite=false` / `force_async=false`.
+
+The retained trace discards request headers, cookies, bodies and raw loading-failure text before retention. Raw provider paths and CDP request IDs are not emitted; source/target paths use the same domain-separated digests as the existing GET-only Yandex observer so later receipt/session evidence can be joined without disclosing paths. Browser `OPTIONS` preflight cannot satisfy command proof, and wrong/duplicate/out-of-order destructive commands fail closed.
+
+Only a **future live** successful trace may emit `commandExecutionProven=true`, and it simultaneously requires `runningExtensionSourceProven=true` for that same service-worker target. It permanently retains `providerStateObserved=false`, `providerMutationCausalityProven=false`, `qualificationPass=false`, and `releaseAuthorized=false`. The deterministic witness `project_tools/test_p1_164_command_observer.js` uses synthetic CDP events only and therefore creates no physical command evidence.
+
+Durable rationale/evidence is `RESEARCH_P1_164_BROWSER_COMMAND_OBSERVATION_2026-09-22_EVIDENCE.md`. P1-164 remains **ACTIVE**: command/provider-state joining and the real authorized browser/Yandex matrix are still required. Manifest remains `0.9.8`; release readiness remains **NOT READY**; release identity axes are unchanged.
+
 ## P1-231 S0-A passive package authority
 
 The repository now has a canonical passive package declaration in `release_package_manifest_v1.json` and a strict exact-Git resolver in `project_tools/release_package_authority.js`.
