@@ -46,6 +46,8 @@ S0-C now has a passive production release-contract **input** authority. `release
 
 S0-D now has a passive production builder-contract **input** authority. `release_builder_contract_v1.json` canonically owns deterministic staging and classic-ZIP semantics, requires the current S0-A package schema/path profile, and explicitly forbids ZIP64, data descriptors, host filesystem metadata authority and undeclared archive bytes. `project_tools/release_builder_contract_authority.js` exposes only canonical builder identity inputs; the deterministic witness applies S0-E `WEBCLIP_RELEASE_IDENTITY_V1 / BCF_V1` framing test-only and reproduces current BCF `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`. No WebClip product ZIP is built. See `RESEARCH_P1_231_S0D_PASSIVE_PRODUCTION_AUTHORITY_2026-09-22_EVIDENCE.md`.
 
+S0-E now has the passive production typed identity engine `project_tools/release_identity.js`. It consumes production S0-A exact package bytes, S0-C canonical QCF/full-RCF inputs and S0-D builder semantics while owning only `WEBCLIP_RELEASE_IDENTITY_V1` framing/domain-separated SHA-256. The composed engine must reproduce the current 34-file RPF, Chrome/Yandex QCFs, 11-root full RCF and BCF exactly; the 33-file `b65c…` RPF remains a legacy negative control. The existing independent Node/Python S0-E predecessor proof remains in the deterministic suite, and no receipt settlement, product build or release authorization is activated. See `RESEARCH_P1_231_S0E_PASSIVE_PRODUCTION_IDENTITY_2026-09-22_EVIDENCE.md`.
+
 ## Current P0-080 implementation evidence
 
 P0-080 is being implemented in bounded application-generation tranches while keeping same-document application generation distinct from browser `documentId` identity.
