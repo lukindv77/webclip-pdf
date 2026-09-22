@@ -157,21 +157,37 @@ check('R11 release policy not activated', () => has(EVIDENCE, 'Release-policy ac
 check('R12 no new P-code', () => has(EVIDENCE, 'New P-code: **NO**'));
 check('R13 exact baseline bound', () => has(EVIDENCE, 'main = 5da21c26cb0bfd0415b4369203f631e5e3f0615e'));
 
-// Current source census: prove today's defect, do not demand target runtime.
+// Current source census: P1-191 runtime implementation while adjacent owners remain separate.
 check('S01 manual function found', () => assert.ok(MANUAL.length > 100));
 check('S02 manual candidate source marker', () => has(MANUAL, "source: 'manual'"));
-check('S03 manual candidate contains access token before validation', () => has(MANUAL, 'accessToken: token'));
+check('S03 manual candidate token becomes auth material only after validation call', () => {
+  const validationAt = MANUAL.indexOf('validateManualYandexTokenCandidate(token)');
+  const tokenAt = MANUAL.indexOf('accessToken: token');
+  assert.ok(validationAt >= 0 && tokenAt > validationAt);
+});
 check('S04 manual candidate scope remains empty', () => has(MANUAL, "scope: ''"));
-check('S05 candidate global write exists', () => has(MANUAL, 'await writeYandexAuth(yandexAuth);'));
-check('S06 ordinary global yandexApi validation exists', () => has(MANUAL, "const info = await yandexApi('');"));
-check('S07 failure exact-record clear exists after candidate publication', () => has(MANUAL, 'await compareClearYandexAuthRecord(yandexAuth);'));
-check('S08 write precedes validation', () => assert.ok(MANUAL.indexOf('await writeYandexAuth(yandexAuth);') < MANUAL.indexOf("const info = await yandexApi('');")));
-check('S09 validation precedes exact-record catch clear', () => assert.ok(MANUAL.indexOf("const info = await yandexApi('');") < MANUAL.indexOf('await compareClearYandexAuthRecord(yandexAuth);')));
-check('S10 account enrichment is exact-record fenced', () => has(MANUAL, 'await compareUpdateYandexAuthRecord(yandexAuth, { account: extractDiskAccount(info) });'));
-check('S11 candidate-bound helper absent current', () => lacks(SOURCE, 'validateManualYandexTokenCandidate'));
-check('S12 generic candidate helper absent current', () => lacks(SOURCE, 'validateYandexAuthCandidate'));
-check('S13 manual generation-CAS helper absent current', () => lacks(SOURCE, 'commitManualYandexAuthIfGeneration'));
-check('S14 PKCE finish now uses P1-178 exact-attempt CAS', () => has(PKCE_FINISH, 'commitYandexOAuthAttemptControl(captured, yandexAuth)'));
+check('S05 no pre-validation global auth write', () => lacks(MANUAL, 'writeYandexAuth(yandexAuth)'));
+check('S06 exact candidate-bound validation exists', () => has(MANUAL, 'validateManualYandexTokenCandidate(token)'));
+check('S07 candidate rejection has no current-auth clear', () => lacks(MANUAL, 'compareClearYandexAuthRecord'));
+check('S08 validation precedes generation-CAS commit', () => {
+  const validationAt = MANUAL.indexOf('validateManualYandexTokenCandidate(token)');
+  const commitAt = MANUAL.indexOf('commitManualYandexAuthIfGeneration(authGeneration, yandexAuth)');
+  assert.ok(validationAt >= 0 && commitAt > validationAt);
+});
+check('S09 manual intent advances shared generation before validation', () => {
+  const generationAt = MANUAL.indexOf("advanceYandexAuthControlGeneration('Поколение manual-token intent Яндекс Диска')");
+  const validationAt = MANUAL.indexOf('validateManualYandexTokenCandidate(token)');
+  assert.ok(generationAt >= 0 && validationAt > generationAt);
+});
+check('S10 account is derived from exact candidate validation', () => has(MANUAL, 'account: validation.account'));
+check('S11 candidate-bound helper implemented', () => has(SOURCE, 'validateManualYandexTokenCandidate'));
+check('S12 candidate helper bypasses mutable global yandexApi', () => {
+  const helper = sliceBetween(SOURCE, 'async function validateManualYandexTokenCandidate', 'async function setManualYandexToken');
+  lacks(helper, 'yandexApi(');
+  lacks(helper, 'getValidYandexAccessToken');
+});
+check('S13 manual generation-CAS helper implemented', () => has(SOURCE, 'commitManualYandexAuthIfGeneration'));
+check('S14 PKCE finish still uses P1-178 exact-attempt CAS', () => has(PKCE_FINISH, 'commitYandexOAuthAttemptControl(captured, yandexAuth)'));
 check('S15 input length positive control', () => has(MANUAL, 'MAX_YANDEX_ACCESS_TOKEN_CHARS'));
 check('S16 empty candidate positive control', () => has(MANUAL, "throw new Error('Вставьте OAuth-токен.');"));
 
@@ -362,4 +378,4 @@ check('B05 evidence separates release readiness', () => has(EVIDENCE, 'P1-231 S2
 check('B06 official ZIP remains forbidden in tranche', () => has(EVIDENCE, 'official ZIP'));
 check('B07 tag/Release/deployment remain outside tranche', () => has(EVIDENCE, 'tag, Release or deployment'));
 
-console.log(`P1-191 manual token replacement refinement model: PASS; cases=${cases}; schema=webclip-manual-token-replacement/v1; baseline=5da21c26cb0bfd0415b4369203f631e5e3f0615e; current_prevalidation_publish=true; current_failure_clear=true; candidate_validation=private-bound; invalid_preserves_old=true; unknown_preserves_old=true; commit=shared-generation-cas; stale_pkce=blocked; manual_capability=unknown; validity_owner=P1-196; capability_owner=P1-195; generation_owner=P1-178; runtime_modified=false; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-191 manual token replacement refinement model: PASS; cases=${cases}; schema=webclip-manual-token-replacement/v1; baseline=5da21c26cb0bfd0415b4369203f631e5e3f0615e; current_prevalidation_publish=false; current_failure_clear=false; candidate_validation=private-bound; invalid_preserves_old=true; unknown_preserves_old=true; commit=shared-generation-cas; stale_pkce=blocked; manual_capability=unknown; validity_owner=P1-196; capability_owner=P1-195; generation_owner=P1-178; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);

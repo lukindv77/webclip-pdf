@@ -15040,6 +15040,40 @@ async function compareClearYandexAuthRecord(expected) {
   }, 'CAS удаление текущего OAuth record Яндекс Диска');
 }
 
+async function commitManualYandexAuthIfGeneration(expectedGeneration, auth) {
+  const generation = normalizeYandexAuthGeneration(expectedGeneration);
+  if (!generation || !auth?.accessToken || !auth?.authRecordId
+    || normalizeYandexAuthGeneration(auth.authGeneration) !== generation) {
+    const error = new Error('Некорректное поколение manual OAuth-кандидата Яндекс Диска.');
+    error.code = 'YANDEX_MANUAL_AUTH_COMMIT_INVALID';
+    throw error;
+  }
+
+  const committed = await runYandexAuthStorageOperation(async () => {
+    const stored = await chrome.storage.session.get(YANDEX_AUTH_GENERATION_KEY);
+    const currentGeneration = normalizeYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]);
+    if (currentGeneration !== generation) return false;
+    await chrome.storage.session.set({
+      [YANDEX_AUTH_KEY]: auth,
+      [YANDEX_OAUTH_PENDING_KEY]: null
+    });
+    return true;
+  }, 'CAS фиксация проверенного manual OAuth-кандидата Яндекс Диска');
+
+  if (!committed) {
+    const error = new Error('Пока manual OAuth-токен проверялся, началась более новая операция авторизации. Старый кандидат не применён.');
+    error.code = 'YANDEX_MANUAL_AUTH_SUPERSEDED';
+    throw error;
+  }
+
+  await removeLegacyPersistentYandexAuth();
+  await updateYandexConfig(
+    (config) => ({ ...config, authStorageMode: YANDEX_AUTH_STORAGE_SESSION }),
+    'Фиксация session-only режима проверенного manual OAuth Яндекс Диска'
+  );
+  return true;
+}
+
 async function disconnectYandexAuthControl() {
   await runYandexAuthStorageOperation(async () => {
     const stored = await chrome.storage.session.get(YANDEX_AUTH_GENERATION_KEY);
@@ -15376,6 +15410,73 @@ async function exchangeAuthorizationCode({ clientId, code, codeVerifier }) {
   }
 }
 
+async function validateManualYandexTokenCandidate(token, timeoutMs = 10_000) {
+  const candidateToken = String(token || '').trim();
+  if (!candidateToken || candidateToken.length > MAX_YANDEX_ACCESS_TOKEN_CHARS) {
+    const error = new Error('Некорректный manual OAuth-кандидат Яндекс Диска.');
+    error.code = 'YANDEX_MANUAL_TOKEN_CANDIDATE_INVALID';
+    throw error;
+  }
+
+  const requestedTimeout = Number(timeoutMs);
+  const boundedTimeoutMs = Number.isFinite(requestedTimeout) && requestedTimeout > 0
+    ? Math.max(1_000, Math.min(25_000, requestedTimeout))
+    : 10_000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), boundedTimeoutMs);
+
+  let response;
+  let data = {};
+  try {
+    response = await fetch(YANDEX_API_BASE, {
+      method: 'GET',
+      headers: {
+        'Authorization': `OAuth ${candidateToken}`,
+        'Accept': 'application/json'
+      },
+      signal: controller.signal,
+      redirect: 'error'
+    });
+    if (response.status !== 204 && response.headers.get('content-length') !== '0') {
+      data = await safeJson(response);
+    }
+  } catch (error) {
+    const unknown = new Error(
+      controller.signal.aborted || error?.name === 'AbortError'
+        ? 'Проверка manual OAuth-токена Яндекс Диска не завершилась вовремя. Текущая авторизация сохранена.'
+        : 'Не удалось надёжно проверить manual OAuth-токен Яндекс Диска. Текущая авторизация сохранена.'
+    );
+    unknown.code = 'YANDEX_MANUAL_TOKEN_VALIDATION_UNKNOWN';
+    throw unknown;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (response.status === 401) {
+    const invalid = new Error('Яндекс отклонил manual OAuth-токен. Текущая авторизация сохранена.');
+    invalid.code = 'YANDEX_MANUAL_TOKEN_INVALID';
+    invalid.status = 401;
+    throw invalid;
+  }
+  if (!response.ok) {
+    const unknown = new Error('Яндекс не подтвердил manual OAuth-токен однозначно. Текущая авторизация сохранена.');
+    unknown.code = 'YANDEX_MANUAL_TOKEN_VALIDATION_UNKNOWN';
+    unknown.status = response.status;
+    throw unknown;
+  }
+
+  const account = extractDiskAccount(data);
+  if (!String(account?.uid || '').trim()) {
+    const unknown = new Error('Яндекс принял запрос, но не вернул надёжную идентичность аккаунта. Текущая авторизация сохранена.');
+    unknown.code = 'YANDEX_MANUAL_TOKEN_VALIDATION_UNKNOWN';
+    throw unknown;
+  }
+  return Object.freeze({
+    validation: 'valid',
+    account: Object.freeze({ ...account })
+  });
+}
+
 async function setManualYandexToken(token) {
   token = String(token || '').trim();
   if (token.length > MAX_YANDEX_ACCESS_TOKEN_CHARS) throw new Error('OAuth-токен превышает безопасный размер.');
@@ -15383,9 +15484,12 @@ async function setManualYandexToken(token) {
     throw new Error('Вставьте OAuth-токен.');
   }
 
-  // Manual replacement is a newer credential intent for P1-178 fencing even
-  // though P1-191 still separately owns validate-before-commit semantics.
+  // Starting a manual replacement is a newer credential intent. Advance the
+  // shared P1-178 control generation immediately so older PKCE/manual network
+  // results cannot commit after this intent. The last proven auth record is
+  // intentionally left untouched until this exact candidate validates.
   const authGeneration = await advanceYandexAuthControlGeneration('Поколение manual-token intent Яндекс Диска');
+  const validation = await validateManualYandexTokenCandidate(token);
   const yandexAuth = {
     authRecordId: randomBase64Url(24),
     authGeneration,
@@ -15395,18 +15499,10 @@ async function setManualYandexToken(token) {
     refreshToken: '',
     expiresAt: 0,
     scope: '',
-    account: null
+    account: validation.account
   };
-  await writeYandexAuth(yandexAuth);
 
-  try {
-    const info = await yandexApi('');
-    await compareUpdateYandexAuthRecord(yandexAuth, { account: extractDiskAccount(info) });
-  } catch (error) {
-    await compareClearYandexAuthRecord(yandexAuth);
-    throw error;
-  }
-
+  await commitManualYandexAuthIfGeneration(authGeneration, yandexAuth);
   return { ok: true, ...(await getYandexStatus()) };
 }
 
