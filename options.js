@@ -50,6 +50,7 @@ let operationLogSelectionGeneration = 0;
 let operationLogDetailRequestInFlight = false;
 let queuedOperationLogDetailRequest = null;
 let yandexStatusGeneration = 0;
+let activeYandexAuthAttemptId = '';
 let backupStatusGeneration = 0;
 const OPERATION_LOG_RENDER_BATCH_SIZE = 80;
 const OPERATION_LOG_SEARCH_DEBOUNCE_MS = 120;
@@ -315,11 +316,14 @@ function bindEvents() {
   }));
 
   el('startAuth').addEventListener('click', () => runBusy(el('startAuth'), async () => {
+    activeYandexAuthAttemptId = '';
     const response = await chrome.runtime.sendMessage({
       type: 'WEBCLIP_YANDEX_START_AUTH',
       clientId: clientId.value.trim()
     });
     requireOk(response);
+    activeYandexAuthAttemptId = String(response.authAttemptId || '').trim();
+    if (!activeYandexAuthAttemptId) throw new Error('WebClip не получил идентификатор текущей попытки Яндекс OAuth. Начните авторизацию заново.');
     await refreshStatus(response);
     confirmationCode.focus();
     showMessage('Страница Яндекс OAuth открыта. Разрешите доступ, скопируйте показанный код и вернитесь сюда.', 'ok');
@@ -328,9 +332,11 @@ function bindEvents() {
   el('finishAuth').addEventListener('click', () => runBusy(el('finishAuth'), async () => {
     const response = await chrome.runtime.sendMessage({
       type: 'WEBCLIP_YANDEX_FINISH_AUTH',
+      authAttemptId: activeYandexAuthAttemptId,
       code: confirmationCode.value.trim()
     });
     requireOk(response);
+    activeYandexAuthAttemptId = '';
     confirmationCode.value = '';
     await refreshStatus(response);
     showMessage('Яндекс Диск подключён.', 'ok');
@@ -584,6 +590,8 @@ async function refreshStatus(prefetched = null) {
     connectionStatus.className = 'status neutral';
     connectionStatus.textContent = 'Яндекс Диск пока не подключён.';
   }
+
+  if (!status.authPending) activeYandexAuthAttemptId = '';
 
   if (status.authPending && status.authPendingExpiresAt) {
     const seconds = Math.max(0, Math.ceil((status.authPendingExpiresAt - Date.now()) / 1000));
