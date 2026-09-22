@@ -101,6 +101,17 @@ throwsCode(() => run([change('R', 'content.js')]), 'PR_IMPACT_DIFF_STATUS_UNSUPP
 throwsCode(() => run([change('M', '../content.js')]), 'PR_IMPACT_PATH_INVALID');
 throwsCode(() => run([change('M', 'content.js'), change('A', 'content.js')]), 'PR_IMPACT_DUPLICATE_PATH');
 throwsCode(
+  () => run([], {
+    candidateGeneration: {
+      schema: sourceAuthority.SCHEMA,
+      relations: [],
+      topologyDigest: 'sha256:' + '0'.repeat(64)
+    }
+  }),
+  'PR_IMPACT_SOURCE_GENERATION_TOPOLOGY_INVALID',
+  'empty S0-B authority view fails closed'
+);
+throwsCode(
   () => run(Array.from({ length: impact.MAX_CHANGES + 1 }, (_, index) => change('A', 'x' + index + '.js'))),
   'PR_IMPACT_DIFF_FAILED'
 );
@@ -150,19 +161,7 @@ eq(
   'unrelated build_* path is not inferred'
 );
 
-// Base+candidate generation union catches relation deletion/addition.
-const noRelations = sourceView([]);
-const relationRemoved = run(
-  [change('D', 'project_tools/build_public_suffix_js.py')],
-  { candidateGeneration: noRelations }
-);
-eq(relationRemoved.authority.sourceGenerationTopologyChanged, true, 'relation removal changes topology');
-eq(relationRemoved.touched.generationGenerator, true, 'base union catches removed generator');
-ok(
-  relationRemoved.affectedGenerationRelations[0].reasons.includes('relation-removed'),
-  'relation removal reason'
-);
-
+// Base+candidate generation union catches relation deletion/addition while both S0-B views remain valid.
 const second = {
   id: 'second-gen',
   runtime_profile: 'cpython-3.12.10-v1',
@@ -170,6 +169,21 @@ const second = {
   inputs: ['second.dat'],
   outputs: ['second.js']
 };
+const relationRemoved = run(
+  [change('D', 'project_tools/gen_second.py')],
+  {
+    baseGeneration: sourceView([...currentSource.relations, second]),
+    candidateGeneration: sourceView(currentSource.relations)
+  }
+);
+eq(relationRemoved.authority.sourceGenerationTopologyChanged, true, 'relation removal changes topology');
+eq(relationRemoved.touched.generationGenerator, true, 'base union catches removed generator');
+ok(
+  relationRemoved.affectedGenerationRelations.some((item) =>
+    item.relationId === 'second-gen' && item.reasons.includes('relation-removed')),
+  'relation removal reason'
+);
+
 const relationAdded = run(
   [change('A', 'second.dat')],
   { candidateGeneration: sourceView([...currentSource.relations, second]) }
