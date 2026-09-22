@@ -50,6 +50,8 @@ S0-E now has the passive production typed identity engine `project_tools/release
 
 S0-F now has the passive production candidate-generation admission `project_tools/release_candidate_generation.js`. It composes one exact candidate SHA across S0-A package admission, S0-B regeneration, S0-C generator/full-RCF binding and S0-E identity computation. Successful `generation_state=pass` carries the current RPF/QCF/RCF/BCF tuple but creates no CGF axis and explicitly performs no receipt interpretation, evidence settlement, artifact build or release authorization. The permanent CPython 3.12.10 Repository Integrity lane runs this gate after S0-B on the same exact delivery SHA. See `RESEARCH_P1_231_S0F_PASSIVE_PRODUCTION_CANDIDATE_ADMISSION_2026-09-22_EVIDENCE.md`.
 
+S0-G now has the passive production typed receipt reader and settlement engine `project_tools/release_evidence_settlement.js`. It reads only exact-Git `webclip-release-evidence/v2` receipts from the dedicated receipt namespace, requires matching independently admitted tested-source generation plus Git ancestry, and applies latest-attempt ordering per kind/RPF/applicable-QCF-or-RCF key. The current canonical receipt namespace is empty, so the exact current candidate truthfully derives `evidence-missing` with all four required slots missing; V1 readiness text is not reinterpreted as machine evidence. The permanent CPython 3.12.10 lane runs this read-only settlement after S0-F. See `RESEARCH_P1_231_S0G_PASSIVE_PRODUCTION_SETTLEMENT_2026-09-22_EVIDENCE.md`.
+
 ## Current P0-080 implementation evidence
 
 P0-080 is being implemented in bounded application-generation tranches while keeping same-document application generation distinct from browser `documentId` identity.
