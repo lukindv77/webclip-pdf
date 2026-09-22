@@ -527,3 +527,14 @@ Repository Integrity #1067 / run `35723534761` on exact head `9af2b0a80224ad6fbd
 ### P1-191 exact-head reconciliation #1068
 
 Repository Integrity #1068 / run `35740532573` on `abc9330b5113e2bf548d24744a5eaf69760ea5d5` reduced the remaining deterministic failures to two direct stale witnesses: the P1-191 refinement test still required the historical ACTIVE-row wording to live in Registry, and S0-G still pinned the pre-transition full RCF. S1-B/S1-D failures were transitive through S0-G. Runtime, RPF, QCF and BCF were already coherent. #1068 is discovery evidence only; the final reconciliation moves the preserved acceptance wording check to durable P1-191 evidence and updates S0-G to current full RCF `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`.
+
+
+## P1-196 exact current-auth 401 demotion — 2026-09-22
+
+A bounded P1-196 runtime tranche adds worker-owned Yandex Authorization headers, an in-memory exact current-auth request authority with a secret-free record/control-generation receipt, and CAS demotion for an exact current-bound HTTP 401. A late A/401 cannot clear newer B; a newer control-generation transition also fences the old response. Generic 403/429/5xx/network failures, unbound legacy auth and immutable P0-074 operation-context responses do not gain global-auth mutation authority.
+
+Deterministic coverage is `project_tools/test_p1_196_exact_auth_401_runtime.js`. Existing P1-196/P0-074/W5/effect-adapter witnesses are reconciled to the new request-header/source shape.
+
+P1-196 remains **ACTIVE**: known local expiry is still not an exact-generation validity transition, token presence/validity/usability are not yet separate runtime/status axes, and `recoverPendingRemoteSaves()` still uses one auth snapshot across the bounded queue instead of rechecking each later auth-required child.
+
+The runtime change modifies a package member, so candidate RPF/current 33-file control must be re-derived by exact-head P1-231 source-generation authority before merge. No live Yandex request/provider mutation/real Chrome qualification/build/version/release action occurs. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
