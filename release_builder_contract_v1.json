@@ -1,0 +1,46 @@
+{
+  "schema": "webclip-release-builder-contract/v1",
+  "builder_profile": "webclip-classic-zip-stored/v1",
+  "requires_package_schema": "webclip-extension-package/v1",
+  "requires_path_profile": "portable-ascii-v1",
+  "staging": {
+    "source": "exact-candidate-git-blobs",
+    "membership": "consume-s0a-only",
+    "root_policy": "fresh-empty",
+    "symlinks": "forbidden",
+    "extra_files": "forbidden",
+    "filesystem_metadata": "non-authoritative"
+  },
+  "zip": {
+    "container": "classic-single-disk",
+    "compression": "stored",
+    "zip64": "forbidden",
+    "member_order": "unsigned-path-bytes-lexicographic",
+    "filename_encoding": "ascii",
+    "dos_datetime": "1980-01-01T00:00:00",
+    "create_system": 3,
+    "create_version": 20,
+    "extract_version": 20,
+    "external_mode": 33188,
+    "internal_attr": 0,
+    "flag_bits": 0,
+    "extra_fields": "forbidden",
+    "member_comments": "forbidden",
+    "archive_comment": "forbidden",
+    "directory_entries": "forbidden",
+    "data_descriptors": "forbidden",
+    "encryption": "forbidden",
+    "digital_signature": "forbidden",
+    "archive_extra_data": "forbidden",
+    "preamble": "forbidden",
+    "trailing_bytes": "forbidden"
+  },
+  "verification": {
+    "local_central_agreement": "required",
+    "crc32": "required",
+    "stored_size_equality": "required",
+    "exact_member_bytes": "required",
+    "candidate_rpf_equality": "required",
+    "artifact_sha256": "required"
+  }
+}
