@@ -220,6 +220,8 @@ function validatePackageView(value) {
     !value
     || value.schema !== packageAuthority.SCHEMA
     || !Array.isArray(value.files)
+    || value.files.length === 0
+    || value.files.length > packageAuthority.MAX_FILES
     || !/^sha256:[0-9a-f]{64}$/.test(value.topologyDigest || '')
   ) {
     fail('PR_IMPACT_PACKAGE_TOPOLOGY_INVALID');
@@ -240,6 +242,8 @@ function validateSourceView(value) {
     !value
     || value.schema !== sourceAuthority.SCHEMA
     || !Array.isArray(value.relations)
+    || value.relations.length === 0
+    || value.relations.length > sourceAuthority.MAX_RELATIONS
     || !/^sha256:[0-9a-f]{64}$/.test(value.topologyDigest || '')
   ) {
     fail('PR_IMPACT_SOURCE_GENERATION_TOPOLOGY_INVALID');
