@@ -359,7 +359,12 @@ function bindEvidence(input) {
       providerWatch: Object.freeze({
         requestedSeconds: providerObservation.watch.requestedSeconds,
         elapsedMs: providerObservation.watch.elapsedMs,
-        attemptCount: providerObservation.watch.attempts.length
+        attemptCount: providerObservation.watch.attempts.length,
+        attempts: Object.freeze(providerObservation.watch.attempts.map((item) => Object.freeze({
+          attempt: item.attempt,
+          elapsedMs: item.elapsedMs,
+          state: item.state
+        })))
       }),
       requiredAdmissions: coverage.requiredAdmissions,
       observedCommands: coverage.observedCommands,
