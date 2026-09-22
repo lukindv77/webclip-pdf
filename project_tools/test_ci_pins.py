@@ -188,6 +188,11 @@ def main() -> None:
         f"permissions:\n  contents: read\nruns-on: ubuntu-24.04\n- uses: actions/checkout@{PIN}\nrun: gh api --method POST repos/x/y/statuses/abc\n",
         "mutating",
     )
+    expect_fail(
+        "escaped-github-expression",
+        f"permissions:\n  contents: read\nruns-on: ubuntu-24.04\n- uses: actions/checkout@{PIN}\nenv:\n  BAD: \\${{{{ github.sha }}}}\n",
+        "escaped GitHub expression",
+    )
     expect_pass(
         "local-action",
         "permissions:\n  contents: read\nruns-on: ubuntu-24.04\n- uses: ./local-action\n",
