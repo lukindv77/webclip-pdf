@@ -511,7 +511,12 @@ module.exports = Object.freeze({
   buildPackageProbeExpression,
   assertLoopbackBase,
   assertLoopbackWebSocket,
+  fetchJson,
+  CdpClient,
+  resultValue,
   parsedPath,
+  collectScriptSnapshot,
   manifestLooksLikeContract,
+  collectLiveSnapshot,
   parseArgs
 });
