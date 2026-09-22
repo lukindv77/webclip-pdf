@@ -331,3 +331,162 @@ jobs:
             + '; release_authorized=' + result.release_authorized
           );
           NODE
+
+      - name: Evaluate P1-231 S1-B/C/D pre-S2 shadow
+        shell: bash
+        env:
+          EVENT_KIND: \${{ github.event_name }}
+          CANDIDATE_SHA: \${{ github.sha }}
+          PR_BASE_SHA: \${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          PR_HEAD_SHA: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const s1bAuthority = require('./project_tools/release_shadow_settlement.js');
+          const s1cAuthority = require('./project_tools/release_builder_equivalence.js');
+          const s1dAuthority = require('./project_tools/release_migration_rehearsal.js');
+
+          function fail(message) {
+            console.error('S1-B/C/D pre-S2 invariant failed: ' + message);
+            process.exit(1);
+          }
+
+          const eventKind = process.env.EVENT_KIND;
+          const candidate = process.env.CANDIDATE_SHA;
+          const prBase = process.env.PR_BASE_SHA || null;
+          const prHead = process.env.PR_HEAD_SHA || null;
+          const s1aPath = path.join(process.env.RUNNER_TEMP, 'webclip-s1a-shadow.json');
+          const s1a = JSON.parse(fs.readFileSync(s1aPath, 'utf8'));
+
+          const shadowInput = {
+            eventKind,
+            candidateSha: candidate,
+            baseSha: eventKind === 'pull_request' ? prBase : null,
+            prHeadSha: eventKind === 'pull_request' ? prHead : null
+          };
+
+          const s1b = s1bAuthority.evaluateShadowSettlement(
+            shadowInput,
+            { shadowProvider: () => s1a }
+          );
+          const s1c = s1cAuthority.observeCandidate(
+            shadowInput,
+            { shadowProvider: () => s1a }
+          );
+
+          const observedMain = eventKind === 'pull_request' ? prBase : candidate;
+          const s1d = s1dAuthority.rehearseMigration({
+            candidateSha: candidate,
+            execution: {
+              checkoutSha: candidate,
+              candidateAdmissionSha: candidate,
+              workflowRef: s1dAuthority.WORKFLOW_REF,
+              workflowBlobSha: s1dAuthority.V1_ANCHORS['.github/workflows/repository-integrity.yml'],
+              evidenceMainSha: observedMain,
+              decisionMainSha: observedMain,
+              receiptHistoryAppendOnly: true,
+              syntheticMergeRequired: eventKind === 'pull_request',
+              prHeadSha: eventKind === 'pull_request' ? prHead : null
+            },
+            s1a,
+            s1b,
+            s1c
+          });
+
+          if (
+            s1b.schema !== 'webclip-shadow-settlement/v1'
+            || s1b.candidate_sha !== candidate
+            || s1b.policy_mutation !== false
+            || s1b.receipt_mutation !== false
+            || s1b.readiness_mutation !== false
+            || s1b.artifact_build !== false
+            || s1b.release_authorized !== false
+          ) {
+            fail('S1-B passive envelope');
+          }
+
+          if (
+            s1c.schema !== 'webclip-builder-equivalence/v1'
+            || s1c.candidate_sha !== candidate
+            || s1c.product_projection_loaded !== false
+            || s1c.product_zip_built !== false
+            || s1c.official_artifact !== false
+            || s1c.authoritative !== false
+            || s1c.policy_mutation !== false
+            || s1c.receipt_mutation !== false
+            || s1c.readiness_mutation !== false
+            || s1c.release_authorized !== false
+          ) {
+            fail('S1-C passive envelope');
+          }
+
+          if (
+            s1d.schema !== 'webclip-shadow-migration-rehearsal/v1'
+            || s1d.candidate_sha !== candidate
+            || s1d.state !== 'shadow-observed'
+            || s1d.failure !== null
+            || s1d.v1_authority !== 'unchanged'
+            || s1d.rollback_target !== 'v1-only'
+            || s1d.release_ready !== false
+            || s1d.release_authorized !== false
+            || s1d.s2_authorized !== false
+            || s1d.product_zip !== false
+            || s1d.authoritative !== false
+            || s1d.policy_mutation !== false
+            || s1d.receipt_mutation !== false
+            || s1d.readiness_mutation !== false
+          ) {
+            fail('S1-D passive envelope');
+          }
+
+          if (s1a.eligible === false) {
+            if (
+              s1b.shadow_outcome !== 'candidate-ineligible'
+              || s1b.settlement_evaluated !== false
+              || s1c.state !== 'candidate-ineligible'
+              || s1c.equivalence_evaluated !== false
+              || s1d.shadow.identity !== 'candidate-ineligible'
+              || s1d.shadow.settlement !== 'candidate-ineligible'
+              || s1d.shadow.builder_equivalence !== 'candidate-ineligible'
+            ) {
+              fail('control-plane ineligible propagation');
+            }
+          } else {
+            if (
+              s1b.identity_eligible !== true
+              || s1b.settlement_evaluated !== true
+              || s1c.identity_eligible !== true
+              || s1c.state !== 'not-evaluated'
+              || s1c.blocker_reason !== 'product-build-not-authorized'
+              || s1d.shadow.identity !== 'eligible'
+              || s1d.shadow.builder_equivalence !== 'not-evaluated'
+            ) {
+              fail('eligible passive observation');
+            }
+            if (
+              s1b.all_required_slots_pass === false
+              && !['evidence-missing', 'evidence-blocked'].includes(s1b.s0g_settlement_state)
+            ) {
+              fail('eligible settlement blocker semantics');
+            }
+          }
+
+          for (const [name, result] of Object.entries({s1b, s1c, s1d})) {
+            fs.writeFileSync(
+              path.join(process.env.RUNNER_TEMP, 'webclip-' + name + '-shadow.json'),
+              JSON.stringify(result, null, 2) + '\n'
+            );
+            console.log(name.toUpperCase() + ' result:');
+            console.log(JSON.stringify(result, null, 2));
+          }
+
+          console.log(
+            'P1-231 permanent pre-S2 shadow verified: '
+            + 'identity=' + s1d.shadow.identity
+            + '; settlement=' + s1d.shadow.settlement
+            + '; builder=' + s1d.shadow.builder_equivalence
+            + '; s2_authorized=' + s1d.s2_authorized
+          );
+          NODE
