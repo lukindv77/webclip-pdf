@@ -254,3 +254,33 @@ P1-231 also remains **ACTIVE**; its passive pre-S2 shadow does not replace curre
 This tranche performs no live browser qualification and no Yandex provider mutation.
 
 It does not build a product ZIP, bump `manifest.json`, run a release action, activate S2, create a tag, deploy, create a GitHub Release or make a release decision.
+
+## 2026-09-22 binder v2 matrix-evidence refinement
+
+The later physical-matrix preparation tranche advances the binder output schema from
+`webclip-p1-164-qualification-evidence-binding/v1` to
+`webclip-p1-164-qualification-evidence-binding/v2`.
+
+The source/receipt/path/session/causality semantics above are unchanged. v2 only retains
+additional already-validated sanitized fields needed to distinguish physical schedules:
+
+- provider wrapper phase and preserved manual-resolution source phase;
+- bounded provider watch seconds / elapsed time / attempt count;
+- sanitized per-attempt classification state history;
+- per-command `networkOutcome` and numeric `responseStatus`.
+
+Raw provider paths, account/resource/public-link identity, OAuth credentials, CDP request ids,
+headers, bodies and loading error detail remain absent.
+
+This refinement is required so the passive matrix authority can distinguish normal 2xx command
+completion from transport-unknown settlement and can recognize target visibility delay without
+inventing those schedules from the final provider state.
+
+Binder v2 still permanently reports:
+
+- `providerMutationCausalityProven=false`;
+- `qualificationPass=false`;
+- `releaseAuthorized=false`.
+
+The matrix authority and its evidence are recorded separately in
+`RESEARCH_P1_164_PHYSICAL_QUALIFICATION_MATRIX_2026-09-22_EVIDENCE.md`.
