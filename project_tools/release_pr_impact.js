@@ -24,7 +24,12 @@ const AUTHORITY_IMPLEMENTATION = Object.freeze([
   'project_tools/release_source_generation_authority.js'
 ]);
 const CHECKER_CONTROL_PLANE = Object.freeze([
+  'project_tools/release_contract_authority.js',
+  'project_tools/release_builder_contract_authority.js',
+  'project_tools/release_identity.js',
+  'project_tools/release_candidate_generation.js',
   'project_tools/release_pr_impact.js',
+  'project_tools/release_shadow_identity.js',
   'project_tools/check_pr_change_contract.py',
   '.github/workflows/repository-integrity.yml'
 ]);

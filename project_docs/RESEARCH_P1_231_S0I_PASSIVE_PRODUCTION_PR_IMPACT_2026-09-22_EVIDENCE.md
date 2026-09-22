@@ -162,6 +162,21 @@ Candidate code therefore cannot make its own control-plane change and simultaneo
 
 This is a trust-state fact, not a claim that the change is malicious.
 
+### S1-A bootstrap extension
+
+The later S1-A passive-production tranche extends the PR-checker/control-plane trust set to the production S1 identity/admission dependencies:
+
+- `project_tools/release_contract_authority.js`
+- `project_tools/release_builder_contract_authority.js`
+- `project_tools/release_identity.js`
+- `project_tools/release_candidate_generation.js`
+- `project_tools/release_pr_impact.js`
+- `project_tools/release_shadow_identity.js`
+- `project_tools/check_pr_change_contract.py`
+- `.github/workflows/repository-integrity.yml`
+
+This extension is intentionally landed before permanent S1-A workflow activation. Once in canonical base, a later PR cannot rewrite S0-C/D/E/F/S1-A shadow trust code and have candidate-controlled S0-I classify that same change as automatically trusted.
+
 ## Derived requirement flags
 
 `candidateGenerationVerification=true` when package/source-generation semantics, generation closure or S0-A/S0-B implementation may affect candidate generation.
