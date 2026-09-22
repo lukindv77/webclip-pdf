@@ -239,9 +239,16 @@ throwsCode(
   'S1C_BCF_MISMATCH'
 );
 
+const baseFixtureMembers=fixtureInputs().members;
 const fiveMembers={
   ...fixtureInputs(),
-  members:[...fixtureInputs().members,{path:'extra.txt',bytes:Buffer.from('x')}]
+  members:[
+    baseFixtureMembers[0],
+    baseFixtureMembers[1],
+    {path:'extra.txt',bytes:Buffer.from('x')},
+    baseFixtureMembers[2],
+    baseFixtureMembers[3]
+  ]
 };
 throwsCode(
   ()=>equivalence.evaluateFixtureEquivalence({
