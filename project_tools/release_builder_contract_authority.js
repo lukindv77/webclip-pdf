@@ -190,14 +190,6 @@ function normalizeAuthority(raw) {
     equalScalar(raw.verification[key], expected, 'BUILDER_CONTRACT_VERIFICATION_INVALID', key);
   }
 
-  const packageManifest = packageAuthority.readCanonicalManifest();
-  if (packageManifest.schema !== raw.requires_package_schema) {
-    fail('BUILDER_CONTRACT_PACKAGE_SCHEMA_MISMATCH');
-  }
-  if (packageManifest.path_profile !== raw.requires_path_profile) {
-    fail('BUILDER_CONTRACT_PATH_PROFILE_MISMATCH');
-  }
-
   return Object.freeze({
     schema: SCHEMA,
     builder_profile: BUILDER_PROFILE,
@@ -206,6 +198,22 @@ function normalizeAuthority(raw) {
     staging: Object.freeze({ ...CANONICAL.staging }),
     zip: Object.freeze({ ...CANONICAL.zip }),
     verification: Object.freeze({ ...CANONICAL.verification })
+  });
+}
+
+function assertPackageCompatibility(authorityValue, packageManifestValue) {
+  const authority = normalizeAuthority(authorityValue);
+  const packageManifest = packageManifestValue || packageAuthority.readCanonicalManifest();
+  if (!packageManifest || packageManifest.schema !== authority.requires_package_schema) {
+    fail('BUILDER_CONTRACT_PACKAGE_SCHEMA_MISMATCH');
+  }
+  if (packageManifest.path_profile !== authority.requires_path_profile) {
+    fail('BUILDER_CONTRACT_PATH_PROFILE_MISMATCH');
+  }
+  return Object.freeze({
+    package_schema: packageManifest.schema,
+    path_profile: packageManifest.path_profile,
+    compatible: true
   });
 }
 
@@ -237,11 +245,13 @@ function bcfPayload(authorityValue) {
   return normalizeAuthority(authorityValue);
 }
 
-function identityInputs(authorityValue) {
+function identityInputs(authorityValue, packageManifestValue) {
   const authority = normalizeAuthority(authorityValue);
+  const packageCompatibility = assertPackageCompatibility(authority, packageManifestValue);
   return Object.freeze({
     schema: 'webclip-release-builder-identity-inputs/v1',
     builder_contract: authority,
+    package_compatibility: packageCompatibility,
     artifact_build: false,
     policy_mutation: false,
     receipt_interpretation: false,
@@ -282,5 +292,6 @@ module.exports = Object.freeze({
   normalizeAuthority,
   readCanonicalManifest,
   bcfPayload,
+  assertPackageCompatibility,
   identityInputs
 });
