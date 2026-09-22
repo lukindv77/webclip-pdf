@@ -30,6 +30,7 @@ const CHECKER_CONTROL_PLANE = Object.freeze([
   'project_tools/release_candidate_generation.js',
   'project_tools/release_pr_impact.js',
   'project_tools/release_shadow_identity.js',
+  'project_tools/release_shadow_settlement.js',
   'project_tools/check_ci_pins.py',
   'project_tools/check_pr_change_contract.py',
   '.github/workflows/repository-integrity.yml'
