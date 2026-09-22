@@ -79,8 +79,8 @@ eq(unpublish.method, 'PUT', 'unpublish method');
 eq(unpublish.endpoint, '/resources/unpublish', 'unpublish endpoint');
 eq(unpublish.sourcePathDigest, observer.identityDigest('source', sourcePath), 'unpublish path digest parity');
 eq(unpublish.targetPathDigest, '', 'unpublish has no target digest');
-ok(/^sha256:[0-9a-f]{64}$/.test(unpublish.requestIdDigest), 'request id is digest only');
-ok(!JSON.stringify(unpublish).includes('u1'), 'raw request id not in sanitized request');
+ok(/^sha256:[0-9a-f]{64}$/.test(unpublish.requestIdDigest), 'request id has sanitized digest');
+eq(unpublish.requestId, 'u1', 'raw request id retained only for in-memory response correlation');
 
 const move = tool.parseDestructiveRequest(req('m1', 2, 'POST', moveUrl));
 eq(move.command, 'move', 'move command');
@@ -246,6 +246,8 @@ for (const limitation of tool.LIMITATIONS) {
 }
 
 const finalJson = JSON.stringify(finalized);
+ok(!finalJson.includes('"requestId":"u1"'), 'raw unpublish request id absent from final output');
+ok(!finalJson.includes('"requestId":"m1"'), 'raw move request id absent from final output');
 ok(!finalJson.includes(sourcePath), 'raw source path absent from output');
 ok(!finalJson.includes(targetPath), 'raw target path absent from output');
 ok(!finalJson.includes(extensionId), 'raw extension id absent from output');
