@@ -14964,9 +14964,10 @@ async function compareRemoveYandexOAuthPendingControl(expected, label = 'Уда�
     const stored = await chrome.storage.session.get([YANDEX_AUTH_GENERATION_KEY, YANDEX_OAUTH_PENDING_KEY]);
     const current = stored?.[YANDEX_OAUTH_PENDING_KEY] || null;
     if (!sameYandexOAuthPendingIdentity(current, expected)) return false;
-    const expectedGeneration = normalizeYandexAuthGeneration(expected.authGeneration);
-    if (String(expected.authAttemptId || '').trim()
-      && normalizeYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]) !== expectedGeneration) return false;
+    // Cleanup authority comes from the exact pending-record identity. Requiring
+    // the separate generation key to agree here could strand a stale/corrupt
+    // pending row after a partial control-state settlement. Token commit below
+    // remains strictly generation-gated.
     await chrome.storage.session.set({ [YANDEX_OAUTH_PENDING_KEY]: null });
     return true;
   }, label);
