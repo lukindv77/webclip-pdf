@@ -2,7 +2,7 @@
 
 // P1-231 S1-B production witness.
 // Exercises passive namespace-first shadow settlement without installing a
-// permanent S1-B workflow job or creating release evidence.
+// separate S1-B workflow job or creating release evidence.
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -327,7 +327,9 @@ ok(prImpact.CHECKER_CONTROL_PLANE.includes('project_tools/release_shadow_settlem
 const workflow=fs.readFileSync(path.join(ROOT,'.github','workflows','repository-integrity.yml'),'utf8');
 ok(workflow.includes('p1-231-shadow-identity'),'S1-A permanent lane remains active');
 ok(!workflow.includes('p1-231-shadow-settlement'),'S1-B permanent lane remains inactive');
-ok(!workflow.includes('release_shadow_settlement.js'),'S1-B CLI not permanently invoked');
+ok(workflow.includes('release_shadow_settlement.js'),'S1-B library permanently invoked in shared S1 shadow lane');
+ok(workflow.includes('Evaluate P1-231 S1-B/C/D pre-S2 shadow'),'shared pre-S2 shadow step present');
+ok(workflow.includes('s2_authorized !== false'),'shared shadow lane retains explicit S2-false fence');
 
 console.log(
   'P1-231 S1-B passive shadow settlement: PASS; checks='+checks+
@@ -337,5 +339,5 @@ console.log(
   '; current_s0g='+current.s0g_settlement_state+
   '; namespace_first=true; review_short_circuit=true; synthetic_all_pass=true'+
   '; policy_mutation=false; receipt_mutation=false; readiness_mutation=false; artifact_build=false; release_authorized=false'+
-  '; permanent_workflow_active=false'
+  '; permanent_workflow_active=shared-s1-shadow'
 );
