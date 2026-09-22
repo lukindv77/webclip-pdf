@@ -25,6 +25,7 @@ function isResearchControlPath(path) {
   return path.startsWith('project_docs/')
     || path.startsWith('project_tools/')
     || path.startsWith('.github/workflows/')
+    || path === 'release_builder_contract_v1.json'
     || path === 'release_contract_inputs_v1.json'
     || path === 'release_package_manifest_v1.json'
     || path === 'release_source_generation_v1.json';
@@ -148,6 +149,7 @@ function releaseAuthority({ runtimeComplete = false, shadowComplete = false, exp
   check(historicalDeltaA.includes('project_docs/RESEARCH_REGISTRY.md'), 'baseline A delta includes current ownership authority update');
   check(historicalDeltaB.includes('project_docs/RESEARCH_REGISTRY.md'), 'baseline B delta includes current ownership authority update');
   check(isResearchControlPath('.github/workflows/repository-integrity.yml'), 'delivery workflow is control-plane, not product runtime');
+  check(isResearchControlPath('release_builder_contract_v1.json'), 'builder-contract authority manifest is control-plane, not product runtime');
   check(isResearchControlPath('release_contract_inputs_v1.json'), 'release-contract authority manifest is control-plane, not product runtime');
   check(isResearchControlPath('release_package_manifest_v1.json'), 'package authority manifest is control-plane, not product runtime');
   check(isResearchControlPath('release_source_generation_v1.json'), 'source-generation authority manifest is control-plane, not product runtime');
