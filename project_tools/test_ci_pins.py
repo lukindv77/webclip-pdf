@@ -134,6 +134,15 @@ GOOD_S1A_JOB = """
             --candidate "$CANDIDATE_SHA"
           if (result.shadow_outcome !== 'control-plane-review-required') fail()
           if (result.release_authorized !== false) fail()
+          # Evaluate P1-231 S1-B/C/D pre-S2 shadow
+          const s1bAuthority = require('./project_tools/release_shadow_settlement.js')
+          const s1cAuthority = require('./project_tools/release_builder_equivalence.js')
+          const s1dAuthority = require('./project_tools/release_migration_rehearsal.js')
+          if (s1c.blocker_reason !== 'product-build-not-authorized') fail()
+          if (s1d.release_ready !== false) fail()
+          if (s1d.s2_authorized !== false) fail()
+          if (s1d.product_zip !== false) fail()
+          if (s1b.shadow_outcome !== 'candidate-ineligible') fail()
 """
 GOOD_REPOSITORY_INTEGRITY_WITH_S0B_AND_S1A = (
     GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB + GOOD_S1A_JOB
@@ -178,6 +187,11 @@ def main() -> None:
         "mutating-gh-api",
         f"permissions:\n  contents: read\nruns-on: ubuntu-24.04\n- uses: actions/checkout@{PIN}\nrun: gh api --method POST repos/x/y/statuses/abc\n",
         "mutating",
+    )
+    expect_fail(
+        "escaped-github-expression",
+        f"permissions:\n  contents: read\nruns-on: ubuntu-24.04\n- uses: actions/checkout@{PIN}\nenv:\n  BAD: \\${{{{ github.sha }}}}\n",
+        "escaped GitHub expression",
     )
     expect_pass(
         "local-action",
@@ -335,6 +349,26 @@ def main() -> None:
     )
     if not any("control-plane-review-required" in error for error in s1a_errors):
         raise AssertionError(f"repository-integrity-s1a-no-review-invariant: expected review failure, got {s1a_errors}")
+
+    no_s1d_rehearsal = GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB + GOOD_S1A_JOB.replace(
+        "          const s1dAuthority = require('./project_tools/release_migration_rehearsal.js')\n",
+        "",
+    )
+    s1a_errors = module.evaluate_repository_integrity_s1a_lane(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: no_s1d_rehearsal}
+    )
+    if not any("release_migration_rehearsal.js" in error for error in s1a_errors):
+        raise AssertionError(f"repository-integrity-s1d-no-rehearsal: expected S1-D failure, got {s1a_errors}")
+
+    no_s2_false = GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB + GOOD_S1A_JOB.replace(
+        "          if (s1d.s2_authorized !== false) fail()\n",
+        "",
+    )
+    s1a_errors = module.evaluate_repository_integrity_s1a_lane(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: no_s2_false}
+    )
+    if not any("s2_authorized !== false" in error for error in s1a_errors):
+        raise AssertionError(f"repository-integrity-s1d-no-s2-fence: expected S2 fence failure, got {s1a_errors}")
 
     profile_errors = module.evaluate(
         {

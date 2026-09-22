@@ -338,7 +338,10 @@ ok(prImpact.CHECKER_CONTROL_PLANE.includes('project_tools/release_migration_rehe
 const workflow=fs.readFileSync(path.join(ROOT,'.github','workflows','repository-integrity.yml'),'utf8');
 ok(workflow.includes('p1-231-shadow-identity'),'S1-A permanent lane remains active');
 ok(!workflow.includes('p1-231-migration-rehearsal'),'S1-D permanent lane absent');
-ok(!workflow.includes('release_migration_rehearsal.js'),'S1-D not permanently invoked');
+ok(workflow.includes('release_migration_rehearsal.js'),'S1-D permanently invoked in shared S1 shadow lane');
+ok(workflow.includes('release_ready !== false'),'shared S1 lane keeps readiness false');
+ok(workflow.includes('s2_authorized !== false'),'shared S1 lane keeps S2 false');
+ok(workflow.includes('product_zip !== false'),'shared S1 lane keeps product ZIP false');
 ok(!Object.prototype.hasOwnProperty.call(rehearsal,'main'),'S1-D exposes no CLI');
 
 console.log(
@@ -350,5 +353,5 @@ console.log(
   '; current_equivalence='+current.shadow.builder_equivalence+
   '; rollback=v1-only; v1_authority=unchanged; v1_blockers=5'+
   '; synthetic_all_green_non_authoritative=true; main_movement=fail-closed; workflow_binding=fail-closed'+
-  '; s2_authorized=false; release_authorized=false; product_zip=false; permanent_workflow_active=false'
+  '; s2_authorized=false; release_authorized=false; product_zip=false; permanent_workflow_active=shared-s1-shadow'
 );

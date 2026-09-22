@@ -55,6 +55,10 @@ def evaluate(workflows: Mapping[str, str]) -> list[str]:
         if MUTATING_GH_API.search(text):
             errors.append(f"{name}: mutating 'gh api --method ...' command is forbidden in permanent workflows")
 
+        if "\\${{" in text:
+            errors.append(f"{name}: escaped GitHub expression syntax '\\${{{{' is forbidden")
+
+
         for use in USES.findall(text):
             if use.startswith("./"):
                 continue
@@ -180,6 +184,15 @@ def evaluate_repository_integrity_s1a_lane(workflows: Mapping[str, str]) -> list
         "--event push",
         "control-plane-review-required",
         "release_authorized !== false",
+        "Evaluate P1-231 S1-B/C/D pre-S2 shadow",
+        "release_shadow_settlement.js",
+        "release_builder_equivalence.js",
+        "release_migration_rehearsal.js",
+        "product-build-not-authorized",
+        "release_ready !== false",
+        "s2_authorized !== false",
+        "product_zip !== false",
+        "candidate-ineligible",
     )
     errors: list[str] = []
     for item in required:
