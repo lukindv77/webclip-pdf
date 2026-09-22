@@ -133,11 +133,10 @@ function normalizePrImpact(value, baseSha, prHeadSha, candidateSha) {
     fail('S1A_PR_IMPACT_INVALID');
   }
 
-  if (
-    value.requires.trustedControlPlaneReview === true
-    || value.trust.automaticClassificationTrusted !== true
-  ) {
-    fail('S1A_PR_CONTROL_PLANE_UNTRUSTED');
+  const trustedControlPlaneReview = value.requires.trustedControlPlaneReview === true;
+  const automaticClassificationTrusted = value.trust.automaticClassificationTrusted === true;
+  if (trustedControlPlaneReview === automaticClassificationTrusted) {
+    fail('S1A_PR_TRUST_STATE_INVALID');
   }
 
   return Object.freeze({
@@ -147,8 +146,8 @@ function normalizePrImpact(value, baseSha, prHeadSha, candidateSha) {
     sourceGenerationTopologyChanged: value.authority.sourceGenerationTopologyChanged === true,
     candidateGenerationVerification: value.requires.candidateGenerationVerification === true,
     shadowIdentityRecompute: value.requires.shadowIdentityRecompute === true,
-    trustedControlPlaneReview: false,
-    automaticClassificationTrusted: true
+    trustedControlPlaneReview,
+    automaticClassificationTrusted
   });
 }
 
@@ -218,6 +217,8 @@ function evaluateShadow(input, options = {}) {
   assertTupleEqual(identityTuple, gateTuple);
 
   let impactContext;
+  let eligible = true;
+  let shadowOutcome = 'eligible';
   if (eventKind === EVENT_PUSH) {
     if (input.baseSha != null || input.prHeadSha != null) fail('S1A_PUSH_PR_CONTEXT_FORBIDDEN');
     impactContext = Object.freeze({
@@ -238,13 +239,18 @@ function evaluateShadow(input, options = {}) {
       if (error && error.code) throw error;
       fail('S1A_PR_IMPACT_FAILED');
     }
+    const normalizedImpact = normalizePrImpact(impact, baseSha, prHeadSha, candidate);
     impactContext = Object.freeze({
       kind: 'pull-request-synthetic-merge',
       baseSha,
       prHeadSha,
       candidateSha: candidate,
-      ...normalizePrImpact(impact, baseSha, prHeadSha, candidate)
+      ...normalizedImpact
     });
+    if (normalizedImpact.trustedControlPlaneReview) {
+      eligible = false;
+      shadowOutcome = 'control-plane-review-required';
+    }
   }
 
   return Object.freeze({
@@ -258,8 +264,8 @@ function evaluateShadow(input, options = {}) {
     rcf: identityTuple.rcf,
     bcf: identityTuple.bcf,
     generation_gate: 'pass',
-    eligible: true,
-    shadow_outcome: 'eligible',
+    eligible,
+    shadow_outcome: shadowOutcome,
     impact_context: impactContext,
     policy_mutation: false,
     receipt_mutation: false,

@@ -126,22 +126,49 @@ eq(pr.impact_context.prHeadSha,prHead,'PR head');
 eq(pr.impact_context.candidateSha,head,'synthetic merge candidate');
 eq(pr.impact_context.automaticClassificationTrusted,true,'trusted PR impact');
 
-const untrustedImpact = {
+const reviewImpact = {
   ...trustedImpact,
   requires: { ...trustedImpact.requires, trustedControlPlaneReview: true },
   trust: { automaticClassificationTrusted: false }
 };
-throwsCode(
-  () => shadow.evaluateShadow(
-    { eventKind: 'pull_request', candidateSha: head, baseSha: base, prHeadSha: prHead },
-    {
-      identityComputer: () => identities,
-      generationComputer: c => gateFromIdentity(c),
-      prImpactComputer: () => untrustedImpact
-    }
-  ),
-  'S1A_PR_CONTROL_PLANE_UNTRUSTED'
+const review = shadow.evaluateShadow(
+  { eventKind: 'pull_request', candidateSha: head, baseSha: base, prHeadSha: prHead },
+  {
+    identityComputer: () => identities,
+    generationComputer: c => gateFromIdentity(c),
+    prImpactComputer: () => reviewImpact
+  }
 );
+eq(review.eligible,false,'control-plane review is not eligible');
+eq(review.shadow_outcome,'control-plane-review-required','control-plane review outcome');
+eq(review.impact_context.trustedControlPlaneReview,true,'review requirement preserved');
+eq(review.impact_context.automaticClassificationTrusted,false,'automatic trust remains false');
+eq(review.release_authorized,false,'review state does not authorize release');
+
+for (const invalidTrust of [
+  {
+    ...trustedImpact,
+    requires: { ...trustedImpact.requires, trustedControlPlaneReview: false },
+    trust: { automaticClassificationTrusted: false }
+  },
+  {
+    ...trustedImpact,
+    requires: { ...trustedImpact.requires, trustedControlPlaneReview: true },
+    trust: { automaticClassificationTrusted: true }
+  }
+]) {
+  throwsCode(
+    () => shadow.evaluateShadow(
+      { eventKind: 'pull_request', candidateSha: head, baseSha: base, prHeadSha: prHead },
+      {
+        identityComputer: () => identities,
+        generationComputer: c => gateFromIdentity(c),
+        prImpactComputer: () => invalidTrust
+      }
+    ),
+    'S1A_PR_TRUST_STATE_INVALID'
+  );
+}
 
 throwsCode(
   () => shadow.evaluateShadow(
@@ -178,6 +205,7 @@ for (const pathValue of [
   'project_tools/release_candidate_generation.js',
   'project_tools/release_pr_impact.js',
   'project_tools/release_shadow_identity.js',
+  'project_tools/check_ci_pins.py',
   'project_tools/check_pr_change_contract.py',
   '.github/workflows/repository-integrity.yml'
 ]) {
@@ -194,6 +222,6 @@ ok(!workflow.includes('p1-231-shadow-identity'),'bootstrap tranche has no perman
 console.log(
   'P1-231 S1-A passive shadow identity: PASS; checks=' + checks +
   '; candidate=' + head +
-  '; push=eligible; pr_trust=fail-closed; workflow_activation=false; ' +
+  '; push=eligible; pr_control_plane=review-required; malformed_trust=fail-closed; workflow_activation=false; ' +
   'policy_mutation=false; receipt_mutation=false; artifact_build=false; release_authorized=false'
 );

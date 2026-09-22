@@ -73,8 +73,14 @@ function validatePrImpact(impact, { candidateSha, baseSha, prHeadSha }) {
   if (impact.baseSha !== baseSha) fail('S1A_PR_BASE_MISMATCH');
   if (impact.prHeadSha !== prHeadSha) fail('S1A_PR_HEAD_MISMATCH');
   if (impact.candidateSha !== candidateSha) fail('S1A_PR_CANDIDATE_MISMATCH');
-  if (impact.trusted !== true || impact.selfChange === true) fail('S1A_PR_CONTROL_PLANE_UNTRUSTED');
-  return impact;
+  const trustedControlPlaneReview = impact.selfChange === true;
+  const automaticClassificationTrusted = impact.trusted === true;
+  if (trustedControlPlaneReview === automaticClassificationTrusted) fail('S1A_PR_TRUST_STATE_INVALID');
+  return Object.freeze({
+    ...impact,
+    trustedControlPlaneReview,
+    automaticClassificationTrusted,
+  });
 }
 
 function shadowIdentity({
@@ -104,6 +110,8 @@ function shadowIdentity({
       prHeadSha,
       candidateSha: githubSha,
       classification: impact.classification,
+      trustedControlPlaneReview: impact.trustedControlPlaneReview,
+      automaticClassificationTrusted: impact.automaticClassificationTrusted,
     });
   } else {
     if (baseSha !== null || prHeadSha !== null || prImpact !== null) fail('S1A_PUSH_PR_CONTEXT_FORBIDDEN');
@@ -121,6 +129,11 @@ function shadowIdentity({
       fail('S1A_BLOCKED_IDENTITY_MISMATCH');
     }
     shadowOutcome = gate.status;
+  }
+
+  if (impactContext.trustedControlPlaneReview === true) {
+    eligible = false;
+    shadowOutcome = 'control-plane-review-required';
   }
 
   return Object.freeze({
@@ -360,18 +373,28 @@ function validateWorkflowExecutionContext({
     generationGate: { candidateSha, status: 'blocked-portability', identities: CURRENT },
     prImpact: { ...baseImpact, prHeadSha: '8'.repeat(40) },
   }), 'S1A_PR_HEAD_MISMATCH');
+  const reviewRequired = shadowIdentity({
+    eventKind: 'pull_request', headSha: candidateSha, githubSha: candidateSha,
+    baseSha, prHeadSha, identities: CURRENT,
+    generationGate: { candidateSha, status: 'pass', identities: CURRENT },
+    prImpact: { ...baseImpact, trusted: false, selfChange: true },
+  });
+  eq(reviewRequired.eligible, false);
+  eq(reviewRequired.shadowOutcome, 'control-plane-review-required');
+  eq(reviewRequired.impactContext.trustedControlPlaneReview, true);
+  eq(reviewRequired.impactContext.automaticClassificationTrusted, false);
   throwsCode(() => shadowIdentity({
     eventKind: 'pull_request', headSha: candidateSha, githubSha: candidateSha,
     baseSha, prHeadSha, identities: CURRENT,
-    generationGate: { candidateSha, status: 'blocked-portability', identities: CURRENT },
-    prImpact: { ...baseImpact, selfChange: true },
-  }), 'S1A_PR_CONTROL_PLANE_UNTRUSTED');
+    generationGate: { candidateSha, status: 'pass', identities: CURRENT },
+    prImpact: { ...baseImpact, trusted: false, selfChange: false },
+  }), 'S1A_PR_TRUST_STATE_INVALID');
   throwsCode(() => shadowIdentity({
     eventKind: 'pull_request', headSha: candidateSha, githubSha: candidateSha,
     baseSha, prHeadSha, identities: CURRENT,
-    generationGate: { candidateSha, status: 'blocked-portability', identities: CURRENT },
-    prImpact: { ...baseImpact, trusted: false },
-  }), 'S1A_PR_CONTROL_PLANE_UNTRUSTED');
+    generationGate: { candidateSha, status: 'pass', identities: CURRENT },
+    prImpact: { ...baseImpact, trusted: true, selfChange: true },
+  }), 'S1A_PR_TRUST_STATE_INVALID');
   throwsCode(() => shadowIdentity({
     eventKind: 'pull_request', headSha: candidateSha, githubSha: candidateSha,
     baseSha, prHeadSha, identities: CURRENT,
@@ -410,7 +433,7 @@ function validateWorkflowExecutionContext({
 
   console.log(
     `P1-231 S1-A shadow identity source-spec model: PASS; cases=${cases}; schema=${SCHEMA}; ` +
-    `current_shadow=eligible; current_eligible=true; structural_errors=fail-closed; ` +
+    `current_shadow=eligible; current_eligible=true; control_plane_review=report-only-ineligible; structural_errors=fail-closed; ` +
     `delivery_checkout=pr-head; pr_candidate=github-sha; shadow_workspace=synthetic-merge; synthetic_merge_required=true; s0f_owner=true; policy_mutation=false; ` +
     `receipt_mutation=false; product_zip=false; permanent_workflow_unchanged=true; rpf=${CURRENT.rpf}; head=${head}`
   );
