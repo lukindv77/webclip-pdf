@@ -1,6 +1,6 @@
 # GitHub workflow — WebClip
 
-Canonical private remote: `lukindv77/webclip-pdf`.
+Canonical public remote: `lukindv77/webclip-pdf`.
 Default branch: `main`.
 
 ## Source-of-truth model
@@ -16,9 +16,9 @@ Normal development, research, documentation and repository-maintenance changes u
 
 `fresh main -> work branch -> Pull Request -> exact-head CI -> reviewed merge`
 
-`main` intentionally remains `protected=false`: the repository stays private, and the project will not move to GitHub Pro or public solely for branch protection. This is an accepted constraint, not an unfinished migration.
+`main` is protected by the active `Protect main` repository ruleset targeting the default branch. Normal writes must arrive through a pull request; deletion and non-fast-forward/force updates are blocked; linear history and resolved review conversations are required; the branch must be up to date and the configured required checks must pass. Repository visibility is public, but GitHub write authority remains limited to the owner/collaborators.
 
-Compensating process controls:
+Project process controls layered on top of the GitHub ruleset:
 
 1. Fresh-fetch `main` immediately before creating/updating the work branch.
 2. Keep one logical change per PR where practical; do not mix unrelated runtime fixes with repository cleanup or release-history retirement.
@@ -29,7 +29,7 @@ Compensating process controls:
 7. Normal PR integration is squash-only; merge commits and rebase merges remain disabled in repository settings.
 8. Never force-update `main` as part of normal work.
 
-Direct modification of `main` is reserved for explicitly documented emergency recovery after a separate user decision. `protected=false` is not permission to bypass PR-first workflow.
+Direct modification of `main` is not a standing project path under the active ruleset. Any emergency that would require changing protection or bypass settings needs a separate explicit user decision, followed by restoration and fresh verification of the normal ruleset before ordinary work resumes.
 
 The detailed P-owner lifecycle is defined in `RESEARCH_CHANGE_WORKFLOW.md`.
 
@@ -181,14 +181,17 @@ Gate fail-closed проверяет `RELEASE_READINESS.md`: real unpacked Chrome
 
 Зафиксированное решение проекта:
 
-- repository остаётся **private**;
-- GitHub Pro ради branch protection не приобретается;
-- repository не переводится в public ради branch protection;
-- `main` остаётся **`protected=false`**;
+- repository — **public**;
+- `main` защищён active repository ruleset **`Protect main`**, targeting default branch;
+- merge в `main` требует Pull Request, resolved review conversations, strict required status checks и up-to-date branch;
+- required checks: **`repository-integrity`**, **`p1-231-source-generation-authority`**, **`p1-231-shadow-identity`**;
+- deletion и non-fast-forward/force updates `main` запрещены; linear history обязательна;
+- administrator bypass ограничен режимом **pull requests only**, а не direct push;
 - normal PR integration — **squash-only**; merge commits и rebase merges выключены;
 - `delete_branch_on_merge=true` включён;
-- защита от ошибок обеспечивается PR-first process, exact-head CI/TOCTOU check, automatic branch deletion, Git history/recovery provenance и запретом обычных direct/force writes в `main`.
+- current pull-request creation policy — **`collaborators_only`**;
+- repository visibility/ruleset/permissions являются GitHub administrative state и проверяются fresh перед существенными write/integration операциями.
 
-Это ограничение нужно учитывать при каждой операции записи, но его не следует снова заводить как open repository-cleanup blocker.
+Эта administrative posture является текущим baseline, а не open repository-cleanup blocker. Если GitHub settings изменятся вне Git, фактическое remote state имеет приоритет и current policy docs должны быть reconciled обычным PR-first изменением.
 
 Если API текущей интеграции в конкретной сессии не умеет удалить obsolete branch ref, такой ref не считается источником истины. Сначала сохраняется exact historical head в PR/Issue/Git evidence, затем ref должен быть удалён через доступный GitHub UI/API; временное выравнивание с canonical `main` допустимо только как промежуточная мера до физического удаления.
