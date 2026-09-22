@@ -220,7 +220,9 @@ The existing W5 fixed-redirect refinement model is updated so its current-source
 
 `service-worker.js` and `options.js` are members of the canonical 34-file extension package. Their byte changes therefore advance the current RPF.
 
-The exact new RPF must be supplied by the existing S0-E release identity authority on the exact PR head; this evidence does not guess it. Chrome QCF, Yandex QCF, full RCF and BCF are not advanced unless their canonical input projections actually change.
+The dedicated P1-231 source-generation/candidate-admission job in Repository Integrity #1059 ran on exact head `8ef5af8202e571e060b55c9db5d00414738bccfa` and independently derived current RPF `sha256:cb04a3cb5dc684c3e4804f63847c4b4f00d93df2db47475091b91701a04727ee`. Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff` because their canonical input projections did not change.
+
+The overall #1059 workflow is not merge evidence: its repository-integrity job failed earlier at the PR change-contract gate and therefore skipped syntax/deterministic tests. The successful source-generation lane is used here only as exact-head identity computation; a later complete exact-head SUCCESS is still required.
 
 Manifest version remains `0.9.8`.
 

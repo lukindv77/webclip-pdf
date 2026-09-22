@@ -28,7 +28,7 @@ The repository-hygiene PR immediately preceding this policy change demonstrated 
 
 ## Current P1-231 release-identity authority boundary
 
-P1-231 remains **ACTIVE**. The current canonical extension package is the 34-member `webclip-extension-package/v1` projection with RPF `sha256:feab25126c9d686062f8ed0da8c9d7ad39f468ebc819342bb34fbd2c47e0e843`. The historical 33-member RPF `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` is only a legacy incomplete control.
+P1-231 remains **ACTIVE**. The current canonical extension package is the 34-member `webclip-extension-package/v1` projection with RPF `sha256:cb04a3cb5dc684c3e4804f63847c4b4f00d93df2db47475091b91701a04727ee`. The historical 33-member RPF `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` is only a legacy incomplete control.
 
 The current full-RCF authority now includes eleven blob roots, adding `project_tools/build_public_suffix_js.py`. The resulting full RCF is `sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb`; the prior `sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce` is the historical ten-root control. Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
 
@@ -486,3 +486,10 @@ browser call, provider call, OAuth use or provider mutation. Durable rationale/e
 
 P1-164 remains **ACTIVE** pending the authorized real Chrome/Yandex matrix. P1-231 remains
 **ACTIVE**. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+
+## P1-178 auth-attempt generation CAS — 2026-09-22
+
+The bounded P1-178 runtime tranche in PR #338 changes current package members `service-worker.js` and `options.js`. On exact head `8ef5af8202e571e060b55c9db5d00414738bccfa`, the dedicated P1-231 source-generation/candidate-admission job in Repository Integrity #1059 independently derived current RPF `sha256:cb04a3cb5dc684c3e4804f63847c4b4f00d93df2db47475091b91701a04727ee`; Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+The overall #1059 run is **not** merge evidence because the repository-integrity job stopped at a PR-body change-contract error before JavaScript syntax/deterministic execution. The successful identity lane is used only to synchronize current source identity. P1-178, P1-165 and P1-191 remain **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**; no physical Chrome/Yandex evidence, build, release receipt, S2 activation, tag, deployment or release decision is created by this tranche.
