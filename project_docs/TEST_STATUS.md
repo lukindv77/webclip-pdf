@@ -557,3 +557,8 @@ P1-196 remains **ACTIVE**. The runtime change modifies `service-worker.js`, so c
 ### P1-196 account-enrichment CI discovery #1074
 
 Repository Integrity #1074 / run `35747481769` on exact preliminary head `dc6ec0150a3b58e7d0adf0fc718e28a240410296` stopped at the PR change-contract metadata gate before syntax/deterministic execution. The independent source-generation lane succeeded and derived current 34-file RPF `sha256:363e8df53233e035a079f5e2a26b124de8cf2b623749d6e4f457d5a94e0f8368`; Chrome/Yandex QCF and full RCF remain unchanged. The 33-file control is intentionally not guessed because the deterministic identity engine did not run. #1074 is discovery evidence only; a new exact-head run is required.
+
+
+### P1-196 account-enrichment identity discovery #1075
+
+Repository Integrity #1075 / run `35756002237` on exact head `9bb60173da21cd789e1cbd9a6f13572ce8aaadde` passed PR-contract/syntax and both dedicated release-control jobs. The generic deterministic suite derived current 34-file RPF `sha256:363e8df53233e035a079f5e2a26b124de8cf2b623749d6e4f457d5a94e0f8368` and current 33-file control `sha256:650ed8d7b3cdff640ca70550122edc9f714c6984e97c4f78f212f819b24d890e`, while QCF/full-RCF/BCF remain unchanged. It also exposed one stale P1-138 connection-test source census, now reconciled to the exact-auth receipt call shape. #1075 is discovery evidence only; a complete later exact-head SUCCESS is required.

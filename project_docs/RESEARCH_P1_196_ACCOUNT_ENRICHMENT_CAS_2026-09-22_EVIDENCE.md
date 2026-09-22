@@ -169,3 +169,23 @@ Repository Integrity #1074 / run `35747481769` on exact preliminary head `dc6ec0
 The independent source-generation lane completed successfully and derived current 34-file RPF `sha256:363e8df53233e035a079f5e2a26b124de8cf2b623749d6e4f457d5a94e0f8368`. Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`, and BCF remains unchanged.
 
 Because the generic deterministic identity engine did not run, this tranche does not invent a current 33-file control digest. A later exact-head run must derive it and must pass the complete suite before merge. #1074 is discovery evidence only, not merge evidence.
+
+
+## 13. Deterministic identity/witness discovery #1075
+
+Repository Integrity #1075 / run `35756002237` on exact head `9bb60173da21cd789e1cbd9a6f13572ce8aaadde` passed the corrected PR change contract, JavaScript syntax and both dedicated release-control jobs. The generic deterministic suite then exposed one stale source-shape witness plus current package-identity pins.
+
+Exact current identities derived by that run:
+
+```text
+34-file RPF             = sha256:363e8df53233e035a079f5e2a26b124de8cf2b623749d6e4f457d5a94e0f8368
+33-file control         = sha256:650ed8d7b3cdff640ca70550122edc9f714c6984e97c4f78f212f819b24d890e
+Chrome QCF              = sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c
+Yandex QCF              = sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1
+full RCF                = sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed
+BCF                     = sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff
+```
+
+The sole direct non-identity stale witness was P1-138's connection-test census, which still looked for the old `const info = await yandexApi('')` source form. The current code correctly uses the opt-in exact-auth receipt form. That census assertion is reconciled without changing P1-138 semantics.
+
+#1075 is discovery evidence only, not merge evidence. The next exact head must pass the complete deterministic suite with these current identities.

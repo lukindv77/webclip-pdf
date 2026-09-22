@@ -448,7 +448,7 @@ function passiveBuild({ candidateSha, admission, loadPackageProjection, identity
   test('S0-E current package count is 34', () => assert.strictEqual(s0e.kv.package_files, '34'));
   test('S0-E current package identity is complete', () => assert.strictEqual(s0e.kv.current_package_complete, 'true'));
   test('S0-E legacy package control remains 33', () => assert.strictEqual(s0e.kv.legacy_package_files, '33'));
-  test('S0-E current legacy-subset RPF remains exact control', () => assert.strictEqual(s0e.kv.legacy_rpf, 'sha256:710d9a44279541adb6ef609b9cad4b34beba17610fb585e668fc1376c362b623'));
+  test('S0-E current legacy-subset RPF remains exact control', () => assert.strictEqual(s0e.kv.legacy_rpf, 'sha256:650ed8d7b3cdff640ca70550122edc9f714c6984e97c4f78f212f819b24d890e'));
   test('S0-A and current S0-E package census agree', () => assert.strictEqual(s0a.kv.package_files, s0e.kv.package_files));
   test('S0-D fixture size exact', () => assert.strictEqual(s0d.kv.fixture_zip_bytes, String(GOLDEN_ZIP_BYTES)));
   test('S0-D fixture hash exact', () => assert.strictEqual(s0d.kv.fixture_zip_sha256, GOLDEN_ZIP_SHA256));
