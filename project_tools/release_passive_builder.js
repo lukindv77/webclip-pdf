@@ -56,7 +56,14 @@ function normalizePackageInputs(value, candidateSha) {
 }
 
 function packageRpf(inputs) {
-  try { return identity.fingerprintRpf(inputs); }
+  const envelope = {
+    schema: 'webclip-package-identity-inputs/v1',
+    candidate_sha: inputs.candidate_sha,
+    package_schema: inputs.package_schema,
+    path_profile: inputs.path_profile,
+    members: inputs.members
+  };
+  try { return identity.fingerprintRpf(envelope); }
   catch (_) { fail('PACKAGE_PROJECTION_INVALID'); }
 }
 
