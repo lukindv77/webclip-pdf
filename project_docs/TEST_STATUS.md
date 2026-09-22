@@ -28,7 +28,7 @@ The repository-hygiene PR immediately preceding this policy change demonstrated 
 
 ## Current P1-231 release-identity authority boundary
 
-P1-231 remains **ACTIVE**. The current canonical extension package is the 34-member `webclip-extension-package/v1` projection with RPF `sha256:cb04a3cb5dc684c3e4804f63847c4b4f00d93df2db47475091b91701a04727ee`. For the current candidate, the 33-member legacy-subset control (the same package minus `application-generation.js`) is `sha256:7bb37622f1ead5ba477116afb53ca5f35d57b918350525aa62d966ad493a730f`; `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` is the historical predecessor value for that subset before the later package-byte changes.
+P1-231 remains **ACTIVE**. The current canonical extension package is the 34-member `webclip-extension-package/v1` projection with RPF `sha256:0bb0e71547169d2f02bed1ee3cbe5dab4db30aa439d053d8fda1ee73ed0bd396`. For the current candidate, the 33-member legacy-subset control (the same package minus `application-generation.js`) is `sha256:7dc0be48b7b97063c2da2c2680ca0920f00418e8141ded98db442e4bfeffd957`; `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` is the historical predecessor value for that subset before the later package-byte changes.
 
 The current full-RCF authority now includes eleven blob roots, adding `project_tools/build_public_suffix_js.py`. The resulting full RCF is `sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb`; the prior `sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce` is the historical ten-root control. Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
 
@@ -503,3 +503,12 @@ Repository Integrity #1061 on branch head `b31aec1f2ea163f335c50fe33552db142121c
 ### P1-178 exact-head deterministic reconciliation #1062
 
 Repository Integrity #1062 reduced the deterministic failure set from 17 to three. The remaining direct failure was a single S0-H assertion still pinning the predecessor 33-file subset RPF `b65c…`; the S1-C and S1-D failures were transitive through that S0-H predecessor. S0-E/F/G already passed with current legacy-subset RPF `sha256:7bb37622f1ead5ba477116afb53ca5f35d57b918350525aa62d966ad493a730f` and current 34-file RPF `sha256:cb04a3cb5dc684c3e4804f63847c4b4f00d93df2db47475091b91701a04727ee`. #1062 is not merge evidence; a complete later exact-head SUCCESS is still required.
+
+
+## P1-191 manual token validate-before-commit — 2026-09-22
+
+PR #339 removes provisional publication of a pasted manual token. The exact candidate is now validated through a read-only Disk-info request before commit; explicit 401 rejects only that candidate, while permission ambiguity, rate limiting, 5xx, timeout/network and missing account identity fail as validation-unknown without clearing the last committed auth. A valid candidate commits only if the shared auth generation captured by the manual intent is still current.
+
+Repository Integrity #1065 on exact preliminary head `aebcad9347ad3bd0093cbe5bbc96c974391c0b1f` passed PR-contract/syntax and both dedicated release-control jobs. Its source-generation lane derived current 34-file RPF `sha256:0bb0e71547169d2f02bed1ee3cbe5dab4db30aa439d053d8fda1ee73ed0bd396` and current 33-file control `sha256:7dc0be48b7b97063c2da2c2680ca0920f00418e8141ded98db442e4bfeffd957`; Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+#1065 is **not merge evidence**: its generic deterministic suite exposed stale current-RPF/current-33 pins plus one older P1-178 manual-source census. Those witnesses are reconciled in the following exact head. P1-191 remains **ACTIVE** pending full exact-head integration evidence; manifest remains `0.9.8`; release readiness remains **NOT READY**.

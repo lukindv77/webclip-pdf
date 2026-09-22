@@ -26,7 +26,7 @@ const head = git('rev-parse', 'HEAD');
 const contract = attestor.expectedRuntimeContract(head);
 eq(contract.schema, 'webclip-p1-164-runtime-source-contract/v1', 'contract schema');
 eq(contract.testedSourceSha, head, 'exact tested source');
-eq(contract.subject.rpf, 'sha256:cb04a3cb5dc684c3e4804f63847c4b4f00d93df2db47475091b91701a04727ee', 'current 34-file RPF');
+eq(contract.subject.rpf, 'sha256:0bb0e71547169d2f02bed1ee3cbe5dab4db30aa439d053d8fda1ee73ed0bd396', 'current 34-file RPF');
 eq(contract.subject.yandexQcf, 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1', 'current Yandex QCF');
 eq(contract.packageSchema, 'webclip-extension-package/v1', 'package schema');
 eq(contract.pathProfile, 'portable-ascii-v1', 'path profile');

@@ -425,7 +425,7 @@ test('current S0-E protocol is exact', () => assert.strictEqual(s0e.kv.protocol,
 test('current S0-E package count is 34', () => assert.strictEqual(s0e.kv.package_files, '34'));
 test('current S0-E package identity is complete', () => assert.strictEqual(s0e.kv.current_package_complete, 'true'));
 test('legacy S0-E package control remains 33', () => assert.strictEqual(s0e.kv.legacy_package_files, '33'));
-test('legacy S0-E RPF remains reproducible control', () => assert.strictEqual(s0e.kv.legacy_rpf, 'sha256:7bb37622f1ead5ba477116afb53ca5f35d57b918350525aa62d966ad493a730f'));
+test('legacy S0-E RPF remains reproducible control', () => assert.strictEqual(s0e.kv.legacy_rpf, 'sha256:7dc0be48b7b97063c2da2c2680ca0920f00418e8141ded98db442e4bfeffd957'));
 test('current S0-E RPF is valid and distinct from legacy', () => {
   assert(validDigest(currentIds.rpf));
   assert.notStrictEqual(currentIds.rpf, s0e.kv.legacy_rpf);

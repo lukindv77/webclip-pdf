@@ -143,11 +143,20 @@ Existing P1-191, W5 fixed-redirect and P1-177 witnesses are reconciled to the ne
 
 ## 10. Identity impact
 
-`service-worker.js` is a current package member, so the package RPF and current 33-file negative/control projection will change.
+`service-worker.js` is a current package member, so both source package identities advance.
 
-This evidence intentionally does not guess those values. The exact-head source-generation / identity authority must derive them from the final PR head before current identity pins are synchronized.
+Repository Integrity #1065 on exact preliminary PR head `aebcad9347ad3bd0093cbe5bbc96c974391c0b1f` independently derived:
 
-No canonical QA-contract input or builder-contract input is changed by this tranche, so no Chrome/Yandex QCF, full RCF or BCF change is claimed without exact-head authority output.
+```text
+current 34-file RPF  = sha256:0bb0e71547169d2f02bed1ee3cbe5dab4db30aa439d053d8fda1ee73ed0bd396
+current 33-file control = sha256:7dc0be48b7b97063c2da2c2680ca0920f00418e8141ded98db442e4bfeffd957
+Chrome QCF           = sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c
+Yandex QCF           = sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1
+full RCF             = sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb
+BCF                  = sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff
+```
+
+The unchanged QCF/RCF/BCF values match the fact that this tranche changes package bytes but not the canonical QA/builder contract projections. #1065 itself is not merge evidence because the generic deterministic suite later failed on stale current-identity/source-census assertions; a later complete exact-head SUCCESS remains required.
 
 ## 11. Evidence boundary
 
