@@ -187,8 +187,15 @@ function normalizeS1B(value, candidate, s1a) {
     || !['evidence-missing', 'evidence-blocked', 'settled-pass'].includes(value.s0g_settlement_state)
   ) fail('S1D_S1B_INVALID');
 
-  const allPass = REQUIRED_SLOTS.every((kind) => value.slots[kind].state === 'pass');
+  const states = REQUIRED_SLOTS.map((kind) => value.slots[kind] && value.slots[kind].state);
+  if (states.some((state) => !['pass', 'missing', 'blocked'].includes(state))) {
+    fail('S1D_S1B_INVALID');
+  }
+  const allPass = states.every((state) => state === 'pass');
+  const anyBlocked = states.includes('blocked');
+  const expectedS0gState = allPass ? 'settled-pass' : (anyBlocked ? 'evidence-blocked' : 'evidence-missing');
   if (allPass !== value.all_required_slots_pass) fail('S1D_S1B_INVALID');
+  if (value.s0g_settlement_state !== expectedS0gState) fail('S1D_S1B_INVALID');
   if (allPass && value.shadow_outcome !== 'settled-pass') fail('S1D_S1B_INVALID');
   if (!allPass && value.shadow_outcome !== 'settled-blocked') fail('S1D_S1B_INVALID');
 
@@ -196,7 +203,7 @@ function normalizeS1B(value, candidate, s1a) {
     state: value.shadow_outcome,
     settlementEvaluated: true,
     allRequiredSlotsPass: allPass,
-    s0gState: value.s0g_settlement_state
+    s0gState: expectedS0gState
   });
 }
 function normalizeS1C(value, candidate, s1a) {
