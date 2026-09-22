@@ -449,3 +449,40 @@ A successful **future live** binding may join the independent evidence axes as `
 Deterministic coverage is `project_tools/test_p1_164_qualification_evidence_binder.js`. It uses synthetic browser/provider artifacts plus a local temporary observation session only; no live Chrome call, Yandex API call, OAuth credential, provider mutation or physical qualification occurs. Durable rationale/evidence is `RESEARCH_P1_164_QUALIFICATION_EVIDENCE_BINDING_2026-09-22_EVIDENCE.md`.
 
 P1-164 remains **ACTIVE** and still requires the authorized physical browser/Yandex matrix. P1-231 remains **ACTIVE**. Manifest remains `0.9.8`; release readiness remains **NOT READY**; product build/version/tag/deploy/release actions remain unauthorized.
+
+## P1-164 passive physical qualification matrix authority
+
+`project_tools/p1_164_qualification_evidence_binder.js` now emits
+`webclip-p1-164-qualification-evidence-binding/v2`. The v2 output preserves the prior exact
+source/receipt/path/session consistency boundaries while adding only sanitized command network
+outcomes, provider wrapper/manual lineage, bounded watch summary and per-attempt classification
+history. This makes transport-unknown and visibility-delay schedules machine-readable without
+retaining raw provider identity, OAuth material, CDP request ids, request headers/bodies or
+loading error detail.
+
+`project_tools/p1_164_qualification_matrix.js` defines ten bounded physical qualification cases:
+normal revoke+Trash success, unpublish transport unknown, move transport unknown, target
+visibility delay, auth expiry/reauth, account switch, root switch, source/public-link
+replacement, target occupation/replacement, and manual resolution. Every case is mapped back to
+existing assertions in the canonical `yandex-e2e` release projection; mapping drift fails
+closed and `release_contract_inputs_v1.json` is not modified.
+
+The matrix accepts sanitized binder-v2 outputs only when exact source/RPF/Yandex-QCF/contract,
+browser target, receipt/path identity and session identity remain coherent. Multi-observation
+cases additionally require strictly increasing provider-observation time and session checkpoint
+sequence with non-regressing receipt revision.
+
+The matrix is a consistency authority only. It permanently emits
+`evidenceOriginAuthenticated=false`, `providerMutationCausalityProven=false`,
+`physicalCasePass=false`, `qualificationPass=false`, `yandexQcfAdvanced=false`,
+`p1_231ReleaseReceiptCreated=false`, and `releaseAuthorized=false`. Real operator reauth/manual
+resolution actions remain external evidence, and P1-231 typed release receipt admission stays
+behind the existing S2 / explicit approval boundary.
+
+Deterministic coverage is `project_tools/test_p1_164_qualification_matrix.js` plus the extended
+`project_tools/test_p1_164_qualification_evidence_binder.js`. Synthetic fixtures create no
+browser call, provider call, OAuth use or provider mutation. Durable rationale/evidence is
+`RESEARCH_P1_164_PHYSICAL_QUALIFICATION_MATRIX_2026-09-22_EVIDENCE.md`.
+
+P1-164 remains **ACTIVE** pending the authorized real Chrome/Yandex matrix. P1-231 remains
+**ACTIVE**. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
