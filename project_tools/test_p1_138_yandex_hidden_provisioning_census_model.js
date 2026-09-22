@@ -98,7 +98,7 @@ check('S11 folder tree uses resources endpoint', () => has(ensureTree, "yandexAp
 
 // Direct H1/H2 call sites, extracted by semantic function rather than fixed windows.
 const testConnection = asyncSection('async function testYandexConnection()');
-check('C01 test connection observes account', () => has(testConnection, "const info = await yandexApi('')"));
+check('C01 test connection observes account through exact-auth receipt read', () => has(testConnection, "const result = await yandexApi('', { includeAuthRequestReceipt: true })"));
 check('C02 test connection hides ensure today', () => has(testConnection, 'ensureYandexServiceFolders({ includeUpload: true, includeReadLater: true, includeBackup: true })'));
 const listBackups = asyncSection("async function listJournalBackupsOnYandex(requestedMonth = '')");
 check('C03 list backups hides ensure today', () => has(listBackups, 'ensureYandexServiceFolders({ includeBackup: true })'));

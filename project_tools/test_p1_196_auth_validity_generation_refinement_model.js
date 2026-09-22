@@ -115,6 +115,14 @@ check('S12 recovery snapshots authAvailable before loop', () => {
   assert.ok(authAt >= 0 && loopAt > authAt);
 });
 check('S13 recovery uses same snapshot inside loop', () => has(recovery, 'if (!authAvailable)'));
+const connectionTest = asyncSection('async function testYandexConnection()');
+check('S14 connection account enrichment requests exact auth receipt', () => has(connectionTest, 'includeAuthRequestReceipt: true'));
+check('S15 connection account enrichment uses exact request CAS', () => has(connectionTest, 'compareUpdateYandexAuthIfCurrentRequest'));
+check('S16 connection account enrichment has no unconditional auth rewrite', () => lacks(connectionTest, 'writeYandexAuth'));
+const currentUid = asyncSection("async function getCurrentYandexAccountUid(operationId = '')");
+check('S17 current-account read requests exact auth receipt', () => has(currentUid, 'includeAuthRequestReceipt: true'));
+check('S18 current-account enrichment uses exact request CAS', () => has(currentUid, 'compareUpdateYandexAuthIfCurrentRequest'));
+check('S19 current-account enrichment has no unconditional auth rewrite', () => lacks(currentUid, 'writeYandexAuth'));
 
 // Deterministic schedules.
 const a = auth('A', 1, 'valid');
@@ -190,4 +198,4 @@ check('N29 no runtime/L5/S2/release action', () => {
   'A new auth generation is not replay authority for an old physical mutation.'
 ].forEach((needle, i) => check(`E${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
 
-console.log(`P1-196 auth validity generation refinement model: PASS; cases=${cases}; schema=webclip-auth-validity-generation/v1; baseline=07ba5d17569dd563102e6699431222742bec9dde; connected_presence_only=current-gap; explicit_validity=current-gap; expiry_transition=current-gap; current_401_demotion=implemented-exact-current-request; stale_401=blocked-by-record-and-control-cas; request_binding=implemented-secret-free-receipt; caller_authorization_override=forbidden; operation_context_global_demotion=forbidden; generic_403=no-demotion; signed_transfer_401=no-oauth-demotion; recovery_auth_recheck=required; shared_generation_owner=P1-178; capability_owner=P1-195; scheduler_owner=P1-177; namespace_owner=P1-179; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-196 auth validity generation refinement model: PASS; cases=${cases}; schema=webclip-auth-validity-generation/v1; baseline=07ba5d17569dd563102e6699431222742bec9dde; connected_presence_only=current-gap; explicit_validity=current-gap; expiry_transition=current-gap; current_401_demotion=implemented-exact-current-request; stale_401=blocked-by-record-and-control-cas; request_binding=implemented-secret-free-receipt; caller_authorization_override=forbidden; positive_enrichment=implemented-exact-request-cas; stale_positive_enrichment=blocked; operation_context_global_demotion=forbidden; generic_403=no-demotion; signed_transfer_401=no-oauth-demotion; recovery_auth_recheck=required; shared_generation_owner=P1-178; capability_owner=P1-195; scheduler_owner=P1-177; namespace_owner=P1-179; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);

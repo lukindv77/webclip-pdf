@@ -15590,6 +15590,29 @@ async function demoteYandexAuthIfCurrentRequest(receipt) {
   }, 'CAS демоция exact OAuth authority Яндекс Диска после 401');
 }
 
+async function compareUpdateYandexAuthIfCurrentRequest(receipt, patch) {
+  if (!receipt || receipt.requestKind !== 'disk-oauth' || receipt.authorizationBound !== true) return false;
+  const expectedRecordId = String(receipt.authRecordId || '').trim();
+  const expectedAuthGeneration = normalizeYandexAuthGeneration(receipt.authGeneration);
+  const expectedControlGeneration = normalizeYandexAuthGeneration(receipt.controlGeneration);
+  if (!expectedRecordId || !expectedAuthGeneration || !expectedControlGeneration) return false;
+
+  return runYandexAuthStorageOperation(async () => {
+    const stored = await chrome.storage.session.get([YANDEX_AUTH_KEY, YANDEX_AUTH_GENERATION_KEY]);
+    const current = stored?.[YANDEX_AUTH_KEY] || null;
+    const currentControlGeneration = normalizeYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]);
+    if (!current
+      || String(current.authRecordId || '').trim() !== expectedRecordId
+      || normalizeYandexAuthGeneration(current.authGeneration) !== expectedAuthGeneration
+      || currentControlGeneration !== expectedControlGeneration) return false;
+
+    await chrome.storage.session.set({
+      [YANDEX_AUTH_KEY]: { ...current, ...(patch && typeof patch === 'object' ? patch : {}) }
+    });
+    return true;
+  }, 'CAS обновление exact OAuth authority Яндекс Диска после ответа');
+}
+
 async function captureCurrentYandexOperationContext() {
   const { auth: yandexAuth, yandexConfig = {} } = await readYandexAuthState();
   if (!yandexAuth?.accessToken) {
@@ -15612,13 +15635,17 @@ async function captureCurrentYandexOperationContext() {
 }
 
 async function testYandexConnection() {
-  const info = await yandexApi('');
+  const result = await yandexApi('', { includeAuthRequestReceipt: true });
+  const info = result?.data || {};
+  const authRequestReceipt = result?.authRequestReceipt || null;
   const account = extractDiskAccount(info);
-  const authState = await readYandexAuthState();
-  const yandexAuth = authState.auth;
-  if (yandexAuth) {
-    yandexAuth.account = account;
-    await writeYandexAuth(yandexAuth);
+  if (authRequestReceipt?.authorizationBound === true) {
+    const updated = await compareUpdateYandexAuthIfCurrentRequest(authRequestReceipt, { account });
+    if (!updated) {
+      const error = new Error('Авторизация Яндекс Диска изменилась во время проверки подключения. Повторите проверку для текущего аккаунта.');
+      error.code = 'YANDEX_AUTH_REQUEST_SUPERSEDED';
+      throw error;
+    }
   }
   const config = await getYandexConfig();
   let structure = null;
@@ -15650,19 +15677,26 @@ async function getCurrentYandexAccountUid(operationId = '') {
   const cachedUid = boundedYandexExternalText(yandexAuth?.account?.uid || '', MAX_YANDEX_ACCOUNT_FIELD_CHARS).trim();
   if (cachedUid) return cachedUid;
 
-  const info = await yandexApi('', { method: 'GET', timeoutMs: 10_000, operationId });
-  const account = extractDiskAccount(info);
+  const result = await yandexApi('', {
+    method: 'GET',
+    timeoutMs: 10_000,
+    operationId,
+    includeAuthRequestReceipt: true
+  });
+  const account = extractDiskAccount(result?.data || {});
   const uid = String(account.uid || '').trim();
   if (!uid) {
     const error = new Error('Яндекс Диск не вернул идентификатор текущего аккаунта. Операция остановлена без изменения файла и журнала.');
     error.code = 'YANDEX_ACCOUNT_UID_UNAVAILABLE';
     throw error;
   }
-  if (yandexAuth?.accessToken) {
-    try {
-      await writeYandexAuth({ ...yandexAuth, account });
-    } catch (error) {
-      console.warn('WebClip Yandex account cache update:', error);
+  const authRequestReceipt = result?.authRequestReceipt || null;
+  if (authRequestReceipt?.authorizationBound === true) {
+    const updated = await compareUpdateYandexAuthIfCurrentRequest(authRequestReceipt, { account });
+    if (!updated) {
+      const error = new Error('Авторизация Яндекс Диска изменилась во время определения аккаунта. Текущий аккаунт не подтверждён этим ответом.');
+      error.code = 'YANDEX_AUTH_REQUEST_SUPERSEDED';
+      throw error;
     }
   }
   return uid;
@@ -15892,6 +15926,7 @@ async function yandexApi(endpoint, options = {}, allowRetry = false) {
   const startedAt = Date.now();
   const safeQuery = sanitizeOperationLogValue(options.query || {});
   const callerHeaders = sanitizeYandexApiCallerHeaders(options.headers || {});
+  const includeAuthRequestReceipt = options.includeAuthRequestReceipt === true;
   if (operationId) {
     appendOperationLogEvent(operationId, {
       category: 'yandex-request',
@@ -15920,6 +15955,9 @@ async function yandexApi(endpoint, options = {}, allowRetry = false) {
     }
     throw error;
   }
+  const wrapYandexApiSuccess = (payload) => includeAuthRequestReceipt
+    ? Object.freeze({ data: payload, authRequestReceipt })
+    : payload;
   const url = new URL(`${YANDEX_API_BASE}${endpoint}`);
   for (const [key, value] of Object.entries(options.query || {})) {
     if (value !== undefined && value !== null && value !== '') {
@@ -16014,7 +16052,7 @@ async function yandexApi(endpoint, options = {}, allowRetry = false) {
         data: { endpoint: endpoint || '/', method, status: response.status, retryAttempt, durationMs: Date.now() - startedAt, response: {} }
       });
     }
-    return {};
+    return wrapYandexApiSuccess({});
   }
   if (operationId) {
     appendOperationLogEvent(operationId, {
@@ -16027,7 +16065,7 @@ async function yandexApi(endpoint, options = {}, allowRetry = false) {
       }
     });
   }
-  return data || {};
+  return wrapYandexApiSuccess(data || {});
 }
 
 function getSiteFolderSegments(hostname) {
