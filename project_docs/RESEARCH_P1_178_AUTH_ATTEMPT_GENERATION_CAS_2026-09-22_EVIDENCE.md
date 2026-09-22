@@ -270,3 +270,8 @@ release readiness                        = NOT READY
 ## 16. Exact-head deterministic reconciliation #1061
 
 Repository Integrity #1061 reached the complete deterministic suite after the PR-contract correction. The new P1-178 runtime test and the reconciled P1-178 refinement model passed. The remaining failures were stale source-census assertions and a transitive release-identity predecessor pin: current auth source now legitimately contains `authAttemptId`, `authGeneration` and `authRecordId`, Disconnect routes through the shared-generation helper, and the 33-file subset fingerprint changes whenever shared package members `service-worker.js` or `options.js` change. Those witnesses are synchronized without promoting adjacent unresolved behavior to closure. #1061 remains non-merge evidence because the full generic deterministic suite did not pass.
+
+
+## 17. Exact-head deterministic reconciliation #1062
+
+Repository Integrity #1062 confirmed the earlier root-cause split: S0-E/F/G and the updated auth/runtime witnesses passed. Only the S0-H predecessor assertion still treated historical `b65c…` as the current 33-file subset value; S1-C/S1-D failed transitively through that predecessor. The assertion is now bound to current subset RPF `sha256:7bb37622f1ead5ba477116afb53ca5f35d57b918350525aa62d966ad493a730f`. This is control-plane truth synchronization only and does not change runtime semantics or release authorization.

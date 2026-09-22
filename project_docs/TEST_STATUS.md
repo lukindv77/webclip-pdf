@@ -498,3 +498,8 @@ The overall #1059 run is **not** merge evidence because the repository-integrity
 ### P1-178 exact-head deterministic reconciliation #1061
 
 Repository Integrity #1061 on branch head `b31aec1f2ea163f335c50fe33552db142121cddd` passed the PR change contract and both dedicated release-control jobs. The new P1-178 runtime test and reconciled P1-178 generation model also passed. The generic deterministic suite then exposed stale current-source witnesses plus one identity root: because `service-worker.js` and `options.js` are members of both the canonical 34-file package and the 33-file legacy subset, the current legacy-subset RPF also advanced to `sha256:7bb37622f1ead5ba477116afb53ca5f35d57b918350525aa62d966ad493a730f`. Downstream S0/S1 model failures were transitive through the stale predecessor pin. Adjacent auth research witnesses are being synchronized only to the new source shape; their unresolved owner semantics remain unresolved. #1061 is not merge evidence.
+
+
+### P1-178 exact-head deterministic reconciliation #1062
+
+Repository Integrity #1062 reduced the deterministic failure set from 17 to three. The remaining direct failure was a single S0-H assertion still pinning the predecessor 33-file subset RPF `b65c…`; the S1-C and S1-D failures were transitive through that S0-H predecessor. S0-E/F/G already passed with current legacy-subset RPF `sha256:7bb37622f1ead5ba477116afb53ca5f35d57b918350525aa62d966ad493a730f` and current 34-file RPF `sha256:cb04a3cb5dc684c3e4804f63847c4b4f00d93df2db47475091b91701a04727ee`. #1062 is not merge evidence; a complete later exact-head SUCCESS is still required.
