@@ -263,7 +263,9 @@ ok(prImpact.CHECKER_CONTROL_PLANE.includes('project_tools/release_builder_equiva
 const workflow=fs.readFileSync(path.join(ROOT,'.github','workflows','repository-integrity.yml'),'utf8');
 ok(workflow.includes('p1-231-shadow-identity'),'S1-A permanent lane remains active');
 ok(!workflow.includes('p1-231-builder-equivalence'),'S1-C permanent lane remains inactive');
-ok(!workflow.includes('release_builder_equivalence.js'),'S1-C library not permanently invoked');
+ok(workflow.includes('release_builder_equivalence.js'),'S1-C library permanently invoked in shared S1 shadow lane');
+ok(workflow.includes("product-build-not-authorized"),'shared S1 lane keeps current product-build blocker');
+ok(workflow.includes('product_zip_built !== false'),'shared S1 lane forbids current product ZIP');
 ok(!Object.prototype.hasOwnProperty.call(equivalence,'main'),'S1-C exposes no CLI');
 
 console.log(
@@ -274,6 +276,6 @@ console.log(
   '; fixture_zip_bytes='+equivalence.GOLDEN_ZIP_BYTES+
   '; fixture_zip_sha256='+equivalence.GOLDEN_ZIP_SHA256+
   '; cross_language=node-python; raw_bytes_equal=true; metadata_drift=fail-closed'+
-  '; current_product_load=false; product_zip=false; permanent_workflow_active=false'+
+  '; current_product_load=false; product_zip=false; permanent_workflow_active=shared-s1-shadow'+
   '; release_authorized=false'
 );
