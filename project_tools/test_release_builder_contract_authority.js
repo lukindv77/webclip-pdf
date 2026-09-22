@@ -63,6 +63,12 @@ const packageManifest = packageAuthority.readCanonicalManifest();
 eq(packageManifest.schema, manifest.requires_package_schema, 'S0-A package schema composition');
 eq(packageManifest.path_profile, manifest.requires_path_profile, 'S0-A path profile composition');
 eq(packageManifest.files.length, 34, 'current package membership count');
+const compatibility = authority.assertPackageCompatibility(manifest, packageManifest);
+eq(compatibility.compatible, true, 'S0-A compatibility');
+eq(compatibility.package_schema, manifest.requires_package_schema, 'compatibility package schema');
+eq(compatibility.path_profile, manifest.requires_path_profile, 'compatibility path profile');
+throwsCode(() => authority.assertPackageCompatibility(manifest, { ...packageManifest, schema: 'webclip-extension-package/v2' }), 'BUILDER_CONTRACT_PACKAGE_SCHEMA_MISMATCH');
+throwsCode(() => authority.assertPackageCompatibility(manifest, { ...packageManifest, path_profile: 'portable-ascii-v2' }), 'BUILDER_CONTRACT_PATH_PROFILE_MISMATCH');
 
 eq(manifest.staging.source, 'exact-candidate-git-blobs', 'staging source');
 eq(manifest.staging.membership, 'consume-s0a-only', 'staging membership owner');
@@ -143,6 +149,7 @@ eq(bcf, 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff
 const inputs = authority.identityInputs(manifest);
 eq(inputs.schema, 'webclip-release-builder-identity-inputs/v1', 'identity-input schema');
 deep(inputs.builder_contract, manifest, 'identity input is canonical S0-D contract');
+eq(inputs.package_compatibility.compatible, true, 'identity inputs include S0-A compatibility');
 eq(inputs.artifact_build, false, 'no artifact build');
 eq(inputs.policy_mutation, false, 'no policy mutation');
 eq(inputs.receipt_interpretation, false, 'no receipt interpretation');
