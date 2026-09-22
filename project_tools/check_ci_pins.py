@@ -124,6 +124,7 @@ def evaluate_repository_integrity_s0b_lane(workflows: Mapping[str, str]) -> list
         f"python-version: '{S0B_PYTHON_VERSION}'",
         f"node-version: '{NODE_VERSION}'",
         'node project_tools/release_source_generation_authority.js --candidate "$EXPECTED_SHA"',
+        'node project_tools/release_candidate_generation.js --candidate "$EXPECTED_SHA"',
     )
     errors: list[str] = []
     for item in required:
