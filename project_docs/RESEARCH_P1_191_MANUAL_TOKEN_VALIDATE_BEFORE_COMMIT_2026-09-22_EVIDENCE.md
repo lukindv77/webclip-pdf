@@ -201,3 +201,10 @@ Repository Integrity #1066 / run `35723132459` completed **SUCCESS** on exact im
 That exact-head gate proves the registered P1-191 source/runtime acceptance contract: candidate-bound validation precedes commit; invalid/unknown candidates preserve the last committed auth; valid candidates commit only under exact shared generation; stale PKCE/manual settlement cannot overwrite the newer intent; candidate account metadata is exact-response-bound; and manual capability remains unproven rather than fabricated.
 
 No separate P1-191 acceptance clause requires a live destructive/provider mutation. Real release regression remains applicable at the broader release/physical qualification layer. Under the Registry status model, P1-191 therefore leaves the ACTIVE table and returns to the default **IMPLEMENTED / RELEASE-REGRESSION** state. This is not `DONE` and does not alter any adjacent ACTIVE capability, validity, OAuth-state, scheduler, account/root or release-evidence owner.
+
+
+## 14. Registry-transition identity consequence
+
+The later Registry transition itself changes one current full-RCF root. Exact-head Repository Integrity #1067 / run `35723534761` therefore derived current full RCF `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`. The preceding `sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb` value remains the exact full RCF for the preliminary implementation head before the Registry status edit.
+
+This identity advance is control-plane only: package RPF remains `sha256:0bb0e71547169d2f02bed1ee3cbe5dab4db30aa439d053d8fda1ee73ed0bd396`, the 33-file control remains `sha256:7dc0be48b7b97063c2da2c2680ca0920f00418e8141ded98db442e4bfeffd957`, Chrome/Yandex QCF are unchanged, and BCF is unchanged. #1067 also exposed stale tests that still required P1-191 to be ACTIVE; those witnesses are synchronized on the next exact head. #1067 is not merge evidence.

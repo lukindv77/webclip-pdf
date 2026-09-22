@@ -143,7 +143,7 @@ function receiptHasSecret(receipt) {
 }
 
 // Canonical ownership/boundary locks.
-check('R01 P1-191 remains ACTIVE', () => has(REGISTRY, '| P1-191 | ACTIVE |'));
+check('R01 P1-191 leaves ACTIVE after implementation gate', () => lacks(REGISTRY, '| P1-191 | ACTIVE |'));
 check('R02 exact P1-191 owner wording', () => has(REGISTRY, 'Manual-token replacement must validate candidate before generation-fenced commit and preserve last proven auth on failure/unknown; old PKCE cannot later overwrite it.'));
 check('R03 P1-178 shared generation owner', () => has(P178, 'P1-178 = shared auth-attempt/settings commit generation'));
 check('R04 P1-178 calls manual replacement a newer mutation', () => has(P178, 'disconnect/manual replacement invalidating older completion authority'));

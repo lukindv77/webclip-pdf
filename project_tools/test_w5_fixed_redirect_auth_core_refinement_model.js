@@ -200,7 +200,7 @@ function statusDto(s) {
   const callerSpread = worker.indexOf('...(options.headers || {})', authHeader);
   check(authHeader >= 0 && callerSpread > authHeader, 'current caller headers are spread after worker Authorization');
   check(registry.includes('| P1-178 | ACTIVE |'), 'P1-178 remains existing owner');
-  check(registry.includes('| P1-191 | ACTIVE |'), 'P1-191 remains existing owner');
+  check(!registry.includes('| P1-191 | ACTIVE |'), 'P1-191 leaves ACTIVE after validate-before-commit implementation');
   check(registry.includes('| P1-195 | ACTIVE |'), 'P1-195 remains existing owner');
   check(registry.includes('| P1-196 | ACTIVE |'), 'P1-196 remains existing owner');
   check(registry.includes('| P0-074 | ACTIVE |'), 'P0-074 immutable operation context remains existing owner');
