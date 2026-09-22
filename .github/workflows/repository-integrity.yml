@@ -335,10 +335,10 @@ jobs:
       - name: Evaluate P1-231 S1-B/C/D pre-S2 shadow
         shell: bash
         env:
-          EVENT_KIND: \${{ github.event_name }}
-          CANDIDATE_SHA: \${{ github.sha }}
-          PR_BASE_SHA: \${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
-          PR_HEAD_SHA: \${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+          EVENT_KIND: ${{ github.event_name }}
+          CANDIDATE_SHA: ${{ github.sha }}
+          PR_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          PR_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
         run: |
           set -euo pipefail
           node - <<'NODE'
