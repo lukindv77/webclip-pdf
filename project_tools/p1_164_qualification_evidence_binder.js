@@ -17,7 +17,7 @@ const admission = require('./yandex_p1_164_admission_contract.js');
 const ROOT = path.resolve(__dirname, '..');
 const REAL_ROOT = fs.realpathSync(ROOT);
 const WORKER_PATH = path.join(ROOT, 'service-worker.js');
-const SCHEMA = 'webclip-p1-164-qualification-evidence-binding/v1';
+const SCHEMA = 'webclip-p1-164-qualification-evidence-binding/v2';
 const EVIDENCE_CLASS = 'passive-cross-evidence-consistency-binding';
 const KIND = 'publication-revoke-trash';
 const MAX_JSON_BYTES = 1024 * 1024;
@@ -352,10 +352,27 @@ function bindEvidence(input) {
       receiptExportedAt: privateReceipt.receiptExportedAt,
       sourcePathDigest: providerObservation.identityDigests.sourcePath,
       targetPathDigest: providerObservation.identityDigests.targetPath,
+      providerPhase: providerObservation.phase,
+      manualResolutionSourcePhase: providerObservation.manualResolutionSourcePhase,
       providerEffectivePhase: providerObservation.effectivePhase,
       providerClassification: providerObservation.classification,
+      providerWatch: Object.freeze({
+        requestedSeconds: providerObservation.watch.requestedSeconds,
+        elapsedMs: providerObservation.watch.elapsedMs,
+        attemptCount: providerObservation.watch.attempts.length,
+        attempts: Object.freeze(providerObservation.watch.attempts.map((item) => Object.freeze({
+          attempt: item.attempt,
+          elapsedMs: item.elapsedMs,
+          state: item.state
+        })))
+      }),
       requiredAdmissions: coverage.requiredAdmissions,
       observedCommands: coverage.observedCommands,
+      commandResults: Object.freeze(commandObservation.commands.map((item) => Object.freeze({
+        command: item.command,
+        networkOutcome: item.networkOutcome,
+        responseStatus: item.responseStatus
+      }))),
       requiredCommandCoverageComplete: coverage.requiredCommandCoverageComplete,
       sessionIdDigest: session.sessionIdDigest,
       sessionFinalDigest: session.finalDigest,

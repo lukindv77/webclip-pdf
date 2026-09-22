@@ -4,20 +4,20 @@ Status: **PASSIVE CROSS-EVIDENCE BINDER IMPLEMENTED / NO PHYSICAL QUALIFICATION 
 
 Owner:
 
-\`P1-164 | ACTIVE\`
+`P1-164 | ACTIVE`
 
 Canonical baseline before this tranche:
 
-\`3917332359bead96693f1c99f68fa61ed976e530\`
+`3917332359bead96693f1c99f68fa61ed976e530`
 
 Baseline post-merge Repository Integrity:
 
 - run #1049;
-- run id \`35701110369\`;
-- exact main \`3917332359bead96693f1c99f68fa61ed976e530\`;
+- run id `35701110369`;
+- exact main `3917332359bead96693f1c99f68fa61ed976e530`;
 - conclusion **SUCCESS**.
 
-Manifest remains \`0.9.8\`.
+Manifest remains `0.9.8`.
 Release readiness remains **NOT READY**.
 
 ## Purpose
@@ -35,11 +35,11 @@ Those producers intentionally do not promote one evidence class into another. In
 
 This tranche adds:
 
-\`project_tools/p1_164_qualification_evidence_binder.js\`
+`project_tools/p1_164_qualification_evidence_binder.js`
 
 with deterministic coverage:
 
-\`project_tools/test_p1_164_qualification_evidence_binder.js\`
+`project_tools/test_p1_164_qualification_evidence_binder.js`
 
 The binder is deliberately passive. It consumes already-produced evidence and performs no Chrome DevTools call, Yandex API call, OAuth operation, receipt mutation or extension mutation.
 
@@ -56,7 +56,7 @@ The CLI requires five physical evidence inputs, all outside the repository:
 The binder also derives two current source authorities itself from the exact clean checkout:
 
 - current runtime/package identity contract;
-- current P1-164 destructive admission contract from \`service-worker.js\`.
+- current P1-164 destructive admission contract from `service-worker.js`.
 
 A supplied old source contract is therefore not trusted as a substitute for current source authority.
 
@@ -113,18 +113,18 @@ The existing session limitation remains unchanged: a local hash chain detects in
 
 The current source admission contract determines which destructive admissions are valid for the provider observation's effective phase:
 
-- \`prepared\` -> none;
-- \`revoke-admitted-unknown\` / \`revoke-verified\` -> \`unpublish\`;
-- \`move-admitted-unknown\` / \`remote-verified\` -> \`unpublish\`, then \`move\`.
+- `prepared` -> none;
+- `revoke-admitted-unknown` / `revoke-verified` -> `unpublish`;
+- `move-admitted-unknown` / `remote-verified` -> `unpublish`, then `move`.
 
 Every observed destructive command must be a correctly ordered member of that source-required admission sequence.
 
 The binder reports both:
 
-- \`observedCommands\`;
-- \`requiredCommandCoverageComplete\`.
+- `observedCommands`;
+- `requiredCommandCoverageComplete`.
 
-A bounded partial live trace can therefore remain honest. For example, a \`move\`-only trace may prove that exact move request emission while \`requiredCommandCoverageComplete=false\` for a phase whose complete source admission lineage also contains \`unpublish\`.
+A bounded partial live trace can therefore remain honest. For example, a `move`-only trace may prove that exact move request emission while `requiredCommandCoverageComplete=false` for a phase whose complete source admission lineage also contains `unpublish`.
 
 Partial coverage is never promoted to complete operation coverage, causality or qualification.
 
@@ -143,7 +143,7 @@ Chronological order remains correlation evidence only.
 
 ## Why provider mutation causality remains false
 
-Chrome DevTools Protocol provides browser-local request correlation such as \`requestId\` inside Network-domain events. WebClip deliberately sanitizes that identifier before retention, and Yandex's later GET-only resource observation does not return a provider-recognized value that WebClip can prove is the same browser request.
+Chrome DevTools Protocol provides browser-local request correlation such as `requestId` inside Network-domain events. WebClip deliberately sanitizes that identifier before retention, and Yandex's later GET-only resource observation does not return a provider-recognized value that WebClip can prove is the same browser request.
 
 General distributed-tracing standards solve cross-system correlation by propagating an explicit shared trace context across boundaries. The current WebClip/Yandex destructive path has no equivalent provider-recognized correlation token that is both emitted with the destructive command and later returned by the read-only state observation.
 
@@ -157,12 +157,12 @@ These are platform/comparison inputs, not WebClip project authority.
 
 Therefore even a fully consistent future **live** binder output permanently records:
 
-- \`runningExtensionSourceProven=true\` only because live source evidence was supplied;
-- \`commandExecutionProven=true\` only because live browser command evidence was supplied;
-- \`providerStateObserved=true\` only because live GET-only provider evidence was supplied;
-- \`providerMutationCausalityProven=false\`;
-- \`qualificationPass=false\`;
-- \`releaseAuthorized=false\`.
+- `runningExtensionSourceProven=true` only because live source evidence was supplied;
+- `commandExecutionProven=true` only because live browser command evidence was supplied;
+- `providerStateObserved=true` only because live GET-only provider evidence was supplied;
+- `providerMutationCausalityProven=false`;
+- `qualificationPass=false`;
+- `releaseAuthorized=false`.
 
 The output explicitly records that it has identity/time consistency only and no provider-recognized command-to-state correlation token.
 
@@ -170,11 +170,11 @@ The output explicitly records that it has identity/time consistency only and no 
 
 A successful binder result uses:
 
-\`webclip-p1-164-qualification-evidence-binding/v1\`
+`webclip-p1-164-qualification-evidence-binding/v1`
 
 with evidence class:
 
-\`passive-cross-evidence-consistency-binding\`
+`passive-cross-evidence-consistency-binding`
 
 It means only that the supplied evidence artifacts passed the current cross-evidence consistency contract.
 
@@ -189,14 +189,14 @@ It does **not** mean:
 
 ## Deterministic witness
 
-\`project_tools/test_p1_164_qualification_evidence_binder.js\` creates only synthetic/local evidence.
+`project_tools/test_p1_164_qualification_evidence_binder.js` creates only synthetic/local evidence.
 
 It covers:
 
 - exact current runtime contract derivation;
 - current package-member and worker-graph counts;
 - synthetic exact runtime attestation;
-- synthetic \`unpublish + move\` command observation;
+- synthetic `unpublish + move` command observation;
 - synthetic private receipt export;
 - synthetic GET-only provider observation;
 - real local session-ledger creation/verification in a temporary outside-repository directory;
@@ -253,4 +253,34 @@ P1-231 also remains **ACTIVE**; its passive pre-S2 shadow does not replace curre
 
 This tranche performs no live browser qualification and no Yandex provider mutation.
 
-It does not build a product ZIP, bump \`manifest.json\`, run a release action, activate S2, create a tag, deploy, create a GitHub Release or make a release decision.
+It does not build a product ZIP, bump `manifest.json`, run a release action, activate S2, create a tag, deploy, create a GitHub Release or make a release decision.
+
+## 2026-09-22 binder v2 matrix-evidence refinement
+
+The later physical-matrix preparation tranche advances the binder output schema from
+`webclip-p1-164-qualification-evidence-binding/v1` to
+`webclip-p1-164-qualification-evidence-binding/v2`.
+
+The source/receipt/path/session/causality semantics above are unchanged. v2 only retains
+additional already-validated sanitized fields needed to distinguish physical schedules:
+
+- provider wrapper phase and preserved manual-resolution source phase;
+- bounded provider watch seconds / elapsed time / attempt count;
+- sanitized per-attempt classification state history;
+- per-command `networkOutcome` and numeric `responseStatus`.
+
+Raw provider paths, account/resource/public-link identity, OAuth credentials, CDP request ids,
+headers, bodies and loading error detail remain absent.
+
+This refinement is required so the passive matrix authority can distinguish normal 2xx command
+completion from transport-unknown settlement and can recognize target visibility delay without
+inventing those schedules from the final provider state.
+
+Binder v2 still permanently reports:
+
+- `providerMutationCausalityProven=false`;
+- `qualificationPass=false`;
+- `releaseAuthorized=false`.
+
+The matrix authority and its evidence are recorded separately in
+`RESEARCH_P1_164_PHYSICAL_QUALIFICATION_MATRIX_2026-09-22_EVIDENCE.md`.
