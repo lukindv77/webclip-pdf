@@ -178,6 +178,19 @@ for (const member of resolved.members) {
   ok(Number.isSafeInteger(member.byte_length) && member.byte_length >= 0, member.path + ' has bounded byte length');
   ok(/^[0-9a-f]{64}$/.test(member.sha256), member.path + ' has diagnostic SHA-256');
 }
+const identityInputs = authority.identityInputs(head, topology);
+eq(identityInputs.schema, 'webclip-package-identity-inputs/v1', 'identity-input schema');
+eq(identityInputs.candidate_sha, head, 'identity-input candidate');
+eq(identityInputs.members.length, 34, 'identity-input member count');
+for (let index = 0; index < identityInputs.members.length; index += 1) {
+  const input = identityInputs.members[index];
+  const admitted = resolved.members[index];
+  eq(input.path, admitted.path, input.path + ' identity path');
+  eq(input.bytes.length, admitted.byte_length, input.path + ' identity byte length');
+  eq(crypto.createHash('sha256').update(input.bytes).digest('hex'), admitted.sha256, input.path + ' identity byte digest');
+}
+eq(identityInputs.policy_mutation, false, 'identity adapter does not mutate policy');
+eq(identityInputs.release_authorized, false, 'identity adapter does not authorize release');
 throwsCode(() => authority.resolvePackage('HEAD', topology), 'PACKAGE_CANDIDATE_SHA_INVALID', 'moving ref cannot enter low-level resolver');
 
 const rpfRun = execFileSync(
