@@ -84,6 +84,10 @@ GOOD_S0B_JOB = """
         env:
           EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: node project_tools/release_source_generation_authority.js --candidate "$EXPECTED_SHA"
+      - name: Verify P1-231 S0-F candidate admission
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: node project_tools/release_candidate_generation.js --candidate "$EXPECTED_SHA"
 """
 GOOD_REPOSITORY_INTEGRITY_WITH_S0B = GOOD_REPOSITORY_INTEGRITY + GOOD_S0B_JOB
 
@@ -196,6 +200,16 @@ def main() -> None:
     )
     if not any("release_source_generation_authority.js" in error for error in lane_errors):
         raise AssertionError(f"repository-integrity-s0b-no-verifier: expected verifier failure, got {lane_errors}")
+
+    no_s0f_gate = GOOD_REPOSITORY_INTEGRITY_WITH_S0B.replace(
+        '        run: node project_tools/release_candidate_generation.js --candidate "$EXPECTED_SHA"\n',
+        "        run: node --version\n",
+    )
+    lane_errors = module.evaluate_repository_integrity_s0b_lane(
+        {module.REPOSITORY_INTEGRITY_WORKFLOW: no_s0f_gate}
+    )
+    if not any("release_candidate_generation.js" in error for error in lane_errors):
+        raise AssertionError(f"repository-integrity-s0f-no-gate: expected S0-F gate failure, got {lane_errors}")
 
     profile_errors = module.evaluate(
         {
