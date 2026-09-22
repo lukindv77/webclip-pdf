@@ -177,6 +177,21 @@ try {
   eq(bound.releaseAuthorized, false, 'binder never authorizes release');
   deep(bound.evidence.requiredAdmissions, ['unpublish', 'move'], 'move phase requires both source admissions');
   deep(bound.evidence.observedCommands, ['unpublish', 'move'], 'composite command trace joined');
+  eq(bound.evidence.providerPhase, 'move-admitted-unknown', 'binder v2 retains provider wrapper phase');
+  eq(bound.evidence.manualResolutionSourcePhase, '', 'non-manual provider observation has no manual source phase');
+  eq(bound.evidence.providerEffectivePhase, 'move-admitted-unknown', 'binder v2 retains effective phase');
+  eq(bound.evidence.providerWatch.requestedSeconds, 0, 'binder v2 retains bounded provider watch request');
+  eq(bound.evidence.providerWatch.attemptCount, 1, 'binder v2 retains provider attempt count');
+  deep(
+    bound.evidence.providerWatch.attempts.map((item) => [item.attempt, item.elapsedMs, item.state]),
+    [[1, 25, 'move-settled-private']],
+    'binder v2 retains sanitized provider attempt history'
+  );
+  deep(
+    bound.evidence.commandResults.map((item) => [item.command, item.networkOutcome, item.responseStatus]),
+    [['unpublish', 'response', 200], ['move', 'response', 201]],
+    'binder v2 retains sanitized command network outcomes'
+  );
   eq(bound.evidence.requiredCommandCoverageComplete, true, 'full synthetic command coverage reported as coverage only');
   eq(bound.evidence.privateReceiptIdentityBound, true, 'private receipt identity bound');
   eq(bound.evidence.sessionCheckpointBound, true, 'provider observation bound into verified session checkpoint');
