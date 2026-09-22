@@ -311,6 +311,17 @@ Deterministic coverage is `project_tools/test_p1_164_admission_contract.js`, inc
 External comparison research confirms the distinction between WebClip's at-most-once/no-replay protocol and APIs that provide server-recognized idempotency tokens/keys (AWS/Stripe). No equivalent client-token contract is claimed for the current WebClip Yandex unpublish/move path.
 
 Durable rationale/evidence is `RESEARCH_P1_164_ADMISSION_CONTRACT_WITNESS_2026-09-21_EVIDENCE.md`. P1-164 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**. Runtime RPF, Chrome/Yandex QCF, full RCF and BCF remain unchanged.
+
+## P1-164 running-extension source attestation tooling
+
+`project_tools/chrome_p1_164_runtime_attestor.js` now prepares the missing browser/runtime provenance layer for future physical P1-164 qualification without changing extension bytes or calling Yandex. A live invocation is restricted to a loopback Chrome DevTools endpoint, refuses CI, requires an exact clean checkout, selects the running MV3 `service-worker.js` target, fetches all 34 package members from the extension's own `chrome-extension://` origin, recomputes the current typed RPF, and separately verifies the currently parsed service-worker/importScripts source digests through DevTools.
+
+The current worker execution graph is six scripts: `service-worker.js`, `public-suffix.js`, `journal-import-stream.js`, `journal-text-filter.js`, `local-download-identity.js`, and `journal-import-digest.js`. Missing, extra, stale or mismatched parsed scripts fail closed.
+
+A successful **future live** invocation may emit `runningExtensionSourceProven=true` for that inspected browser context, but it permanently keeps `commandExecutionProven=false`, `providerMutationCausalityProven=false`, `qualificationPass=false`, and `releaseAuthorized=false`. The deterministic witness `project_tools/test_p1_164_runtime_source_attestor.js` is network-free and proves only the attestor contract; no live Chrome attestation is produced by the current tranche.
+
+Durable rationale/evidence is `RESEARCH_P1_164_RUNTIME_SOURCE_ATTESTATION_2026-09-22_EVIDENCE.md`. P1-164 remains **ACTIVE** pending the authorized physical browser/Yandex matrix; manifest remains `0.9.8`, release readiness remains **NOT READY**, and current RPF/QCF/RCF/BCF identities remain unchanged.
+
 ## P1-231 S0-A passive package authority
 
 The repository now has a canonical passive package declaration in `release_package_manifest_v1.json` and a strict exact-Git resolver in `project_tools/release_package_authority.js`.
