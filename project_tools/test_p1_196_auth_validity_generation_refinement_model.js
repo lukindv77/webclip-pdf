@@ -77,7 +77,7 @@ function receiptSecretFree(receipt) {
 check('O01 P1-196 ACTIVE', () => has(REGISTRY, '| P1-196 | ACTIVE |'));
 check('O02 P1-196 exact owner', () => has(REGISTRY, 'Invalid-token/401 demotion is exact auth-generation fenced; stale failure from auth A cannot clear/downgrade newer auth B.'));
 check('O03 P1-178 ACTIVE', () => has(REGISTRY, '| P1-178 | ACTIVE |'));
-check('O04 P1-191 ACTIVE', () => has(REGISTRY, '| P1-191 | ACTIVE |'));
+check('O04 P1-191 no longer ACTIVE after validate-before-commit implementation', () => lacks(REGISTRY, '| P1-191 | ACTIVE |'));
 check('O05 P1-195 ACTIVE', () => has(REGISTRY, '| P1-195 | ACTIVE |'));
 check('O06 P1-177 ACTIVE', () => has(REGISTRY, '| P1-177 | ACTIVE |'));
 check('O07 P1-179 ACTIVE', () => has(REGISTRY, '| P1-179 | ACTIVE |'));

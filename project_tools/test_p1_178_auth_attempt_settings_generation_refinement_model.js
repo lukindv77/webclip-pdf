@@ -99,10 +99,14 @@ check('S15 finish owns attemptId', () => has(finish, 'authAttemptId'));
 check('S16 finish uses auth generation', () => has(finish, 'authGeneration'));
 
 const manual = asyncSection('async function setManualYandexToken(token)');
-check('S17 manual writes auth', () => has(manual, 'writeYandexAuth(yandexAuth)'));
-check('S18 manual performs provider read', () => has(manual, "await yandexApi('')"));
-check('S19 manual failure compare-clears exact record', () => has(manual, 'compareClearYandexAuthRecord(yandexAuth)'));
-check('S20 manual advances shared auth generation', () => has(manual, 'advanceYandexAuthControlGeneration'));
+check('S17 manual commits only through exact generation CAS', () => has(manual, 'commitManualYandexAuthIfGeneration(authGeneration, yandexAuth)'));
+check('S18 manual performs candidate-bound provider validation', () => has(manual, 'validateManualYandexTokenCandidate(token)'));
+check('S19 manual rejection has no committed-auth clear', () => lacks(manual, 'compareClearYandexAuthRecord'));
+check('S20 manual advances shared auth generation before validation', () => {
+  const generationAt = manual.indexOf('advanceYandexAuthControlGeneration');
+  const validationAt = manual.indexOf('validateManualYandexTokenCandidate(token)');
+  assert.ok(generationAt >= 0 && validationAt > generationAt);
+});
 
 check('S21 disconnect case exists', () => has(SOURCE, 'WEBCLIP_YANDEX_DISCONNECT'));
 check('S22 disconnect uses shared generation barrier', () => has(SOURCE, 'await disconnectYandexAuthControl()'));

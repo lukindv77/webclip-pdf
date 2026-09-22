@@ -187,16 +187,20 @@ function statusDto(s) {
   check(worker.includes('commitYandexOAuthAttemptControl(captured, yandexAuth)'), 'current OAuth finish uses post-network generation CAS');
   check(worker.includes("advanceYandexAuthControlGeneration('Поколение manual-token intent Яндекс Диска')"), 'manual intent fences older OAuth attempt');
   check(worker.includes('await disconnectYandexAuthControl()'), 'disconnect is a shared-generation barrier');
-  const manualInstall = worker.indexOf('await writeYandexAuth(yandexAuth)');
-  const manualValidate = worker.indexOf("await yandexApi('')", manualInstall);
-  check(manualInstall >= 0 && manualValidate > manualInstall, 'current manual candidate is installed before provider validation');
-  const clearAfterManual = worker.indexOf('await compareClearYandexAuthRecord(yandexAuth)', manualValidate);
-  check(clearAfterManual > manualValidate, 'current failed manual validation exact-clears its candidate after the candidate was already published');
+  const manualFunction = worker.slice(
+    worker.indexOf('async function setManualYandexToken(token)'),
+    worker.indexOf('async function getValidYandexAccessToken')
+  );
+  const manualValidate = manualFunction.indexOf('validateManualYandexTokenCandidate(token)');
+  const manualCommit = manualFunction.indexOf('commitManualYandexAuthIfGeneration(authGeneration, yandexAuth)');
+  check(manualValidate >= 0 && manualCommit > manualValidate, 'current manual candidate validates privately before generation-CAS commit');
+  check(!manualFunction.includes('writeYandexAuth(yandexAuth)'), 'manual candidate is not globally published before validation');
+  check(!manualFunction.includes('compareClearYandexAuthRecord'), 'invalid/unknown manual candidate cannot clear proven current auth');
   const authHeader = worker.indexOf("'Authorization': `OAuth ${token}`");
   const callerSpread = worker.indexOf('...(options.headers || {})', authHeader);
   check(authHeader >= 0 && callerSpread > authHeader, 'current caller headers are spread after worker Authorization');
   check(registry.includes('| P1-178 | ACTIVE |'), 'P1-178 remains existing owner');
-  check(registry.includes('| P1-191 | ACTIVE |'), 'P1-191 remains existing owner');
+  check(!registry.includes('| P1-191 | ACTIVE |'), 'P1-191 leaves ACTIVE after validate-before-commit implementation');
   check(registry.includes('| P1-195 | ACTIVE |'), 'P1-195 remains existing owner');
   check(registry.includes('| P1-196 | ACTIVE |'), 'P1-196 remains existing owner');
   check(registry.includes('| P0-074 | ACTIVE |'), 'P0-074 immutable operation context remains existing owner');

@@ -161,7 +161,7 @@ const finishAuth = asyncSection('async function finishYandexOAuth(authAttemptId,
 check('S27 OAuth success commits exact auth attempt through CAS', () => has(finishAuth, 'commitYandexOAuthAttemptControl(captured, yandexAuth)'));
 check('S28 OAuth success lacks explicit scheduler resume', () => lacks(finishAuth, 'initializeJournalBackupScheduler'));
 const manualAuth = asyncSection('async function setManualYandexToken(token)');
-check('S29 manual auth writes auth', () => has(manualAuth, 'await writeYandexAuth(yandexAuth);'));
+check('S29 manual auth commits validated candidate through generation CAS', () => has(manualAuth, 'commitManualYandexAuthIfGeneration(authGeneration, yandexAuth)'));
 check('S30 manual auth lacks explicit scheduler resume', () => lacks(manualAuth, 'initializeJournalBackupScheduler'));
 check('S31 scheduler init call set excludes auth-resume labels', () => {
   assert.equal(count(SOURCE, "initializeJournalBackupScheduler('"), 5);
