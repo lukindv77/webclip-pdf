@@ -112,6 +112,9 @@ function normalizePackageInputs(value) {
     previous = item.path;
     members.push(Object.freeze({ path: item.path, bytes: item.bytes }));
   }
+  if (value.package_schema !== packageAuthority.SCHEMA || value.path_profile !== packageAuthority.PATH_PROFILE) {
+    fail('IDENTITY_PACKAGE_INPUTS_INVALID');
+  }
   return Object.freeze({
     candidate_sha: packageAuthority.normalizeCandidateSha(value.candidate_sha),
     package_schema: value.package_schema,
@@ -143,6 +146,18 @@ function normalizeContractInputs(value) {
   const kinds = Object.keys(value.qcf_payloads).sort((a, b) => Buffer.from(a).compare(Buffer.from(b)));
   if (JSON.stringify(kinds) !== JSON.stringify([...contractAuthority.PROJECTION_NAMES].sort())) {
     fail('IDENTITY_CONTRACT_INPUTS_INVALID');
+  }
+  for (const kind of kinds) {
+    const payload = value.qcf_payloads[kind];
+    if (
+      !payload
+      || payload.release_contract_schema !== contractAuthority.SCHEMA
+      || payload.fingerprint_profile !== contractAuthority.FP_PROFILE
+      || payload.kind !== kind
+      || !payload.projection
+    ) {
+      fail('IDENTITY_CONTRACT_INPUTS_INVALID');
+    }
   }
   if (!Array.isArray(value.full_rcf_blob_inputs) || value.full_rcf_blob_inputs.length === 0) {
     fail('IDENTITY_CONTRACT_INPUTS_INVALID');
@@ -183,6 +198,14 @@ function rcfPayload(contractInputsValue, qcfValues) {
   if (JSON.stringify(kinds) !== JSON.stringify(supplied)) fail('IDENTITY_QCF_SET_INVALID');
 
   const first = inputs.qcf_payloads[kinds[0]];
+  for (const kind of kinds) {
+    if (
+      inputs.qcf_payloads[kind].release_contract_schema !== first.release_contract_schema
+      || inputs.qcf_payloads[kind].fingerprint_profile !== first.fingerprint_profile
+    ) {
+      fail('IDENTITY_CONTRACT_INPUTS_INVALID');
+    }
+  }
   return Object.freeze({
     release_contract_schema: first.release_contract_schema,
     fingerprint_profile: first.fingerprint_profile,
