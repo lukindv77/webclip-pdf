@@ -15520,6 +15520,76 @@ async function getValidYandexAccessToken() {
   return yandexAuth.accessToken;
 }
 
+function sanitizeYandexApiCallerHeaders(headers = {}) {
+  const source = headers && typeof headers === 'object' ? headers : {};
+  const safe = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (String(key || '').toLowerCase() === 'authorization') {
+      const error = new Error('Заголовок Authorization Яндекс Диска принадлежит worker и не может быть переопределён вызывающим кодом.');
+      error.code = 'YANDEX_CALLER_AUTHORIZATION_FORBIDDEN';
+      throw error;
+    }
+    safe[key] = value;
+  }
+  return safe;
+}
+
+async function captureCurrentYandexAuthRequestAuthority() {
+  // Reuse the existing migration/security cleanup boundary first, then capture
+  // auth + shared control generation in one serialized session read.
+  await readYandexAuthState();
+  return runYandexAuthStorageOperation(async () => {
+    const stored = await chrome.storage.session.get([YANDEX_AUTH_KEY, YANDEX_AUTH_GENERATION_KEY]);
+    const current = stored?.[YANDEX_AUTH_KEY] || null;
+    if (!current?.accessToken) {
+      throw new Error('Яндекс Диск не подключён. Откройте настройки расширения и выполните авторизацию.');
+    }
+    if (current.expiresAt && current.expiresAt <= Date.now() + 60_000) {
+      throw new Error('Срок действия OAuth-токена истёк. Откройте настройки и подключите Яндекс Диск заново.');
+    }
+
+    const authRecordId = String(current.authRecordId || '').trim();
+    const authGeneration = normalizeYandexAuthGeneration(current.authGeneration);
+    const controlGeneration = normalizeYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]);
+    const authorizationBound = Boolean(authRecordId && authGeneration > 0 && controlGeneration > 0);
+    return Object.freeze({
+      accessToken: current.accessToken,
+      receipt: Object.freeze({
+        requestKind: 'disk-oauth',
+        authRecordId,
+        authGeneration,
+        controlGeneration,
+        authorizationBound
+      })
+    });
+  }, 'Фиксация exact OAuth authority для запроса Яндекс Диска');
+}
+
+async function demoteYandexAuthIfCurrentRequest(receipt) {
+  if (!receipt || receipt.requestKind !== 'disk-oauth' || receipt.authorizationBound !== true) return false;
+  const expectedRecordId = String(receipt.authRecordId || '').trim();
+  const expectedAuthGeneration = normalizeYandexAuthGeneration(receipt.authGeneration);
+  const expectedControlGeneration = normalizeYandexAuthGeneration(receipt.controlGeneration);
+  if (!expectedRecordId || !expectedAuthGeneration || !expectedControlGeneration) return false;
+
+  return runYandexAuthStorageOperation(async () => {
+    const stored = await chrome.storage.session.get([YANDEX_AUTH_KEY, YANDEX_AUTH_GENERATION_KEY]);
+    const current = stored?.[YANDEX_AUTH_KEY] || null;
+    const currentControlGeneration = normalizeYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]);
+    if (!current
+      || String(current.authRecordId || '').trim() !== expectedRecordId
+      || normalizeYandexAuthGeneration(current.authGeneration) !== expectedAuthGeneration
+      || currentControlGeneration !== expectedControlGeneration) return false;
+
+    await chrome.storage.session.set({
+      [YANDEX_AUTH_KEY]: null,
+      [YANDEX_AUTH_GENERATION_KEY]: nextYandexAuthGeneration(currentControlGeneration),
+      [YANDEX_OAUTH_PENDING_KEY]: null
+    });
+    return true;
+  }, 'CAS демоция exact OAuth authority Яндекс Диска после 401');
+}
+
 async function captureCurrentYandexOperationContext() {
   const { auth: yandexAuth, yandexConfig = {} } = await readYandexAuthState();
   if (!yandexAuth?.accessToken) {
@@ -15821,6 +15891,7 @@ async function yandexApi(endpoint, options = {}, allowRetry = false) {
   const retryAttempt = Math.max(0, Math.floor(Number(options.retryAttempt) || 0));
   const startedAt = Date.now();
   const safeQuery = sanitizeOperationLogValue(options.query || {});
+  const callerHeaders = sanitizeYandexApiCallerHeaders(options.headers || {});
   if (operationId) {
     appendOperationLogEvent(operationId, {
       category: 'yandex-request',
@@ -15830,10 +15901,15 @@ async function yandexApi(endpoint, options = {}, allowRetry = false) {
     });
   }
   let token;
+  let authRequestReceipt = null;
   try {
-    token = options.operationContext
-      ? WebClipYandexOperationContext.validateOperationContext(options.operationContext).accessToken
-      : await getValidYandexAccessToken();
+    if (options.operationContext) {
+      token = WebClipYandexOperationContext.validateOperationContext(options.operationContext).accessToken;
+    } else {
+      const authority = await captureCurrentYandexAuthRequestAuthority();
+      token = authority.accessToken;
+      authRequestReceipt = authority.receipt;
+    }
   } catch (error) {
     if (operationId) {
       appendOperationLogEvent(operationId, {
@@ -15864,9 +15940,9 @@ async function yandexApi(endpoint, options = {}, allowRetry = false) {
     response = await fetch(url.toString(), {
       method,
       headers: {
-        'Authorization': `OAuth ${token}`,
+        ...callerHeaders,
         'Accept': 'application/json',
-        ...(options.headers || {})
+        'Authorization': `OAuth ${token}`
       },
       body: options.body,
       signal: controller.signal,
@@ -15913,12 +15989,20 @@ async function yandexApi(endpoint, options = {}, allowRetry = false) {
         }
       });
     }
+    let authDemoted = false;
+    if (response.status === 401 && authRequestReceipt?.authorizationBound === true) {
+      authDemoted = await demoteYandexAuthIfCurrentRequest(authRequestReceipt);
+    }
     const error = new Error(boundedYandexExternalText(
       data?.message || data?.description || data?.error || `Яндекс Диск вернул HTTP ${response.status}`,
       MAX_YANDEX_EXTERNAL_ERROR_CHARS
     ));
     error.status = response.status;
     error.code = boundedYandexExternalText(data?.error || '', MAX_YANDEX_EXTERNAL_ERROR_CHARS);
+    if (response.status === 401) {
+      error.authRequestBound = Boolean(authRequestReceipt?.authorizationBound);
+      error.authDemoted = authDemoted;
+    }
     throw error;
   }
 

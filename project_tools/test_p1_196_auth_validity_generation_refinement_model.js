@@ -98,12 +98,12 @@ check('S04 expiry function has no auth demotion write', () => lacks(validToken, 
 const api = asyncSection('async function yandexApi(endpoint, options = {}, allowRetry = false)');
 check('S05 API attaches response status', () => has(api, 'error.status = response.status'));
 check('S06 API attaches bounded provider code', () => has(api, "error.code = boundedYandexExternalText(data?.error || '', MAX_YANDEX_EXTERNAL_ERROR_CHARS)"));
-check('S07 API has no explicit exact 401 demotion branch', () => lacks(api, 'response.status === 401'));
-check('S08 API builds OAuth Authorization', () => has(api, "'Authorization': `OAuth ${token}`"));
-check('S09 caller headers are spread after OAuth header', () => {
-  const authAt = api.indexOf("'Authorization': `OAuth ${token}`");
-  const spreadAt = api.indexOf('...(options.headers || {})');
-  assert.ok(authAt >= 0 && spreadAt > authAt);
+check('S07 API now has explicit bounded 401 demotion branch', () => has(api, 'response.status === 401'));
+check('S08 API builds worker-owned OAuth Authorization', () => has(api, "'Authorization': `OAuth ${token}`"));
+check('S09 caller Authorization override is now rejected before request', () => {
+  has(api, 'sanitizeYandexApiCallerHeaders(options.headers || {})');
+  lacks(api, '...(options.headers || {})');
+  has(SOURCE, "error.code = 'YANDEX_CALLER_AUTHORIZATION_FORBIDDEN'");
 });
 check('S10 runtime now carries shared authGeneration substrate from P1-178', () => has(SOURCE, 'authGeneration'));
 check('S10b runtime now carries authRecordId substrate from P1-178', () => has(SOURCE, 'authRecordId'));
@@ -190,4 +190,4 @@ check('N29 no runtime/L5/S2/release action', () => {
   'A new auth generation is not replay authority for an old physical mutation.'
 ].forEach((needle, i) => check(`E${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
 
-console.log(`P1-196 auth validity generation refinement model: PASS; cases=${cases}; schema=webclip-auth-validity-generation/v1; baseline=07ba5d17569dd563102e6699431222742bec9dde; connected_presence_only=current-gap; explicit_validity=current-gap; expiry_unknown=explicit-required; current_401_demotion=missing; stale_401=must-not-demote; request_binding=final-authorization-required; caller_authorization_override=current-surface; generic_403=no-demotion; signed_transfer_401=no-oauth-demotion; recovery_auth_recheck=required; shared_generation_owner=P1-178; capability_owner=P1-195; scheduler_owner=P1-177; namespace_owner=P1-179; runtime_modified=false; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-196 auth validity generation refinement model: PASS; cases=${cases}; schema=webclip-auth-validity-generation/v1; baseline=07ba5d17569dd563102e6699431222742bec9dde; connected_presence_only=current-gap; explicit_validity=current-gap; expiry_transition=current-gap; current_401_demotion=implemented-exact-current-request; stale_401=blocked-by-record-and-control-cas; request_binding=implemented-secret-free-receipt; caller_authorization_override=forbidden; operation_context_global_demotion=forbidden; generic_403=no-demotion; signed_transfer_401=no-oauth-demotion; recovery_auth_recheck=required; shared_generation_owner=P1-178; capability_owner=P1-195; scheduler_owner=P1-177; namespace_owner=P1-179; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);

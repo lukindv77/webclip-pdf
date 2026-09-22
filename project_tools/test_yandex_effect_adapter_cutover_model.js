@@ -90,8 +90,8 @@ function signedTransferHeaders(headers = {}) {
 
 check('S01 generic yandexApi exists', () => has(SOURCE, 'async function yandexApi(endpoint, options = {}, allowRetry = false)'));
 check('S02 current token helper exists', () => has(SOURCE, 'getValidYandexAccessToken()'));
-check('S03 current caller-header spread exists', () => has(SOURCE, '...(options.headers || {})'));
-check('S04 current OAuth header exists', () => has(SOURCE, "'Authorization': `OAuth ${token}`"));
+check('S03 caller Authorization override is forbidden in current worker', () => has(SOURCE, 'sanitizeYandexApiCallerHeaders(options.headers || {})'));
+check('S04 current worker-owned OAuth header exists', () => has(SOURCE, "'Authorization': `OAuth ${token}`"));
 check('S05 current source now exposes authRecordId control identity substrate', () => has(SOURCE, 'authRecordId'));
 check('S06 current source now exposes authGeneration control identity substrate', () => has(SOURCE, 'authGeneration'));
 check('S07 manifest version unchanged research tranche', () => assert.equal(MANIFEST.version, '0.9.8'));

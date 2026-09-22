@@ -197,8 +197,9 @@ function statusDto(s) {
   check(!manualFunction.includes('writeYandexAuth(yandexAuth)'), 'manual candidate is not globally published before validation');
   check(!manualFunction.includes('compareClearYandexAuthRecord'), 'invalid/unknown manual candidate cannot clear proven current auth');
   const authHeader = worker.indexOf("'Authorization': `OAuth ${token}`");
-  const callerSpread = worker.indexOf('...(options.headers || {})', authHeader);
-  check(authHeader >= 0 && callerSpread > authHeader, 'current caller headers are spread after worker Authorization');
+  check(authHeader >= 0, 'current worker emits OAuth Authorization');
+  check(worker.includes('sanitizeYandexApiCallerHeaders(options.headers || {})'), 'current worker rejects caller Authorization override');
+  check(!worker.includes('...(options.headers || {})'), 'raw caller header spread no longer follows worker Authorization');
   check(registry.includes('| P1-178 | ACTIVE |'), 'P1-178 remains existing owner');
   check(!registry.includes('| P1-191 | ACTIVE |'), 'P1-191 leaves ACTIVE after validate-before-commit implementation');
   check(registry.includes('| P1-195 | ACTIVE |'), 'P1-195 remains existing owner');

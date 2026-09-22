@@ -149,7 +149,7 @@ const apiEnd = worker.indexOf('\n\nfunction getSiteFolderSegments(', apiStart);
 const apiSource = worker.slice(apiStart, apiEnd);
 ok(apiSource.includes('options.operationContext'), 'Yandex API accepts captured context');
 ok(apiSource.includes('validateOperationContext(options.operationContext).accessToken'), 'Yandex API selects token from validated context');
-ok(apiSource.includes(': await getValidYandexAccessToken()'), 'uncovered callers retain bounded compatibility fallback');
+ok(apiSource.includes('captureCurrentYandexAuthRequestAuthority()'), 'uncovered callers use exact current-auth request authority fallback');
 ok(apiSource.includes('sanitizeOperationLogValue(options.query || {})'), 'request log sanitizes query only, not secret context');
 ok(!apiSource.includes('sanitizeOperationLogValue(options)'), 'request log never serializes the full secret-bearing options object');
 
