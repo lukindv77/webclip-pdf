@@ -383,6 +383,40 @@ function resolvePackage(candidateSha, topologyValue, options = {}) {
   });
 }
 
+function identityInputs(candidateSha, topologyValue, options = {}) {
+  const repoRoot = path.resolve(options.repoRoot || ROOT);
+  const resolved = resolvePackage(candidateSha, topologyValue, options);
+  const members = resolved.members.map((member) => {
+    let bytes;
+    try {
+      bytes = git(repoRoot, ['cat-file', 'blob', member.git_oid], {
+        encoding: null,
+        maxBuffer: Math.max(16 * 1024 * 1024, member.byte_length + 1024)
+      });
+    } catch (_) {
+      fail('PACKAGE_GIT_READ_FAILED', member.path);
+    }
+    if (!Buffer.isBuffer(bytes) || bytes.length !== member.byte_length) {
+      fail('PACKAGE_GIT_READ_FAILED', member.path);
+    }
+    const digest = crypto.createHash('sha256').update(bytes).digest('hex');
+    if (digest !== member.sha256) fail('PACKAGE_IDENTITY_INPUT_MISMATCH', member.path);
+    return Object.freeze({ path: member.path, bytes });
+  });
+
+  return Object.freeze({
+    schema: 'webclip-package-identity-inputs/v1',
+    candidate_sha: resolved.candidate_sha,
+    package_schema: resolved.schema,
+    path_profile: resolved.path_profile,
+    topology_digest: resolved.topology_digest,
+    members: Object.freeze(members),
+    aggregate_bytes: resolved.aggregate_bytes,
+    policy_mutation: false,
+    release_authorized: false
+  });
+}
+
 function parseArgs(argv) {
   const out = { candidate: '', help: false };
   for (let index = 0; index < argv.length; index += 1) {
@@ -443,5 +477,6 @@ module.exports = Object.freeze({
   normalizeCandidateSha,
   normalizedLimits,
   resolvePackage,
+  identityInputs,
   parseArgs
 });
