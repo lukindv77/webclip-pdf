@@ -54,6 +54,8 @@ S0-G now has the passive production typed receipt reader and settlement engine `
 
 S0-H now has the passive production builder/verifier library `project_tools/release_passive_builder.js`, but current product construction remains intentionally disabled. The library enforces S0-F admission and canonical BCF before package loading, staged/extracted RPF equality, and strict raw classic-ZIP verification. Repository Integrity executes only the four-member synthetic 510-byte golden fixture; no current 34-file WebClip package is loaded/staged/zipped, no product ZIP is produced, and the module exposes no product-build CLI. See `RESEARCH_P1_231_S0H_FIXTURE_ONLY_PASSIVE_BUILDER_2026-09-22_EVIDENCE.md`.
 
+S0-I now has the passive production PR-impact classifier `project_tools/release_pr_impact.js`. It validates exact base/head/two-parent synthetic-merge provenance, reads exact base and candidate S0-A/S0-B authority manifests through the existing production parsers, classifies the exact `base -> candidate` `--no-renames` delta against the base∪candidate package/generation surfaces, and marks S0-A/S0-B/checker/workflow self-changes as requiring trusted review with `automaticClassificationTrusted=false`. The production checker and Repository Integrity workflow are intentionally not switched to S0-I in this bootstrap tranche. See `RESEARCH_P1_231_S0I_PASSIVE_PRODUCTION_PR_IMPACT_2026-09-22_EVIDENCE.md`.
+
 ## Current P0-080 implementation evidence
 
 P0-080 is being implemented in bounded application-generation tranches while keeping same-document application generation distinct from browser `documentId` identity.
