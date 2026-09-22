@@ -15141,6 +15141,46 @@ async function writeYandexAuth(auth) {
   return { mode: YANDEX_AUTH_STORAGE_SESSION, yandexConfig: nextConfig };
 }
 
+function describeYandexAuthTruth(auth, controlGeneration = 0, now = Date.now()) {
+  const accessToken = String(auth?.accessToken || '').trim();
+  const authPresent = Boolean(accessToken);
+  const expiresAt = Math.max(0, Number(auth?.expiresAt) || 0);
+  const storedExpiryKnowledge = String(auth?.expiryKnowledge || '').trim();
+  const expiryKnowledge = expiresAt > 0
+    ? 'known'
+    : (storedExpiryKnowledge === 'known' || storedExpiryKnowledge === 'unknown' ? storedExpiryKnowledge : 'unknown');
+  const storedValidity = String(auth?.validity || '').trim();
+  let authValidity = ['valid', 'invalid', 'expired'].includes(storedValidity)
+    ? storedValidity
+    : 'unknown';
+
+  if (authPresent && expiresAt > 0 && expiresAt <= now) authValidity = 'expired';
+  if (!authPresent && authValidity === 'valid') authValidity = 'unknown';
+
+  // A token within the existing 60-second admission skew remains a present
+  // credential, but it is not usable for a new request even before the exact
+  // provider expiry instant. This keeps validity and admission usability
+  // separate rather than calling a still-present token already expired.
+  const authExpirySkewActive = Boolean(authPresent && expiresAt > 0 && expiresAt <= now + 60_000);
+  const authUsable = Boolean(
+    authPresent
+    && authValidity !== 'invalid'
+    && authValidity !== 'expired'
+    && !authExpirySkewActive
+  );
+
+  return Object.freeze({
+    authPresent,
+    authValidity,
+    authUsable,
+    expiryKnowledge,
+    authGeneration: normalizeYandexAuthGeneration(controlGeneration),
+    authRecordGeneration: normalizeYandexAuthGeneration(auth?.authGeneration),
+    authExpiresAt: expiresAt,
+    authExpirySkewActive
+  });
+}
+
 async function getYandexStatus() {
   const [authState, authControlStored] = await Promise.all([
     readYandexAuthState(),
@@ -15153,6 +15193,7 @@ async function getYandexStatus() {
   const yandexAuth = authState.auth;
   const yandexOAuthPending = authControlStored?.[YANDEX_OAUTH_PENDING_KEY] || null;
   const authGeneration = normalizeYandexAuthGeneration(authControlStored?.[YANDEX_AUTH_GENERATION_KEY]);
+  const authTruth = describeYandexAuthTruth(yandexAuth, authGeneration);
 
   const pendingValid = Boolean(
     yandexOAuthPending?.authAttemptId &&
@@ -15180,7 +15221,17 @@ async function getYandexStatus() {
   );
   return {
     ok: true,
-    connected: Boolean(yandexAuth?.accessToken),
+    // Compatibility field: "connected" now means current auth is admissible
+    // for a new request, not merely that secret bytes are present.
+    connected: authTruth.authUsable,
+    authPresent: authTruth.authPresent,
+    authValidity: authTruth.authValidity,
+    authUsable: authTruth.authUsable,
+    expiryKnowledge: authTruth.expiryKnowledge,
+    authGeneration: authTruth.authGeneration,
+    authRecordGeneration: authTruth.authRecordGeneration,
+    authExpiresAt: authTruth.authExpiresAt,
+    authExpirySkewActive: authTruth.authExpirySkewActive,
     authSource: yandexAuth?.source || null,
     authStorageMode: authState.mode,
     clientId: yandexConfig.clientId || yandexOAuthPending?.clientId || yandexAuth?.clientId || '',
@@ -15356,6 +15407,9 @@ async function finishYandexOAuth(authAttemptId, code) {
     accessToken: token.access_token,
     refreshToken: '',
     expiresAt: expiresInSeconds ? now + expiresInSeconds * 1000 : 0,
+    expiryKnowledge: expiresInSeconds ? 'known' : 'unknown',
+    validity: 'valid',
+    validityObservedAt: now,
     scope: boundedYandexExternalText(token.scope || YANDEX_SCOPES.join(' '), MAX_YANDEX_SCOPE_CHARS),
     account: null
   };
@@ -15490,6 +15544,7 @@ async function setManualYandexToken(token) {
   // intentionally left untouched until this exact candidate validates.
   const authGeneration = await advanceYandexAuthControlGeneration('Поколение manual-token intent Яндекс Диска');
   const validation = await validateManualYandexTokenCandidate(token);
+  const validatedAt = Date.now();
   const yandexAuth = {
     authRecordId: randomBase64Url(24),
     authGeneration,
@@ -15498,6 +15553,9 @@ async function setManualYandexToken(token) {
     accessToken: token,
     refreshToken: '',
     expiresAt: 0,
+    expiryKnowledge: 'unknown',
+    validity: 'valid',
+    validityObservedAt: validatedAt,
     scope: '',
     account: validation.account
   };

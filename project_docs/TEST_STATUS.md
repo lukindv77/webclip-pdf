@@ -562,3 +562,16 @@ Repository Integrity #1074 / run `35747481769` on exact preliminary head `dc6ec0
 ### P1-196 account-enrichment identity discovery #1075
 
 Repository Integrity #1075 / run `35756002237` on exact head `9bb60173da21cd789e1cbd9a6f13572ce8aaadde` passed PR-contract/syntax and both dedicated release-control jobs. The generic deterministic suite derived current 34-file RPF `sha256:363e8df53233e035a079f5e2a26b124de8cf2b623749d6e4f457d5a94e0f8368` and current 33-file control `sha256:650ed8d7b3cdff640ca70550122edc9f714c6984e97c4f78f212f819b24d890e`, while QCF/full-RCF/BCF remain unchanged. It also exposed one stale P1-138 connection-test source census, now reconciled to the exact-auth receipt call shape. #1075 is discovery evidence only; a complete later exact-head SUCCESS is required.
+
+
+## P1-196 explicit auth status axes — 2026-09-22
+
+A bounded P1-196 tranche adds explicit auth truth to `getYandexStatus()`: `authPresent`, `authValidity`, `authUsable`, `expiryKnowledge`, shared `authGeneration`, record generation, exact expiry timestamp and admission-skew state. Compatibility `connected` now means current auth is usable for a new request rather than merely that token bytes are present.
+
+Fresh OAuth records carry `validity=valid` plus known/unknown lifetime from `expires_in`; successfully validated manual tokens carry `validity=valid` with `expiryKnowledge=unknown`. A zero expiry is not interpreted as infinite lifetime. A token inside the existing 60-second admission skew is present and temporally valid but explicitly unusable; a timestamp already in the past is classified expired.
+
+Deterministic coverage is `project_tools/test_p1_196_auth_status_axes_runtime.js`. Options UI now distinguishes connected/usable, expired, admission-skew, present-but-unusable and absent auth.
+
+P1-196 remains **ACTIVE**: exact-generation persistent expiry transition, durable invalid/expired tombstone semantics, and recovery per-child auth recheck remain open. This tranche performs no live provider call, real Chrome qualification, build, release receipt or release action.
+
+Because `service-worker.js` and `options.js` are canonical package members, current RPF and current 33-file control must be re-derived by exact-head P1-231 authority before merge. No QA-contract, Registry/full-RCF root or builder-contract input is intentionally changed. Manifest remains `0.9.8`; release readiness remains **NOT READY**.

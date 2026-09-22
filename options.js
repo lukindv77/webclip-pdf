@@ -586,6 +586,15 @@ async function refreshStatus(prefetched = null) {
     connectionStatus.className = 'status ok';
     const storage = 'OAuth-токен хранится только до закрытия Chrome';
     connectionStatus.textContent = `Подключено: ${who} (${source}; ${storage}).`;
+  } else if (status.authPresent && status.authValidity === 'expired') {
+    connectionStatus.className = 'status error';
+    connectionStatus.textContent = 'OAuth-токен Яндекс Диска истёк. Подключите аккаунт заново.';
+  } else if (status.authPresent && status.authExpirySkewActive) {
+    connectionStatus.className = 'status neutral';
+    connectionStatus.textContent = 'Срок действия OAuth-токена Яндекс Диска заканчивается. Подключите аккаунт заново перед следующей операцией.';
+  } else if (status.authPresent) {
+    connectionStatus.className = 'status neutral';
+    connectionStatus.textContent = 'OAuth-токен Яндекс Диска сохранён, но сейчас не считается пригодным для новой операции.';
   } else {
     connectionStatus.className = 'status neutral';
     connectionStatus.textContent = 'Яндекс Диск пока не подключён.';
