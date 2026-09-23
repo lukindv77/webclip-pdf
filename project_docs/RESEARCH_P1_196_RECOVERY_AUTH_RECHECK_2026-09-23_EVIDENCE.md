@@ -278,7 +278,7 @@ That exact-head gate proves the registered P1-196 source/runtime acceptance cont
 - an old A recovery batch cannot replay later children under B;
 - no secret is added to durable control receipts.
 
-No remaining P1-196-specific source/runtime acceptance gap was exposed by #1087. The owner therefore leaves the Registry ACTIVE table and returns to the Registry default **IMPLEMENTED / RELEASE-REGRESSION** state.
+No remaining P1-196-specific source/runtime acceptance gap was exposed by #1087. The owner therefore leaves **ACTIVE** but remains explicitly listed, as required for mandatory late/reserved owners, with status **IMPLEMENTED / RELEASE-REGRESSION**.
 
 This is not `DONE`, not live Yandex qualification, not release readiness, and not release authorization. Adjacent ACTIVE owners such as capability truth, scheduler semantics, OAuth-state verification and release evidence remain independent.
 
