@@ -77,6 +77,7 @@ function callerRuntime({
   let compareCalls = 0;
   let folderCalls = 0;
   let apiCalls = 0;
+  let schedulerCalls = 0;
   const context = vm.createContext({
     Promise, Error, String,
     MAX_YANDEX_ACCOUNT_FIELD_CHARS: 1024,
@@ -92,6 +93,11 @@ function callerRuntime({
     async compareUpdateYandexAuthIfCurrentRequest() { compareCalls += 1; return compareResult; },
     async getYandexConfig() { return { rootPath }; },
     async ensureYandexServiceFolders() { folderCalls += 1; return folderResult; },
+    async initializeJournalBackupScheduler(reason) {
+      assert.strictEqual(reason, 'auth-resume');
+      schedulerCalls += 1;
+      return { ok: true };
+    },
     normalizeYandexNonNegativeNumber(value) { return Math.max(0, Number(value) || 0); },
     async readYandexAuthState() {
       return {
@@ -111,7 +117,8 @@ function callerRuntime({
     counts: {
       compare: () => compareCalls,
       folders: () => folderCalls,
-      api: () => apiCalls
+      api: () => apiCalls,
+      scheduler: () => schedulerCalls
     }
   };
 }
@@ -184,6 +191,7 @@ function callerRuntime({
     eq(counts.api(), 1, 'connection test issues one account read');
     eq(counts.compare(), 1, 'connection test validates exact receipt before continuation');
     eq(counts.folders(), 0, 'superseded read cannot continue into folder work');
+    eq(counts.scheduler(), 0, 'superseded read cannot resume backup scheduler');
   }
 
   // Connection test success preserves existing result shape after exact enrichment.
@@ -194,6 +202,7 @@ function callerRuntime({
     eq(out.account.uid, 'acct-A', 'connection account comes from exact response');
     eq(out.totalSpace, 100, 'space metadata preserved');
     eq(counts.compare(), 1, 'successful bound read performs exact account CAS');
+    eq(counts.scheduler(), 1, 'successful connection proof repairs/resumes backup scheduler once');
   }
 
   // Current-account lookup cannot return stale A as "current" after a newer auth transition.
@@ -243,6 +252,7 @@ function callerRuntime({
   ok(testConnectionSource.includes('compareUpdateYandexAuthIfCurrentRequest'), 'connection test uses exact positive CAS');
   ok(!testConnectionSource.includes('writeYandexAuth'), 'connection test no longer performs unconditional auth rewrite');
   ok(testConnectionSource.indexOf('compareUpdateYandexAuthIfCurrentRequest') < testConnectionSource.indexOf('ensureYandexServiceFolders'), 'positive CAS precedes later folder work');
+  ok(testConnectionSource.includes("initializeJournalBackupScheduler('auth-resume')"), 'successful connection proof explicitly repairs/resumes backup scheduler');
 
   const uidSource = section("async function getCurrentYandexAccountUid(operationId = '')", 'async function ensureYandexPublicUrl');
   ok(uidSource.includes('includeAuthRequestReceipt: true'), 'uid lookup requests exact receipt');

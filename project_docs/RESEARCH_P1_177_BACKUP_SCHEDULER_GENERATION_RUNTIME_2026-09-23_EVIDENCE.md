@@ -233,11 +233,11 @@ No live provider call is made by the tests.
 
 `service-worker.js` is a current package member, so current 34-file RPF and 33-file negative/control projection must advance.
 
-This evidence does not guess those digests. Exact-head P1-231 source-generation authority must derive them.
+Repository Integrity #1093 / run `35816086398` on exact head `142c8ab19082339938de2dfd6d944eaebaafe331` supplied the required discovery authority: current 34-file RPF is `sha256:3b493236e8060f2fdfdd60fc1a1078c82eb99f98757a2771fe37b68b68980673` and the current 33-file negative/control projection is `sha256:4c5f04e9a2ab4caf1dacb6b7141f2c21fe5fe4af267c20e33e73d00c3ebd052c`.
 
-No canonical Chrome/Yandex QA-contract or builder-contract input is intentionally changed in this tranche, so QCF/BCF changes are not claimed without exact authority output.
+No canonical Chrome/Yandex QA-contract or builder-contract input changed: Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:a099e052fdd75038f40a8895d2f91a8e63cefc545387d9ddebef8b783eb90b07`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
 
-The new evidence/test files may affect full RCF according to the canonical full-RCF root projection; exact-head authority remains decisive.
+#1093 is discovery evidence only, not merge evidence: `repository-integrity` failed at Deterministic JavaScript tests while the two dedicated release-control jobs succeeded. The direct reconciliation set is limited to stale current identity pins, the P1-076/P1-077 alarm-boundary witness, and the P1-196 extracted-source harness. A later exact-head complete SUCCESS is still required before merge.
 
 ## 12. Evidence boundary / non-actions
 
