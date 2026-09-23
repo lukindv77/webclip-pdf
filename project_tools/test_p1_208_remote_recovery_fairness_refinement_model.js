@@ -43,10 +43,10 @@ check(listBody.includes('stale-unverified'), 'stale archive exclusion positive c
 check(recoverBody.includes('Math.min(6'), 'six-item recovery bound changed');
 check(recoverBody.includes('listPendingRemoteSaves(cappedItems)'), 'single oldest-prefix selection shape changed');
 check(recoverBody.includes("current.phase !== 'remote-verified'") || recoverBody.includes('current.phase !== "remote-verified"'), 'remote-verified bypass changed');
-check(recoverBody.includes('getValidYandexAccessToken'), 'auth preflight positive control missing');
-check(recoverBody.includes('if (!authAvailable)'), 'auth deferral positive control missing');
+check(recoverBody.includes('captureCurrentYandexOperationContext'), 'immutable auth/context preflight positive control missing');
+check(recoverBody.includes('await isCurrentYandexOperationAuthUsable(operationContext)'), 'per-child auth deferral positive control missing');
 check(recoverBody.includes('appendJournalEntryFromDurableCheckpoint'), 'local finalization positive control missing');
-check(recoverBody.includes('authRequired: !authAvailable'), 'authRequired result truth missing');
+check(recoverBody.includes('authRequired: !authAvailable || authUnavailableObserved'), 'authRequired result truth missing');
 
 function row(id, phase, updatedAt, extra = {}) {
   return { id, phase, updatedAt, ...extra };

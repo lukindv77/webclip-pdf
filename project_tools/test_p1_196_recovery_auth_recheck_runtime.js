@@ -150,7 +150,7 @@ function makeHelperContext(currentAuthority) {
   ok(recovery.includes("current.phase !== 'remote-verified'"), 'auth gate remains scoped to provider-required children');
   ok(recovery.indexOf('appendJournalEntryFromDurableCheckpoint') > phaseAt, 'remote-verified local finalization remains outside provider auth gate');
   ok(!recovery.includes('captureCurrentYandexOperationContext()') || (recovery.match(/captureCurrentYandexOperationContext\(\)/g) || []).length === 1, 'recovery does not recapture/retarget operation context per child');
-  ok(!recovery.includes('getValidYandexAccessToken()'), 'recovery does not use mutable unbound token preflight');
+  ok(!recovery.includes('await getValidYandexAccessToken()'), 'recovery does not execute mutable unbound token preflight');
 
   // Schedule model: item 1 current A gets authoritative 401; exact CAS moves
   // current auth to an invalid tombstone at generation 8. Item 2 must fail the

@@ -246,3 +246,14 @@ Repository Integrity #1085 / run `35813179626` on exact implementation head `985
 The independent source-generation lane completed successfully and derived current 34-file RPF `sha256:686505dd03013ccc9760eab3daf15062b8791cb86c4b6d13693eb6a8997d946b`. Chrome/Yandex QCF remain unchanged; full RCF remains `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`; BCF remains unchanged. The exact current 33-file control was not emitted because the generic deterministic identity suite did not run, so predecessor `sha256:2dd647a17acd570c42d09ca47f01401b81c9936b23d30f794bb873ea7e81333a` remains historical baseline only and is not promoted as current for this head.
 
 #1085 is not merge evidence. The next exact head must run the complete suite and derive the exact current 33-file control.
+
+
+## 15. Deterministic reconciliation — #1086
+
+Repository Integrity #1086 / run `35813546912` on exact head `45b28d0261955d502709d9e7f260f7fe2c4f4699` reached the complete deterministic suite. The P1-196 refinement model, exact-auth 401 regression, status-axis regression, tombstone regression and account-enrichment regression all passed. Three direct reconciliation items remained:
+
+1. the new recovery test rejected the textual legacy comment `getValidYandexAccessToken()` even though there is no executable `await getValidYandexAccessToken()` in recovery;
+2. the P1-208 fairness witness still looked for the old literal `if (!authAvailable)` instead of the new per-child `isCurrentYandexOperationAuthUsable(operationContext)` deferral while the fairness semantics remain unchanged;
+3. current identity tests still pinned the pre-runtime 33-file control.
+
+Exact identity execution derived current 33-file control `sha256:bc3d9d15bc389a9efc3257775ab408594ee9e6c9c9f0a2a6fbfc8c684b9da7f0`. Current 34-file RPF remains `sha256:686505dd03013ccc9760eab3daf15062b8791cb86c4b6d13693eb6a8997d946b`; Chrome/Yandex QCF, full RCF and BCF remain unchanged. The source-witness corrections do not alter package bytes or change P1-208 ownership/status. #1086 is not merge evidence; a new complete exact-head SUCCESS remains required.
