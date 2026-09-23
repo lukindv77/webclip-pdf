@@ -17,7 +17,7 @@ const IDENTITY_PROTOCOL = 'WEBCLIP_RELEASE_IDENTITY_V1';
 const PR_IMPACT_SCHEMA = 'webclip-pr-impact/v1';
 
 const CURRENT = Object.freeze({
-  rpf: 'sha256:363e8df53233e035a079f5e2a26b124de8cf2b623749d6e4f457d5a94e0f8368',
+  rpf: 'sha256:37768ce6929adc01d8042fc728c898e5500c932eb12a657d042277ac67816d15',
   chromeQcf: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandexQcf: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
   rcf: 'sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed',

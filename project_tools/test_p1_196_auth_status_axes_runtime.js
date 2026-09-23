@@ -167,7 +167,7 @@ ok(manual.includes("expiryKnowledge: 'unknown'"), 'manual token lifetime stays u
 ok(manual.includes("validity: 'valid'"), 'validated manual token marked valid');
 ok(manual.includes('validityObservedAt: validatedAt'), 'manual validation timestamped');
 
-const optionsStatus = section(OPTIONS, 'async function refreshStatus(prefetched = null)', "el('startAuth').addEventListener");
+const optionsStatus = section(OPTIONS, 'async function refreshStatus(prefetched = null)', 'async function saveRoot(path)');
 ok(optionsStatus.includes("status.authPresent && status.authValidity === 'expired'"), 'UI distinguishes expired token');
 ok(optionsStatus.includes('status.authPresent && status.authExpirySkewActive'), 'UI distinguishes admission-skew token');
 ok(optionsStatus.includes('status.authPresent'), 'UI distinguishes present-but-unusable token from absent');

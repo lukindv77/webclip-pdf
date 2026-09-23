@@ -217,7 +217,9 @@ Therefore:
 - current 34-file RPF must advance;
 - current 33-file negative/control digest must advance.
 
-This document does not guess those values. Exact-head source-generation/deterministic identity authority must derive them before current identity pins are synchronized.
+Repository Integrity #1078 / run `35757954047` on exact preliminary head `72b71bcdd56aa5304df862274607360f30565856` independently derived current 34-file RPF `sha256:37768ce6929adc01d8042fc728c898e5500c932eb12a657d042277ac67816d15` and current 33-file negative/control digest `sha256:293be1d3c4f8fdea2978a07d147ea43972e41d806e7c4fd69c9841adbbccddb6`. Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+#1078 is discovery evidence only, not merge evidence: the generic deterministic suite exposed stale identity pins plus two source-witness defects (P1-195 still expected `connected` to mean token presence, and the new Options status test used an impossible source-section end marker). Those assertions are reconciled on the next exact head; a complete exact-head SUCCESS is still required before merge.
 
 No canonical QA-contract, Registry/full-RCF root or builder-contract input is intentionally changed by this tranche.
 
