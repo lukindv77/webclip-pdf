@@ -110,6 +110,7 @@ check('O06 P0-074 operation context owner', () => has(REGISTRY, 'Long Yandex ope
 check('O07 P1-138 hidden mutation owner', () => has(REGISTRY, 'Read-like Yandex list/fetch/status flows must not hide provisioning/mutation authority'));
 check('O08 P1-178 auth generation owner', () => has(REGISTRY, 'OAuth pending/token exchange/config commit is one auth-attempt + settings-generation state machine'));
 check('O09 P1-184 exact receipt owner', () => has(REGISTRY, 'path+size cannot authorize adoption or publication'));
+check('O09b P1-210 unknown external-effect settlement owner', () => has(REGISTRY, 'Lost/rejected outer user-operation transport response means unknown'));
 check('O10 baseline exact', () => has(EVIDENCE, '0e58f326a19f22611f3ddcb65e13bcf2cbd48670'));
 check('O11 no new P code', () => has(EVIDENCE, 'New P-code: **NO**'));
 check('O12 runtime none', () => has(EVIDENCE, 'Production/runtime modification: **NONE**'));
