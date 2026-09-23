@@ -46,6 +46,7 @@ function makeRuntime({ auth, controlGeneration = 7, fetchImpl } = {}) {
     YANDEX_AUTH_GENERATION_KEY: 'yandexAuthGeneration',
     YANDEX_OAUTH_PENDING_KEY: 'yandexOAuthPending',
     MAX_YANDEX_EXTERNAL_ERROR_CHARS: 2000,
+    MAX_YANDEX_CLIENT_ID_CHARS: 512,
     chrome: {
       storage: {
         session: {
@@ -60,7 +61,7 @@ function makeRuntime({ auth, controlGeneration = 7, fetchImpl } = {}) {
       }
     },
     async runYandexAuthStorageOperation(fn) { return fn(); },
-    async readYandexAuthState() { return { auth: values.yandexAuth || null, mode: 'session', yandexConfig: {} }; },
+    async readYandexAuthState() { return { auth: values.yandexAuth || null, authControlGeneration: values.yandexAuthGeneration, mode: 'session', yandexConfig: {} }; },
     normalizeYandexAuthGeneration(value) {
       const n = Math.floor(Number(value) || 0);
       return Number.isSafeInteger(n) && n >= 0 ? n : 0;
@@ -88,9 +89,10 @@ function makeRuntime({ auth, controlGeneration = 7, fetchImpl } = {}) {
     }
   });
 
+  const validityHelpers = between('function isYandexAuthValidityTombstone', 'async function readYandexAuthState');
   const helpers = between('function sanitizeYandexApiCallerHeaders', 'async function captureCurrentYandexOperationContext');
   const api = between('async function yandexApi(endpoint, options = {}, allowRetry = false)', 'function getSiteFolderSegments');
-  vm.runInContext(`${helpers}\n${api}\nthis.api = { sanitizeYandexApiCallerHeaders, captureCurrentYandexAuthRequestAuthority, demoteYandexAuthIfCurrentRequest, yandexApi };`, context);
+  vm.runInContext(`${validityHelpers}\n${helpers}\n${api}\nthis.api = { sanitizeYandexApiCallerHeaders, captureCurrentYandexAuthRequestAuthority, demoteYandexAuthIfCurrentRequest, yandexApi };`, context);
 
   return { context, values, requests, logs };
 }
@@ -149,7 +151,10 @@ async function rejected(promise, predicate, message) {
       'current exact 401 reports demotion'
     );
     checks += 1;
-    eq(values.yandexAuth, null, 'current A cleared after authoritative 401');
+    eq(values.yandexAuth.validity, 'invalid', 'authoritative 401 persists invalid tombstone');
+    eq(values.yandexAuth.authRecordId, 'A', 'tombstone retains invalidated subject identity');
+    eq(values.yandexAuth.authGeneration, 8, 'tombstone belongs to advanced shared generation');
+    ok(!Object.prototype.hasOwnProperty.call(values.yandexAuth, 'accessToken'), 'invalid tombstone retains no access token');
     eq(values.yandexAuthGeneration, 8, 'demotion advances shared auth generation');
     eq(values.yandexOAuthPending, null, 'demotion retires stale pending authority');
   }
@@ -206,7 +211,10 @@ async function rejected(promise, predicate, message) {
       'record/control pair captured after failed manual intent remains demotable'
     );
     checks += 1;
-    eq(values.yandexAuth, null, 'preserved A can be invalidated exactly');
+    eq(values.yandexAuth.validity, 'invalid', 'preserved A becomes exact invalid tombstone');
+    eq(values.yandexAuth.authRecordId, 'A', 'preserved A subject retained');
+    eq(values.yandexAuth.authGeneration, 7, 'tombstone adopts advanced control generation');
+    ok(!Object.prototype.hasOwnProperty.call(values.yandexAuth, 'accessToken'), 'preserved A secret removed from tombstone');
     eq(values.yandexAuthGeneration, 7, 'demotion advances captured control generation');
   }
 
@@ -264,14 +272,29 @@ async function rejected(promise, predicate, message) {
     eq(values.yandexAuthGeneration, 7, 'global generation untouched by operation-context response');
   }
 
-  // Known local expiry is still a separately tracked remaining P1-196 gap in this bounded tranche.
+  // Known local expiry publishes the same exact-generation non-secret validity transition.
   {
-    const expired = { authRecordId: 'A', authGeneration: 7, accessToken: 'token-A', expiresAt: Date.now() - 1 };
+    const expired = {
+      authRecordId: 'A',
+      authGeneration: 7,
+      accessToken: 'token-A',
+      expiresAt: Date.now() - 1,
+      expiryKnowledge: 'known',
+      validity: 'valid'
+    };
     const { context, values } = makeRuntime({ auth: expired, controlGeneration: 7 });
-    await rejected(context.api.captureCurrentYandexAuthRequestAuthority(), /Срок действия OAuth-токена истёк/, 'known expiry blocks request');
+    await rejected(
+      context.api.captureCurrentYandexAuthRequestAuthority(),
+      (error) => error?.code === 'YANDEX_AUTH_TOKEN_EXPIRED' && error?.authTransitioned === true,
+      'known exact expiry publishes validity transition'
+    );
     checks += 1;
-    eq(values.yandexAuth.authRecordId, 'A', 'bounded tranche does not yet publish expiry validity transition');
-    eq(values.yandexAuthGeneration, 7, 'bounded tranche does not yet advance generation for local expiry');
+    eq(values.yandexAuth.validity, 'expired', 'known expiry persists expired tombstone');
+    eq(values.yandexAuth.authRecordId, 'A', 'expired tombstone retains subject identity');
+    eq(values.yandexAuth.authGeneration, 8, 'expired tombstone adopts advanced generation');
+    eq(values.yandexAuth.expiryKnowledge, 'known', 'expired tombstone keeps lifetime knowledge');
+    ok(!Object.prototype.hasOwnProperty.call(values.yandexAuth, 'accessToken'), 'expired tombstone retains no access token');
+    eq(values.yandexAuthGeneration, 8, 'known expiry advances shared generation');
   }
 
   const apiSource = between('async function yandexApi(endpoint, options = {}, allowRetry = false)', 'function getSiteFolderSegments');
@@ -281,7 +304,7 @@ async function rejected(promise, predicate, message) {
   ok(apiSource.includes('response.status === 401'), '401 is the only explicit auth-demotion status branch');
   ok(!apiSource.includes('response.status === 403'), '403 is not blanket auth-demotion authority');
 
-  console.log(`P1-196 exact-auth 401 runtime tests: PASS; checks=${checks}; caller_authorization_forbidden=true; current_401_exact_cas=true; stale_401_demotes_newer=false; operation_context_global_demotion=false; expiry_transition_remaining=true; live_provider_calls=0`);
+  console.log(`P1-196 exact-auth 401 runtime tests: PASS; checks=${checks}; caller_authorization_forbidden=true; current_401_exact_cas=true; invalid_tombstone=non-secret; stale_401_demotes_newer=false; operation_context_global_demotion=false; exact_expiry_transition=true; live_provider_calls=0`);
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;
