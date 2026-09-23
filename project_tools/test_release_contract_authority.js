@@ -170,7 +170,7 @@ const fullRcf = typedRcf(resolved.inputs, manifest, {
   'unpacked-chrome': chromeQcf,
   'yandex-e2e': yandexQcf
 });
-eq(fullRcf, 'sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed', 'current typed full RCF');
+eq(fullRcf, 'sha256:a099e052fdd75038f40a8895d2f91a8e63cefc545387d9ddebef8b783eb90b07', 'current typed full RCF');
 
 const inputs = authority.identityInputs(head, manifest);
 eq(inputs.schema, 'webclip-release-contract-identity-inputs/v1', 'identity-input schema');

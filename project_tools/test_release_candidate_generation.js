@@ -15,10 +15,10 @@ const identity = require('./release_identity.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const CURRENT = Object.freeze({
-  rpf: 'sha256:63ba60983ae6cce7df28f775cf64111a2d6a5d20913b22568fafc055c79856ff',
+  rpf: 'sha256:686505dd03013ccc9760eab3daf15062b8791cb86c4b6d13693eb6a8997d946b',
   chrome: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandex: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
-  rcf: 'sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed',
+  rcf: 'sha256:a099e052fdd75038f40a8895d2f91a8e63cefc545387d9ddebef8b783eb90b07',
   bcf: 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'
 });
 

@@ -5773,6 +5773,7 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
   let stale = 0;
   let cancelled = 0;
   let authAvailable = true;
+  let authUnavailableObserved = false;
   let operationContext = null;
   try {
     // Replace the legacy getValidYandexAccessToken() preflight with one
@@ -5802,7 +5803,11 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
       let current = item;
       WebClipYandexRecoveryNamespace.validateBoundRecoveryReceipt(current);
       if (current.phase !== 'remote-verified') {
-        if (!authAvailable) {
+        const childAuthUsable = authAvailable
+          ? await isCurrentYandexOperationAuthUsable(operationContext)
+          : false;
+        if (!childAuthUsable) {
+          authUnavailableObserved = true;
           deferred += 1;
           continue;
         }
@@ -5869,6 +5874,14 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
         await markPendingRemoteSaveFailure(id, journalAppend.warning).catch(() => {});
       }
     } catch (error) {
+      if (Number(error?.status) === 401 && operationContext?.authRequestReceipt?.authorizationBound === true) {
+        const transitioned = await transitionYandexAuthValidityIfCurrentRequest(
+          operationContext.authRequestReceipt,
+          'invalid',
+          Date.now()
+        ).catch(() => false);
+        if (transitioned) authUnavailableObserved = true;
+      }
       // A checkpoint that remains 404 for a long time must not occupy one of
       // the bounded active recovery slots forever. Archive it locally after a
       // conservative age/attempt threshold; a deliberate user retry with the
@@ -5885,7 +5898,18 @@ async function recoverPendingRemoteSaves(trigger = 'maintenance', maxItems = 6) 
     }
   }
   const phaseCounts = await countPendingRemoteSavePhases().catch(() => ({ active: 0, stale: 0 }));
-  return { trigger, pending: phaseCounts.active, stalePending: phaseCounts.stale, recovered, verified, deferred, failed, stale, cancelled, authRequired: !authAvailable };
+  return {
+    trigger,
+    pending: phaseCounts.active,
+    stalePending: phaseCounts.stale,
+    recovered,
+    verified,
+    deferred,
+    failed,
+    stale,
+    cancelled,
+    authRequired: !authAvailable || authUnavailableObserved
+  };
 }
 
 function pendingLocalDownloadResetDisposition(item = {}) {
@@ -15152,6 +15176,17 @@ function makeYandexAuthRequestReceipt(current, controlGeneration) {
   });
 }
 
+function yandexAuthRequestReceiptsMatch(expected, current) {
+  if (!expected || !current
+    || expected.requestKind !== 'disk-oauth'
+    || current.requestKind !== 'disk-oauth'
+    || expected.authorizationBound !== true
+    || current.authorizationBound !== true) return false;
+  return String(expected.authRecordId || '').trim() === String(current.authRecordId || '').trim()
+    && normalizeYandexAuthGeneration(expected.authGeneration) === normalizeYandexAuthGeneration(current.authGeneration)
+    && normalizeYandexAuthGeneration(expected.controlGeneration) === normalizeYandexAuthGeneration(current.controlGeneration);
+}
+
 async function transitionYandexAuthValidityIfCurrentRequest(receipt, validity, observedAt = Date.now()) {
   if (!receipt || receipt.requestKind !== 'disk-oauth' || receipt.authorizationBound !== true) return false;
   const expectedRecordId = String(receipt.authRecordId || '').trim();
@@ -15749,6 +15784,17 @@ async function compareUpdateYandexAuthIfCurrentRequest(receipt, patch) {
   }, 'CAS обновление exact OAuth authority Яндекс Диска после ответа');
 }
 
+async function isCurrentYandexOperationAuthUsable(operationContext) {
+  const expected = operationContext?.authRequestReceipt || null;
+  if (!expected || expected.authorizationBound !== true || expected.requestKind !== 'disk-oauth') return false;
+  try {
+    const current = await captureCurrentYandexAuthRequestAuthority();
+    return yandexAuthRequestReceiptsMatch(expected, current?.receipt);
+  } catch (_) {
+    return false;
+  }
+}
+
 async function captureCurrentYandexOperationContext() {
   const authState = await readYandexAuthState();
   const yandexAuth = authState.auth;
@@ -15771,11 +15817,11 @@ async function captureCurrentYandexOperationContext() {
   }
 
   const capturedAt = Date.now();
+  const authRequestReceipt = makeYandexAuthRequestReceipt(yandexAuth, authState.authControlGeneration);
   const expiresAt = Math.max(0, Number(yandexAuth.expiresAt) || 0);
   if (expiresAt > 0 && expiresAt <= capturedAt) {
-    const receipt = makeYandexAuthRequestReceipt(yandexAuth, authState.authControlGeneration);
-    const transitioned = receipt.authorizationBound === true
-      ? await transitionYandexAuthValidityIfCurrentRequest(receipt, 'expired', capturedAt)
+    const transitioned = authRequestReceipt.authorizationBound === true
+      ? await transitionYandexAuthValidityIfCurrentRequest(authRequestReceipt, 'expired', capturedAt)
       : false;
     const error = new Error(
       transitioned
@@ -15793,12 +15839,16 @@ async function captureCurrentYandexOperationContext() {
     throw error;
   }
 
-  return WebClipYandexOperationContext.validateOperationContext({
+  const validatedContext = WebClipYandexOperationContext.validateOperationContext({
     accessToken: yandexAuth.accessToken,
     accountUid: yandexAuth.account?.uid,
     rootPath: yandexConfig.rootPath,
     createPublicLinks: yandexConfig.createPublicLinks !== false,
     capturedAt
+  });
+  return Object.freeze({
+    ...validatedContext,
+    authRequestReceipt
   });
 }
 

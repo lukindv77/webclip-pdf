@@ -203,7 +203,7 @@ function statusDto(s) {
   check(registry.includes('| P1-178 | ACTIVE |'), 'P1-178 remains existing owner');
   check(!registry.includes('| P1-191 | ACTIVE |'), 'P1-191 leaves ACTIVE after validate-before-commit implementation');
   check(registry.includes('| P1-195 | ACTIVE |'), 'P1-195 remains existing owner');
-  check(registry.includes('| P1-196 | ACTIVE |'), 'P1-196 remains existing owner');
+  check(registry.includes('| P1-196 | IMPLEMENTED / RELEASE-REGRESSION |'), 'P1-196 remains explicit implemented owner');
   check(registry.includes('| P0-074 | ACTIVE |'), 'P0-074 immutable operation context remains existing owner');
   check(dag.includes('EXPLICIT_USER_APPROVAL_FOR_RELEASE_POLICY_ACTIVATION'), 'S2 remains explicitly fenced');
 

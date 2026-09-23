@@ -19,7 +19,7 @@ const RESULT_SCHEMA = 'webclip-candidate-generation-result/v1';
 
 const PACKAGE_TOPOLOGY = packageAuthority.readCanonicalManifest();
 const PACKAGE_FILES = Object.freeze([...PACKAGE_TOPOLOGY.files]);
-const LEGACY_RPF = 'sha256:2dd647a17acd570c42d09ca47f01401b81c9936b23d30f794bb873ea7e81333a';
+const LEGACY_RPF = 'sha256:bc3d9d15bc389a9efc3257775ab408594ee9e6c9c9f0a2a6fbfc8c684b9da7f0';
 
 const CURRENT_RELATION = Object.freeze({
   id: 'public-suffix-js',
@@ -32,7 +32,7 @@ const CURRENT_RELATION = Object.freeze({
 const EXPECTED_CONTRACT_IDENTITIES = Object.freeze({
   chromeQcf: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandexQcf: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
-  rcf: 'sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed',
+  rcf: 'sha256:a099e052fdd75038f40a8895d2f91a8e63cefc545387d9ddebef8b783eb90b07',
   bcf: 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff',
 });
 
