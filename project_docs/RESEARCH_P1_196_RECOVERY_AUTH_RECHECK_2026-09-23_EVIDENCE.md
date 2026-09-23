@@ -237,3 +237,12 @@ It does not:
 P1-196 remains **ACTIVE** until this implementation receives complete exact-head CI and any identity/source witnesses exposed by that run are reconciled.
 
 If the exact-head implementation gate proves the registered P1-196 acceptance contract and no additional owner-specific gap is discovered, the Registry status can then transition to its default **IMPLEMENTED / RELEASE-REGRESSION** state. That transition itself would require a fresh exact-head run because Registry is a full-RCF root.
+
+
+## 14. Exact-head identity discovery — #1085
+
+Repository Integrity #1085 / run `35813179626` on exact implementation head `985cedd6cb5ebb583fc4afa03bee7f05351e7e1a` stopped the generic repository-integrity job at PR change-contract metadata before JavaScript syntax and deterministic tests. The cause was PR prose that named an unrelated owner code in the release-identity paragraph; branch bytes were not implicated.
+
+The independent source-generation lane completed successfully and derived current 34-file RPF `sha256:686505dd03013ccc9760eab3daf15062b8791cb86c4b6d13693eb6a8997d946b`. Chrome/Yandex QCF remain unchanged; full RCF remains `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`; BCF remains unchanged. The exact current 33-file control was not emitted because the generic deterministic identity suite did not run, so predecessor `sha256:2dd647a17acd570c42d09ca47f01401b81c9936b23d30f794bb873ea7e81333a` remains historical baseline only and is not promoted as current for this head.
+
+#1085 is not merge evidence. The next exact head must run the complete suite and derive the exact current 33-file control.
