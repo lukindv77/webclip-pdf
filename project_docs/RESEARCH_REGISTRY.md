@@ -145,7 +145,6 @@ Every code in this range remains occupied. All are ACTIVE except `P1-213`, which
 | Code | Status | Single current owner / root cause |
 |---|---|---|
 | P1-195 | ACTIVE | Yandex capability truth: token presence/read success is not proof of all required Disk scopes; requested/granted/reduced/unknown capability states stay distinct. |
-| P1-196 | ACTIVE | Invalid-token/401 demotion is exact auth-generation fenced; stale failure from auth A cannot clear/downgrade newer auth B. |
 | P1-197 | ACTIVE | OperationLog administrative clear/delete needs durable history generation; late old writers cannot repopulate a cleared generation. |
 | P1-198 | ACTIVE | Physical live operation identity is worker-issued; caller textual `operationId` is correlation metadata, not ownership capability. |
 | P1-199 | ACTIVE | Cross-origin frame print prepare/restore state needs exact print-operation generation; stale restore cannot undo newer prepare. |

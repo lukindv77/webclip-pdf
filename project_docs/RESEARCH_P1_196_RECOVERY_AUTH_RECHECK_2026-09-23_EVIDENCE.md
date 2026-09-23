@@ -257,3 +257,29 @@ Repository Integrity #1086 / run `35813546912` on exact head `45b28d0261955d5027
 3. current identity tests still pinned the pre-runtime 33-file control.
 
 Exact identity execution derived current 33-file control `sha256:bc3d9d15bc389a9efc3257775ab408594ee9e6c9c9f0a2a6fbfc8c684b9da7f0`. Current 34-file RPF remains `sha256:686505dd03013ccc9760eab3daf15062b8791cb86c4b6d13693eb6a8997d946b`; Chrome/Yandex QCF, full RCF and BCF remain unchanged. The source-witness corrections do not alter package bytes or change P1-208 ownership/status. #1086 is not merge evidence; a new complete exact-head SUCCESS remains required.
+
+
+## 16. Exact-head implementation gate and Registry transition — #1087
+
+Repository Integrity #1087 / run `35813852999` completed **SUCCESS** on exact implementation head `a79144e8786a9a0d01e4fee446c78cbb2ef98b90`. All three required jobs passed, including the complete deterministic JavaScript suite, source-generation authority and shadow identity.
+
+That exact-head gate proves the registered P1-196 source/runtime acceptance contract now represented by current production regressions:
+
+- token presence, validity, usability and expiry knowledge are separate axes;
+- exact known expiry publishes only an exact-generation invalidity transition;
+- unknown lifetime remains unknown;
+- authoritative current OAuth-bound Disk 401 can demote only the exact request auth subject;
+- stale A/401 cannot mutate newer B;
+- caller Authorization override is forbidden and request identity is secret-free;
+- generic 403/network/timeout/5xx and signed-transfer failures do not blanket-demote OAuth auth;
+- positive account enrichment and negative validity transitions use the same shared generation fence;
+- manual-token replacement composes without stale cleanup of newer auth;
+- restart/maintenance recovery rechecks exact current auth usability/generation before every provider-required child;
+- an old A recovery batch cannot replay later children under B;
+- no secret is added to durable control receipts.
+
+No remaining P1-196-specific source/runtime acceptance gap was exposed by #1087. The owner therefore leaves the Registry ACTIVE table and returns to the Registry default **IMPLEMENTED / RELEASE-REGRESSION** state.
+
+This is not `DONE`, not live Yandex qualification, not release readiness, and not release authorization. Adjacent ACTIVE owners such as capability truth, scheduler semantics, OAuth-state verification and release evidence remain independent.
+
+Because `project_docs/RESEARCH_REGISTRY.md` is a full-RCF root, this status transition changes control-plane identity and requires a new exact-head identity/CI reconciliation before merge. #1087 is implementation-gate evidence for the pre-transition head, not merge evidence for the later Registry-transition head.
