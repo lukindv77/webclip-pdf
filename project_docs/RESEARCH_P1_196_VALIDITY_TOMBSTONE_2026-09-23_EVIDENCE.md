@@ -275,3 +275,21 @@ This tranche does **not**:
 - make a release decision.
 
 Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+
+## 13. Exact 33-file control discovery — #1082
+
+Repository Integrity #1082 / run `35805776775` on exact head `e183d84fb2a5d243caec67738f26b26a24c84705` completed both dedicated release-control jobs successfully and executed the new P1-196 tombstone/runtime regressions successfully. Its generic deterministic suite then exposed one current-identity drift: the 33-file negative/control projection still pinned the predecessor value.
+
+Exact identity execution derived:
+
+```text
+current 34-file RPF     = sha256:63ba60983ae6cce7df28f775cf64111a2d6a5d20913b22568fafc055c79856ff
+current 33-file control = sha256:2dd647a17acd570c42d09ca47f01401b81c9936b23d30f794bb873ea7e81333a
+Chrome QCF              = sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c
+Yandex QCF              = sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1
+full RCF                = sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed
+BCF                     = sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff
+```
+
+The predecessor `sha256:293be1d3c4f8fdea2978a07d147ea43972e41d806e7c4fd69c9841adbbccddb6` remains historical identity for the immediately preceding package byte state; it is no longer the expected 33-file control for this tranche. #1082 is not merge evidence because the generic deterministic suite failed on the stale pin. The next exact head must pass the complete suite.
