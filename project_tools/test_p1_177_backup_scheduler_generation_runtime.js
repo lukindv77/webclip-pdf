@@ -56,6 +56,18 @@ const upload = section(
   'async function uploadJournalExportStagedToYandex(',
   'async function recoverPendingJournalBackup'
 );
+const recovery = section(
+  'async function recoverPendingJournalBackup(',
+  'async function finalizeJournalBackupSuccessHousekeeping'
+);
+const backup = section(
+  'async function exportJournalBackupToYandex(',
+  'function parseJournalMonthFolder'
+);
+const folderTree = section(
+  'async function ensureYandexFolderTree(',
+  'async function yandexApi('
+);
 
 // Durable scheduler authority is explicit and separate from alarm names.
 has(SOURCE, "const JOURNAL_BACKUP_SCHEDULER_CONTROL_KEY = 'webclipJournalBackupSchedulerControl';");
@@ -117,6 +129,7 @@ eq((due.match(/proveJournalBackupSchedulerAdmission\(scheduledGeneration\)/g) ||
 has(due, "schedulerReason: schedulerAdmission.reason");
 has(due, "schedulerReason: finalAdmission.reason");
 has(due, 'schedulerGeneration: scheduledGeneration');
+has(due, 'exportJournalBackupToYandex({ reason, operationId, schedulerGeneration: scheduledGeneration })');
 has(due, 'staleRetryAlarm: true', 'existing newer-success stale-retry guard remains');
 
 // Explicit disconnect revokes future scheduler admission but preserves pending checkpoint truth.
@@ -129,10 +142,28 @@ has(finishAuth, "initializeJournalBackupScheduler('auth-resume')");
 has(manualAuth, "initializeJournalBackupScheduler('auth-resume')");
 has(connection, "initializeJournalBackupScheduler('auth-resume')");
 
-// The bounded tranche intentionally does not claim full P1-177 child-admission closure.
-has(upload, 'runOffscreenSignedTransfer');
-lacks(upload, 'proveJournalBackupSchedulerAdmission',
-  'signed-upload child scheduler recheck remains a later P1-177 tranche');
+// Every later background remote child consumes a fresh scheduler-generation gate.
+has(control, 'assertJournalBackupRemoteChildAdmission');
+has(control, 'captureJournalBackupSchedulerOperationContext');
+has(backup, 'backgroundSchedulerGeneration');
+has(backup, 'captureJournalBackupSchedulerOperationContext(backgroundSchedulerGeneration)');
+has(backup, 'beforeRemoteChild = (remoteChild) => assertJournalBackupRemoteChildAdmission');
+has(backup, "error?.code === 'JOURNAL_BACKUP_SCHEDULER_STALE'");
+ok(backup.indexOf("error?.code === 'JOURNAL_BACKUP_SCHEDULER_STALE'") < backup.indexOf('const failureAt = Date.now();'),
+  'stale child veto must bypass ordinary backup failure bookkeeping');
+has(upload, "await admitRemoteChild('upload-url')");
+has(upload, "await admitRemoteChild('signed-upload')");
+has(upload, "await admitRemoteChild('post-upload-verify')");
+has(upload, 'schedulerGeneration: normalizeJournalBackupSchedulerGeneration(schedulerGeneration)');
+ok(upload.indexOf('[JOURNAL_BACKUP_PENDING_KEY]: pending') < upload.indexOf("await admitRemoteChild('signed-upload')"),
+  'prepared checkpoint must exist before signed transfer admission');
+ok(upload.indexOf("await admitRemoteChild('signed-upload')") < upload.indexOf('runOffscreenSignedTransfer'),
+  'fresh scheduler gate must precede signed transfer start');
+has(recovery, "await admitRemoteChild('recovery-verify')");
+has(folderTree, "beforeRemoteChild('folder-provision')");
+has(folderTree, "beforeRemoteChild('folder-verify')");
+has(upload, 'operationContext');
+has(recovery, 'operationContext');
 
 // Compact race simulation mirrors the durable generation rules.
 function controller({ generation = 1, mode = 'active', periodicGeneration = 0, retryGeneration = 0 } = {}) {
@@ -178,4 +209,4 @@ function admit(c, kind) {
   ok(!admit(staleAfterLocalPrep, 'periodic'), 'second pre-pipeline check blocks callback after disconnect');
 }
 
-console.log(`P1-177 backup scheduler generation runtime: PASS; checks=${checks}; durable_generation=true; fixed_alarm_is_delivery_only=true; disconnect_pause=true; auth_resume_generation=true; callback_recheck=true; pre_pipeline_recheck=true; per_child_remote_recheck=false; provider_calls=0`);
+console.log(`P1-177 backup scheduler generation runtime: PASS; checks=${checks}; durable_generation=true; fixed_alarm_is_delivery_only=true; disconnect_pause=true; auth_resume_generation=true; callback_recheck=true; pre_pipeline_recheck=true; per_child_remote_recheck=true; started_effect_checkpoint=preserved; provider_calls=0`);
