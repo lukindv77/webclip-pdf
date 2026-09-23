@@ -3498,6 +3498,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'WEBCLIP_YANDEX_DISCONNECT':
         await disconnectYandexAuthControl();
+        await pauseJournalBackupSchedulerNoAuth('explicit-disconnect');
         return { ok: true, ...(await getYandexStatus()) };
 
       case 'WEBCLIP_YANDEX_SAVE_ROOT':
@@ -3569,10 +3570,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   const contextMenuRepairAttempt = parseContextMenuRepairAttempt(alarm?.name);
   if (contextMenuRepairAttempt > 0) {
     initializeContextMenusCrashSafe(contextMenuRepairAttempt).catch((error) => console.warn('WebClip context menu repair:', error));
-  } else if (alarm?.name === JOURNAL_BACKUP_ALARM) {
-    runDueJournalBackup('periodic-alarm', false).catch((error) => console.warn('WebClip backup alarm:', error));
-  } else if (alarm?.name === JOURNAL_BACKUP_RETRY_ALARM) {
-    runDueJournalBackup('retry-alarm', true).catch((error) => console.warn('WebClip backup retry:', error));
+  } else if (alarm?.name === JOURNAL_BACKUP_ALARM || alarm?.name === JOURNAL_BACKUP_RETRY_ALARM) {
+    dispatchJournalBackupAlarm(alarm).catch((error) => console.warn('WebClip backup alarm:', error));
   } else if (alarm?.name === OPERATION_LOG_CLEANUP_ALARM) {
     runLoggedOperationLogCleanup('alarm').catch((error) => console.warn('WebClip operation log cleanup:', error));
   }
@@ -13728,9 +13727,10 @@ async function fetchJournalBackupFromYandex(requestedPath, operationId = '', own
 async function scheduleNextPeriodicBackup(baseAt, intervalMinutes) {
   const period = normalizeIntervalMinutes(intervalMinutes, DEFAULT_JOURNAL_BACKUP_INTERVAL_MINUTES);
   const when = Math.max(Date.now() + 60000, Number(baseAt || Date.now()) + period * 60000);
-  await mutateChromeAlarmSerialized(
+  return scheduleJournalBackupAlarm(
+    'periodic',
     JOURNAL_BACKUP_ALARM,
-    () => chrome.alarms.create(JOURNAL_BACKUP_ALARM, { when }),
+    when,
     'Планирование periodic backup alarm'
   );
 }
@@ -13738,53 +13738,61 @@ async function scheduleNextPeriodicBackup(baseAt, intervalMinutes) {
 async function scheduleBackupRetry(baseAt, retryMinutes) {
   const retry = normalizeIntervalMinutes(retryMinutes, DEFAULT_JOURNAL_BACKUP_RETRY_MINUTES);
   const when = Math.max(Date.now() + 60000, Number(baseAt || Date.now()) + retry * 60000);
-  await mutateChromeAlarmSerialized(
+  return scheduleJournalBackupAlarm(
+    'retry',
     JOURNAL_BACKUP_RETRY_ALARM,
-    () => chrome.alarms.create(JOURNAL_BACKUP_RETRY_ALARM, { when }),
+    when,
     'Планирование retry backup alarm'
   );
 }
 
 async function scheduleDueBackupSoon() {
   // Use a durable alarm boundary instead of starting a long backup from a
-  // worker-start/startup initialization chain. One minute is within the
-  // extension's background cadence and ensures Chrome can wake the worker.
-  await mutateChromeAlarmSerialized(
+  // worker-start/startup initialization chain. The accompanying durable
+  // scheduler receipt, not the fixed alarm name, owns admission authority.
+  return scheduleJournalBackupAlarm(
+    'periodic',
     JOURNAL_BACKUP_ALARM,
-    () => chrome.alarms.create(JOURNAL_BACKUP_ALARM, { when: Date.now() + 60_000 }),
+    Date.now() + 60_000,
     'Планирование ближайшего backup alarm'
   );
 }
 
 async function initializeJournalBackupScheduler(reason = 'init') {
   const status = await getJournalBackupStatus();
+  const control = await reconcileJournalBackupSchedulerControl(status, reason);
 
-  if (reason === 'worker-start') {
-    if (!status.enabled) return { ok: true, enabled: false, lightweight: true };
+  if (control.mode !== 'active') {
+    return {
+      ok: true,
+      enabled: Boolean(status.enabled),
+      paused: true,
+      schedulerMode: control.mode,
+      schedulerGeneration: control.generation
+    };
+  }
+
+  if (reason === 'worker-start' || reason === 'startup') {
     const [periodicAlarm, retryAlarm] = await Promise.all([
       getChromeAlarmBounded(JOURNAL_BACKUP_ALARM, 'Проверка periodic backup alarm'),
       getChromeAlarmBounded(JOURNAL_BACKUP_RETRY_ALARM, 'Проверка retry backup alarm')
     ]);
-    if (periodicAlarm || retryAlarm) {
-      return { ok: true, enabled: true, lightweight: true, alarmAlreadyPresent: true };
+    const periodicCurrent = Boolean(periodicAlarm && control.periodicGeneration === control.generation);
+    const retryCurrent = Boolean(retryAlarm && control.retryGeneration === control.generation);
+    if (periodicCurrent || retryCurrent) {
+      return {
+        ok: true,
+        enabled: true,
+        lightweight: true,
+        alarmAlreadyPresent: true,
+        schedulerGeneration: control.generation
+      };
     }
-    // Only reconstruct scheduling if both alarms are unexpectedly absent.
-  } else {
-    await mutateChromeAlarmSerialized(
-      JOURNAL_BACKUP_ALARM,
-      () => chrome.alarms.clear(JOURNAL_BACKUP_ALARM),
-      'Очистка periodic backup alarm'
-    );
-    await mutateChromeAlarmSerialized(
-      JOURNAL_BACKUP_RETRY_ALARM,
-      () => chrome.alarms.clear(JOURNAL_BACKUP_RETRY_ALARM),
-      'Очистка retry backup alarm'
-    );
   }
 
-  if (!status.enabled) {
-    return { ok: true, enabled: false };
-  }
+  // Fixed alarm names are delivery channels only. Any alarm without a current
+  // durable generation receipt is replaced before this generation schedules.
+  await clearJournalBackupAlarms();
 
   const now = Date.now();
   const due = !status.lastSuccessAt || now >= status.lastSuccessAt + status.intervalMinutes * 60000;
@@ -13795,22 +13803,36 @@ async function initializeJournalBackupScheduler(reason = 'init') {
   if (due && retryBlocked) {
     await scheduleBackupRetry(status.lastFailureAt, status.retryMinutes);
   } else if (due) {
-    // Если Chrome был закрыт дольше установленного периода, планируем ближайший
-    // alarm вместо fire-and-forget тяжёлой операции из startup/worker-start.
     await scheduleDueBackupSoon();
   } else {
     await scheduleNextPeriodicBackup(status.lastSuccessAt, status.intervalMinutes);
   }
-  return { ok: true, enabled: true };
+  return { ok: true, enabled: true, schedulerGeneration: control.generation };
 }
 
-async function runDueJournalBackup(reason = 'scheduled', forceRetry = false) {
+async function runDueJournalBackup(reason = 'scheduled', forceRetry = false, scheduledGeneration = 0) {
   const operationId = makeOperationLogId('background-backup');
   await startOperationLog(operationId, 'journal-backup-check', 'Фоновая проверка резервного копирования журнала', {
     reason, forceRetry: Boolean(forceRetry), background: true
   });
   try {
     recordOperationStage(operationId, 'settings', 'Проверяем настройки фонового экспорта журнала…', 10, 'running', { reason, forceRetry: Boolean(forceRetry) });
+    const schedulerAdmission = await proveJournalBackupSchedulerAdmission(scheduledGeneration);
+    if (!schedulerAdmission.admitted) {
+      recordOperationStage(operationId, 'complete', 'Фоновый экспорт пропущен: scheduler generation устарело или приостановлено.', 100, 'success', {
+        skipped: true,
+        schedulerReason: schedulerAdmission.reason,
+        schedulerGeneration: schedulerAdmission.generation
+      });
+      return {
+        ok: true,
+        skipped: true,
+        schedulerReason: schedulerAdmission.reason,
+        schedulerGeneration: schedulerAdmission.generation,
+        operationId
+      };
+    }
+    scheduledGeneration = schedulerAdmission.generation;
     const status = await getJournalBackupStatus();
     if (!status.enabled || !status.rootPath) {
       recordOperationStage(operationId, 'complete', status.enabled ? 'Фоновый экспорт пропущен: не выбрана корневая папка Яндекс Диска.' : 'Фоновый экспорт пропущен: автоматический экспорт выключен.', 100, 'success', {
@@ -13850,10 +13872,26 @@ async function runDueJournalBackup(reason = 'scheduled', forceRetry = false) {
       }
     }
 
+    const finalAdmission = await proveJournalBackupSchedulerAdmission(scheduledGeneration);
+    if (!finalAdmission.admitted || finalAdmission.generation !== scheduledGeneration) {
+      recordOperationStage(operationId, 'complete', 'Фоновый экспорт отменён до backup pipeline: scheduler generation изменилось.', 100, 'success', {
+        skipped: true,
+        schedulerReason: finalAdmission.reason,
+        schedulerGeneration: finalAdmission.generation
+      });
+      return {
+        ok: true,
+        skipped: true,
+        schedulerReason: finalAdmission.reason,
+        schedulerGeneration: finalAdmission.generation,
+        operationId
+      };
+    }
+
     appendOperationLogEvent(operationId, {
       category: 'background-decision', level: 'info', stage: 'decision',
       message: 'Фоновый экспорт требуется. Переходим к формированию и отправке журнала.',
-      data: { reason, forceRetry: Boolean(forceRetry), due: true }
+      data: { reason, forceRetry: Boolean(forceRetry), due: true, schedulerGeneration: scheduledGeneration }
     });
     return await exportJournalBackupToYandex({ reason, operationId });
   } catch (error) {
@@ -15784,6 +15822,7 @@ async function finishYandexOAuth(authAttemptId, code) {
     // уничтожать или перезаписывать более новую авторизацию.
   }
 
+  await initializeJournalBackupScheduler('auth-resume').catch((error) => console.warn('WebClip backup auth resume:', error));
   return { ok: true, ...(await getYandexStatus()) };
 }
 
@@ -15921,6 +15960,7 @@ async function setManualYandexToken(token) {
   };
 
   await commitManualYandexAuthIfGeneration(authGeneration, yandexAuth);
+  await initializeJournalBackupScheduler('auth-resume').catch((error) => console.warn('WebClip backup manual-auth resume:', error));
   return { ok: true, ...(await getYandexStatus()) };
 }
 
