@@ -172,8 +172,13 @@ ok(optionsStatus.includes("status.authPresent && status.authValidity === 'expire
 ok(optionsStatus.includes('status.authPresent && status.authExpirySkewActive'), 'UI distinguishes admission-skew token');
 ok(optionsStatus.includes('status.authPresent'), 'UI distinguishes present-but-unusable token from absent');
 
-const validToken = section(WORKER, 'async function getValidYandexAccessToken()', 'function sanitizeYandexApiCallerHeaders');
-ok(validToken.includes('yandexAuth.expiresAt && yandexAuth.expiresAt <= Date.now() + 60_000'), 'existing known-expiry admission guard preserved');
-ok(!validToken.includes('validityGeneration'), 'known-expiry persistent transition remains separate gap');
+const authority = section(WORKER, 'async function captureCurrentYandexAuthRequestAuthority()', 'async function demoteYandexAuthIfCurrentRequest');
+ok(authority.includes("transitionYandexAuthValidityIfCurrentRequest(authority.receipt, 'expired'"), 'known exact expiry publishes persistent validity transition');
+ok(authority.includes("error.code = 'YANDEX_AUTH_TOKEN_EXPIRY_SKEW'"), 'near-expiry admission skew remains distinct from exact expiry');
+ok(!authority.includes('validityGeneration'), 'P1-196 does not invent a second generation counter');
 
-console.log(`P1-196 auth status axes runtime tests: PASS; checks=${checks}; status_axes=true; connected_means_usable=true; zero_expiry_unknown=true; near_expiry_not_falsely_expired=true; known_expiry_transition_remaining=true; provider_calls=0`);
+const tombstoneSource = section(WORKER, 'function isYandexAuthValidityTombstone', 'async function readYandexAuthState');
+ok(tombstoneSource.includes("validity === 'invalid' || validity === 'expired'"), 'runtime recognizes bounded invalid/expired tombstones');
+ok(tombstoneSource.includes('transitionYandexAuthValidityIfCurrentRequest'), 'shared exact-generation validity transition helper exists');
+
+console.log(`P1-196 auth status axes runtime tests: PASS; checks=${checks}; status_axes=true; connected_means_usable=true; zero_expiry_unknown=true; near_expiry_not_falsely_expired=true; known_expiry_transition=true; non_secret_tombstone=true; provider_calls=0`);

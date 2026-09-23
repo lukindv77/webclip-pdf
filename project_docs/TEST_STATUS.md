@@ -582,3 +582,16 @@ Because `service-worker.js` and `options.js` are canonical package members, curr
 Repository Integrity #1078 / run `35757954047` on exact preliminary head `72b71bcdd56aa5304df862274607360f30565856` passed the PR contract, JavaScript syntax and both dedicated P1-231 release-control jobs. Exact authority derived current 34-file RPF `sha256:37768ce6929adc01d8042fc728c898e5500c932eb12a657d042277ac67816d15` and current 33-file control `sha256:293be1d3c4f8fdea2978a07d147ea43972e41d806e7c4fd69c9841adbbccddb6`; Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
 
 The generic deterministic suite failed on stale current identity pins plus two direct source-witness defects: the P1-195 capability model still expected compatibility `connected` to mean token presence, and the new P1-196 Options-status regression used an end marker that occurs earlier in the file than `refreshStatus()`. Both are witness corrections only; runtime bytes are unchanged after the preliminary head. #1078 is discovery evidence, not merge evidence. P1-196 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+
+## P1-196 exact-generation validity tombstones — 2026-09-23
+
+A bounded P1-196 tranche converts exact current-auth HTTP 401 and exact known local expiry into one shared generation-fenced validity transition. Instead of deleting current auth to an untyped absence, the transition stores a non-secret session tombstone with the same `authRecordId`, advanced shared P1-178 auth generation, bounded source/account/lifetime metadata, explicit `validity=invalid|expired`, and no access token / refresh token / scope.
+
+`readYandexAuthState()` treats this tombstone as authoritative session state and cleans any stale legacy persistent OAuth secret rather than migrating it back, preventing invalid/expired credential resurrection. Exact provider expiry (`expiresAt <= now`) may publish an expired tombstone only under record/control-generation CAS; the existing future 60-second admission skew remains a non-transition block and is not mislabeled expired.
+
+Deterministic coverage includes new `project_tools/test_p1_196_validity_tombstone_runtime.js`, reconciled `test_p1_196_exact_auth_401_runtime.js`, `test_p1_196_auth_status_axes_runtime.js`, `test_p1_196_auth_validity_generation_refinement_model.js`, and `test_yandex_legacy_token_cleanup.js`.
+
+P1-196 remains **ACTIVE** after this tranche: bounded restart/maintenance recovery still needs per-child current-auth usability/generation recheck after a preceding child can invalidate or supersede auth. No live Yandex request, real Chrome qualification, product build/ZIP, release receipt, manifest bump, S2 activation, tag, deployment or release decision is performed.
+
+`service-worker.js` changes package bytes, so exact current RPF/current 33-file control must be re-derived by P1-231 authority on the PR head before merge. Manifest remains `0.9.8`; release readiness remains **NOT READY**.

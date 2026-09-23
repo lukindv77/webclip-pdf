@@ -96,9 +96,14 @@ check('S01c status exposes presence/validity/usability/lifetime axes', () => {
   ['authPresent', 'authValidity', 'authUsable', 'expiryKnowledge'].forEach((field) => has(statusSection, `${field}: authTruth.${field}`));
 });
 const validToken = asyncSection('async function getValidYandexAccessToken()');
-check('S02 known expiry skew exists', () => has(validToken, 'yandexAuth.expiresAt && yandexAuth.expiresAt <= Date.now() + 60_000'));
-check('S03 expiry throws unusable error', () => has(validToken, 'Срок действия OAuth-токена истёк'));
-check('S04 expiry function has no auth demotion write', () => lacks(validToken, 'writeYandexAuth'));
+check('S02 token admission delegates to exact request authority', () => has(validToken, 'captureCurrentYandexAuthRequestAuthority()'));
+const requestAuthority = asyncSection('async function captureCurrentYandexAuthRequestAuthority()');
+check('S03 exact expiry publishes generation-fenced expired transition', () => has(requestAuthority, "transitionYandexAuthValidityIfCurrentRequest(authority.receipt, 'expired'"));
+check('S04 expiry skew remains a non-transition admission block', () => has(requestAuthority, "error.code = 'YANDEX_AUTH_TOKEN_EXPIRY_SKEW'"));
+check('S04b invalid/expired state uses non-secret tombstone helper', () => {
+  has(SOURCE, 'function createYandexAuthValidityTombstone');
+  has(SOURCE, 'function isYandexAuthValidityTombstone');
+});
 const api = asyncSection('async function yandexApi(endpoint, options = {}, allowRetry = false)');
 check('S05 API attaches response status', () => has(api, 'error.status = response.status'));
 check('S06 API attaches bounded provider code', () => has(api, "error.code = boundedYandexExternalText(data?.error || '', MAX_YANDEX_EXTERNAL_ERROR_CHARS)"));

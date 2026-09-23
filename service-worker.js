@@ -15102,19 +15102,99 @@ async function removeLegacyPersistentYandexAuth() {
   }
 }
 
+function isYandexAuthValidityTombstone(value) {
+  const validity = String(value?.validity || '').trim();
+  return !String(value?.accessToken || '').trim()
+    && (validity === 'invalid' || validity === 'expired')
+    && Boolean(String(value?.authRecordId || '').trim())
+    && normalizeYandexAuthGeneration(value?.authGeneration) > 0;
+}
+
+function createYandexAuthValidityTombstone(current, validity, nextGeneration, observedAt = Date.now()) {
+  const normalizedValidity = validity === 'invalid' ? 'invalid' : validity === 'expired' ? 'expired' : '';
+  const authRecordId = String(current?.authRecordId || '').trim();
+  const authGeneration = normalizeYandexAuthGeneration(nextGeneration);
+  if (!normalizedValidity || !authRecordId || !authGeneration) {
+    const error = new Error('Некорректный validity transition Яндекс Диска.');
+    error.code = 'YANDEX_AUTH_VALIDITY_TRANSITION_INVALID';
+    throw error;
+  }
+
+  const expiresAt = Math.max(0, Number(current?.expiresAt) || 0);
+  const storedExpiryKnowledge = String(current?.expiryKnowledge || '').trim();
+  const expiryKnowledge = expiresAt > 0
+    ? 'known'
+    : (storedExpiryKnowledge === 'known' || storedExpiryKnowledge === 'unknown' ? storedExpiryKnowledge : 'unknown');
+
+  return Object.freeze({
+    authRecordId,
+    authGeneration,
+    source: String(current?.source || '').trim(),
+    clientId: String(current?.clientId || '').trim().slice(0, MAX_YANDEX_CLIENT_ID_CHARS),
+    expiresAt,
+    expiryKnowledge,
+    validity: normalizedValidity,
+    validityObservedAt: Math.max(0, Number(observedAt) || Date.now()),
+    account: current?.account && typeof current.account === 'object' ? { ...current.account } : null
+  });
+}
+
+function makeYandexAuthRequestReceipt(current, controlGeneration) {
+  const authRecordId = String(current?.authRecordId || '').trim();
+  const authGeneration = normalizeYandexAuthGeneration(current?.authGeneration);
+  const normalizedControlGeneration = normalizeYandexAuthGeneration(controlGeneration);
+  return Object.freeze({
+    requestKind: 'disk-oauth',
+    authRecordId,
+    authGeneration,
+    controlGeneration: normalizedControlGeneration,
+    authorizationBound: Boolean(authRecordId && authGeneration > 0 && normalizedControlGeneration > 0)
+  });
+}
+
+async function transitionYandexAuthValidityIfCurrentRequest(receipt, validity, observedAt = Date.now()) {
+  if (!receipt || receipt.requestKind !== 'disk-oauth' || receipt.authorizationBound !== true) return false;
+  const expectedRecordId = String(receipt.authRecordId || '').trim();
+  const expectedAuthGeneration = normalizeYandexAuthGeneration(receipt.authGeneration);
+  const expectedControlGeneration = normalizeYandexAuthGeneration(receipt.controlGeneration);
+  if (!expectedRecordId || !expectedAuthGeneration || !expectedControlGeneration) return false;
+
+  return runYandexAuthStorageOperation(async () => {
+    const stored = await chrome.storage.session.get([YANDEX_AUTH_KEY, YANDEX_AUTH_GENERATION_KEY]);
+    const current = stored?.[YANDEX_AUTH_KEY] || null;
+    const currentControlGeneration = normalizeYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]);
+    if (!current?.accessToken
+      || String(current.authRecordId || '').trim() !== expectedRecordId
+      || normalizeYandexAuthGeneration(current.authGeneration) !== expectedAuthGeneration
+      || currentControlGeneration !== expectedControlGeneration) return false;
+
+    const nextGeneration = nextYandexAuthGeneration(currentControlGeneration);
+    const tombstone = createYandexAuthValidityTombstone(current, validity, nextGeneration, observedAt);
+    await chrome.storage.session.set({
+      [YANDEX_AUTH_KEY]: tombstone,
+      [YANDEX_AUTH_GENERATION_KEY]: nextGeneration,
+      [YANDEX_OAUTH_PENDING_KEY]: null
+    });
+    return true;
+  }, 'CAS validity transition exact OAuth authority Яндекс Диска');
+}
+
 async function readYandexAuthState() {
   const [{ yandexConfig = {} }, sessionStored, localStored] = await Promise.all([
     chrome.storage.local.get('yandexConfig'),
-    runYandexAuthStorageOperation(() => chrome.storage.session.get(YANDEX_AUTH_KEY), 'Чтение session OAuth-токена Яндекс Диска'),
+    runYandexAuthStorageOperation(
+      () => chrome.storage.session.get([YANDEX_AUTH_KEY, YANDEX_AUTH_GENERATION_KEY]),
+      'Чтение session OAuth-состояния Яндекс Диска'
+    ),
     runYandexAuthStorageOperation(() => chrome.storage.local.get(YANDEX_AUTH_KEY), 'Проверка legacy persistent OAuth-токена Яндекс Диска')
   ]);
   const sessionAuth = sessionStored?.[YANDEX_AUTH_KEY] || null;
-  if (sessionAuth?.accessToken) {
-    // Не оставляем старую копию секрета в persistent storage. Security cleanup
-    // is awaited and fail-closed: returning a usable token while the durable
-    // legacy copy still exists would silently violate the session-only model.
+  const authControlGeneration = normalizeYandexAuthGeneration(sessionStored?.[YANDEX_AUTH_GENERATION_KEY]);
+  if (sessionAuth?.accessToken || isYandexAuthValidityTombstone(sessionAuth)) {
+    // Session tombstones are authoritative negative state: a legacy local secret
+    // must never resurrect an auth record already invalidated/expired in-session.
     if (localStored?.[YANDEX_AUTH_KEY]) await removeLegacyPersistentYandexAuth();
-    return { auth: sessionAuth, mode: YANDEX_AUTH_STORAGE_SESSION, yandexConfig };
+    return { auth: sessionAuth, authControlGeneration, mode: YANDEX_AUTH_STORAGE_SESSION, yandexConfig };
   }
 
   const legacyAuth = localStored?.[YANDEX_AUTH_KEY] || null;
@@ -15124,9 +15204,9 @@ async function readYandexAuthState() {
     await runYandexAuthStorageOperation(() => chrome.storage.session.set({ [YANDEX_AUTH_KEY]: legacyAuth }), 'Миграция OAuth-токена Яндекс Диска в session storage');
     const migratedConfig = await updateYandexConfig((config) => ({ ...config, authStorageMode: YANDEX_AUTH_STORAGE_SESSION }), 'Фиксация session-only режима OAuth Яндекс Диска');
     await removeLegacyPersistentYandexAuth();
-    return { auth: legacyAuth, mode: YANDEX_AUTH_STORAGE_SESSION, yandexConfig: migratedConfig };
+    return { auth: legacyAuth, authControlGeneration, mode: YANDEX_AUTH_STORAGE_SESSION, yandexConfig: migratedConfig };
   }
-  return { auth: null, mode: YANDEX_AUTH_STORAGE_SESSION, yandexConfig };
+  return { auth: null, authControlGeneration, mode: YANDEX_AUTH_STORAGE_SESSION, yandexConfig };
 }
 
 async function writeYandexAuth(auth) {
@@ -15565,17 +15645,8 @@ async function setManualYandexToken(token) {
 }
 
 async function getValidYandexAccessToken() {
-  const { auth: yandexAuth } = await readYandexAuthState();
-  if (!yandexAuth?.accessToken) {
-    throw new Error('Яндекс Диск не подключён. Откройте настройки расширения и выполните авторизацию.');
-  }
-
-  if (yandexAuth.expiresAt && yandexAuth.expiresAt <= Date.now() + 60_000) {
-    // Для refresh_token Яндекс документирует client_secret. Мы намеренно не храним
-    // Client Secret внутри Chrome-расширения. Повторная PKCE-авторизация безопаснее.
-    throw new Error('Срок действия OAuth-токена истёк. Откройте настройки и подключите Яндекс Диск заново.');
-  }
-  return yandexAuth.accessToken;
+  const authority = await captureCurrentYandexAuthRequestAuthority();
+  return authority.accessToken;
 }
 
 function sanitizeYandexApiCallerHeaders(headers = {}) {
@@ -15596,56 +15667,63 @@ async function captureCurrentYandexAuthRequestAuthority() {
   // Reuse the existing migration/security cleanup boundary first, then capture
   // auth + shared control generation in one serialized session read.
   await readYandexAuthState();
-  return runYandexAuthStorageOperation(async () => {
+  const capturedAt = Date.now();
+  const authority = await runYandexAuthStorageOperation(async () => {
     const stored = await chrome.storage.session.get([YANDEX_AUTH_KEY, YANDEX_AUTH_GENERATION_KEY]);
     const current = stored?.[YANDEX_AUTH_KEY] || null;
     if (!current?.accessToken) {
-      throw new Error('Яндекс Диск не подключён. Откройте настройки расширения и выполните авторизацию.');
-    }
-    if (current.expiresAt && current.expiresAt <= Date.now() + 60_000) {
-      throw new Error('Срок действия OAuth-токена истёк. Откройте настройки и подключите Яндекс Диск заново.');
+      const validity = String(current?.validity || '').trim();
+      const error = new Error(
+        validity === 'expired'
+          ? 'Срок действия OAuth-токена истёк. Откройте настройки и подключите Яндекс Диск заново.'
+          : validity === 'invalid'
+            ? 'OAuth-токен Яндекс Диска больше не действителен. Подключите аккаунт заново.'
+            : 'Яндекс Диск не подключён. Откройте настройки расширения и выполните авторизацию.'
+      );
+      error.code = validity === 'expired'
+        ? 'YANDEX_AUTH_TOKEN_EXPIRED'
+        : validity === 'invalid'
+          ? 'YANDEX_AUTH_TOKEN_INVALID'
+          : 'YANDEX_AUTH_REQUIRED';
+      throw error;
     }
 
-    const authRecordId = String(current.authRecordId || '').trim();
-    const authGeneration = normalizeYandexAuthGeneration(current.authGeneration);
-    const controlGeneration = normalizeYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]);
-    const authorizationBound = Boolean(authRecordId && authGeneration > 0 && controlGeneration > 0);
+    const receipt = makeYandexAuthRequestReceipt(current, stored?.[YANDEX_AUTH_GENERATION_KEY]);
+    const expiresAt = Math.max(0, Number(current.expiresAt) || 0);
+    if (expiresAt > 0 && expiresAt <= capturedAt) {
+      return Object.freeze({ expired: true, receipt, observedAt: capturedAt });
+    }
+    if (expiresAt > 0 && expiresAt <= capturedAt + 60_000) {
+      const error = new Error('Срок действия OAuth-токена скоро истечёт. Подключите Яндекс Диск заново перед следующей операцией.');
+      error.code = 'YANDEX_AUTH_TOKEN_EXPIRY_SKEW';
+      throw error;
+    }
+
     return Object.freeze({
       accessToken: current.accessToken,
-      receipt: Object.freeze({
-        requestKind: 'disk-oauth',
-        authRecordId,
-        authGeneration,
-        controlGeneration,
-        authorizationBound
-      })
+      receipt
     });
   }, 'Фиксация exact OAuth authority для запроса Яндекс Диска');
+
+  if (authority?.expired) {
+    const transitioned = authority.receipt?.authorizationBound === true
+      ? await transitionYandexAuthValidityIfCurrentRequest(authority.receipt, 'expired', authority.observedAt)
+      : false;
+    const error = new Error(
+      transitioned
+        ? 'Срок действия OAuth-токена истёк. Подключите Яндекс Диск заново.'
+        : 'Срок действия OAuth-токена истёк или авторизация уже изменилась. Повторите действие после проверки текущего аккаунта.'
+    );
+    error.code = transitioned ? 'YANDEX_AUTH_TOKEN_EXPIRED' : 'YANDEX_AUTH_EXPIRY_SUPERSEDED';
+    error.authTransitioned = transitioned;
+    throw error;
+  }
+
+  return authority;
 }
 
 async function demoteYandexAuthIfCurrentRequest(receipt) {
-  if (!receipt || receipt.requestKind !== 'disk-oauth' || receipt.authorizationBound !== true) return false;
-  const expectedRecordId = String(receipt.authRecordId || '').trim();
-  const expectedAuthGeneration = normalizeYandexAuthGeneration(receipt.authGeneration);
-  const expectedControlGeneration = normalizeYandexAuthGeneration(receipt.controlGeneration);
-  if (!expectedRecordId || !expectedAuthGeneration || !expectedControlGeneration) return false;
-
-  return runYandexAuthStorageOperation(async () => {
-    const stored = await chrome.storage.session.get([YANDEX_AUTH_KEY, YANDEX_AUTH_GENERATION_KEY]);
-    const current = stored?.[YANDEX_AUTH_KEY] || null;
-    const currentControlGeneration = normalizeYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]);
-    if (!current
-      || String(current.authRecordId || '').trim() !== expectedRecordId
-      || normalizeYandexAuthGeneration(current.authGeneration) !== expectedAuthGeneration
-      || currentControlGeneration !== expectedControlGeneration) return false;
-
-    await chrome.storage.session.set({
-      [YANDEX_AUTH_KEY]: null,
-      [YANDEX_AUTH_GENERATION_KEY]: nextYandexAuthGeneration(currentControlGeneration),
-      [YANDEX_OAUTH_PENDING_KEY]: null
-    });
-    return true;
-  }, 'CAS демоция exact OAuth authority Яндекс Диска после 401');
+  return transitionYandexAuthValidityIfCurrentRequest(receipt, 'invalid', Date.now());
 }
 
 async function compareUpdateYandexAuthIfCurrentRequest(receipt, patch) {
@@ -15672,23 +15750,55 @@ async function compareUpdateYandexAuthIfCurrentRequest(receipt, patch) {
 }
 
 async function captureCurrentYandexOperationContext() {
-  const { auth: yandexAuth, yandexConfig = {} } = await readYandexAuthState();
+  const authState = await readYandexAuthState();
+  const yandexAuth = authState.auth;
+  const yandexConfig = authState.yandexConfig || {};
   if (!yandexAuth?.accessToken) {
-    const error = new Error('Яндекс Диск не подключён. Невозможно зафиксировать контекст операции.');
-    error.code = 'YANDEX_OPERATION_CONTEXT_AUTH_REQUIRED';
+    const validity = String(yandexAuth?.validity || '').trim();
+    const error = new Error(
+      validity === 'expired'
+        ? 'Срок действия OAuth-токена истёк. Невозможно зафиксировать контекст операции.'
+        : validity === 'invalid'
+          ? 'OAuth-токен Яндекс Диска больше не действителен. Невозможно зафиксировать контекст операции.'
+          : 'Яндекс Диск не подключён. Невозможно зафиксировать контекст операции.'
+    );
+    error.code = validity === 'expired'
+      ? 'YANDEX_OPERATION_CONTEXT_TOKEN_EXPIRED'
+      : validity === 'invalid'
+        ? 'YANDEX_OPERATION_CONTEXT_TOKEN_INVALID'
+        : 'YANDEX_OPERATION_CONTEXT_AUTH_REQUIRED';
     throw error;
   }
-  if (yandexAuth.expiresAt && yandexAuth.expiresAt <= Date.now() + 60_000) {
-    const error = new Error('Срок действия OAuth-токена истёк. Невозможно зафиксировать контекст операции.');
-    error.code = 'YANDEX_OPERATION_CONTEXT_TOKEN_EXPIRED';
+
+  const capturedAt = Date.now();
+  const expiresAt = Math.max(0, Number(yandexAuth.expiresAt) || 0);
+  if (expiresAt > 0 && expiresAt <= capturedAt) {
+    const receipt = makeYandexAuthRequestReceipt(yandexAuth, authState.authControlGeneration);
+    const transitioned = receipt.authorizationBound === true
+      ? await transitionYandexAuthValidityIfCurrentRequest(receipt, 'expired', capturedAt)
+      : false;
+    const error = new Error(
+      transitioned
+        ? 'Срок действия OAuth-токена истёк. Невозможно зафиксировать контекст операции.'
+        : 'Срок действия OAuth-токена истёк или авторизация уже изменилась. Повторите операцию с текущим аккаунтом.'
+    );
+    error.code = transitioned
+      ? 'YANDEX_OPERATION_CONTEXT_TOKEN_EXPIRED'
+      : 'YANDEX_OPERATION_CONTEXT_AUTH_SUPERSEDED';
     throw error;
   }
+  if (expiresAt > 0 && expiresAt <= capturedAt + 60_000) {
+    const error = new Error('Срок действия OAuth-токена скоро истечёт. Подключите Яндекс Диск заново перед новой операцией.');
+    error.code = 'YANDEX_OPERATION_CONTEXT_TOKEN_EXPIRY_SKEW';
+    throw error;
+  }
+
   return WebClipYandexOperationContext.validateOperationContext({
     accessToken: yandexAuth.accessToken,
     accountUid: yandexAuth.account?.uid,
     rootPath: yandexConfig.rootPath,
     createPublicLinks: yandexConfig.createPublicLinks !== false,
-    capturedAt: Date.now()
+    capturedAt
   });
 }
 
