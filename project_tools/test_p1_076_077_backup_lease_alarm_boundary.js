@@ -73,9 +73,11 @@ async function testP1077SettingsOnlySchedulesDurableBoundary() {
   assert(save.includes("initializeJournalBackupScheduler('settings-change')"), 'settings path must rebuild durable alarm scheduling');
 
   const allCalls = [...sw.matchAll(/runDueJournalBackup\(([^\n]*)/g)].map((m) => m[0]);
-  assert.strictEqual(allCalls.length, 3, 'runDueJournalBackup must have only two alarm call sites plus its declaration');
-  assert(sw.includes("runDueJournalBackup('periodic-alarm', false)"));
-  assert(sw.includes("runDueJournalBackup('retry-alarm', true)"));
+  assert.strictEqual(allCalls.length, 2, 'runDueJournalBackup must have only its declaration plus generation-admitted dispatcher call');
+  assert(!sw.includes("runDueJournalBackup('periodic-alarm', false)"), 'fixed periodic alarm must not bypass generation admission');
+  assert(!sw.includes("runDueJournalBackup('retry-alarm', true)"), 'fixed retry alarm must not bypass generation admission');
+  assert(sw.includes("return runDueJournalBackup(kind === 'retry' ? 'retry-alarm' : 'periodic-alarm', kind === 'retry', scheduledGeneration);"), 'dispatcher must pass the admitted scheduler generation into the heavy backup');
+  assert(sw.includes('dispatchJournalBackupAlarm(alarm)'), 'fixed alarm names must route through the generation-admission dispatcher');
   assert(!sw.includes("runDueJournalBackup('enabled', false)"));
 
   let schedulerCalls = 0;

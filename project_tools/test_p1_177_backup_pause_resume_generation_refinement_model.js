@@ -96,8 +96,8 @@ function preserveStartedEffectAcrossDisconnect(control, effect) {
 function targetPausedSkip(control) {
   return { remoteCalls: 0, failureDelta: 0, backgroundFailureDelta: 0, retryScheduled: false, mode: control.mode };
 }
-function currentShapedNoAuthFailure() {
-  return { remoteCalls: 0, failureDelta: 1, backgroundFailureDelta: 1, retryScheduled: true, outcome: 'ordinary-failure' };
+function currentNoAuthPause() {
+  return { remoteCalls: 0, failureDelta: 0, backgroundFailureDelta: 0, retryScheduled: false, outcome: 'paused-no-auth' };
 }
 
 // Canonical owner/scope checks.
@@ -117,13 +117,16 @@ check('O13 no L5', () => has(EVIDENCE, 'Real Chrome/Yandex L5: **NOT RUN**'));
 check('O14 no S2', () => has(EVIDENCE, 'Release-policy activation: **NONE**'));
 check('O15 manifest unchanged', () => assert.equal(MANIFEST.version, '0.9.8'));
 
-// Current-source absorption review: preserve real positive controls and prove missing scheduler-generation semantics.
-check('S01 periodic alarm fixed name', () => has(SOURCE, "const JOURNAL_BACKUP_ALARM = 'webclip-journal-backup';"));
-check('S02 retry alarm fixed name', () => has(SOURCE, 'const JOURNAL_BACKUP_RETRY_ALARM = `${JOURNAL_BACKUP_ALARM}-retry`;'));
-check('S03 no paused-no-auth runtime symbol', () => lacks(SOURCE, 'paused-no-auth'));
-check('S04 no backupSchedulerControl runtime symbol', () => lacks(SOURCE, 'backupSchedulerControl'));
-check('S05 no backupSchedulerGeneration runtime symbol', () => lacks(SOURCE, 'backupSchedulerGeneration'));
-check('S06 no scheduledGeneration runtime symbol', () => lacks(SOURCE, 'scheduledGeneration'));
+// Current-source absorption review: first bounded scheduler-generation implementation.
+check('S01 periodic alarm fixed name retained as delivery channel', () => has(SOURCE, "const JOURNAL_BACKUP_ALARM = 'webclip-journal-backup';"));
+check('S02 retry alarm fixed name retained as delivery channel', () => has(SOURCE, 'const JOURNAL_BACKUP_RETRY_ALARM = `${JOURNAL_BACKUP_ALARM}-retry`;'));
+check('S03 paused-no-auth runtime mode exists', () => has(SOURCE, "'paused-no-auth'"));
+check('S04 durable scheduler control key exists', () => has(SOURCE, "JOURNAL_BACKUP_SCHEDULER_CONTROL_KEY = 'webclipJournalBackupSchedulerControl'"));
+check('S05 scheduler generation helper exists', () => has(SOURCE, 'nextJournalBackupSchedulerGeneration'));
+check('S06 durable periodic/retry scheduled-generation receipts exist', () => {
+  has(SOURCE, 'periodicGeneration');
+  has(SOURCE, 'retryGeneration');
+});
 
 const disconnectCase = switchCase('WEBCLIP_YANDEX_DISCONNECT');
 const disconnectAuth = asyncSection('async function disconnectYandexAuthControl()');
@@ -132,56 +135,60 @@ check('S08 Disconnect helper clears auth + pending PKCE in one session mutation'
   has(disconnectAuth, '[YANDEX_OAUTH_PENDING_KEY]: null');
   has(disconnectAuth, '[YANDEX_AUTH_KEY]: null');
 });
-check('S09 Disconnect lacks scheduler init', () => lacks(disconnectCase, 'initializeJournalBackupScheduler'));
-check('S10 Disconnect lacks pending-backup deletion', () => lacks(disconnectCase, 'JOURNAL_BACKUP_PENDING_KEY'));
+check('S09 Disconnect explicitly advances paused scheduler generation', () => has(disconnectCase, "pauseJournalBackupSchedulerNoAuth('explicit-disconnect')"));
+check('S10 Disconnect still preserves pending backup checkpoint', () => lacks(disconnectCase, 'JOURNAL_BACKUP_PENDING_KEY'));
 
-const due = asyncSection("async function runDueJournalBackup(reason = 'scheduled', forceRetry = false)");
+const due = asyncSection("async function runDueJournalBackup(reason = 'scheduled', forceRetry = false, scheduledGeneration = 0)");
 check('S11 due reads backup status', () => has(due, 'const status = await getJournalBackupStatus();'));
-check('S12 due entry gates enabled/root', () => has(due, 'if (!status.enabled || !status.rootPath)'));
-check('S13 due lacks explicit paused-no-auth', () => lacks(due, 'paused-no-auth'));
-check('S14 due lacks scheduler generation', () => lacks(due, 'schedulerGeneration'));
+check('S12 due entry still gates enabled/root', () => has(due, 'if (!status.enabled || !status.rootPath)'));
+check('S13 due revalidates scheduler admission at entry', () => has(due, 'const schedulerAdmission = await proveJournalBackupSchedulerAdmission(scheduledGeneration)'));
+check('S14 due revalidates same scheduler generation before backup pipeline', () => has(due, 'const finalAdmission = await proveJournalBackupSchedulerAdmission(scheduledGeneration)'));
 check('S15 current stale-retry guard preserved', () => has(due, 'staleRetryAlarm: true'));
 check('S16 stale-retry guard tied to newer success', () => has(due, 'if (forceRetry && !unresolvedFailure)'));
 
 const backup = asyncSection("async function exportJournalBackupToYandex({ reason = 'manual', operationId = '' } = {})");
-check('S17 background failure writes lastFailureAt', () => has(backup, 'state.lastFailureAt = failureAt;'));
-check('S18 background failure writes lastBackgroundFailureAt', () => has(backup, 'state.lastBackgroundFailureAt = failureAt;'));
+check('S17 background failure writes lastFailureAt for real execution failures', () => has(backup, 'state.lastFailureAt = failureAt;'));
+check('S18 background failure writes lastBackgroundFailureAt for real execution failures', () => has(backup, 'state.lastBackgroundFailureAt = failureAt;'));
 check('S19 background failure records error', () => has(backup, 'state.lastBackgroundError = normalizeError(error);'));
-check('S20 enabled background failure schedules retry', () => has(backup, "if (status?.enabled && isBackground && error?.code !== 'JOURNAL_BACKUP_BUSY')"));
-check('S21 retry scheduling call present', () => has(backup, 'await scheduleBackupRetry(failureAt, status.retryMinutes);'));
+check('S20 enabled background failure scheduling remains for admitted execution failures', () => has(backup, "if (status?.enabled && isBackground && error?.code !== 'JOURNAL_BACKUP_BUSY')"));
+check('S21 retry scheduling uses generation-bound alarm helper transitively', () => has(backup, 'await scheduleBackupRetry(failureAt, status.retryMinutes);'));
 
 const init = asyncSection("async function initializeJournalBackupScheduler(reason = 'init')");
 check('S22 init reads status', () => has(init, 'const status = await getJournalBackupStatus();'));
-check('S23 worker-start trusts existing alarm presence as lightweight path', () => has(init, 'alarmAlreadyPresent: true'));
-check('S24 non-worker init clears periodic alarm', () => has(init, 'chrome.alarms.clear(JOURNAL_BACKUP_ALARM)'));
-check('S25 non-worker init clears retry alarm', () => has(init, 'chrome.alarms.clear(JOURNAL_BACKUP_RETRY_ALARM)'));
-check('S26 init lacks generation receipt check', () => lacks(init, 'schedulerGeneration'));
+check('S23 worker/startup lightweight path requires current generation receipt', () => {
+  has(init, 'control.periodicGeneration === control.generation');
+  has(init, 'control.retryGeneration === control.generation');
+});
+check('S24 scheduler init reconciles explicit control state', () => has(init, 'reconcileJournalBackupSchedulerControl(status, reason)'));
+check('S25 scheduler init replaces alarms through shared clear helper', () => has(init, 'await clearJournalBackupAlarms()'));
+check('S26 init reports scheduler generation', () => has(init, 'schedulerGeneration: control.generation'));
 
 const finishAuth = asyncSection('async function finishYandexOAuth(authAttemptId, code)');
 check('S27 OAuth success commits exact auth attempt through CAS', () => has(finishAuth, 'commitYandexOAuthAttemptControl(captured, yandexAuth)'));
-check('S28 OAuth success lacks explicit scheduler resume', () => lacks(finishAuth, 'initializeJournalBackupScheduler'));
+check('S28 OAuth success explicitly repairs/resumes scheduler', () => has(finishAuth, "initializeJournalBackupScheduler('auth-resume')"));
 const manualAuth = asyncSection('async function setManualYandexToken(token)');
 check('S29 manual auth commits validated candidate through generation CAS', () => has(manualAuth, 'commitManualYandexAuthIfGeneration(authGeneration, yandexAuth)'));
-check('S30 manual auth lacks explicit scheduler resume', () => lacks(manualAuth, 'initializeJournalBackupScheduler'));
-check('S31 scheduler init call set excludes auth-resume labels', () => {
-  assert.equal(count(SOURCE, "initializeJournalBackupScheduler('"), 5);
-  lacks(SOURCE, "initializeJournalBackupScheduler('oauth");
-  lacks(SOURCE, "initializeJournalBackupScheduler('auth");
-  lacks(SOURCE, "initializeJournalBackupScheduler('reauth");
+check('S30 manual auth explicitly repairs/resumes scheduler', () => has(manualAuth, "initializeJournalBackupScheduler('auth-resume')"));
+check('S31 scheduler has multiple explicit auth-resume repair points', () => {
+  assert.ok(count(SOURCE, "initializeJournalBackupScheduler('auth-resume')") >= 3);
 });
-check('S32 alarm listener dispatches periodic directly', () => has(SOURCE, "runDueJournalBackup('periodic-alarm', false)"));
-check('S33 alarm listener dispatches retry directly', () => has(SOURCE, "runDueJournalBackup('retry-alarm', true)"));
+check('S32 alarm listener routes backup alarms through generation dispatcher', () => has(SOURCE, 'dispatchJournalBackupAlarm(alarm)'));
+check('S33 direct fixed-name alarm -> runDue dispatch removed', () => {
+  lacks(SOURCE, "runDueJournalBackup('periodic-alarm', false)");
+  lacks(SOURCE, "runDueJournalBackup('retry-alarm', true)");
+});
 const upload = asyncSection('async function uploadJournalExportStagedToYandex(');
 check('S34 physical upload path persists prepared checkpoint', () => has(upload, '[JOURNAL_BACKUP_PENDING_KEY]: pending'));
 check('S35 physical upload uses offscreen signed transfer', () => has(upload, 'runOffscreenSignedTransfer'));
+check('S36 per-child scheduler recheck remains next bounded gap', () => lacks(upload, 'proveJournalBackupSchedulerAdmission'));
 
 // Deterministic target/race matrix.
 const ar1 = ns('A', '/R1');
 const ar2 = ns('A', '/R2');
 const br2 = ns('B', '/R2');
-check('N01 current-shaped no-auth is ordinary failure/retry gap', () => {
-  const r = currentShapedNoAuthFailure();
-  assert.equal(r.outcome, 'ordinary-failure'); assert.equal(r.failureDelta, 1); assert.equal(r.retryScheduled, true);
+check('N01 current no-auth scheduler admission is pause truth, not ordinary failure', () => {
+  const r = currentNoAuthPause();
+  assert.equal(r.outcome, 'paused-no-auth'); assert.equal(r.failureDelta, 0); assert.equal(r.retryScheduled, false);
 });
 check('N02 Disconnect advances generation and pauses', () => {
   const c = makeControl({ generation: 4 }); disconnect(c); assert.equal(c.generation, 5); assert.equal(c.mode, 'paused-no-auth');
@@ -285,4 +292,4 @@ check('N33 no runtime/L5/S2/release action', () => {
   'V1 readiness and release authority are untouched.'
 ].forEach((needle, i) => check(`E${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
 
-console.log(`P1-177 backup pause/resume generation refinement model: PASS; cases=${cases}; schema=webclip-backup-scheduler-generation/v1; baseline=0e58f326a19f22611f3ddcb65e13bcf2cbd48670; disconnect_pause_missing=current-gap; due_auth_generation_gate_missing=current-gap; fixed_alarm_generation_missing=current-gap; explicit_auth_resume_missing=current-gap; stale_retry_success_guard=preserved; callback_recheck=required-before-each-child; started_effect=persist-reconcile; namespace_owner=P1-179; auth_generation_owner=P1-178; scheduler_owner=P1-177; runtime_modified=false; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-177 backup pause/resume generation refinement model: PASS; cases=${cases}; schema=webclip-backup-scheduler-generation/v1; baseline=0e58f326a19f22611f3ddcb65e13bcf2cbd48670; disconnect_pause=implemented; due_auth_generation_gate=implemented; fixed_alarm_generation_receipt=implemented; explicit_auth_resume=implemented; stale_retry_success_guard=preserved; callback_entry_recheck=implemented; backup_entry_recheck=implemented; child_mutation_recheck=current-gap; started_effect=persist-reconcile; namespace_owner=P1-179; auth_generation_owner=P1-178; scheduler_owner=P1-177; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);

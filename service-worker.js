@@ -399,6 +399,8 @@ const JOURNAL_IMPORT_CHECKPOINT_TTL_MS = JOURNAL_IMPORT_STAGING_TTL_MS;
 const MAX_INLINE_JOURNAL_IMPORT_JSON_CHARS = 1024 * 1024;
 const JOURNAL_BACKUP_ALARM = 'webclip-journal-backup';
 const JOURNAL_BACKUP_RETRY_ALARM = `${JOURNAL_BACKUP_ALARM}-retry`;
+const JOURNAL_BACKUP_SCHEDULER_CONTROL_KEY = 'webclipJournalBackupSchedulerControl';
+const JOURNAL_BACKUP_SCHEDULER_CONTROL_VERSION = 1;
 const JOURNAL_BACKUP_LEASE_KEY = 'webclipJournalBackupLease';
 const JOURNAL_BACKUP_PENDING_KEY = 'webclipJournalBackupPendingUpload';
 const JOURNAL_BACKUP_LEASE_TTL_MS = 10 * 60 * 1000;
@@ -3496,6 +3498,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'WEBCLIP_YANDEX_DISCONNECT':
         await disconnectYandexAuthControl();
+        await pauseJournalBackupSchedulerNoAuth('explicit-disconnect');
         return { ok: true, ...(await getYandexStatus()) };
 
       case 'WEBCLIP_YANDEX_SAVE_ROOT':
@@ -3567,10 +3570,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   const contextMenuRepairAttempt = parseContextMenuRepairAttempt(alarm?.name);
   if (contextMenuRepairAttempt > 0) {
     initializeContextMenusCrashSafe(contextMenuRepairAttempt).catch((error) => console.warn('WebClip context menu repair:', error));
-  } else if (alarm?.name === JOURNAL_BACKUP_ALARM) {
-    runDueJournalBackup('periodic-alarm', false).catch((error) => console.warn('WebClip backup alarm:', error));
-  } else if (alarm?.name === JOURNAL_BACKUP_RETRY_ALARM) {
-    runDueJournalBackup('retry-alarm', true).catch((error) => console.warn('WebClip backup retry:', error));
+  } else if (alarm?.name === JOURNAL_BACKUP_ALARM || alarm?.name === JOURNAL_BACKUP_RETRY_ALARM) {
+    dispatchJournalBackupAlarm(alarm).catch((error) => console.warn('WebClip backup alarm:', error));
   } else if (alarm?.name === OPERATION_LOG_CLEANUP_ALARM) {
     runLoggedOperationLogCleanup('alarm').catch((error) => console.warn('WebClip operation log cleanup:', error));
   }
@@ -12765,6 +12766,249 @@ function mutateJournalBackupState(mutator, label) {
   );
 }
 
+function normalizeJournalBackupSchedulerGeneration(value) {
+  const generation = Math.floor(Number(value) || 0);
+  return Number.isSafeInteger(generation) && generation >= 0 ? generation : 0;
+}
+
+function nextJournalBackupSchedulerGeneration(value) {
+  const generation = normalizeJournalBackupSchedulerGeneration(value);
+  if (generation >= Number.MAX_SAFE_INTEGER) {
+    const error = new Error('Поколение backup scheduler исчерпано.');
+    error.code = 'JOURNAL_BACKUP_SCHEDULER_GENERATION_EXHAUSTED';
+    throw error;
+  }
+  return generation + 1;
+}
+
+function normalizeJournalBackupSchedulerControl(value = {}) {
+  const mode = ['active', 'paused-no-auth', 'paused-user', 'paused-unconfigured'].includes(String(value?.mode || ''))
+    ? String(value.mode)
+    : 'paused-unconfigured';
+  const generation = normalizeJournalBackupSchedulerGeneration(value?.generation);
+  const periodicGeneration = normalizeJournalBackupSchedulerGeneration(value?.periodicGeneration);
+  const retryGeneration = normalizeJournalBackupSchedulerGeneration(value?.retryGeneration);
+  return Object.freeze({
+    version: JOURNAL_BACKUP_SCHEDULER_CONTROL_VERSION,
+    generation,
+    mode,
+    authRecordId: String(value?.authRecordId || '').trim().slice(0, 256),
+    authControlGeneration: normalizeYandexAuthGeneration(value?.authControlGeneration),
+    accountUid: boundedYandexExternalText(value?.accountUid || '', MAX_YANDEX_ACCOUNT_FIELD_CHARS).trim(),
+    rootPath: normalizeDiskPath(value?.rootPath || ''),
+    periodicGeneration,
+    periodicDueAt: Math.max(0, Number(value?.periodicDueAt) || 0),
+    retryGeneration,
+    retryDueAt: Math.max(0, Number(value?.retryDueAt) || 0)
+  });
+}
+
+function readJournalBackupSchedulerControl(label = 'Чтение backup scheduler control') {
+  return readJournalBackupStorage(JOURNAL_BACKUP_SCHEDULER_CONTROL_KEY, label)
+    .then((stored) => normalizeJournalBackupSchedulerControl(stored?.[JOURNAL_BACKUP_SCHEDULER_CONTROL_KEY] || {}));
+}
+
+function mutateJournalBackupSchedulerControl(mutator, label) {
+  return runSerializedLateSettlementOperation(
+    chromeStorageMutationSettlementChains,
+    `storage.local:${JOURNAL_BACKUP_SCHEDULER_CONTROL_KEY}`,
+    async () => {
+      const stored = await chrome.storage.local.get(JOURNAL_BACKUP_SCHEDULER_CONTROL_KEY);
+      const previous = normalizeJournalBackupSchedulerControl(stored?.[JOURNAL_BACKUP_SCHEDULER_CONTROL_KEY] || {});
+      const nextRaw = mutator({ ...previous });
+      if (!nextRaw || typeof nextRaw !== 'object') {
+        throw new Error('Некорректное состояние backup scheduler control.');
+      }
+      const next = normalizeJournalBackupSchedulerControl({
+        ...nextRaw,
+        version: JOURNAL_BACKUP_SCHEDULER_CONTROL_VERSION
+      });
+      await chrome.storage.local.set({ [JOURNAL_BACKUP_SCHEDULER_CONTROL_KEY]: next });
+      return next;
+    },
+    label,
+    CHROME_STORAGE_OPERATION_TIMEOUT_MS
+  );
+}
+
+async function captureJournalBackupSchedulerProof() {
+  const authState = await readYandexAuthState();
+  const auth = authState.auth;
+  const truth = describeYandexAuthTruth(auth, authState.authControlGeneration);
+  const authReceipt = makeYandexAuthRequestReceipt(auth, authState.authControlGeneration);
+  const accountUid = boundedYandexExternalText(auth?.account?.uid || '', MAX_YANDEX_ACCOUNT_FIELD_CHARS).trim();
+  const rootPath = normalizeDiskPath(authState.yandexConfig?.rootPath || '');
+  return Object.freeze({
+    authUsable: Boolean(truth.authUsable && authReceipt.authorizationBound),
+    authRecordId: String(authReceipt.authRecordId || '').trim(),
+    authControlGeneration: normalizeYandexAuthGeneration(authReceipt.controlGeneration),
+    accountUid,
+    rootPath
+  });
+}
+
+async function clearJournalBackupAlarms() {
+  await mutateChromeAlarmSerialized(
+    JOURNAL_BACKUP_ALARM,
+    () => chrome.alarms.clear(JOURNAL_BACKUP_ALARM),
+    'Очистка periodic backup alarm'
+  );
+  await mutateChromeAlarmSerialized(
+    JOURNAL_BACKUP_RETRY_ALARM,
+    () => chrome.alarms.clear(JOURNAL_BACKUP_RETRY_ALARM),
+    'Очистка retry backup alarm'
+  );
+}
+
+async function transitionJournalBackupScheduler(mode, reason, proof = null, { forceAdvance = true } = {}) {
+  const normalizedMode = ['active', 'paused-no-auth', 'paused-user', 'paused-unconfigured'].includes(mode)
+    ? mode
+    : 'paused-unconfigured';
+  return mutateJournalBackupSchedulerControl((previous) => {
+    const identityChanged = normalizedMode === 'active' && (
+      String(previous.authRecordId || '') !== String(proof?.authRecordId || '')
+      || normalizeYandexAuthGeneration(previous.authControlGeneration) !== normalizeYandexAuthGeneration(proof?.authControlGeneration)
+      || String(previous.accountUid || '') !== String(proof?.accountUid || '')
+      || normalizeDiskPath(previous.rootPath || '') !== normalizeDiskPath(proof?.rootPath || '')
+    );
+    const modeChanged = previous.mode !== normalizedMode;
+    const generation = (forceAdvance || identityChanged || modeChanged || !previous.generation)
+      ? nextJournalBackupSchedulerGeneration(previous.generation)
+      : previous.generation;
+    return {
+      ...previous,
+      generation,
+      mode: normalizedMode,
+      authRecordId: normalizedMode === 'active' ? String(proof?.authRecordId || '') : '',
+      authControlGeneration: normalizedMode === 'active' ? normalizeYandexAuthGeneration(proof?.authControlGeneration) : 0,
+      accountUid: normalizedMode === 'active' ? String(proof?.accountUid || '') : '',
+      rootPath: normalizedMode === 'active' ? normalizeDiskPath(proof?.rootPath || '') : '',
+      periodicGeneration: generation === previous.generation ? previous.periodicGeneration : 0,
+      periodicDueAt: generation === previous.generation ? previous.periodicDueAt : 0,
+      retryGeneration: generation === previous.generation ? previous.retryGeneration : 0,
+      retryDueAt: generation === previous.generation ? previous.retryDueAt : 0,
+      lastTransitionReason: String(reason || '').slice(0, 120)
+    };
+  }, `Переход backup scheduler: ${String(reason || normalizedMode)}`);
+}
+
+async function pauseJournalBackupSchedulerNoAuth(reason = 'no-auth') {
+  const control = await transitionJournalBackupScheduler('paused-no-auth', reason, null, { forceAdvance: true });
+  await clearJournalBackupAlarms();
+  return control;
+}
+
+async function reconcileJournalBackupSchedulerControl(status, reason = 'init') {
+  if (!status?.enabled) {
+    const control = await transitionJournalBackupScheduler('paused-user', reason, null, {
+      forceAdvance: !['worker-start', 'startup'].includes(reason)
+    });
+    await clearJournalBackupAlarms();
+    return control;
+  }
+
+  let proof;
+  try {
+    proof = await captureJournalBackupSchedulerProof();
+  } catch (_) {
+    proof = null;
+  }
+  if (!proof?.authUsable) {
+    const control = await transitionJournalBackupScheduler('paused-no-auth', reason, null, {
+      forceAdvance: !['worker-start', 'startup'].includes(reason)
+    });
+    await clearJournalBackupAlarms();
+    return control;
+  }
+  if (!proof.rootPath || !proof.accountUid) {
+    const control = await transitionJournalBackupScheduler('paused-unconfigured', reason, null, {
+      forceAdvance: !['worker-start', 'startup'].includes(reason)
+    });
+    await clearJournalBackupAlarms();
+    return control;
+  }
+
+  return transitionJournalBackupScheduler('active', reason, proof, {
+    forceAdvance: !['worker-start', 'startup'].includes(reason)
+  });
+}
+
+async function proveJournalBackupSchedulerAdmission(expectedGeneration = 0) {
+  const control = await readJournalBackupSchedulerControl('Проверка поколения backup scheduler');
+  const expected = normalizeJournalBackupSchedulerGeneration(expectedGeneration) || control.generation;
+  if (!expected || control.mode !== 'active' || control.generation !== expected) {
+    return Object.freeze({ admitted: false, reason: 'stale-or-paused', generation: control.generation });
+  }
+
+  let proof;
+  try {
+    proof = await captureJournalBackupSchedulerProof();
+  } catch (_) {
+    proof = null;
+  }
+  if (!proof?.authUsable) {
+    await pauseJournalBackupSchedulerNoAuth('admission-no-auth').catch(() => {});
+    return Object.freeze({ admitted: false, reason: 'no-auth', generation: control.generation });
+  }
+  if (String(control.authRecordId || '') !== String(proof.authRecordId || '')
+    || normalizeYandexAuthGeneration(control.authControlGeneration) !== normalizeYandexAuthGeneration(proof.authControlGeneration)
+    || String(control.accountUid || '') !== String(proof.accountUid || '')
+    || normalizeDiskPath(control.rootPath || '') !== normalizeDiskPath(proof.rootPath || '')) {
+    return Object.freeze({ admitted: false, reason: 'auth-or-namespace-superseded', generation: control.generation });
+  }
+  return Object.freeze({ admitted: true, reason: 'current', generation: control.generation });
+}
+
+function scheduledJournalBackupGeneration(control, kind) {
+  const normalized = normalizeJournalBackupSchedulerControl(control);
+  return kind === 'retry' ? normalized.retryGeneration : normalized.periodicGeneration;
+}
+
+async function recordJournalBackupScheduledReceipt(kind, generation, dueAt) {
+  let recorded = false;
+  const current = await mutateJournalBackupSchedulerControl((previous) => {
+    const normalizedGeneration = normalizeJournalBackupSchedulerGeneration(generation);
+    if (previous.mode !== 'active' || previous.generation !== normalizedGeneration || !normalizedGeneration) return previous;
+    recorded = true;
+    if (kind === 'retry') {
+      return { ...previous, retryGeneration: normalizedGeneration, retryDueAt: Math.max(0, Number(dueAt) || 0) };
+    }
+    return { ...previous, periodicGeneration: normalizedGeneration, periodicDueAt: Math.max(0, Number(dueAt) || 0) };
+  }, `Фиксация ${kind} backup scheduler receipt`);
+  return { recorded, control: current };
+}
+
+async function scheduleJournalBackupAlarm(kind, name, when, label) {
+  const control = await readJournalBackupSchedulerControl(`Чтение поколения перед ${kind} backup alarm`);
+  if (control.mode !== 'active' || !control.generation) return false;
+  const generation = control.generation;
+  const receipt = await recordJournalBackupScheduledReceipt(kind, generation, when);
+  if (!receipt.recorded) return false;
+  await mutateChromeAlarmSerialized(name, () => chrome.alarms.create(name, { when }), label);
+  return true;
+}
+
+async function dispatchJournalBackupAlarm(alarm) {
+  const kind = alarm?.name === JOURNAL_BACKUP_RETRY_ALARM
+    ? 'retry'
+    : alarm?.name === JOURNAL_BACKUP_ALARM
+      ? 'periodic'
+      : '';
+  if (!kind) return { handled: false };
+  const control = await readJournalBackupSchedulerControl('Чтение receipt сработавшего backup alarm');
+  const scheduledGeneration = scheduledJournalBackupGeneration(control, kind);
+  const admission = await proveJournalBackupSchedulerAdmission(scheduledGeneration);
+  if (!admission.admitted || scheduledGeneration !== control.generation) {
+    await mutateChromeAlarmSerialized(
+      alarm.name,
+      () => chrome.alarms.clear(alarm.name),
+      'Очистка stale backup alarm'
+    ).catch(() => {});
+    return { handled: true, skipped: true, reason: admission.reason };
+  }
+  return runDueJournalBackup(kind === 'retry' ? 'retry-alarm' : 'periodic-alarm', kind === 'retry', scheduledGeneration);
+}
+
 async function saveJournalBackupSettings(settings) {
   await updateYandexConfig((config) => {
     if (Object.prototype.hasOwnProperty.call(settings, 'enabled')) {
@@ -13483,9 +13727,10 @@ async function fetchJournalBackupFromYandex(requestedPath, operationId = '', own
 async function scheduleNextPeriodicBackup(baseAt, intervalMinutes) {
   const period = normalizeIntervalMinutes(intervalMinutes, DEFAULT_JOURNAL_BACKUP_INTERVAL_MINUTES);
   const when = Math.max(Date.now() + 60000, Number(baseAt || Date.now()) + period * 60000);
-  await mutateChromeAlarmSerialized(
+  return scheduleJournalBackupAlarm(
+    'periodic',
     JOURNAL_BACKUP_ALARM,
-    () => chrome.alarms.create(JOURNAL_BACKUP_ALARM, { when }),
+    when,
     'Планирование periodic backup alarm'
   );
 }
@@ -13493,53 +13738,61 @@ async function scheduleNextPeriodicBackup(baseAt, intervalMinutes) {
 async function scheduleBackupRetry(baseAt, retryMinutes) {
   const retry = normalizeIntervalMinutes(retryMinutes, DEFAULT_JOURNAL_BACKUP_RETRY_MINUTES);
   const when = Math.max(Date.now() + 60000, Number(baseAt || Date.now()) + retry * 60000);
-  await mutateChromeAlarmSerialized(
+  return scheduleJournalBackupAlarm(
+    'retry',
     JOURNAL_BACKUP_RETRY_ALARM,
-    () => chrome.alarms.create(JOURNAL_BACKUP_RETRY_ALARM, { when }),
+    when,
     'Планирование retry backup alarm'
   );
 }
 
 async function scheduleDueBackupSoon() {
   // Use a durable alarm boundary instead of starting a long backup from a
-  // worker-start/startup initialization chain. One minute is within the
-  // extension's background cadence and ensures Chrome can wake the worker.
-  await mutateChromeAlarmSerialized(
+  // worker-start/startup initialization chain. The accompanying durable
+  // scheduler receipt, not the fixed alarm name, owns admission authority.
+  return scheduleJournalBackupAlarm(
+    'periodic',
     JOURNAL_BACKUP_ALARM,
-    () => chrome.alarms.create(JOURNAL_BACKUP_ALARM, { when: Date.now() + 60_000 }),
+    Date.now() + 60_000,
     'Планирование ближайшего backup alarm'
   );
 }
 
 async function initializeJournalBackupScheduler(reason = 'init') {
   const status = await getJournalBackupStatus();
+  const control = await reconcileJournalBackupSchedulerControl(status, reason);
 
-  if (reason === 'worker-start') {
-    if (!status.enabled) return { ok: true, enabled: false, lightweight: true };
+  if (control.mode !== 'active') {
+    return {
+      ok: true,
+      enabled: Boolean(status.enabled),
+      paused: true,
+      schedulerMode: control.mode,
+      schedulerGeneration: control.generation
+    };
+  }
+
+  if (reason === 'worker-start' || reason === 'startup') {
     const [periodicAlarm, retryAlarm] = await Promise.all([
       getChromeAlarmBounded(JOURNAL_BACKUP_ALARM, 'Проверка periodic backup alarm'),
       getChromeAlarmBounded(JOURNAL_BACKUP_RETRY_ALARM, 'Проверка retry backup alarm')
     ]);
-    if (periodicAlarm || retryAlarm) {
-      return { ok: true, enabled: true, lightweight: true, alarmAlreadyPresent: true };
+    const periodicCurrent = Boolean(periodicAlarm && control.periodicGeneration === control.generation);
+    const retryCurrent = Boolean(retryAlarm && control.retryGeneration === control.generation);
+    if (periodicCurrent || retryCurrent) {
+      return {
+        ok: true,
+        enabled: true,
+        lightweight: true,
+        alarmAlreadyPresent: true,
+        schedulerGeneration: control.generation
+      };
     }
-    // Only reconstruct scheduling if both alarms are unexpectedly absent.
-  } else {
-    await mutateChromeAlarmSerialized(
-      JOURNAL_BACKUP_ALARM,
-      () => chrome.alarms.clear(JOURNAL_BACKUP_ALARM),
-      'Очистка periodic backup alarm'
-    );
-    await mutateChromeAlarmSerialized(
-      JOURNAL_BACKUP_RETRY_ALARM,
-      () => chrome.alarms.clear(JOURNAL_BACKUP_RETRY_ALARM),
-      'Очистка retry backup alarm'
-    );
   }
 
-  if (!status.enabled) {
-    return { ok: true, enabled: false };
-  }
+  // Fixed alarm names are delivery channels only. Any alarm without a current
+  // durable generation receipt is replaced before this generation schedules.
+  await clearJournalBackupAlarms();
 
   const now = Date.now();
   const due = !status.lastSuccessAt || now >= status.lastSuccessAt + status.intervalMinutes * 60000;
@@ -13550,22 +13803,36 @@ async function initializeJournalBackupScheduler(reason = 'init') {
   if (due && retryBlocked) {
     await scheduleBackupRetry(status.lastFailureAt, status.retryMinutes);
   } else if (due) {
-    // Если Chrome был закрыт дольше установленного периода, планируем ближайший
-    // alarm вместо fire-and-forget тяжёлой операции из startup/worker-start.
     await scheduleDueBackupSoon();
   } else {
     await scheduleNextPeriodicBackup(status.lastSuccessAt, status.intervalMinutes);
   }
-  return { ok: true, enabled: true };
+  return { ok: true, enabled: true, schedulerGeneration: control.generation };
 }
 
-async function runDueJournalBackup(reason = 'scheduled', forceRetry = false) {
+async function runDueJournalBackup(reason = 'scheduled', forceRetry = false, scheduledGeneration = 0) {
   const operationId = makeOperationLogId('background-backup');
   await startOperationLog(operationId, 'journal-backup-check', 'Фоновая проверка резервного копирования журнала', {
     reason, forceRetry: Boolean(forceRetry), background: true
   });
   try {
     recordOperationStage(operationId, 'settings', 'Проверяем настройки фонового экспорта журнала…', 10, 'running', { reason, forceRetry: Boolean(forceRetry) });
+    const schedulerAdmission = await proveJournalBackupSchedulerAdmission(scheduledGeneration);
+    if (!schedulerAdmission.admitted) {
+      recordOperationStage(operationId, 'complete', 'Фоновый экспорт пропущен: scheduler generation устарело или приостановлено.', 100, 'success', {
+        skipped: true,
+        schedulerReason: schedulerAdmission.reason,
+        schedulerGeneration: schedulerAdmission.generation
+      });
+      return {
+        ok: true,
+        skipped: true,
+        schedulerReason: schedulerAdmission.reason,
+        schedulerGeneration: schedulerAdmission.generation,
+        operationId
+      };
+    }
+    scheduledGeneration = schedulerAdmission.generation;
     const status = await getJournalBackupStatus();
     if (!status.enabled || !status.rootPath) {
       recordOperationStage(operationId, 'complete', status.enabled ? 'Фоновый экспорт пропущен: не выбрана корневая папка Яндекс Диска.' : 'Фоновый экспорт пропущен: автоматический экспорт выключен.', 100, 'success', {
@@ -13605,10 +13872,26 @@ async function runDueJournalBackup(reason = 'scheduled', forceRetry = false) {
       }
     }
 
+    const finalAdmission = await proveJournalBackupSchedulerAdmission(scheduledGeneration);
+    if (!finalAdmission.admitted || finalAdmission.generation !== scheduledGeneration) {
+      recordOperationStage(operationId, 'complete', 'Фоновый экспорт отменён до backup pipeline: scheduler generation изменилось.', 100, 'success', {
+        skipped: true,
+        schedulerReason: finalAdmission.reason,
+        schedulerGeneration: finalAdmission.generation
+      });
+      return {
+        ok: true,
+        skipped: true,
+        schedulerReason: finalAdmission.reason,
+        schedulerGeneration: finalAdmission.generation,
+        operationId
+      };
+    }
+
     appendOperationLogEvent(operationId, {
       category: 'background-decision', level: 'info', stage: 'decision',
       message: 'Фоновый экспорт требуется. Переходим к формированию и отправке журнала.',
-      data: { reason, forceRetry: Boolean(forceRetry), due: true }
+      data: { reason, forceRetry: Boolean(forceRetry), due: true, schedulerGeneration: scheduledGeneration }
     });
     return await exportJournalBackupToYandex({ reason, operationId });
   } catch (error) {
@@ -15539,6 +15822,7 @@ async function finishYandexOAuth(authAttemptId, code) {
     // уничтожать или перезаписывать более новую авторизацию.
   }
 
+  await initializeJournalBackupScheduler('auth-resume').catch((error) => console.warn('WebClip backup auth resume:', error));
   return { ok: true, ...(await getYandexStatus()) };
 }
 
@@ -15676,6 +15960,7 @@ async function setManualYandexToken(token) {
   };
 
   await commitManualYandexAuthIfGeneration(authGeneration, yandexAuth);
+  await initializeJournalBackupScheduler('auth-resume').catch((error) => console.warn('WebClip backup manual-auth resume:', error));
   return { ok: true, ...(await getYandexStatus()) };
 }
 
@@ -15870,6 +16155,7 @@ async function testYandexConnection() {
   if (config.rootPath) {
     structure = await ensureYandexServiceFolders({ includeUpload: true, includeReadLater: true, includeBackup: true });
   }
+  await initializeJournalBackupScheduler('auth-resume').catch((error) => console.warn('WebClip backup connection-test resume:', error));
   return {
     ok: true,
     account,
