@@ -91,7 +91,7 @@ deep([...topology.files], authority.asciiSort(currentS0a), 'production manifest 
 ok(s0eSource.includes("const PACKAGE_TOPOLOGY = packageAuthority.readCanonicalManifest();"), 'S0-E consumes canonical package authority');
 ok(s0eSource.includes("const PACKAGE_FILES = Object.freeze([...PACKAGE_TOPOLOGY.files]);"), 'S0-E current package membership comes from S0-A authority');
 ok(s0eSource.includes("const LEGACY_PACKAGE_FILES = Object.freeze(PACKAGE_FILES.filter((rel) => rel !== 'application-generation.js'));"), 'S0-E retains explicit 33-file legacy subset control');
-ok(s0eSource.includes("const CURRENT_RPF = 'sha256:37768ce6929adc01d8042fc728c898e5500c932eb12a657d042277ac67816d15';"), 'S0-E pins corrected current 34-file RPF');
+ok(s0eSource.includes("const CURRENT_RPF = 'sha256:63ba60983ae6cce7df28f775cf64111a2d6a5d20913b22568fafc055c79856ff';"), 'S0-E pins corrected current 34-file RPF');
 ok(s0eSource.includes("const LEGACY_RPF = 'sha256:293be1d3c4f8fdea2978a07d147ea43972e41d806e7c4fd69c9841adbbccddb6';"), 'S0-E retains exact legacy incomplete RPF control');
 
 const digest = authority.topologyDigest(topology);
@@ -204,7 +204,7 @@ const packageCountMatch = /(?:^|;\s*)package_files=(\d+)(?=;|$)/m.exec(rpfRun);
 const legacyCountMatch = /(?:^|;\s*)legacy_package_files=(\d+)(?=;|$)/m.exec(rpfRun);
 ok(Boolean(currentRpfMatch), 'current S0-E output exposes corrected RPF');
 ok(Boolean(legacyRpfMatch), 'S0-E output exposes explicit legacy RPF control');
-eq(currentRpfMatch[1], 'sha256:37768ce6929adc01d8042fc728c898e5500c932eb12a657d042277ac67816d15', 'current S0-E RPF equals canonical 34-file identity');
+eq(currentRpfMatch[1], 'sha256:63ba60983ae6cce7df28f775cf64111a2d6a5d20913b22568fafc055c79856ff', 'current S0-E RPF equals canonical 34-file identity');
 eq(legacyRpfMatch[1], 'sha256:293be1d3c4f8fdea2978a07d147ea43972e41d806e7c4fd69c9841adbbccddb6', 'legacy S0-E RPF remains reproducible control');
 eq(packageCountMatch && Number(packageCountMatch[1]), 34, 'S0-E output current package count');
 eq(legacyCountMatch && Number(legacyCountMatch[1]), 33, 'S0-E output legacy package count');

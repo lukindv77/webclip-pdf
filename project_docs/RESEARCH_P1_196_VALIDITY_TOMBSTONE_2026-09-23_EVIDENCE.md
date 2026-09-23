@@ -253,9 +253,11 @@ Broader adjacent owners remain separate:
 
 `service-worker.js` is a canonical package member, so current 34-file RPF and current 33-file negative/control identity must advance.
 
-This initial evidence intentionally does not guess those exact digests. The exact-head P1-231 source-generation/identity authorities must derive them from the PR head before current identity pins are synchronized.
+Repository Integrity #1081 / run `35805481196` on exact preliminary head `ce218c40bd35d27567a3df8ee8a1a511a82d542f` stopped the generic repository-integrity job at a PR-body change-contract metadata error before syntax/deterministic execution, so it is not merge evidence. Its independent source-generation authority completed successfully and derived current 34-file RPF `sha256:63ba60983ae6cce7df28f775cf64111a2d6a5d20913b22568fafc055c79856ff`.
 
-No canonical QA-contract, Registry/full-RCF root or builder-contract input is intentionally changed, so no QCF/full-RCF/BCF change is claimed without exact authority output.
+Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+The source-generation lane does not print the 33-file negative/control digest. That identity is therefore intentionally not guessed here; a later complete deterministic identity run must derive it before the predecessor 33-file pin is changed.
 
 ## 12. Non-actions
 

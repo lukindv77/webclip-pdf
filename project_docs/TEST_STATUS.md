@@ -28,7 +28,7 @@ The repository-hygiene PR immediately preceding this policy change demonstrated 
 
 ## Current P1-231 release-identity authority boundary
 
-P1-231 remains **ACTIVE**. The current canonical extension package is the 34-member `webclip-extension-package/v1` projection with RPF `sha256:37768ce6929adc01d8042fc728c898e5500c932eb12a657d042277ac67816d15`. For the current candidate, the 33-member legacy-subset control (the same package minus `application-generation.js`) is `sha256:293be1d3c4f8fdea2978a07d147ea43972e41d806e7c4fd69c9841adbbccddb6`; `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` is the historical predecessor value for that subset before the later package-byte changes.
+P1-231 remains **ACTIVE**. The current canonical extension package is the 34-member `webclip-extension-package/v1` projection with RPF `sha256:63ba60983ae6cce7df28f775cf64111a2d6a5d20913b22568fafc055c79856ff`. For the current candidate, the 33-member legacy-subset control (the same package minus `application-generation.js`) is `sha256:293be1d3c4f8fdea2978a07d147ea43972e41d806e7c4fd69c9841adbbccddb6`; `sha256:b65c38854c016ce3ea88efd1caf5c3291a3089336ba9d58b01b9f86db73b835a` is the historical predecessor value for that subset before the later package-byte changes.
 
 The current full-RCF authority includes eleven blob roots, including `project_tools/build_public_suffix_js.py` and the canonical research Registry. After the P1-191 Registry transition, the resulting full RCF is `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`; the prior `sha256:df6709bbe06a91b39828073552c499e307d74c4aebf782b3966fb1163ebdc8ce` is the historical ten-root control. Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
 
@@ -595,3 +595,10 @@ Deterministic coverage includes new `project_tools/test_p1_196_validity_tombston
 P1-196 remains **ACTIVE** after this tranche: bounded restart/maintenance recovery still needs per-child current-auth usability/generation recheck after a preceding child can invalidate or supersede auth. No live Yandex request, real Chrome qualification, product build/ZIP, release receipt, manifest bump, S2 activation, tag, deployment or release decision is performed.
 
 `service-worker.js` changes package bytes, so exact current RPF/current 33-file control must be re-derived by P1-231 authority on the PR head before merge. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+
+### P1-196 validity-tombstone identity discovery #1081
+
+Repository Integrity #1081 / run `35805481196` on preliminary head `ce218c40bd35d27567a3df8ee8a1a511a82d542f` stopped the generic repository-integrity job at a PR-body change-contract metadata error before syntax/deterministic execution. Both independent release-control jobs completed successfully. The exact source-generation authority derived current 34-file RPF `sha256:63ba60983ae6cce7df28f775cf64111a2d6a5d20913b22568fafc055c79856ff`; Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF remains `sha256:037cd4b167ed9c6b572b8e74ea8b355be9599c142c68bffce55e0fb386aab9ed`, and BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+The source-generation lane does not emit the current 33-file negative/control digest, so that value is intentionally left at its predecessor pin until a complete deterministic identity run derives the exact new value. #1081 is discovery evidence only, not merge evidence. P1-196 remains **ACTIVE**; manifest remains `0.9.8`; release readiness remains **NOT READY**.
