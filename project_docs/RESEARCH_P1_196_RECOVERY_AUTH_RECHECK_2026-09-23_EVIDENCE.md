@@ -301,3 +301,10 @@ BCF        = sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f9133
 ```
 
 The generic deterministic suite exposed only stale control-plane witnesses: prior full-RCF pins, neighboring tests that still required P1-196 to be ACTIVE, and the old owner wording. Those assertions are synchronized on the next exact head. #1089 is not merge evidence; a later complete exact-head SUCCESS remains required.
+
+
+## 18. PR-event metadata replay note — #1090 attempt 2
+
+After correcting the live PR body, the failed-job rerun of #1090 still evaluated the original pull-request webhook payload and repeated the already-removed unrelated owner-range declaration. A direct read of the current PR body contained only the intended owner references. Therefore the rerun is not evidence of a repository-source defect.
+
+This evidence-only commit exists solely to generate a fresh pull-request event whose workflow payload contains the corrected metadata. It changes no runtime/package byte and is not intended to move RPF/QCF/full-RCF/BCF. A complete CI success on the new exact head is still required.
