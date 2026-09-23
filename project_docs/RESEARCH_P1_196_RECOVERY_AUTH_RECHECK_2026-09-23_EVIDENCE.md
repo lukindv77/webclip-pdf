@@ -283,3 +283,21 @@ No remaining P1-196-specific source/runtime acceptance gap was exposed by #1087.
 This is not `DONE`, not live Yandex qualification, not release readiness, and not release authorization. Adjacent ACTIVE owners such as capability truth, scheduler semantics, OAuth-state verification and release evidence remain independent.
 
 Because `project_docs/RESEARCH_REGISTRY.md` is a full-RCF root, this status transition changes control-plane identity and requires a new exact-head identity/CI reconciliation before merge. #1087 is implementation-gate evidence for the pre-transition head, not merge evidence for the later Registry-transition head.
+
+
+## 17. Registry-transition identity reconciliation — #1089
+
+Repository Integrity #1089 / run `35814373187` on exact mandatory-row transition head `5f76abf49befa01ad665327eca9abbb6c8c7aed1` passed repository consistency and both dedicated release-control lanes. Exact identity authority derived current full RCF `sha256:a099e052fdd75038f40a8895d2f91a8e63cefc545387d9ddebef8b783eb90b07`.
+
+Package/runtime identity did not move at this governance-only step:
+
+```text
+RPF        = sha256:686505dd03013ccc9760eab3daf15062b8791cb86c4b6d13693eb6a8997d946b
+33-control = sha256:bc3d9d15bc389a9efc3257775ab408594ee9e6c9c9f0a2a6fbfc8c684b9da7f0
+Chrome QCF = sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c
+Yandex QCF = sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1
+full RCF   = sha256:a099e052fdd75038f40a8895d2f91a8e63cefc545387d9ddebef8b783eb90b07
+BCF        = sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff
+```
+
+The generic deterministic suite exposed only stale control-plane witnesses: prior full-RCF pins, neighboring tests that still required P1-196 to be ACTIVE, and the old owner wording. Those assertions are synchronized on the next exact head. #1089 is not merge evidence; a later complete exact-head SUCCESS remains required.

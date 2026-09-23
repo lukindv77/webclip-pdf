@@ -75,7 +75,7 @@ function receiptSecretFree(receipt) {
 
 // Owner and scope.
 check('O01 P1-196 is retained as implemented mandatory late owner', () => has(REGISTRY, '| P1-196 | IMPLEMENTED / RELEASE-REGRESSION |'));
-check('O02 P1-196 exact owner', () => has(REGISTRY, 'Invalid-token/401 demotion is exact auth-generation fenced; stale failure from auth A cannot clear/downgrade newer auth B.'));
+check('O02 P1-196 implemented owner wording', () => has(REGISTRY, 'Exact OAuth-bound 401/known-expiry validity transitions, status axes, account-enrichment CAS and per-child recovery auth recheck are generation-fenced; stale auth A cannot demote or retarget newer auth B.'));
 check('O03 P1-178 ACTIVE', () => has(REGISTRY, '| P1-178 | ACTIVE |'));
 check('O04 P1-191 no longer ACTIVE after validate-before-commit implementation', () => lacks(REGISTRY, '| P1-191 | ACTIVE |'));
 check('O05 P1-195 ACTIVE', () => has(REGISTRY, '| P1-195 | ACTIVE |'));

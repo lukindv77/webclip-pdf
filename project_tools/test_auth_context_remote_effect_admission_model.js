@@ -189,7 +189,7 @@ function durableProjection(cp) {
   check(registry.includes('| P1-178 | ACTIVE |'), 'P1-178 remains active existing owner');
   check(registry.includes('| P1-184 | ACTIVE |'), 'P1-184 remains active existing owner');
   check(registry.includes('| P1-195 | ACTIVE |'), 'P1-195 remains active existing owner');
-  check(registry.includes('| P1-196 | ACTIVE |'), 'P1-196 remains active existing owner');
+  check(registry.includes('| P1-196 | IMPLEMENTED / RELEASE-REGRESSION |'), 'P1-196 remains explicit implemented late owner');
   check(registry.includes('| P1-198 | ACTIVE |'), 'P1-198 remains active existing owner');
   check(w5.includes('authRecordId'), 'canonical W5 research supplies authRecordId target');
   check(w5.includes('authGeneration'), 'canonical W5 research supplies shared authGeneration target');
