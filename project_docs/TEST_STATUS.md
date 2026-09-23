@@ -643,3 +643,20 @@ Repository Integrity #1088 / run `35814260093` on exact transition head `7728598
 Repository Integrity #1089 / run `35814373187` on exact head `5f76abf49befa01ad665327eca9abbb6c8c7aed1` passed Repository consistency and both dedicated release-control jobs, then reached the complete deterministic suite. Exact authority derived full RCF `sha256:a099e052fdd75038f40a8895d2f91a8e63cefc545387d9ddebef8b783eb90b07`; package RPF remains `sha256:686505dd03013ccc9760eab3daf15062b8791cb86c4b6d13693eb6a8997d946b`, current 33-file control remains `sha256:bc3d9d15bc389a9efc3257775ab408594ee9e6c9c9f0a2a6fbfc8c684b9da7f0`, Chrome/Yandex QCF and BCF remain unchanged.
 
 The direct deterministic failures were stale full-RCF pins plus neighboring source witnesses that still required `P1-196 | ACTIVE`, and the P1-196 owner test still expected the pre-implementation owner wording. Downstream S0/S1 failures were transitive through those stale pins. Runtime/package bytes were already coherent. #1089 is discovery evidence only, not merge evidence.
+
+
+## P1-177 durable backup scheduler generation — 2026-09-23
+
+Bounded implementation branch from canonical main `6b818b8fea0ae541286cd8a124b6d333a5d0a93c`, whose post-merge Repository Integrity #1092 / run `35815117901` completed **SUCCESS**.
+
+This tranche implements durable backup scheduler generation/mode, generation-bound periodic/retry alarm receipts, explicit no-auth pause on Disconnect, explicit scheduler repair/resume after successful OAuth/manual/connection-test auth proof, worker/startup alarm-receipt validation, and two scheduler-admission checks before the background backup pipeline begins.
+
+It intentionally does **not** yet add scheduler-generation recheck immediately before every later not-yet-started remote child inside `uploadJournalExportStagedToYandex(...)`. P1-177 therefore remains **ACTIVE**.
+
+Fresh official Chrome Alarms documentation was reviewed and supports treating fixed alarm names as delivery channels rather than durable scheduler authority: important alarms should be checked/recreated at service-worker start and dynamically scheduled intent may require separate stored state.
+
+New/updated deterministic coverage:
+- `project_tools/test_p1_177_backup_pause_resume_generation_refinement_model.js`
+- `project_tools/test_p1_177_backup_scheduler_generation_runtime.js`
+
+No live Yandex/browser qualification, provider mutation, physical release receipt, product ZIP/build, version bump, S2 activation, tag, deployment, GitHub Release or release decision is performed. `service-worker.js` changes package bytes, so exact current RPF/33-file control must be re-derived by the P1-231 exact-head authority before merge. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
