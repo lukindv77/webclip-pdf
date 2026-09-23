@@ -16155,6 +16155,7 @@ async function testYandexConnection() {
   if (config.rootPath) {
     structure = await ensureYandexServiceFolders({ includeUpload: true, includeReadLater: true, includeBackup: true });
   }
+  await initializeJournalBackupScheduler('auth-resume').catch((error) => console.warn('WebClip backup connection-test resume:', error));
   return {
     ok: true,
     account,
