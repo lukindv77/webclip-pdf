@@ -53,8 +53,19 @@ function makeControl({ generation = 1, mode = 'active', namespace = ns('A', '/R1
     pendingEffect: null
   };
 }
-function scheduledReceipt(control, kind = 'periodic') {
-  return Object.freeze({ kind, schedulerGeneration: control.generation });
+function scheduledReceipt(control, kind = 'periodic', dueAt = 1000) {
+  return Object.freeze({ kind, schedulerGeneration: control.generation, dueAt });
+}
+function alarmCreateAdmission(control, preparedReceipt, currentReceipt) {
+  return Boolean(
+    preparedReceipt
+    && currentReceipt
+    && control.mode === 'active'
+    && preparedReceipt.schedulerGeneration === control.generation
+    && currentReceipt.schedulerGeneration === control.generation
+    && preparedReceipt.kind === currentReceipt.kind
+    && preparedReceipt.dueAt === currentReceipt.dueAt
+  );
 }
 function disconnect(control) {
   control.authPresent = false;
@@ -75,8 +86,9 @@ function resume(control, proof) {
   control.namespace = proof.namespace;
   return { ok: true, generation: control.generation };
 }
-function callbackAdmission(control, receipt, liveProof = {}) {
+function callbackAdmission(control, receipt, liveProof = {}, alarmScheduledTime = receipt?.dueAt) {
   if (!receipt || receipt.schedulerGeneration !== control.generation) return { outcome: 'stale-generation', startRemote: false };
+  if (!receipt.dueAt || alarmScheduledTime !== receipt.dueAt) return { outcome: 'stale-delivery-receipt', startRemote: false };
   if (control.mode !== 'active' || !control.authPresent) return { outcome: 'paused', startRemote: false };
   if (!liveProof.authPresent) return { outcome: 'no-auth', startRemote: false };
   if (!sameNs(control.namespace, liveProof.namespace)) return { outcome: 'namespace-mismatch', startRemote: false };
@@ -128,6 +140,11 @@ check('S06 durable periodic/retry scheduled-generation receipts exist', () => {
   has(SOURCE, 'periodicGeneration');
   has(SOURCE, 'retryGeneration');
 });
+check('S06b durable periodic/retry due-time receipts exist', () => {
+  has(SOURCE, 'periodicDueAt');
+  has(SOURCE, 'retryDueAt');
+  has(SOURCE, 'normalizeJournalBackupSchedulerDueAt');
+});
 
 const disconnectCase = switchCase('WEBCLIP_YANDEX_DISCONNECT');
 const disconnectAuth = asyncSection('async function disconnectYandexAuthControl()');
@@ -156,9 +173,13 @@ check('S21 retry scheduling uses generation-bound alarm helper transitively', ()
 
 const init = asyncSection("async function initializeJournalBackupScheduler(reason = 'init')");
 check('S22 init reads status', () => has(init, 'const status = await getJournalBackupStatus();'));
-check('S23 worker/startup lightweight path requires current generation receipt', () => {
-  has(init, 'control.periodicGeneration === control.generation');
-  has(init, 'control.retryGeneration === control.generation');
+check('S23 worker/startup lightweight path requires exact generation+time receipt', () => {
+  has(init, "scheduledJournalBackupReceipt(control, 'periodic')");
+  has(init, "scheduledJournalBackupReceipt(control, 'retry')");
+  has(init, 'journalBackupAlarmMatchesReceipt(periodicAlarm, periodicReceipt)');
+  has(init, 'journalBackupAlarmMatchesReceipt(retryAlarm, retryReceipt)');
+  has(init, 'periodicReceipt.generation === control.generation');
+  has(init, 'retryReceipt.generation === control.generation');
 });
 check('S24 scheduler init reconciles explicit control state', () => has(init, 'reconcileJournalBackupSchedulerControl(status, reason)'));
 check('S25 scheduler init replaces alarms through shared clear helper', () => has(init, 'await clearJournalBackupAlarms()'));
@@ -189,6 +210,17 @@ check('S39 background export maps stale child veto to skipped outcome before fai
   assert.ok(backup.indexOf("error?.code === 'JOURNAL_BACKUP_SCHEDULER_STALE'") < backup.indexOf('const failureAt = Date.now();'));
 });
 check('S40 due passes the exact admitted generation into the backup pipeline', () => has(due, 'schedulerGeneration: scheduledGeneration'));
+check('S41 alarm scheduling rechecks exact receipt inside serialized mutation', () => {
+  has(SOURCE, 'const currentReceipt = scheduledJournalBackupReceipt(current, kind)');
+  has(SOURCE, 'currentReceipt.generation !== generation');
+  has(SOURCE, 'currentReceipt.dueAt !== dueAt');
+});
+check('S42 fixed-name create consumes normalized exact due time', () => has(SOURCE, 'chrome.alarms.create(name, { when: dueAt })'));
+check('S43 dispatch binds delivered scheduledTime to durable due time', () => {
+  has(SOURCE, 'const deliveryCurrent = journalBackupAlarmMatchesReceipt(alarm, scheduledReceipt)');
+  has(SOURCE, 'normalizeJournalBackupSchedulerDueAt(alarm?.scheduledTime) === receipt.dueAt');
+});
+check('S44 mismatched delivered time is explicit stale delivery', () => has(SOURCE, "stale-delivery-receipt"));
 
 // Deterministic target/race matrix.
 const ar1 = ns('A', '/R1');
@@ -280,8 +312,34 @@ check('N30 user disable invalidates old scheduled generation', () => {
 check('N31 re-enable does not revive old retry receipt', () => {
   const c = makeControl({ generation: 3 }); const old = scheduledReceipt(c, 'retry'); pauseUser(c); resume(c, { authPresent: true, namespace: ar1 }); assert.equal(callbackAdmission(c, old, { authPresent: true, namespace: ar1 }).outcome, 'stale-generation');
 });
-check('N32 manifest remains 0.9.8', () => assert.equal(MANIFEST.version, '0.9.8'));
-check('N33 no runtime/L5/S2/release action', () => {
+check('N32 exact scheduledTime admits current receipt', () => {
+  const c = makeControl({ generation: 8 }); const r = scheduledReceipt(c, 'periodic', 8000);
+  assert.equal(callbackAdmission(c, r, { authPresent: true, namespace: ar1 }, 8000).outcome, 'prepare-only');
+});
+check('N33 mismatched scheduledTime cannot inherit current generation authority', () => {
+  const c = makeControl({ generation: 8 }); const r = scheduledReceipt(c, 'periodic', 8000);
+  assert.equal(callbackAdmission(c, r, { authPresent: true, namespace: ar1 }, 7999).outcome, 'stale-delivery-receipt');
+});
+check('N34 late create from old generation is vetoed by current control', () => {
+  const c = makeControl({ generation: 10 });
+  const old = scheduledReceipt(c, 'periodic', 10000);
+  disconnect(c);
+  const current = scheduledReceipt(c, 'periodic', 11000);
+  assert.equal(alarmCreateAdmission(c, old, current), false);
+});
+check('N35 same-generation older due time cannot replace newer receipt', () => {
+  const c = makeControl({ generation: 12 });
+  const old = scheduledReceipt(c, 'periodic', 12000);
+  const current = scheduledReceipt(c, 'periodic', 12500);
+  assert.equal(alarmCreateAdmission(c, old, current), false);
+});
+check('N36 same-generation exact latest due time may create', () => {
+  const c = makeControl({ generation: 12 });
+  const current = scheduledReceipt(c, 'periodic', 12500);
+  assert.equal(alarmCreateAdmission(c, current, current), true);
+});
+check('N37 manifest remains 0.9.8', () => assert.equal(MANIFEST.version, '0.9.8'));
+check('N38 no runtime/L5/S2/release action', () => {
   has(EVIDENCE, 'runtime remains unchanged'); has(EVIDENCE, 'no real Chrome/Yandex L5'); has(EVIDENCE, 'P1-231 S2 activation');
 });
 
@@ -300,4 +358,4 @@ check('N33 no runtime/L5/S2/release action', () => {
   'V1 readiness and release authority are untouched.'
 ].forEach((needle, i) => check(`E${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
 
-console.log(`P1-177 backup pause/resume generation refinement model: PASS; cases=${cases}; schema=webclip-backup-scheduler-generation/v1; baseline=0e58f326a19f22611f3ddcb65e13bcf2cbd48670; disconnect_pause=implemented; due_auth_generation_gate=implemented; fixed_alarm_generation_receipt=implemented; explicit_auth_resume=implemented; stale_retry_success_guard=preserved; callback_entry_recheck=implemented; backup_entry_recheck=implemented; child_mutation_recheck=implemented; started_effect=persist-reconcile; namespace_owner=P1-179; auth_generation_owner=P1-178; scheduler_owner=P1-177; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-177 backup pause/resume generation refinement model: PASS; cases=${cases}; schema=webclip-backup-scheduler-generation/v1; baseline=0e58f326a19f22611f3ddcb65e13bcf2cbd48670; disconnect_pause=implemented; due_auth_generation_gate=implemented; fixed_alarm_generation_receipt=implemented; exact_alarm_due_time=implemented; late_stale_alarm_create=blocked; explicit_auth_resume=implemented; stale_retry_success_guard=preserved; callback_entry_recheck=implemented; backup_entry_recheck=implemented; child_mutation_recheck=implemented; started_effect=persist-reconcile; namespace_owner=P1-179; auth_generation_owner=P1-178; scheduler_owner=P1-177; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);
