@@ -143,3 +143,23 @@ manifest = 0.9.8
 release readiness = NOT READY
 release authorized = false
 ```
+
+
+## 8. Registry-transition discovery #1121
+
+Repository Integrity **#1121 / run 35949893255** on exact initial closure head `60dd01aa2d808971eb289dc67b7721706bfe6794` passed both dedicated release-control jobs and reached the complete deterministic suite.
+
+Exact source-generation authority derived:
+
+- RPF unchanged: `sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071`
+- 33-file control unchanged: `sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2`
+- Chrome QCF unchanged: `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`
+- Yandex QCF unchanged: `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`
+- current full RCF: `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`
+- BCF unchanged: `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
+
+The direct generic-suite failures were exactly the expected control-plane drift: three neighboring owner witnesses still required the historical P1-177 ACTIVE row/wording, and seven current full-RCF assertions still pinned `sha256:a099e052fdd75038f40a8895d2f91a8e63cefc545387d9ddebef8b783eb90b07`. Downstream settlement/shadow failures were transitive through those stale assertions.
+
+The P1-177 scheduler runtime and refinement model themselves both passed on #1121. Current reconciliation changes only status/current-identity witnesses; package/runtime bytes remain unchanged.
+
+#1121 is discovery evidence only, not merge evidence. A later complete exact-head SUCCESS is required.

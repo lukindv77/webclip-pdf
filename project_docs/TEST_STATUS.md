@@ -720,3 +720,10 @@ Integrated identities before the Registry transition are: RPF `sha256:3ae12e58cb
 Current-source closure review finds the registered P1-177 scheduler contract implemented: pause/resume generation, exact alarm generation+due-time receipts, stale create/delivery fencing, startup repair, pre-pipeline and per-child remote admission, and preservation of already-started effect truth all have deterministic source/runtime coverage. P1-177 is therefore prepared to transition from **ACTIVE** to **IMPLEMENTED / RELEASE-REGRESSION**.
 
 This status edit changes a full-RCF root, so the closure PR must obtain a new exact-head full RCF and complete Repository Integrity SUCCESS before merge. Package bytes do not change in this closure PR; manifest remains `0.9.8` and release readiness remains **NOT READY**.
+
+
+### P1-177 closure transition discovery #1121
+
+Repository Integrity #1121 / run `35949893255` on exact head `60dd01aa2d808971eb289dc67b7721706bfe6794` passed both dedicated release-control jobs and executed the complete deterministic suite. The P1-177 scheduler runtime/model tests passed. Direct failures were limited to stale owner-status witnesses and old full-RCF pins created by the Registry transition.
+
+Exact authority derived current full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`. RPF remains `sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071`; 33-file control remains `sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2`; Chrome/Yandex QCF and BCF remain unchanged. Current witnesses are synchronized on the next exact head. #1121 is discovery evidence only; merge requires a later complete SUCCESS.
