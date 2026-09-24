@@ -709,3 +709,14 @@ P1-177 remains **ACTIVE** pending exact-head CI and a fresh closure review. Mani
 ### P1-177 exact alarm receipt-time discovery #1107
 
 Repository Integrity #1107 / run `35942836375` on exact initial PR #347 head `0c0e8f5e13e41c97676485baa1734dc62f3a4288` passed both dedicated P1-231 jobs and failed only in the deterministic suite through current identity/predecessor drift. Exact authority derived 34-file RPF `sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071` and current 33-file control `sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2`; Chrome/Yandex QCF, full RCF, and BCF remain unchanged. The 15 listed deterministic failures reduce to stale current identity witnesses and their downstream predecessors; current assertions were synchronized without rewriting historical evidence. #1107 is discovery evidence only, not merge evidence.
+
+
+### P1-177 post-merge closure review — 2026-09-24
+
+PR #347 is integrated at canonical `main=a0118352a6d0335cd3bfe25a3d6291ec2033cd3e`. Post-merge Repository Integrity **#1120 / run 35949412158** completed **SUCCESS** on that exact main for all three required jobs.
+
+Integrated identities before the Registry transition are: RPF `sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071`, 33-file control `sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2`, Chrome QCF `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF `sha256:a099e052fdd75038f40a8895d2f91a8e63cefc545387d9ddebef8b783eb90b07`, and BCF `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+Current-source closure review finds the registered P1-177 scheduler contract implemented: pause/resume generation, exact alarm generation+due-time receipts, stale create/delivery fencing, startup repair, pre-pipeline and per-child remote admission, and preservation of already-started effect truth all have deterministic source/runtime coverage. P1-177 is therefore prepared to transition from **ACTIVE** to **IMPLEMENTED / RELEASE-REGRESSION**.
+
+This status edit changes a full-RCF root, so the closure PR must obtain a new exact-head full RCF and complete Repository Integrity SUCCESS before merge. Package bytes do not change in this closure PR; manifest remains `0.9.8` and release readiness remains **NOT READY**.

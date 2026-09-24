@@ -206,3 +206,33 @@ Exact source-generation authority derived:
 The 15 deterministic failures were identity-witness/predecessor drift from the old current RPF/control values. No new alarm-runtime failure appeared before the predecessor cascade. Current identity assertions were synchronized; historical dated evidence remains unchanged.
 
 #1107 is discovery evidence only, not merge evidence.
+
+
+## 11. Post-merge integration and closure review — 2026-09-24
+
+PR #347 was squash-merged to canonical `main=a0118352a6d0335cd3bfe25a3d6291ec2033cd3e`.
+
+Post-merge Repository Integrity **#1120 / run 35949412158** completed **SUCCESS** on that exact main for all three required jobs. Exact integrated identity is:
+
+- current 34-file RPF: `sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071`
+- current 33-file control: `sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2`
+- Chrome QCF: `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`
+- Yandex QCF: `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`
+- full RCF before the later Registry status edit: `sha256:a099e052fdd75038f40a8895d2f91a8e63cefc545387d9ddebef8b783eb90b07`
+- BCF: `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
+
+A fresh current-source closure review after that integration found no remaining P1-177-owned scheduler-generation/delivery admission gap. The registered runtime contract is now represented by:
+
+- explicit no-auth/user pause and proven-auth resume generations;
+- durable periodic/retry generation receipts;
+- exact due-time binding for fixed-name Chrome alarms;
+- create-time, startup and callback delivery rechecks;
+- pre-pipeline and per-remote-child scheduler/auth admission;
+- no ordinary failure/retry churn for stale/paused work;
+- preservation and separate reconciliation of already-started signed effects.
+
+Fresh official Chrome Alarms documentation was rechecked on 2026-09-24 and still documents `Alarm.scheduledTime` as the scheduled epoch-millisecond time, same-name `create()` as replacement of the existing alarm, and startup checking/recreation for important dynamic alarms where persistence cannot be assumed. Those platform semantics match the implemented delivery-channel model; they do not by themselves constitute physical WebClip QA.
+
+The P1-177 source/runtime acceptance contract therefore transitions to **IMPLEMENTED / RELEASE-REGRESSION**. This is not `DONE`: applicable real Chrome/Yandex release regression remains part of release qualification. No provider mutation, physical QA receipt, product build, manifest bump, release-policy activation, tag, deploy, GitHub Release or release decision is authorized by this status transition.
+
+Because `project_docs/RESEARCH_REGISTRY.md` is a full-RCF root, the status edit requires a fresh exact-head full-RCF derivation and complete CI before merge.
