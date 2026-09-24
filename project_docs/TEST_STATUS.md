@@ -680,3 +680,27 @@ A stale/paused child veto is mapped to a successful `skipped` background outcome
 The baseline 34-file RPF before this source change was `sha256:3b493236e8060f2fdfdd60fc1a1078c82eb99f98757a2771fe37b68b68980673`; the baseline 33-file negative/control projection was `sha256:4c5f04e9a2ab4caf1dacb6b7141f2c21fe5fe4af267c20e33e73d00c3ebd052c`. Because `service-worker.js` changes in this tranche, the new exact candidate RPF/control values must be derived by exact-head P1-231 authority and are not guessed here. Chrome/Yandex QCF, full RCF, and BCF are not claimed to change without authority evidence.
 
 P1-177 remains **ACTIVE** until exact-head CI and a closure review prove that this runtime tranche satisfies the remaining scheduler-generation child-admission boundary. Manifest remains `0.9.8`; release readiness remains **NOT READY**; no real Chrome/Yandex L5, S2 activation, physical release receipt, version bump, tag, deploy, or release action is performed.
+
+
+### P1-177 per-child tranche integration — #1106
+
+PR #346 was squash-merged to canonical `main=c5893a8d30664dd933853fe441632e71644cfa30`. Post-merge Repository Integrity **#1106 / run 35942156373** completed **SUCCESS** on that exact main for all three required jobs: `repository-integrity`, `p1-231-source-generation-authority`, and `p1-231-shadow-identity`. The per-child scheduler-generation boundary is therefore integrated. P1-177 remains **ACTIVE** because closure review found a separate fixed-name alarm delivery race described below.
+
+### P1-177 exact alarm receipt-time tranche — 2026-09-24
+
+Canonical starting point is `main=c5893a8d30664dd933853fe441632e71644cfa30` with post-merge #1106 SUCCESS.
+
+Fresh official Chrome Alarms documentation confirms that `Alarm.scheduledTime` identifies the time an alarm was scheduled to fire and that creating another alarm with the same name replaces the existing alarm. Source closure review therefore identified a remaining P1-177 race: a queued stale `chrome.alarms.create(fixedName,...)` could run after a newer same-name schedule, and a stale callback could unconditionally clear a newer replacement.
+
+This bounded tranche makes the durable alarm receipt exact over `(scheduler generation, dueAt)`. Scheduling rechecks that exact receipt inside the serialized same-name alarm mutation immediately before `chrome.alarms.create`; worker/startup reuse and dispatch require `alarm.scheduledTime == durable dueAt`; stale delivery uses compare-before-clear so an old callback cannot delete a newer same-name alarm.
+
+Updated deterministic coverage:
+- `project_tools/test_p1_177_backup_scheduler_generation_runtime.js`
+- `project_tools/test_p1_177_backup_pause_resume_generation_refinement_model.js`
+
+Research evidence:
+- `project_docs/RESEARCH_P1_177_BACKUP_ALARM_RECEIPT_TIME_RUNTIME_2026-09-24_EVIDENCE.md`
+
+The pre-tranche current 34-file RPF is `sha256:861caa46903cebd38aac4650f0962743a83719b94fb724a6426596ac091f4b32`; the pre-tranche current 33-file negative/control projection is `sha256:11cae4f79e83e3771927227e1a249f2fa29c3cd753c07e72ed22f649dc6ad036`. Because `service-worker.js` changes, replacement current identities must be derived by exact-head P1-231 authority and are not guessed here. Chrome/Yandex QCF, full RCF, and BCF are not claimed to change without authority evidence.
+
+P1-177 remains **ACTIVE** pending exact-head CI and a fresh closure review. Manifest remains `0.9.8`; release readiness remains **NOT READY**. No real Chrome/Yandex L5, provider mutation, physical release receipt, product ZIP/build, version bump, S2 activation, tag, deployment, GitHub Release, or release decision is performed.
