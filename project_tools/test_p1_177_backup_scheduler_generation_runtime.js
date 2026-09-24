@@ -123,7 +123,10 @@ has(control, 'const deliveryCurrent = journalBackupAlarmMatchesReceipt(alarm, sc
 has(control, 'normalizeJournalBackupSchedulerDueAt(alarm?.scheduledTime) === receipt.dueAt');
 has(control, 'scheduledGeneration !== control.generation');
 has(control, "reason: !deliveryCurrent ? 'stale-delivery-receipt' : admission.reason");
-has(control, "chrome.alarms.clear(alarm.name)");
+has(control, 'clearDeliveredJournalBackupAlarmIfStillStale(alarm, kind)');
+has(control, 'normalizeJournalBackupSchedulerDueAt(currentAlarm.scheduledTime) !== deliveredDueAt');
+has(control, 'journalBackupAlarmMatchesReceipt(currentAlarm, currentReceipt)');
+has(control, 'chrome.alarms.clear(name)');
 has(listener, 'dispatchJournalBackupAlarm(alarm)');
 lacks(listener, "runDueJournalBackup('periodic-alarm', false)");
 lacks(listener, "runDueJournalBackup('retry-alarm', true)");
@@ -228,6 +231,15 @@ function mayCreateAfterQueue(c, kind, preparedGeneration, preparedDueAt) {
     && r.generation === preparedGeneration
     && r.dueAt === preparedDueAt;
 }
+function mayClearDelivered(c, kind, deliveredDueAt, currentAlarmDueAt) {
+  if (currentAlarmDueAt !== deliveredDueAt) return false;
+  const r = receipt(c, kind);
+  const currentAlarmOwnsReceipt = c.mode === 'active'
+    && r.generation === c.generation
+    && r.dueAt > 0
+    && r.dueAt === currentAlarmDueAt;
+  return !currentAlarmOwnsReceipt;
+}
 
 {
   let c = schedule(controller({ generation: 4 }), 'periodic', 4000);
@@ -273,6 +285,15 @@ function mayCreateAfterQueue(c, kind, preparedGeneration, preparedDueAt) {
     'startup/dispatch rejects alarm whose scheduledTime no longer matches the durable receipt');
   ok(admit(superseded, 'periodic', 31000),
     'startup/dispatch accepts exact generation+scheduledTime receipt');
+  ok(!mayClearDelivered(superseded, 'periodic', 30000, 31000),
+    'stale callback cannot clear a newer same-name alarm with another scheduledTime');
+  ok(!mayClearDelivered(superseded, 'periodic', 31000, 31000),
+    'callback cannot clear the current alarm that owns the durable receipt');
+}
+{
+  const stale = controller({ generation: 40, periodicGeneration: 39, periodicDueAt: 39000 });
+  ok(mayClearDelivered(stale, 'periodic', 39000, 39000),
+    'still-stale same delivery may be cleared when it does not own current authority');
 }
 
-console.log(`P1-177 backup scheduler generation runtime: PASS; checks=${checks}; durable_generation=true; exact_due_time=true; late_stale_create=false; fixed_alarm_is_delivery_only=true; disconnect_pause=true; auth_resume_generation=true; callback_recheck=true; pre_pipeline_recheck=true; per_child_remote_recheck=true; started_effect_checkpoint=preserved; provider_calls=0`);
+console.log(`P1-177 backup scheduler generation runtime: PASS; checks=${checks}; durable_generation=true; exact_due_time=true; late_stale_create=false; stale_delivery_preserves_newer_alarm=true; fixed_alarm_is_delivery_only=true; disconnect_pause=true; auth_resume_generation=true; callback_recheck=true; pre_pipeline_recheck=true; per_child_remote_recheck=true; started_effect_checkpoint=preserved; provider_calls=0`);
