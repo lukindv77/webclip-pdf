@@ -704,3 +704,8 @@ Research evidence:
 The pre-tranche current 34-file RPF is `sha256:861caa46903cebd38aac4650f0962743a83719b94fb724a6426596ac091f4b32`; the pre-tranche current 33-file negative/control projection is `sha256:11cae4f79e83e3771927227e1a249f2fa29c3cd753c07e72ed22f649dc6ad036`. Because `service-worker.js` changes, replacement current identities must be derived by exact-head P1-231 authority and are not guessed here. Chrome/Yandex QCF, full RCF, and BCF are not claimed to change without authority evidence.
 
 P1-177 remains **ACTIVE** pending exact-head CI and a fresh closure review. Manifest remains `0.9.8`; release readiness remains **NOT READY**. No real Chrome/Yandex L5, provider mutation, physical release receipt, product ZIP/build, version bump, S2 activation, tag, deployment, GitHub Release, or release decision is performed.
+
+
+### P1-177 exact alarm receipt-time discovery #1107
+
+Repository Integrity #1107 / run `35942836375` on exact initial PR #347 head `0c0e8f5e13e41c97676485baa1734dc62f3a4288` passed both dedicated P1-231 jobs and failed only in the deterministic suite through current identity/predecessor drift. Exact authority derived 34-file RPF `sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071` and current 33-file control `sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2`; Chrome/Yandex QCF, full RCF, and BCF remain unchanged. The 15 listed deterministic failures reduce to stale current identity witnesses and their downstream predecessors; current assertions were synchronized without rewriting historical evidence. #1107 is discovery evidence only, not merge evidence.
