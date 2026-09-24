@@ -756,3 +756,8 @@ Pre-tranche identities:
 - BCF: `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
 
 Because `service-worker.js` changes, replacement current RPF/33-file identities must come from exact-head P1-231 authority and are not guessed here. P1-178 remains **ACTIVE** pending complete exact-head CI and a fresh closure review. P1-165 remains **ACTIVE** because fixed screen-code OAuth still does not expose returned-state comparison. Manifest remains `0.9.8`; release readiness remains **NOT READY**. No real Chrome/Yandex L5, provider mutation, physical release receipt, ZIP/build, version bump, S2 activation, tag, deployment, GitHub Release or release decision is performed.
+
+
+### P1-178 identity discovery #1124
+
+Repository Integrity #1124 / run `35963862602` on exact initial head `904f25215028e623350bc8daa0b62a5b2e99abf8` is **not merge evidence** because the generic job stopped at PR change-contract metadata before syntax/deterministic tests. Both dedicated release-control lanes succeeded and derived current 34-file RPF `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`; Chrome/Yandex QCF, full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`, and BCF remain unchanged. The current 33-file control is deliberately deferred to the later complete deterministic identity witness rather than guessed outside the canonical verifier.

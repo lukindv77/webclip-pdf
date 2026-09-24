@@ -315,3 +315,16 @@ release readiness                              = NOT READY
 ```
 
 P1-178 remains **ACTIVE** until a complete exact-head Repository Integrity run and a fresh post-run closure review prove that the registered source/runtime acceptance contract is satisfied.
+
+
+## 16. Exact-head identity discovery #1124
+
+Repository Integrity #1124 / run `35963862602` ran on exact initial PR head `904f25215028e623350bc8daa0b62a5b2e99abf8`. The generic repository-integrity job stopped at PR metadata accounting before syntax/deterministic execution, so #1124 is **not** merge evidence.
+
+Both dedicated release-control lanes completed successfully. Exact source-generation authority derived current 34-file RPF:
+
+`sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`
+
+Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`; Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`; full RCF remains `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`; BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+The dedicated lane does not emit the current 33-file negative/control fingerprint. That value is intentionally left unsynchronized until the complete deterministic identity witness runs on a later exact head; it is not computed or guessed outside the canonical verifier.
