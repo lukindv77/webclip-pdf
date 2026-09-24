@@ -8,6 +8,7 @@ const ROOT = path.resolve(__dirname, '..');
 const SOURCE = fs.readFileSync(path.join(ROOT, 'service-worker.js'), 'utf8');
 const REGISTRY = fs.readFileSync(path.join(ROOT, 'project_docs', 'RESEARCH_REGISTRY.md'), 'utf8');
 const EVIDENCE = fs.readFileSync(path.join(ROOT, 'project_docs', 'RESEARCH_P1_179_BACKUP_NAMESPACE_BINDING_REFINEMENT_2026-09-10_EVIDENCE.md'), 'utf8');
+const IMPLEMENTATION = fs.readFileSync(path.join(ROOT, 'project_docs', 'RESEARCH_P1_179_BACKUP_NAMESPACE_RECOVERY_2026-09-24_EVIDENCE.md'), 'utf8');
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
 
 let cases = 0;
@@ -101,33 +102,42 @@ check('O13 no release activation', () => has(EVIDENCE, 'Release-policy activatio
 check('O14 baseline pinned', () => has(EVIDENCE, '9ab02ceaa70057dc57bcdd0eb5bb937097496869'));
 check('O15 manifest unchanged', () => assert.equal(MANIFEST.version, '0.9.8'));
 
-// Current-main absorption review: preserve positive controls while proving namespace gap.
+// Current-main absorption review: namespace authority is partially implemented.
 check('S01 lease key', () => has(SOURCE, "const JOURNAL_BACKUP_LEASE_KEY = 'webclipJournalBackupLease'"));
 check('S02 pending key', () => has(SOURCE, "const JOURNAL_BACKUP_PENDING_KEY = 'webclipJournalBackupPendingUpload'"));
-check('S03 runtime namespace symbol absent', () => lacks(SOURCE, 'backupNamespace'));
+check('S03 runtime namespace authority exists', () => has(SOURCE, 'normalizeJournalBackupNamespace'));
 const acquire = section('async function acquireJournalBackupLease(');
-check('S04 lease acquisition serialized', () => has(acquire, 'mutateChromeStorageSerialized'));
+check('S04 lease acquisition remains serialized', () => has(acquire, 'runIndexedDbTransactionBounded'));
 const leaseObject = objectLiteral(acquire, 'const lease = {');
 check('S05 lease token present', () => has(leaseObject, 'token'));
 check('S06 lease operationId present', () => has(leaseObject, 'operationId'));
-check('S07 lease accountUid absent', () => lacks(leaseObject, 'accountUid'));
-check('S08 lease rootPath absent', () => lacks(leaseObject, 'rootPath'));
+check('S07 lease carries backupNamespace', () => has(leaseObject, 'backupNamespace: namespace'));
+check('S08 lease namespace is validated before construction', () => has(acquire, 'normalizeJournalBackupNamespace(backupNamespace)'));
 const renew = section('async function renewJournalBackupLease(');
 check('S09 renewal token CAS preserved', () => has(renew, 'current?.token !== lease.token'));
-check('S10 renewal namespace comparison absent', () => lacks(renew, 'namespace'));
+check('S10 renewal also requires namespace CAS', () => has(renew, 'sameJournalBackupNamespace(current?.backupNamespace, leaseNamespace)'));
 const upload = section('async function uploadJournalExportStagedToYandex(');
 const pendingObject = objectLiteral(upload, 'const pending = {');
 check('S11 prepared phase present', () => has(pendingObject, "phase: 'prepared'"));
 check('S12 pending remotePath present', () => has(pendingObject, 'remotePath'));
 check('S13 pending expectedBytes present', () => has(pendingObject, 'expectedBytes'));
-check('S14 pending accountUid absent', () => lacks(pendingObject, 'accountUid'));
-check('S15 pending rootPath absent', () => lacks(pendingObject, 'rootPath'));
-const recovery = section("async function recoverPendingJournalBackup(status, operationId = '', { operationContext = null, beforeRemoteChild = null } = {})");
+check('S14 pending checkpoint carries namespace', () => has(pendingObject, 'backupNamespace: namespace'));
+check('S15 upload binds namespace to immutable operation context', () => has(upload, 'assertJournalBackupNamespaceForOperation(backupNamespace, operationContext)'));
+const recovery = section("async function recoverPendingJournalBackup(status, operationId = '', { operationContext = null, beforeRemoteChild = null, backupNamespace = null } = {})");
 check('S16 recovery loads pending checkpoint', () => has(recovery, 'JOURNAL_BACKUP_PENDING_KEY'));
-check('S17 current ensure precedes historical path handling', () => {
+check('S17 namespace/path/mismatch gates precede current provisioning', () => {
+  const namespaceAt = recovery.indexOf('normalizeJournalBackupNamespace(pending?.backupNamespace)');
+  const pathAt = recovery.indexOf('isAllowedJournalBackupPath(remotePath, pendingNamespace.journalRootPath)');
+  const mismatchAt = recovery.indexOf('!sameJournalBackupNamespace(pendingNamespace, currentNamespace)');
   const ensureAt = recovery.indexOf('ensureYandexServiceFolders({');
-  const pathAt = recovery.indexOf('normalizeDiskPath(pending.remotePath)');
-  assert.ok(ensureAt >= 0 && pathAt >= 0 && ensureAt < pathAt);
+  assert.ok(namespaceAt >= 0 && pathAt > namespaceAt && mismatchAt > pathAt && ensureAt > mismatchAt);
+});
+check('S17b legacy/mismatch checkpoints fail closed before remote calls', () => {
+  const ensureAt = recovery.indexOf('ensureYandexServiceFolders({');
+  const preEnsure = recovery.slice(0, ensureAt);
+  has(preEnsure, 'JOURNAL_BACKUP_NAMESPACE_UNBOUND_CHECKPOINT');
+  has(preEnsure, 'JOURNAL_BACKUP_NAMESPACE_MISMATCH');
+  lacks(preEnsure, "chrome.storage.local.remove(JOURNAL_BACKUP_PENDING_KEY)");
 });
 const status = section('async function getJournalBackupStatus()');
 check('S18 status reads yandexConfig', () => has(status, 'yandexConfig'));
@@ -178,9 +188,9 @@ check('N22 current ensure excluded from historical steps', () => has(EVIDENCE, '
 check('N23 new provisioning needs fresh mutation intent', () => has(EVIDENCE, 'create a fresh MutationIntent under current namespace'));
 check('N24 namespace contains no durable secret', () => assert.equal(secretFree(ar1), true));
 check('N25 exact adoption remains P1-184', () => has(EVIDENCE, 'path + expectedBytes != exact remote content identity'));
-check('N26 current namespace gap represented', () => has(EVIDENCE, 'does **not** expose a durable `backupNamespace`'));
+check('N26 bounded namespace implementation evidence is explicit', () => { has(IMPLEMENTATION, 'legacy/unbound checkpoint'); has(IMPLEMENTATION, 'exact-current-namespace'); });
 check('N27 manifest still 0.9.8', () => assert.equal(MANIFEST.version, '0.9.8'));
-check('N28 release boundary intact', () => { has(EVIDENCE, 'runtime remains unchanged'); has(EVIDENCE, 'no real L5'); has(EVIDENCE, 'release-policy activation'); });
+check('N28 release boundary intact', () => { has(IMPLEMENTATION, 'No live Yandex request'); has(IMPLEMENTATION, 'release readiness remains **NOT READY**'); });
 
 // Evidence acceptance anchors.
 [
@@ -198,4 +208,4 @@ check('N28 release boundary intact', () => { has(EVIDENCE, 'runtime remains unch
   'V1 readiness and release authority are untouched.'
 ].forEach((needle, i) => check(`E${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
 
-console.log(`P1-179 backup namespace binding refinement model: PASS; cases=${cases}; schema=webclip-backup-namespace-binding/v1; baseline=9ab02ceaa70057dc57bcdd0eb5bb937097496869; current_namespace_absent=true; lease_token_cas=preserved; lease_namespace_cas=required; checkpoint_namespace=required; scheduler_state=namespace-local; wrong_namespace_404=no-aging; same_account_rotation=read-only-reconcile; exact_content_owner=P1-184; hidden_provision_owner=P1-138; runtime_modified=false; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-179 backup namespace binding refinement model: PASS; cases=${cases}; schema=webclip-backup-namespace-binding/v1; baseline=9ab02ceaa70057dc57bcdd0eb5bb937097496869; current_namespace_absent=false; lease_token_cas=preserved; lease_namespace_cas=implemented; checkpoint_namespace=implemented; exact_current_namespace_recovery=implemented; legacy_mismatch=fail-closed-zero-remote; scheduler_state_namespace_local=remaining; same_account_root_rotation_readonly=remaining; exact_content_owner=P1-184; hidden_provision_owner=P1-138; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);
