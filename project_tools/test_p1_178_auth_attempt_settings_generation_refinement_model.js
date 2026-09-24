@@ -8,6 +8,7 @@ const ROOT = path.resolve(__dirname, '..');
 const SOURCE = fs.readFileSync(path.join(ROOT, 'service-worker.js'), 'utf8');
 const REGISTRY = fs.readFileSync(path.join(ROOT, 'project_docs', 'RESEARCH_REGISTRY.md'), 'utf8');
 const EVIDENCE = fs.readFileSync(path.join(ROOT, 'project_docs', 'RESEARCH_P1_178_AUTH_ATTEMPT_SETTINGS_GENERATION_REFINEMENT_2026-09-10_EVIDENCE.md'), 'utf8');
+const IMPLEMENTATION = fs.readFileSync(path.join(ROOT, 'project_docs', 'RESEARCH_P1_178_AUTH_SETTINGS_COMMIT_RECEIPT_2026-09-24_EVIDENCE.md'), 'utf8');
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
 
 let cases = 0;
@@ -81,6 +82,8 @@ check('O12 manifest unchanged', () => assert.equal(MANIFEST.version, '0.9.8'));
 check('S01 pending key exists', () => has(SOURCE, 'yandexOAuthPending'));
 check('S02 auth storage serialization exists', () => has(SOURCE, 'runYandexAuthStorageOperation'));
 check('S03 config serializer exists', () => has(SOURCE, 'updateYandexConfig'));
+check('S03b one shared auth/settings turn exists', () => has(SOURCE, 'acquireYandexAuthStorageTurn'));
+check('S03c non-secret auth/config commit receipt exists', () => has(SOURCE, 'YANDEX_AUTH_CONFIG_COMMIT_KEY'));
 const start = asyncSection('async function startYandexOAuth(clientId, sourceTabId = 0)');
 check('S04 start claims exact pending generation', () => has(start, 'beginYandexOAuthAttemptControl'));
 check('S05 start has PKCE verifier', () => has(start, 'codeVerifier'));
@@ -88,12 +91,16 @@ check('S06 start has oauth state', () => has(start, 'state'));
 check('S07 start returns exact authAttemptId', () => has(start, 'authAttemptId: pending.authAttemptId'));
 check('S08 start binds logical tab request to attempt', () => has(start, '`yandex-oauth:${pending.authAttemptId}`'));
 check('S09 start cleanup compare-removes exact attempt', () => has(start, 'compareRemoveYandexOAuthPendingControl'));
+check('S09b start persists Client ID only under exact attempt authority', () => has(start, 'persistYandexOAuthClientIdForAttempt(pending)'));
+check('S09c start has no blind updateYandexConfig Client ID write', () => lacks(start, "config.clientId = clientId"));
 
 const finish = asyncSection('async function finishYandexOAuth(authAttemptId, code)');
 check('S10 finish captures exact attempt', () => has(finish, 'captureYandexOAuthAttemptControl(authAttemptId)'));
 check('S11 finish exchanges code', () => has(finish, 'exchangeAuthorizationCode'));
 check('S12 finish has no stale post-network config rewrite', () => lacks(finish, 'updateYandexConfig'));
 check('S13 finish commits through exact CAS', () => has(finish, 'commitYandexOAuthAttemptControl(captured, yandexAuth)'));
+check('S13b auth CAS publishes matching config receipt', () => has(SOURCE, '[YANDEX_AUTH_CONFIG_COMMIT_KEY]: configReceipt'));
+check('S13c worker start reconciles pending auth/config receipt', () => has(SOURCE, "reconcileYandexAuthConfigCommit('worker-start')"));
 check('S14 finish auth record keeps captured generation', () => has(finish, 'authGeneration: normalizeYandexAuthGeneration(captured.authGeneration)'));
 check('S15 finish owns attemptId', () => has(finish, 'authAttemptId'));
 check('S16 finish uses auth generation', () => has(finish, 'authGeneration'));
@@ -112,6 +119,26 @@ check('S21 disconnect case exists', () => has(SOURCE, 'WEBCLIP_YANDEX_DISCONNECT
 check('S22 disconnect uses shared generation barrier', () => has(SOURCE, 'await disconnectYandexAuthControl()'));
 check('S23 status observes pending', () => has(SOURCE, 'yandexOAuthPending'));
 check('S24 source has shared authGeneration symbol', () => has(SOURCE, 'authGeneration'));
+check('S25 source has no second config/settings generation counter', () => {
+  lacks(SOURCE, 'yandexConfigGeneration');
+  lacks(SOURCE, 'yandexSettingsGeneration');
+});
+const importSettingsStart = SOURCE.indexOf('async function importUserSettings(document)');
+const importSettingsEnd = SOURCE.indexOf('\nfunction openIndexedDbBounded', importSettingsStart);
+assert.ok(importSettingsStart >= 0 && importSettingsEnd > importSettingsStart, 'importUserSettings source section');
+const importSettings = SOURCE.slice(importSettingsStart, importSettingsEnd);
+check('S26 changed imported Client ID enters shared auth/settings turn', () => has(importSettings, 'acquireYandexAuthStorageTurn'));
+check('S27 changed imported Client ID advances shared generation', () => has(importSettings, 'nextYandexAuthGeneration'));
+check('S28 settings import does not replace committed OAuth auth', () => lacks(importSettings, '[YANDEX_AUTH_KEY]:'));
+check('S29 settings import invalidates stale pending/config authority', () => {
+  has(importSettings, '[YANDEX_OAUTH_PENDING_KEY]: null');
+  has(importSettings, '[YANDEX_AUTH_CONFIG_COMMIT_KEY]: null');
+});
+check('S30 cross-storage settlement has exact receipt reconciliation', () => {
+  has(SOURCE, 'settleYandexAuthConfigCommitReceipt');
+  has(SOURCE, 'sameYandexAuthConfigCommitIdentity');
+  has(SOURCE, 'isCurrentYandexAuthConfigCommitReceipt');
+});
 
 const s0 = { generation: 0, pending: null, auth: { tokenTag: 'old', generation: 0 }, clientId: 'old' };
 const sA = begin(s0, 'oauth', 'client-A');
@@ -166,9 +193,17 @@ check('N20 P1-177 scheduler generation separate', () => has(EVIDENCE, 'scheduler
 check('N21 P1-179 namespace separate', () => has(EVIDENCE, 'is not the auth-attempt generation'));
 check('N22 P1-196 shared generation composition', () => has(EVIDENCE, 'Both must use the same generation rather than independent counters'));
 check('N23 manifest stays 0.9.8', () => assert.equal(MANIFEST.version, '0.9.8'));
-check('N24 no runtime/L5/S2/release action', () => {
-  has(EVIDENCE, 'runtime remains unchanged'); has(EVIDENCE, 'no real L5'); has(EVIDENCE, 'V1 readiness and release authority are untouched.');
+check('N24 implementation keeps live/release boundary', () => {
+  has(IMPLEMENTATION, 'real Yandex OAuth');
+  has(IMPLEMENTATION, 'release readiness remains **NOT READY**');
+  has(IMPLEMENTATION, 'No new P-code is allocated.');
 });
+check('N25 settings-generation implementation evidence is explicit', () => {
+  has(IMPLEMENTATION, 'One shared generation, not a second settings counter');
+  has(IMPLEMENTATION, 'Cross-storage auth/config commit receipt');
+  has(IMPLEMENTATION, 'User-settings import composition');
+});
+check('N26 P1-165 remains separate after settings closure', () => has(IMPLEMENTATION, 'P1-165: effective returned OAuth `state` verification remains ACTIVE.'));
 
 [
   'cleanup(A) may consume only exact attemptId+generation A',
@@ -180,4 +215,11 @@ check('N24 no runtime/L5/S2/release action', () => {
   'cross-storage partial commit has explicit recoverable semantics'
 ].forEach((needle, i) => check(`E${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
 
-console.log(`P1-178 auth attempt/settings generation refinement model: PASS; cases=${cases}; schema=webclip-auth-attempt-settings-generation/v1; baseline=d09ec5cbb4666636c983fb3385481d3c6eb5d9e3; pending_attempt_generation=implemented; start_cleanup_compare_remove=implemented; expiry_cleanup_compare_remove=implemented; finish_post_exchange_cas=implemented; disconnect_generation_barrier=implemented; manual_late_failure_guard=partial-exact-record; account_enrichment_guard=implemented-exact-record; storage_serialization=preserved; returned_state_owner=P1-165; scheduler_generation_owner=P1-177; namespace_owner=P1-179; auth_validity_owner=P1-196; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);
+[
+  'persistYandexOAuthClientIdForAttempt(expected)',
+  'yandexAuthConfigCommit',
+  'worker startup runs `reconcileYandexAuthConfigCommit',
+  'settings import does not disable or replace the current OAuth session'
+].forEach((needle, i) => check(`I${String(i + 1).padStart(2, '0')}`, () => has(IMPLEMENTATION, needle)));
+
+console.log(`P1-178 auth attempt/settings generation refinement model: PASS; cases=${cases}; schema=webclip-auth-attempt-settings-generation/v1; baseline=d09ec5cbb4666636c983fb3385481d3c6eb5d9e3; pending_attempt_generation=implemented; start_cleanup_compare_remove=implemented; expiry_cleanup_compare_remove=implemented; finish_post_exchange_cas=implemented; shared_auth_settings_turn=implemented; exact_client_id_writer=implemented; cross_storage_commit_receipt=implemented; worker_start_reconciliation=implemented; import_client_id_generation_fence=implemented; second_settings_counter=false; disconnect_generation_barrier=implemented; manual_late_failure_guard=implemented-by-p1-191; account_enrichment_guard=implemented-exact-request; returned_state_owner=P1-165; scheduler_generation_owner=P1-177; namespace_owner=P1-179; auth_validity_owner=P1-196; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);

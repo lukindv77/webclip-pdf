@@ -301,6 +301,7 @@ const MAX_YANDEX_ITEM_MIME_CHARS = 512;
 const YANDEX_AUTH_KEY = 'yandexAuth';
 const YANDEX_OAUTH_PENDING_KEY = 'yandexOAuthPending';
 const YANDEX_AUTH_GENERATION_KEY = 'yandexAuthGeneration';
+const YANDEX_AUTH_CONFIG_COMMIT_KEY = 'yandexAuthConfigCommit';
 const YANDEX_OAUTH_TRANSPORT = 'yandex-verification-code-pkce-v1';
 const YANDEX_AUTH_STORAGE_TIMEOUT_MS = 10_000;
 const YANDEX_CONFIG_STORAGE_TIMEOUT_MS = 10_000;
@@ -1109,6 +1110,29 @@ async function importUserSettings(document) {
     createdAt: Date.now(),
     schema: USER_SETTINGS_SCHEMA
   };
+  const clientIdChanged = String(previousYandexConfig.clientId || '').trim() !== normalized.yandex.clientId;
+  let releaseAuthSettingsTurn = null;
+  if (clientIdChanged) {
+    // Reserve the shared auth/settings turn before the bundled local write.
+    // Later OAuth starts queue behind this turn; older OAuth settings writers
+    // finish first. The committed OAuth session itself is intentionally kept.
+    releaseAuthSettingsTurn = await acquireYandexAuthStorageTurn(
+      'Импорт Client ID: ожидание предыдущего auth/settings поколения'
+    );
+    try {
+      const storedControl = await chrome.storage.session.get(YANDEX_AUTH_GENERATION_KEY);
+      const authGeneration = nextYandexAuthGeneration(storedControl?.[YANDEX_AUTH_GENERATION_KEY]);
+      await chrome.storage.session.set({
+        [YANDEX_AUTH_GENERATION_KEY]: authGeneration,
+        [YANDEX_OAUTH_PENDING_KEY]: null,
+        [YANDEX_AUTH_CONFIG_COMMIT_KEY]: null
+      });
+    } catch (error) {
+      releaseAuthSettingsTurn();
+      throw error;
+    }
+  }
+
   const actual = Promise.resolve().then(() => chrome.storage.local.set({
     yandexConfig: nextYandexConfig,
     [OPERATION_LOG_SETTINGS_KEY]: { retentionHours: normalized.operationLog.retentionHours },
@@ -1117,6 +1141,7 @@ async function importUserSettings(document) {
   }));
   userSettingsImportStorageSettlement = actual;
   void actual.finally(() => {
+    releaseAuthSettingsTurn?.();
     if (userSettingsImportStorageSettlement === actual) userSettingsImportStorageSettlement = Promise.resolve();
   }).catch(() => {});
 
@@ -3598,6 +3623,9 @@ async function reloadOpenExtensionPagesAfterVersionChange() {
 // запуске проверяем, не пропущен ли настроенный период резервного копирования.
 reloadOpenExtensionPagesAfterVersionChange().catch((error) => console.warn('WebClip extension-page refresh:', error));
 reconcileUserSettingsImportMarker('worker-start').catch((error) => console.warn('WebClip settings import reconciliation:', error));
+reconcileYandexAuthConfigCommit('worker-start').then((result) => {
+  if (result?.ok === false && result?.pending) console.warn('WebClip OAuth config reconciliation remains pending:', result.error || 'unknown');
+}).catch((error) => console.warn('WebClip OAuth config reconciliation:', error));
 reapExpiredJournalImportCheckpoint('worker-start').catch((error) => console.warn('WebClip Journal import checkpoint cleanup:', error));
 initializeJournalBackupScheduler('worker-start').catch((error) => console.warn('WebClip backup init:', error));
 initializeOperationLogCleanup().catch((error) => console.warn('WebClip operation log init:', error));
@@ -15356,12 +15384,10 @@ async function updateYandexConfig(mutator, label = 'Изменение наст�
 
 let yandexAuthStorageSettlementChain = Promise.resolve();
 
-async function runYandexAuthStorageOperation(start, label) {
-  // chrome.storage operations are not cancellable when our local deadline
-  // wins. Reserve a queue turn synchronously, then start the side effect only
-  // if the previous *actual* settlement completed within the bounded wait.
-  // A caller that times out while waiting never leaves behind a future token
-  // write/remove that could execute after the UI already reported failure.
+async function acquireYandexAuthStorageTurn(label) {
+  // Reservation happens synchronously before the first await in this function.
+  // That lets a caller establish one ordering point before it begins a
+  // cross-storage auth/settings settlement.
   let releaseTurn = null;
   const turn = new Promise((resolve) => { releaseTurn = resolve; });
   const previous = yandexAuthStorageSettlementChain.catch(() => {});
@@ -15370,12 +15396,19 @@ async function runYandexAuthStorageOperation(start, label) {
   try {
     await withOperationTimeout(previous, YANDEX_AUTH_STORAGE_TIMEOUT_MS, `${label}: ожидание предыдущей OAuth storage операции`);
   } catch (error) {
-    // Preserve ordering for later callers without starting this abandoned
-    // operation. Once the previous real side effect settles, our empty turn
-    // releases and the queue may continue.
     void previous.finally(() => releaseTurn()).catch(() => releaseTurn());
     throw error;
   }
+  return releaseTurn;
+}
+
+async function runYandexAuthStorageOperation(start, label) {
+  // chrome.storage operations are not cancellable when our local deadline
+  // wins. Reserve a queue turn synchronously, then start the side effect only
+  // if the previous *actual* settlement completed within the bounded wait.
+  // A caller that times out while waiting never leaves behind a future token
+  // write/remove that could execute after the UI already reported failure.
+  const releaseTurn = await acquireYandexAuthStorageTurn(label);
 
   let actual;
   try {
@@ -15420,6 +15453,107 @@ function sameYandexOAuthPendingIdentity(current, expected) {
     && Number(current.expiresAt || 0) === Number(expected.expiresAt || 0);
 }
 
+function makeYandexAuthConfigCommitReceipt(captured, auth, createdAt = Date.now()) {
+  const authAttemptId = String(captured?.authAttemptId || '').trim();
+  const authRecordId = String(auth?.authRecordId || '').trim();
+  const authGeneration = normalizeYandexAuthGeneration(captured?.authGeneration);
+  const clientId = String(captured?.clientId || '').trim().slice(0, MAX_YANDEX_CLIENT_ID_CHARS);
+  if (!authAttemptId || !authRecordId || !authGeneration || !clientId) {
+    const error = new Error('Некорректная identity для фиксации OAuth Client ID Яндекс Диска.');
+    error.code = 'YANDEX_AUTH_CONFIG_COMMIT_INVALID';
+    throw error;
+  }
+  return Object.freeze({
+    version: 1,
+    authAttemptId,
+    authRecordId,
+    authGeneration,
+    clientId,
+    createdAt: Math.max(0, Number(createdAt) || Date.now())
+  });
+}
+
+function sameYandexAuthConfigCommitIdentity(current, expected) {
+  if (!current || !expected || Number(current.version || 0) !== 1 || Number(expected.version || 0) !== 1) return false;
+  return String(current.authAttemptId || '').trim() === String(expected.authAttemptId || '').trim()
+    && String(current.authRecordId || '').trim() === String(expected.authRecordId || '').trim()
+    && normalizeYandexAuthGeneration(current.authGeneration) === normalizeYandexAuthGeneration(expected.authGeneration)
+    && String(current.clientId || '').trim() === String(expected.clientId || '').trim();
+}
+
+function isCurrentYandexAuthConfigCommitReceipt(receipt, auth, controlGeneration) {
+  if (!receipt || Number(receipt.version || 0) !== 1) return false;
+  return String(receipt.authRecordId || '').trim() === String(auth?.authRecordId || '').trim()
+    && normalizeYandexAuthGeneration(receipt.authGeneration) === normalizeYandexAuthGeneration(auth?.authGeneration)
+    && normalizeYandexAuthGeneration(receipt.authGeneration) === normalizeYandexAuthGeneration(controlGeneration)
+    && Boolean(String(receipt.clientId || '').trim());
+}
+
+async function persistYandexOAuthClientIdForAttempt(expected) {
+  return runYandexAuthStorageOperation(async () => {
+    const stored = await chrome.storage.session.get([YANDEX_AUTH_GENERATION_KEY, YANDEX_OAUTH_PENDING_KEY]);
+    const currentGeneration = normalizeYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]);
+    const pending = stored?.[YANDEX_OAUTH_PENDING_KEY] || null;
+    const expectedGeneration = normalizeYandexAuthGeneration(expected?.authGeneration);
+    if (currentGeneration !== expectedGeneration || !sameYandexOAuthPendingIdentity(pending, expected)) return false;
+
+    await updateYandexConfig(
+      (config) => ({ ...config, clientId: String(expected.clientId || '').trim() }),
+      'Фиксация Client ID exact OAuth-попытки Яндекс Диска'
+    );
+    return true;
+  }, 'CAS фиксация Client ID exact OAuth-попытки Яндекс Диска');
+}
+
+async function settleYandexAuthConfigCommitReceipt(expected, label = 'Reconciliation OAuth Client ID Яндекс Диска') {
+  if (!expected) return false;
+  return runYandexAuthStorageOperation(async () => {
+    const stored = await chrome.storage.session.get([
+      YANDEX_AUTH_KEY,
+      YANDEX_AUTH_GENERATION_KEY,
+      YANDEX_AUTH_CONFIG_COMMIT_KEY
+    ]);
+    const currentReceipt = stored?.[YANDEX_AUTH_CONFIG_COMMIT_KEY] || null;
+    if (!sameYandexAuthConfigCommitIdentity(currentReceipt, expected)) return false;
+
+    const currentAuth = stored?.[YANDEX_AUTH_KEY] || null;
+    const currentGeneration = normalizeYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]);
+    if (!isCurrentYandexAuthConfigCommitReceipt(currentReceipt, currentAuth, currentGeneration)) {
+      await chrome.storage.session.set({ [YANDEX_AUTH_CONFIG_COMMIT_KEY]: null });
+      return false;
+    }
+
+    await updateYandexConfig(
+      (config) => ({
+        ...config,
+        clientId: String(currentReceipt.clientId || '').trim(),
+        authStorageMode: YANDEX_AUTH_STORAGE_SESSION
+      }),
+      label
+    );
+    await chrome.storage.session.set({ [YANDEX_AUTH_CONFIG_COMMIT_KEY]: null });
+    return true;
+  }, label);
+}
+
+async function reconcileYandexAuthConfigCommit(reason = 'worker-start') {
+  const stored = await runYandexAuthStorageOperation(
+    () => chrome.storage.session.get(YANDEX_AUTH_CONFIG_COMMIT_KEY),
+    `Чтение pending OAuth config commit (${reason})`
+  );
+  const receipt = stored?.[YANDEX_AUTH_CONFIG_COMMIT_KEY] || null;
+  if (!receipt) return { ok: true, reconciled: false, pending: false };
+  try {
+    const settled = await settleYandexAuthConfigCommitReceipt(
+      receipt,
+      `Reconciliation OAuth Client ID (${reason})`
+    );
+    return { ok: true, reconciled: settled, pending: !settled };
+  } catch (error) {
+    return { ok: false, reconciled: false, pending: true, error: normalizeError(error) };
+  }
+}
+
 async function beginYandexOAuthAttemptControl({ clientId, codeVerifier, state, createdAt, expiresAt }) {
   const authAttemptId = randomBase64Url(24);
   return runYandexAuthStorageOperation(async () => {
@@ -15437,7 +15571,8 @@ async function beginYandexOAuthAttemptControl({ clientId, codeVerifier, state, c
     };
     await chrome.storage.session.set({
       [YANDEX_AUTH_GENERATION_KEY]: authGeneration,
-      [YANDEX_OAUTH_PENDING_KEY]: pending
+      [YANDEX_OAUTH_PENDING_KEY]: pending,
+      [YANDEX_AUTH_CONFIG_COMMIT_KEY]: null
     });
     return pending;
   }, 'Создание поколения pending PKCE Яндекс OAuth');
@@ -15496,13 +15631,15 @@ async function advanceYandexAuthControlGeneration(label = 'Новое покол
     const authGeneration = nextYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]);
     await chrome.storage.session.set({
       [YANDEX_AUTH_GENERATION_KEY]: authGeneration,
-      [YANDEX_OAUTH_PENDING_KEY]: null
+      [YANDEX_OAUTH_PENDING_KEY]: null,
+      [YANDEX_AUTH_CONFIG_COMMIT_KEY]: null
     });
     return authGeneration;
   }, label);
 }
 
 async function commitYandexOAuthAttemptControl(captured, auth) {
+  const configReceipt = makeYandexAuthConfigCommitReceipt(captured, auth);
   const committed = await runYandexAuthStorageOperation(async () => {
     const stored = await chrome.storage.session.get([YANDEX_AUTH_GENERATION_KEY, YANDEX_OAUTH_PENDING_KEY]);
     const currentGeneration = normalizeYandexAuthGeneration(stored?.[YANDEX_AUTH_GENERATION_KEY]);
@@ -15511,7 +15648,8 @@ async function commitYandexOAuthAttemptControl(captured, auth) {
     if (currentGeneration !== expectedGeneration || !sameYandexOAuthPendingIdentity(pending, captured)) return false;
     await chrome.storage.session.set({
       [YANDEX_AUTH_KEY]: auth,
-      [YANDEX_OAUTH_PENDING_KEY]: null
+      [YANDEX_OAUTH_PENDING_KEY]: null,
+      [YANDEX_AUTH_CONFIG_COMMIT_KEY]: configReceipt
     });
     return true;
   }, 'CAS фиксация завершённого Яндекс OAuth');
@@ -15523,10 +15661,19 @@ async function commitYandexOAuthAttemptControl(captured, auth) {
   }
 
   await removeLegacyPersistentYandexAuth();
-  await updateYandexConfig(
-    (config) => ({ ...config, authStorageMode: YANDEX_AUTH_STORAGE_SESSION }),
-    'Фиксация session-only режима завершённого Яндекс OAuth'
-  );
+  let configReconciliationPending = false;
+  try {
+    configReconciliationPending = !(await settleYandexAuthConfigCommitReceipt(
+      configReceipt,
+      'Фиксация matching Client ID завершённого Яндекс OAuth'
+    ));
+  } catch (error) {
+    // Auth is already committed in session storage. Keep the non-secret receipt
+    // for worker-start reconciliation instead of falsely rolling back the token.
+    configReconciliationPending = true;
+    console.warn('WebClip OAuth config reconciliation pending:', error);
+  }
+  return { configReconciliationPending };
 }
 
 async function compareUpdateYandexAuthRecord(expected, patch) {
@@ -15572,7 +15719,8 @@ async function commitManualYandexAuthIfGeneration(expectedGeneration, auth) {
     if (currentGeneration !== generation) return false;
     await chrome.storage.session.set({
       [YANDEX_AUTH_KEY]: auth,
-      [YANDEX_OAUTH_PENDING_KEY]: null
+      [YANDEX_OAUTH_PENDING_KEY]: null,
+      [YANDEX_AUTH_CONFIG_COMMIT_KEY]: null
     });
     return true;
   }, 'CAS фиксация проверенного manual OAuth-кандидата Яндекс Диска');
@@ -15598,7 +15746,8 @@ async function disconnectYandexAuthControl() {
     await chrome.storage.session.set({
       [YANDEX_AUTH_GENERATION_KEY]: authGeneration,
       [YANDEX_OAUTH_PENDING_KEY]: null,
-      [YANDEX_AUTH_KEY]: null
+      [YANDEX_AUTH_KEY]: null,
+      [YANDEX_AUTH_CONFIG_COMMIT_KEY]: null
     });
   }, 'Поколение отключения Яндекс Диска');
   await removeLegacyPersistentYandexAuth();
@@ -15701,7 +15850,8 @@ async function transitionYandexAuthValidityIfCurrentRequest(receipt, validity, o
     await chrome.storage.session.set({
       [YANDEX_AUTH_KEY]: tombstone,
       [YANDEX_AUTH_GENERATION_KEY]: nextGeneration,
-      [YANDEX_OAUTH_PENDING_KEY]: null
+      [YANDEX_OAUTH_PENDING_KEY]: null,
+      [YANDEX_AUTH_CONFIG_COMMIT_KEY]: null
     });
     return true;
   }, 'CAS validity transition exact OAuth authority Яндекс Диска');
@@ -15793,15 +15943,21 @@ async function getYandexStatus() {
   const [authState, authControlStored] = await Promise.all([
     readYandexAuthState(),
     runYandexAuthStorageOperation(
-      () => chrome.storage.session.get([YANDEX_AUTH_GENERATION_KEY, YANDEX_OAUTH_PENDING_KEY]),
-      'Чтение pending PKCE поколения Яндекс OAuth'
+      () => chrome.storage.session.get([
+        YANDEX_AUTH_GENERATION_KEY,
+        YANDEX_OAUTH_PENDING_KEY,
+        YANDEX_AUTH_CONFIG_COMMIT_KEY
+      ]),
+      'Чтение pending PKCE/config поколения Яндекс OAuth'
     )
   ]);
   const yandexConfig = authState.yandexConfig || {};
   const yandexAuth = authState.auth;
   const yandexOAuthPending = authControlStored?.[YANDEX_OAUTH_PENDING_KEY] || null;
+  const authConfigCommit = authControlStored?.[YANDEX_AUTH_CONFIG_COMMIT_KEY] || null;
   const authGeneration = normalizeYandexAuthGeneration(authControlStored?.[YANDEX_AUTH_GENERATION_KEY]);
   const authTruth = describeYandexAuthTruth(yandexAuth, authGeneration);
+  const authConfigCommitCurrent = isCurrentYandexAuthConfigCommitReceipt(authConfigCommit, yandexAuth, authGeneration);
 
   const pendingValid = Boolean(
     yandexOAuthPending?.authAttemptId &&
@@ -15842,7 +15998,12 @@ async function getYandexStatus() {
     authExpirySkewActive: authTruth.authExpirySkewActive,
     authSource: yandexAuth?.source || null,
     authStorageMode: authState.mode,
-    clientId: yandexConfig.clientId || yandexOAuthPending?.clientId || yandexAuth?.clientId || '',
+    clientId: pendingValid
+      ? yandexOAuthPending.clientId
+      : authConfigCommitCurrent
+        ? String(authConfigCommit.clientId || '').trim()
+        : yandexConfig.clientId || yandexAuth?.clientId || '',
+    authConfigReconciliationPending: authConfigCommitCurrent,
     rootPath,
     createPublicLinks: yandexConfig.createPublicLinks !== false,
     uploadPath: rootPath ? joinDiskPath(rootPath, YANDEX_UPLOAD_DIR) : '',
@@ -15951,14 +16112,16 @@ async function startYandexOAuth(clientId, sourceTabId = 0) {
   url.searchParams.set('code_challenge_method', 'S256');
 
   try {
-    await updateYandexConfig((config) => {
-      config.clientId = clientId;
-      return config;
-    }, 'Сохранение Client ID Яндекс OAuth');
+    const settingsCommitted = await persistYandexOAuthClientIdForAttempt(pending);
+    if (!settingsCommitted) {
+      const error = new Error('Client ID относится к устаревшей попытке Яндекс OAuth и не применён.');
+      error.code = 'YANDEX_AUTH_ATTEMPT_SUPERSEDED';
+      throw error;
+    }
   } catch (error) {
     await compareRemoveYandexOAuthPendingControl(
       pending,
-      'Откат exact pending PKCE состояния после ошибки сохранения Client ID'
+      'Откат exact pending PKCE состояния после ошибки фиксации Client ID'
     ).catch(() => {});
     throw error;
   }
@@ -16022,7 +16185,7 @@ async function finishYandexOAuth(authAttemptId, code) {
     account: null
   };
 
-  await commitYandexOAuthAttemptControl(captured, yandexAuth);
+  const authCommit = await commitYandexOAuthAttemptControl(captured, yandexAuth);
 
   try {
     const info = await yandexApi('');
@@ -16033,7 +16196,11 @@ async function finishYandexOAuth(authAttemptId, code) {
   }
 
   await initializeJournalBackupScheduler('auth-resume').catch((error) => console.warn('WebClip backup auth resume:', error));
-  return { ok: true, ...(await getYandexStatus()) };
+  return {
+    ok: true,
+    configReconciliationPending: Boolean(authCommit?.configReconciliationPending),
+    ...(await getYandexStatus())
+  };
 }
 
 async function exchangeAuthorizationCode({ clientId, code, codeVerifier }) {

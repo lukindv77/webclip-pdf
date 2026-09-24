@@ -41,6 +41,8 @@ function makeStorage() {
 
 function makeContext() {
   const storage = makeStorage();
+  const config = {};
+  let configWriteError = null;
   let randomCounter = 0;
   const context = vm.createContext({
     chrome: { storage: { session: storage.session } },
@@ -53,10 +55,18 @@ function makeContext() {
     structuredClone,
     setTimeout,
     clearTimeout,
+    console: { warn() {} },
+    normalizeError(error) { return error?.message || String(error || ''); },
     randomBase64Url() { randomCounter += 1; return `id-${randomCounter}`; },
     withOperationTimeout(promise) { return Promise.resolve(promise); },
     async removeLegacyPersistentYandexAuth() {},
-    async updateYandexConfig(mutator) { return mutator({}); }
+    async updateYandexConfig(mutator) {
+      if (configWriteError) throw configWriteError;
+      const next = await mutator({ ...config });
+      Object.keys(config).forEach((key) => delete config[key]);
+      Object.assign(config, next || {});
+      return { ...config };
+    }
   });
 
   const code = section(
@@ -69,13 +79,19 @@ function makeContext() {
     const YANDEX_AUTH_KEY = 'yandexAuth';
     const YANDEX_OAUTH_PENDING_KEY = 'yandexOAuthPending';
     const YANDEX_AUTH_GENERATION_KEY = 'yandexAuthGeneration';
+    const YANDEX_AUTH_CONFIG_COMMIT_KEY = 'yandexAuthConfigCommit';
     const YANDEX_OAUTH_TRANSPORT = 'yandex-verification-code-pkce-v1';
     const YANDEX_AUTH_STORAGE_SESSION = 'session';
+    const MAX_YANDEX_CLIENT_ID_CHARS = 512;
     ${code}
     this.api = {
       beginYandexOAuthAttemptControl,
       captureYandexOAuthAttemptControl,
       compareRemoveYandexOAuthPendingControl,
+      persistYandexOAuthClientIdForAttempt,
+      makeYandexAuthConfigCommitReceipt,
+      settleYandexAuthConfigCommitReceipt,
+      reconcileYandexAuthConfigCommit,
       advanceYandexAuthControlGeneration,
       commitYandexOAuthAttemptControl,
       compareUpdateYandexAuthRecord,
@@ -84,7 +100,12 @@ function makeContext() {
     };
   `, context);
 
-  return { context, storage };
+  return {
+    context,
+    storage,
+    config,
+    setConfigWriteError(error) { configWriteError = error || null; }
+  };
 }
 
 async function rejectsCode(promise, code) {
@@ -218,11 +239,69 @@ async function rejectsCode(promise, code) {
     eq(storage.values.yandexOAuthPending, null, 'legacy pending is cleared without claiming new attempt authority');
   }
 
+  {
+    const { context, config } = makeContext();
+    const A = await context.api.beginYandexOAuthAttemptControl({
+      clientId: 'client-A', codeVerifier: 'verifier-A', state: 'state-A', createdAt: 100, expiresAt: 1000
+    });
+    const B = await context.api.beginYandexOAuthAttemptControl({
+      clientId: 'client-B', codeVerifier: 'verifier-B', state: 'state-B', createdAt: 200, expiresAt: 1200
+    });
+    eq(await context.api.persistYandexOAuthClientIdForAttempt(A), false, 'stale A cannot write Client ID after B generation starts');
+    eq(await context.api.persistYandexOAuthClientIdForAttempt(B), true, 'current B writes matching Client ID');
+    eq(config.clientId, 'client-B', 'config ends on current B Client ID');
+  }
+
+  {
+    const { context, storage, config, setConfigWriteError } = makeContext();
+    const A = await context.api.beginYandexOAuthAttemptControl({
+      clientId: 'client-A', codeVerifier: 'verifier-A', state: 'state-A', createdAt: 100, expiresAt: 1000
+    });
+    eq(await context.api.persistYandexOAuthClientIdForAttempt(A), true, 'A Client ID persists while A owns generation');
+    const capturedA = await context.api.captureYandexOAuthAttemptControl(A.authAttemptId, 200);
+    const authA = { authRecordId: 'record-A', authGeneration: capturedA.authGeneration, accessToken: 'token-A', clientId: 'client-A' };
+    setConfigWriteError(new Error('local config unavailable'));
+    const result = await context.api.commitYandexOAuthAttemptControl(capturedA, authA);
+    eq(result.configReconciliationPending, true, 'auth commit survives config-settlement failure with pending receipt');
+    eq(storage.values.yandexAuth.authRecordId, 'record-A', 'auth A remains committed');
+    eq(storage.values.yandexAuthConfigCommit.authRecordId, 'record-A', 'non-secret config receipt remains pending');
+    check(!JSON.stringify(storage.values.yandexAuthConfigCommit).includes('token-A'), 'config receipt contains no access token');
+    check(!JSON.stringify(storage.values.yandexAuthConfigCommit).includes('verifier-A'), 'config receipt contains no PKCE verifier');
+    setConfigWriteError(null);
+    const reconciled = await context.api.reconcileYandexAuthConfigCommit('test-restart');
+    eq(reconciled.reconciled, true, 'worker-style reconciliation settles exact receipt');
+    eq(storage.values.yandexAuthConfigCommit, null, 'settled receipt is retired');
+    eq(config.clientId, 'client-A', 'reconciliation restores matching committed Client ID');
+    eq(config.authStorageMode, 'session', 'reconciliation restores session-only mode');
+  }
+
+  {
+    const { context, storage, setConfigWriteError } = makeContext();
+    const A = await context.api.beginYandexOAuthAttemptControl({
+      clientId: 'client-A', codeVerifier: 'verifier-A', state: 'state-A', createdAt: 100, expiresAt: 1000
+    });
+    await context.api.persistYandexOAuthClientIdForAttempt(A);
+    const capturedA = await context.api.captureYandexOAuthAttemptControl(A.authAttemptId, 200);
+    const authA = { authRecordId: 'record-A', authGeneration: capturedA.authGeneration, accessToken: 'token-A', clientId: 'client-A' };
+    setConfigWriteError(new Error('local config unavailable'));
+    await context.api.commitYandexOAuthAttemptControl(capturedA, authA);
+    check(Boolean(storage.values.yandexAuthConfigCommit), 'receipt exists before newer settings/auth intent');
+    setConfigWriteError(null);
+    await context.api.advanceYandexAuthControlGeneration('newer intent');
+    eq(storage.values.yandexAuthConfigCommit, null, 'newer shared generation retires older config receipt');
+    const reconciled = await context.api.reconcileYandexAuthConfigCommit('stale');
+    eq(reconciled.reconciled, false, 'retired stale receipt cannot rewrite settings');
+  }
+
   check(workerSource.includes("const YANDEX_FIXED_REDIRECT_URI = 'https://oauth.yandex.ru/verification_code';"), 'fixed Yandex redirect remains unchanged');
   check(!workerSource.includes('chrome.identity.launchWebAuthFlow'), 'P1-165 transport is not silently changed');
   check(workerSource.includes("error?.code !== 'WEBCLIP_TAB_CREATE_PENDING'"), 'unknown tabs.create settlement retains exact pending attempt');
   check(workerSource.includes('authAttemptId: pending.authAttemptId'), 'start response returns only non-secret attempt identity');
   check(workerSource.includes('commitYandexOAuthAttemptControl(captured, yandexAuth)'), 'finish performs post-network exact-attempt CAS');
+  check(workerSource.includes('persistYandexOAuthClientIdForAttempt(pending)'), 'start persists Client ID only under exact attempt authority');
+  check(workerSource.includes('[YANDEX_AUTH_CONFIG_COMMIT_KEY]: configReceipt'), 'auth commit publishes non-secret config receipt atomically with session auth');
+  check(workerSource.includes("reconcileYandexAuthConfigCommit('worker-start')"), 'worker startup reconciles cross-storage config receipt');
+  check(workerSource.includes("acquireYandexAuthStorageTurn("), 'shared auth/settings turn is explicit');
   check(workerSource.includes("advanceYandexAuthControlGeneration('Поколение manual-token intent Яндекс Диска')"), 'manual intent fences older OAuth generation');
   check(workerSource.includes('await disconnectYandexAuthControl()'), 'disconnect uses generation barrier');
   check(optionsSource.includes("let activeYandexAuthAttemptId = '';"), 'Options owns in-memory attempt identity');

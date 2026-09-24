@@ -727,3 +727,32 @@ This status edit changes a full-RCF root, so the closure PR must obtain a new ex
 Repository Integrity #1121 / run `35949893255` on exact head `60dd01aa2d808971eb289dc67b7721706bfe6794` passed both dedicated release-control jobs and executed the complete deterministic suite. The P1-177 scheduler runtime/model tests passed. Direct failures were limited to stale owner-status witnesses and old full-RCF pins created by the Registry transition.
 
 Exact authority derived current full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`. RPF remains `sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071`; 33-file control remains `sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2`; Chrome/Yandex QCF and BCF remain unchanged. Current witnesses are synchronized on the next exact head. #1121 is discovery evidence only; merge requires a later complete SUCCESS.
+
+
+### P1-178 auth/settings commit-receipt tranche — 2026-09-24
+
+Canonical starting point is protected `main=66a5049c5cfe7a4f06f0b4e6c2b769650b8ecfa0`. Post-merge Repository Integrity **#1123 / run 35950619707** completed **SUCCESS** on that exact main for all three required jobs.
+
+Fresh P1-178 closure review found one remaining source/runtime gap after the earlier auth-attempt CAS work: exact OAuth auth generation was session-bound, but the matching `yandexConfig.clientId` lived in `storage.local` behind a separate config serializer. A stale OAuth settings writer could therefore outlive a newer auth/settings intent, and auth + matching Client ID had no explicit recoverable cross-storage commit receipt.
+
+This tranche keeps one shared `yandexAuthGeneration` rather than adding a second settings counter. OAuth-start Client-ID persistence is exact pending-attempt/generation fenced. Successful OAuth token CAS publishes a secret-free `yandexAuthConfigCommit` receipt in the same session mutation as committed auth; matching local Client-ID settlement then compare-checks exact auth record/generation and retires the receipt. Failed/unknown local settlement preserves the committed auth plus receipt for worker-start reconciliation. Newer OAuth/manual/Disconnect/validity/settings intents retire stale receipts.
+
+A changed Client ID imported through the existing user-settings feature reserves the same auth/settings turn, advances the shared generation, invalidates older pending/config-settlement authority, preserves the current committed OAuth session, and holds the turn through actual bundled local-storage settlement. This preserves the product requirement that settings import does not disable or replace the current OAuth session while placing Client-ID intent in the same logical generation ordering.
+
+Deterministic coverage:
+- `project_tools/test_p1_178_auth_attempt_generation_runtime.js` (extended)
+- `project_tools/test_p1_178_auth_settings_commit_runtime.js` (new)
+- `project_tools/test_p1_178_auth_attempt_settings_generation_refinement_model.js` (reconciled)
+
+Evidence:
+- `project_docs/RESEARCH_P1_178_AUTH_SETTINGS_COMMIT_RECEIPT_2026-09-24_EVIDENCE.md`
+
+Pre-tranche identities:
+- 34-file RPF: `sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071`
+- 33-file control: `sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2`
+- Chrome QCF: `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`
+- Yandex QCF: `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`
+- full RCF: `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`
+- BCF: `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
+
+Because `service-worker.js` changes, replacement current RPF/33-file identities must come from exact-head P1-231 authority and are not guessed here. P1-178 remains **ACTIVE** pending complete exact-head CI and a fresh closure review. P1-165 remains **ACTIVE** because fixed screen-code OAuth still does not expose returned-state comparison. Manifest remains `0.9.8`; release readiness remains **NOT READY**. No real Chrome/Yandex L5, provider mutation, physical release receipt, ZIP/build, version bump, S2 activation, tag, deployment, GitHub Release or release decision is performed.
