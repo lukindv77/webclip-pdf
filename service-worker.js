@@ -13036,6 +13036,31 @@ function journalBackupAlarmMatchesReceipt(alarm, receipt) {
   );
 }
 
+async function clearDeliveredJournalBackupAlarmIfStillStale(alarm, kind) {
+  const name = String(alarm?.name || '');
+  const deliveredDueAt = normalizeJournalBackupSchedulerDueAt(alarm?.scheduledTime);
+  if (!name || !deliveredDueAt) return false;
+  return mutateChromeAlarmSerialized(name, async () => {
+    const currentAlarm = await getChromeAlarmBounded(name, 'Проверка alarm перед stale-delivery clear');
+    if (!currentAlarm) return false;
+
+    // Never let an old callback clear a replacement that already owns this
+    // fixed delivery name under another scheduledTime.
+    if (normalizeJournalBackupSchedulerDueAt(currentAlarm.scheduledTime) !== deliveredDueAt) {
+      return false;
+    }
+
+    const currentControl = await readJournalBackupSchedulerControl('Проверка receipt перед stale-delivery clear');
+    const currentReceipt = scheduledJournalBackupReceipt(currentControl, kind);
+    if (currentControl.mode === 'active'
+      && currentReceipt.generation === currentControl.generation
+      && journalBackupAlarmMatchesReceipt(currentAlarm, currentReceipt)) {
+      return false;
+    }
+    return chrome.alarms.clear(name);
+  }, 'Очистка всё ещё stale backup alarm');
+}
+
 async function recordJournalBackupScheduledReceipt(kind, generation, dueAt) {
   let recorded = false;
   const current = await mutateJournalBackupSchedulerControl((previous) => {
@@ -13093,11 +13118,7 @@ async function dispatchJournalBackupAlarm(alarm) {
   const deliveryCurrent = journalBackupAlarmMatchesReceipt(alarm, scheduledReceipt);
   const admission = await proveJournalBackupSchedulerAdmission(scheduledGeneration);
   if (!deliveryCurrent || !admission.admitted || scheduledGeneration !== control.generation) {
-    await mutateChromeAlarmSerialized(
-      alarm.name,
-      () => chrome.alarms.clear(alarm.name),
-      'Очистка stale backup alarm'
-    ).catch(() => {});
+    await clearDeliveredJournalBackupAlarmIfStillStale(alarm, kind).catch(() => {});
     return {
       handled: true,
       skipped: true,
