@@ -789,3 +789,10 @@ P1-178 therefore transitions from **ACTIVE** to the Registry default **IMPLEMENT
 Implementation-head identities are RPF `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`, 33-file control `sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad`, Chrome QCF `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, pre-transition full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`, and BCF `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
 
 Because the Registry edit changes a full-RCF root, a new exact-head full RCF and complete Repository Integrity SUCCESS are required before merge. Package bytes are unchanged by the closure-only edit; manifest remains `0.9.8` and release readiness remains **NOT READY**.
+
+
+### P1-178 Registry-transition discovery #1127
+
+Repository Integrity #1127 / run `36012167714` on exact closure head `fb04b2f312740230056cb80dd9653019ef516e4e` confirmed stable package identity (RPF `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`, 33-file control `sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad`) and derived current full RCF `sha256:9c0fc13d98bfa613f59d7ed68ecd414a0bd12172bee489c8fba4674284243d35`. Chrome/Yandex QCF and BCF remain unchanged.
+
+The generic suite failures were closure-only stale witnesses: three cross-owner tests still required P1-178 in ACTIVE Registry and seven current release-control pins still expected pre-transition full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`; downstream S0-H/S0-I/S1-B/S1-C/S1-D failures were transitive. P1-178 implementation tests themselves passed. These witnesses are reconciled on the following exact head. #1127 is not merge evidence. Manifest remains `0.9.8`; release readiness remains **NOT READY**.

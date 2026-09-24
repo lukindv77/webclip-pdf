@@ -395,3 +395,29 @@ BCF               = sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941
 The Registry status transition itself changes a full-RCF root, so the pre-transition full RCF above is not asserted as current after this edit. Package bytes do not change in the closure commit, therefore RPF/33-file/QCF/BCF are expected to remain stable while exact-head authority must derive the new full RCF.
 
 Under the Registry status model, P1-178 now leaves the ACTIVE table and returns to the default **IMPLEMENTED / RELEASE-REGRESSION** state. This is not `DONE`; applicable real release regression remains separate. A new complete exact-head Repository Integrity SUCCESS is required before merge because this status transition changes the PR head.
+
+
+## 19. Registry-transition identity discovery #1127
+
+Repository Integrity #1127 / run `36012167714` executed on exact closure head `fb04b2f312740230056cb80dd9653019ef516e4e`.
+
+Both dedicated release-control jobs completed successfully. Exact authority derived:
+
+```text
+34-file RPF       = sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200
+33-file control   = sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad
+Chrome QCF        = sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c
+Yandex QCF        = sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1
+full RCF          = sha256:9c0fc13d98bfa613f59d7ed68ecd414a0bd12172bee489c8fba4674284243d35
+BCF               = sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff
+```
+
+The package identities stayed exactly stable, confirming that the closure commit changed control-plane status rather than extension package bytes.
+
+The generic deterministic suite then exposed only closure-reconciliation witnesses:
+
+- three cross-owner models still expected P1-178 to be present in the ACTIVE Registry;
+- current release-control tests still pinned the pre-transition full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`;
+- S0-H/S0-I/S1-B/S1-C/S1-D failures were downstream/transitive through those current authority pins.
+
+The P1-178 implementation runtime/model tests themselves passed on this head. The stale witnesses are synchronized on the next exact head. #1127 is discovery evidence only and cannot be merge evidence.
