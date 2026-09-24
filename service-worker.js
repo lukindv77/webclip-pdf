@@ -12771,6 +12771,11 @@ function normalizeJournalBackupSchedulerGeneration(value) {
   return Number.isSafeInteger(generation) && generation >= 0 ? generation : 0;
 }
 
+function normalizeJournalBackupSchedulerDueAt(value) {
+  const dueAt = Math.floor(Number(value) || 0);
+  return Number.isSafeInteger(dueAt) && dueAt > 0 ? dueAt : 0;
+}
+
 function nextJournalBackupSchedulerGeneration(value) {
   const generation = normalizeJournalBackupSchedulerGeneration(value);
   if (generation >= Number.MAX_SAFE_INTEGER) {
@@ -12797,9 +12802,9 @@ function normalizeJournalBackupSchedulerControl(value = {}) {
     accountUid: boundedYandexExternalText(value?.accountUid || '', MAX_YANDEX_ACCOUNT_FIELD_CHARS).trim(),
     rootPath: normalizeDiskPath(value?.rootPath || ''),
     periodicGeneration,
-    periodicDueAt: Math.max(0, Number(value?.periodicDueAt) || 0),
+    periodicDueAt: normalizeJournalBackupSchedulerDueAt(value?.periodicDueAt),
     retryGeneration,
-    retryDueAt: Math.max(0, Number(value?.retryDueAt) || 0)
+    retryDueAt: normalizeJournalBackupSchedulerDueAt(value?.retryDueAt)
   });
 }
 
@@ -13004,9 +13009,56 @@ async function captureJournalBackupSchedulerOperationContext(expectedGeneration)
   return operationContext;
 }
 
-function scheduledJournalBackupGeneration(control, kind) {
+function scheduledJournalBackupReceipt(control, kind) {
   const normalized = normalizeJournalBackupSchedulerControl(control);
-  return kind === 'retry' ? normalized.retryGeneration : normalized.periodicGeneration;
+  if (kind === 'retry') {
+    return Object.freeze({
+      generation: normalized.retryGeneration,
+      dueAt: normalized.retryDueAt
+    });
+  }
+  return Object.freeze({
+    generation: normalized.periodicGeneration,
+    dueAt: normalized.periodicDueAt
+  });
+}
+
+function scheduledJournalBackupGeneration(control, kind) {
+  return scheduledJournalBackupReceipt(control, kind).generation;
+}
+
+function journalBackupAlarmMatchesReceipt(alarm, receipt) {
+  return Boolean(
+    alarm
+    && receipt?.generation
+    && receipt?.dueAt
+    && normalizeJournalBackupSchedulerDueAt(alarm?.scheduledTime) === receipt.dueAt
+  );
+}
+
+async function clearDeliveredJournalBackupAlarmIfStillStale(alarm, kind) {
+  const name = String(alarm?.name || '');
+  const deliveredDueAt = normalizeJournalBackupSchedulerDueAt(alarm?.scheduledTime);
+  if (!name || !deliveredDueAt) return false;
+  return mutateChromeAlarmSerialized(name, async () => {
+    const currentAlarm = await getChromeAlarmBounded(name, 'Проверка alarm перед stale-delivery clear');
+    if (!currentAlarm) return false;
+
+    // Never let an old callback clear a replacement that already owns this
+    // fixed delivery name under another scheduledTime.
+    if (normalizeJournalBackupSchedulerDueAt(currentAlarm.scheduledTime) !== deliveredDueAt) {
+      return false;
+    }
+
+    const currentControl = await readJournalBackupSchedulerControl('Проверка receipt перед stale-delivery clear');
+    const currentReceipt = scheduledJournalBackupReceipt(currentControl, kind);
+    if (currentControl.mode === 'active'
+      && currentReceipt.generation === currentControl.generation
+      && journalBackupAlarmMatchesReceipt(currentAlarm, currentReceipt)) {
+      return false;
+    }
+    return chrome.alarms.clear(name);
+  }, 'Очистка всё ещё stale backup alarm');
 }
 
 async function recordJournalBackupScheduledReceipt(kind, generation, dueAt) {
@@ -13016,9 +13068,9 @@ async function recordJournalBackupScheduledReceipt(kind, generation, dueAt) {
     if (previous.mode !== 'active' || previous.generation !== normalizedGeneration || !normalizedGeneration) return previous;
     recorded = true;
     if (kind === 'retry') {
-      return { ...previous, retryGeneration: normalizedGeneration, retryDueAt: Math.max(0, Number(dueAt) || 0) };
+      return { ...previous, retryGeneration: normalizedGeneration, retryDueAt: normalizeJournalBackupSchedulerDueAt(dueAt) };
     }
-    return { ...previous, periodicGeneration: normalizedGeneration, periodicDueAt: Math.max(0, Number(dueAt) || 0) };
+    return { ...previous, periodicGeneration: normalizedGeneration, periodicDueAt: normalizeJournalBackupSchedulerDueAt(dueAt) };
   }, `Фиксация ${kind} backup scheduler receipt`);
   return { recorded, control: current };
 }
@@ -13027,10 +13079,30 @@ async function scheduleJournalBackupAlarm(kind, name, when, label) {
   const control = await readJournalBackupSchedulerControl(`Чтение поколения перед ${kind} backup alarm`);
   if (control.mode !== 'active' || !control.generation) return false;
   const generation = control.generation;
-  const receipt = await recordJournalBackupScheduledReceipt(kind, generation, when);
+  const dueAt = normalizeJournalBackupSchedulerDueAt(when);
+  if (!dueAt) return false;
+  const receipt = await recordJournalBackupScheduledReceipt(kind, generation, dueAt);
   if (!receipt.recorded) return false;
-  await mutateChromeAlarmSerialized(name, () => chrome.alarms.create(name, { when }), label);
-  return true;
+
+  // The fixed Chrome alarm name is only a delivery channel. Re-read the
+  // durable receipt inside the per-alarm serialized mutation so a schedule
+  // prepared by an older generation/due-time cannot create late and replace
+  // the current alarm with the same name.
+  let created = false;
+  await mutateChromeAlarmSerialized(name, async () => {
+    const current = await readJournalBackupSchedulerControl(`Повторная проверка receipt перед ${kind} backup alarm`);
+    const currentReceipt = scheduledJournalBackupReceipt(current, kind);
+    if (current.mode !== 'active'
+      || current.generation !== generation
+      || currentReceipt.generation !== generation
+      || currentReceipt.dueAt !== dueAt) {
+      return false;
+    }
+    await chrome.alarms.create(name, { when: dueAt });
+    created = true;
+    return true;
+  }, label);
+  return created;
 }
 
 async function dispatchJournalBackupAlarm(alarm) {
@@ -13041,15 +13113,17 @@ async function dispatchJournalBackupAlarm(alarm) {
       : '';
   if (!kind) return { handled: false };
   const control = await readJournalBackupSchedulerControl('Чтение receipt сработавшего backup alarm');
-  const scheduledGeneration = scheduledJournalBackupGeneration(control, kind);
+  const scheduledReceipt = scheduledJournalBackupReceipt(control, kind);
+  const scheduledGeneration = scheduledReceipt.generation;
+  const deliveryCurrent = journalBackupAlarmMatchesReceipt(alarm, scheduledReceipt);
   const admission = await proveJournalBackupSchedulerAdmission(scheduledGeneration);
-  if (!admission.admitted || scheduledGeneration !== control.generation) {
-    await mutateChromeAlarmSerialized(
-      alarm.name,
-      () => chrome.alarms.clear(alarm.name),
-      'Очистка stale backup alarm'
-    ).catch(() => {});
-    return { handled: true, skipped: true, reason: admission.reason };
+  if (!deliveryCurrent || !admission.admitted || scheduledGeneration !== control.generation) {
+    await clearDeliveredJournalBackupAlarmIfStillStale(alarm, kind).catch(() => {});
+    return {
+      handled: true,
+      skipped: true,
+      reason: !deliveryCurrent ? 'stale-delivery-receipt' : admission.reason
+    };
   }
   return runDueJournalBackup(kind === 'retry' ? 'retry-alarm' : 'periodic-alarm', kind === 'retry', scheduledGeneration);
 }
@@ -13909,8 +13983,12 @@ async function initializeJournalBackupScheduler(reason = 'init') {
       getChromeAlarmBounded(JOURNAL_BACKUP_ALARM, 'Проверка periodic backup alarm'),
       getChromeAlarmBounded(JOURNAL_BACKUP_RETRY_ALARM, 'Проверка retry backup alarm')
     ]);
-    const periodicCurrent = Boolean(periodicAlarm && control.periodicGeneration === control.generation);
-    const retryCurrent = Boolean(retryAlarm && control.retryGeneration === control.generation);
+    const periodicReceipt = scheduledJournalBackupReceipt(control, 'periodic');
+    const retryReceipt = scheduledJournalBackupReceipt(control, 'retry');
+    const periodicCurrent = journalBackupAlarmMatchesReceipt(periodicAlarm, periodicReceipt)
+      && periodicReceipt.generation === control.generation;
+    const retryCurrent = journalBackupAlarmMatchesReceipt(retryAlarm, retryReceipt)
+      && retryReceipt.generation === control.generation;
     if (periodicCurrent || retryCurrent) {
       return {
         ok: true,

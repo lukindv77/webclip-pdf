@@ -75,7 +75,10 @@ has(SOURCE, 'const JOURNAL_BACKUP_SCHEDULER_CONTROL_VERSION = 1;');
 has(control, "['active', 'paused-no-auth', 'paused-user', 'paused-unconfigured']");
 has(control, 'nextJournalBackupSchedulerGeneration');
 has(control, 'periodicGeneration');
+has(control, 'periodicDueAt');
 has(control, 'retryGeneration');
+has(control, 'retryDueAt');
+has(control, 'normalizeJournalBackupSchedulerDueAt');
 has(control, 'authRecordId');
 has(control, 'authControlGeneration');
 has(control, 'accountUid');
@@ -98,28 +101,44 @@ has(control, 'Boolean(truth.authUsable && authReceipt.authorizationBound)');
 has(control, "boundedYandexExternalText(auth?.account?.uid || ''");
 has(control, "normalizeDiskPath(authState.yandexConfig?.rootPath || '')");
 
-// Fixed alarm names receive a separate durable generation receipt.
+// Fixed alarm names receive an exact durable generation + due-time receipt.
 has(control, 'recordJournalBackupScheduledReceipt(kind, generation, dueAt)');
 has(control, 'previous.generation !== normalizedGeneration');
 has(control, "return { ...previous, retryGeneration: normalizedGeneration");
+has(control, "retryDueAt: normalizeJournalBackupSchedulerDueAt(dueAt)");
 has(control, "return { ...previous, periodicGeneration: normalizedGeneration");
+has(control, "periodicDueAt: normalizeJournalBackupSchedulerDueAt(dueAt)");
 has(control, 'scheduleJournalBackupAlarm(kind, name, when, label)');
-has(control, 'chrome.alarms.create(name, { when })');
+has(control, 'const dueAt = normalizeJournalBackupSchedulerDueAt(when)');
+has(control, 'const currentReceipt = scheduledJournalBackupReceipt(current, kind)');
+has(control, 'currentReceipt.generation !== generation');
+has(control, 'currentReceipt.dueAt !== dueAt');
+has(control, 'chrome.alarms.create(name, { when: dueAt })');
 
-// Alarm delivery itself is not authority.
+// Alarm delivery itself is not authority: exact scheduledTime must match the durable receipt.
 has(control, 'dispatchJournalBackupAlarm(alarm)');
-has(control, 'const scheduledGeneration = scheduledJournalBackupGeneration(control, kind)');
-has(control, 'const admission = await proveJournalBackupSchedulerAdmission(scheduledGeneration)');
+has(control, 'const scheduledReceipt = scheduledJournalBackupReceipt(control, kind)');
+has(control, 'const scheduledGeneration = scheduledReceipt.generation');
+has(control, 'const deliveryCurrent = journalBackupAlarmMatchesReceipt(alarm, scheduledReceipt)');
+has(control, 'normalizeJournalBackupSchedulerDueAt(alarm?.scheduledTime) === receipt.dueAt');
 has(control, 'scheduledGeneration !== control.generation');
-has(control, "chrome.alarms.clear(alarm.name)");
+has(control, "reason: !deliveryCurrent ? 'stale-delivery-receipt' : admission.reason");
+has(control, 'clearDeliveredJournalBackupAlarmIfStillStale(alarm, kind)');
+has(control, 'normalizeJournalBackupSchedulerDueAt(currentAlarm.scheduledTime) !== deliveredDueAt');
+has(control, 'journalBackupAlarmMatchesReceipt(currentAlarm, currentReceipt)');
+has(control, 'chrome.alarms.clear(name)');
 has(listener, 'dispatchJournalBackupAlarm(alarm)');
 lacks(listener, "runDueJournalBackup('periodic-alarm', false)");
 lacks(listener, "runDueJournalBackup('retry-alarm', true)");
 
-// Worker/startup may reuse an alarm only with a receipt for the exact current generation.
+// Worker/startup may reuse an alarm only with the exact current generation + scheduledTime receipt.
 has(init, "reason === 'worker-start' || reason === 'startup'");
-has(init, 'control.periodicGeneration === control.generation');
-has(init, 'control.retryGeneration === control.generation');
+has(init, "const periodicReceipt = scheduledJournalBackupReceipt(control, 'periodic')");
+has(init, "const retryReceipt = scheduledJournalBackupReceipt(control, 'retry')");
+has(init, 'journalBackupAlarmMatchesReceipt(periodicAlarm, periodicReceipt)');
+has(init, 'journalBackupAlarmMatchesReceipt(retryAlarm, retryReceipt)');
+has(init, 'periodicReceipt.generation === control.generation');
+has(init, 'retryReceipt.generation === control.generation');
 has(init, 'await clearJournalBackupAlarms()');
 has(init, 'schedulerGeneration: control.generation');
 
@@ -166,29 +185,70 @@ has(upload, 'operationContext');
 has(recovery, 'operationContext');
 
 // Compact race simulation mirrors the durable generation rules.
-function controller({ generation = 1, mode = 'active', periodicGeneration = 0, retryGeneration = 0 } = {}) {
-  return { generation, mode, periodicGeneration, retryGeneration };
+function controller({
+  generation = 1,
+  mode = 'active',
+  periodicGeneration = 0,
+  periodicDueAt = 0,
+  retryGeneration = 0,
+  retryDueAt = 0
+} = {}) {
+  return { generation, mode, periodicGeneration, periodicDueAt, retryGeneration, retryDueAt };
 }
 function transition(c, mode) {
-  return { generation: c.generation + 1, mode, periodicGeneration: 0, retryGeneration: 0 };
+  return {
+    generation: c.generation + 1,
+    mode,
+    periodicGeneration: 0,
+    periodicDueAt: 0,
+    retryGeneration: 0,
+    retryDueAt: 0
+  };
 }
-function schedule(c, kind) {
+function schedule(c, kind, dueAt = 1000) {
   if (c.mode !== 'active') return { ...c };
   return kind === 'retry'
-    ? { ...c, retryGeneration: c.generation }
-    : { ...c, periodicGeneration: c.generation };
+    ? { ...c, retryGeneration: c.generation, retryDueAt: dueAt }
+    : { ...c, periodicGeneration: c.generation, periodicDueAt: dueAt };
 }
-function admit(c, kind) {
-  const scheduled = kind === 'retry' ? c.retryGeneration : c.periodicGeneration;
-  return c.mode === 'active' && scheduled > 0 && scheduled === c.generation;
+function receipt(c, kind) {
+  return kind === 'retry'
+    ? { generation: c.retryGeneration, dueAt: c.retryDueAt }
+    : { generation: c.periodicGeneration, dueAt: c.periodicDueAt };
+}
+function admit(c, kind, alarmScheduledTime = receipt(c, kind).dueAt) {
+  const r = receipt(c, kind);
+  return c.mode === 'active'
+    && r.generation > 0
+    && r.generation === c.generation
+    && r.dueAt > 0
+    && r.dueAt === alarmScheduledTime;
+}
+function mayCreateAfterQueue(c, kind, preparedGeneration, preparedDueAt) {
+  const r = receipt(c, kind);
+  return c.mode === 'active'
+    && c.generation === preparedGeneration
+    && r.generation === preparedGeneration
+    && r.dueAt === preparedDueAt;
+}
+function mayClearDelivered(c, kind, deliveredDueAt, currentAlarmDueAt) {
+  if (currentAlarmDueAt !== deliveredDueAt) return false;
+  const r = receipt(c, kind);
+  const currentAlarmOwnsReceipt = c.mode === 'active'
+    && r.generation === c.generation
+    && r.dueAt > 0
+    && r.dueAt === currentAlarmDueAt;
+  return !currentAlarmOwnsReceipt;
 }
 
 {
-  let c = schedule(controller({ generation: 4 }), 'periodic');
-  ok(admit(c, 'periodic'), 'current periodic receipt admits');
+  let c = schedule(controller({ generation: 4 }), 'periodic', 4000);
+  ok(admit(c, 'periodic', 4000), 'current periodic generation+time receipt admits');
+  ok(!admit(c, 'periodic', 3999), 'same generation with stale scheduledTime is rejected');
   c = transition(c, 'paused-no-auth');
-  ok(!admit(c, 'periodic'), 'disconnect invalidates old periodic receipt');
+  ok(!admit(c, 'periodic', 4000), 'disconnect invalidates old periodic receipt');
   eq(c.periodicGeneration, 0, 'disconnect clears periodic receipt');
+  eq(c.periodicDueAt, 0, 'disconnect clears periodic due-time receipt');
 }
 {
   let c = schedule(controller({ generation: 7 }), 'retry');
@@ -204,9 +264,36 @@ function admit(c, kind) {
   ok(!admit(c, 'periodic'), 'paused-user cannot schedule authority');
 }
 {
-  const delivered = schedule(controller({ generation: 12 }), 'periodic');
+  const delivered = schedule(controller({ generation: 12 }), 'periodic', 12000);
   const staleAfterLocalPrep = transition(delivered, 'paused-no-auth');
-  ok(!admit(staleAfterLocalPrep, 'periodic'), 'second pre-pipeline check blocks callback after disconnect');
+  ok(!admit(staleAfterLocalPrep, 'periodic', 12000), 'second pre-pipeline check blocks callback after disconnect');
+}
+{
+  const prepared = schedule(controller({ generation: 20 }), 'periodic', 20000);
+  const nextGeneration = transition(prepared, 'active');
+  ok(!mayCreateAfterQueue(nextGeneration, 'periodic', 20, 20000),
+    'late create prepared by an old generation is vetoed inside the serialized alarm mutation');
+}
+{
+  const first = schedule(controller({ generation: 30 }), 'periodic', 30000);
+  const superseded = schedule(first, 'periodic', 31000);
+  ok(!mayCreateAfterQueue(superseded, 'periodic', 30, 30000),
+    'same-generation older due-time cannot replace the newer exact receipt');
+  ok(mayCreateAfterQueue(superseded, 'periodic', 30, 31000),
+    'same-generation latest exact due-time may create');
+  ok(!admit(superseded, 'periodic', 30000),
+    'startup/dispatch rejects alarm whose scheduledTime no longer matches the durable receipt');
+  ok(admit(superseded, 'periodic', 31000),
+    'startup/dispatch accepts exact generation+scheduledTime receipt');
+  ok(!mayClearDelivered(superseded, 'periodic', 30000, 31000),
+    'stale callback cannot clear a newer same-name alarm with another scheduledTime');
+  ok(!mayClearDelivered(superseded, 'periodic', 31000, 31000),
+    'callback cannot clear the current alarm that owns the durable receipt');
+}
+{
+  const stale = controller({ generation: 40, periodicGeneration: 39, periodicDueAt: 39000 });
+  ok(mayClearDelivered(stale, 'periodic', 39000, 39000),
+    'still-stale same delivery may be cleared when it does not own current authority');
 }
 
-console.log(`P1-177 backup scheduler generation runtime: PASS; checks=${checks}; durable_generation=true; fixed_alarm_is_delivery_only=true; disconnect_pause=true; auth_resume_generation=true; callback_recheck=true; pre_pipeline_recheck=true; per_child_remote_recheck=true; started_effect_checkpoint=preserved; provider_calls=0`);
+console.log(`P1-177 backup scheduler generation runtime: PASS; checks=${checks}; durable_generation=true; exact_due_time=true; late_stale_create=false; stale_delivery_preserves_newer_alarm=true; fixed_alarm_is_delivery_only=true; disconnect_pause=true; auth_resume_generation=true; callback_recheck=true; pre_pipeline_recheck=true; per_child_remote_recheck=true; started_effect_checkpoint=preserved; provider_calls=0`);
