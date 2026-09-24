@@ -66,8 +66,8 @@ function controlSecretFree(control) {
   return !['accesstoken', 'access_token', 'refreshtoken', 'refresh_token', 'codeverifier', 'oauthstate', 'authorization'].some((x) => s.includes(x));
 }
 
-check('O01 P1-178 active', () => has(REGISTRY, '| P1-178 | ACTIVE |'));
-check('O02 P1-178 owner wording', () => has(REGISTRY, 'OAuth pending/token exchange/config commit is one auth-attempt + settings-generation state machine'));
+check('O01 P1-178 leaves ACTIVE after exact-head implementation gate', () => lacks(REGISTRY, '| P1-178 | ACTIVE |'));
+check('O02 implemented P1-178 owner wording remains durable', () => has(IMPLEMENTATION, 'OAuth pending/token exchange/config commit is one auth-attempt + settings-generation state machine'));
 check('O03 P1-165 remains separate', () => has(REGISTRY, '| P1-165 | ACTIVE |'));
 check('O04 P1-177 remains separate implemented owner', () => has(REGISTRY, '| P1-177 | IMPLEMENTED / RELEASE-REGRESSION |'));
 check('O05 P1-179 remains separate', () => has(REGISTRY, '| P1-179 | ACTIVE |'));

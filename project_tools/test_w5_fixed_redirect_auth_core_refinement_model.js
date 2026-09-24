@@ -200,7 +200,7 @@ function statusDto(s) {
   check(authHeader >= 0, 'current worker emits OAuth Authorization');
   check(worker.includes('sanitizeYandexApiCallerHeaders(options.headers || {})'), 'current worker rejects caller Authorization override');
   check(!worker.includes('...(options.headers || {})'), 'raw caller header spread no longer follows worker Authorization');
-  check(registry.includes('| P1-178 | ACTIVE |'), 'P1-178 remains existing owner');
+  check(!registry.includes('| P1-178 | ACTIVE |'), 'P1-178 leaves ACTIVE after auth/settings implementation');
   check(!registry.includes('| P1-191 | ACTIVE |'), 'P1-191 leaves ACTIVE after validate-before-commit implementation');
   check(registry.includes('| P1-195 | ACTIVE |'), 'P1-195 remains existing owner');
   check(registry.includes('| P1-196 | IMPLEMENTED / RELEASE-REGRESSION |'), 'P1-196 remains explicit implemented owner');

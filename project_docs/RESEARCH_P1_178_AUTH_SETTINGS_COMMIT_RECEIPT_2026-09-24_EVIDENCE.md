@@ -356,3 +356,42 @@ Current 34-file RPF remains the #1124 value:
 `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`
 
 Chrome/Yandex QCF, full RCF and BCF remain unchanged. #1125 is discovery evidence only, not merge evidence.
+
+
+## 18. Exact-head closure review #1126
+
+Repository Integrity #1126 / run `35964884390` completed **SUCCESS** on exact implementation head `7235174919dfbc6897c8851734725c0f675fbf61`. All three required jobs passed, including the complete deterministic JavaScript suite, P1-231 source-generation authority, and P1-231 shadow identity.
+
+Fresh post-run review finds the registered P1-178 source/runtime acceptance contract satisfied:
+
+> OAuth pending/token exchange/config commit is one auth-attempt + settings-generation state machine; stale finish/cleanup cannot delete/overwrite newer attempt/settings.
+
+The exact implementation now proves:
+
+- worker-issued exact pending attempt + shared auth/settings generation;
+- compare-and-remove for late start failure and expired pending cleanup;
+- post-exchange exact-attempt/generation CAS before auth commit;
+- Disconnect/manual/validity/settings intents supersede older writers through the same shared generation;
+- exact OAuth-start Client-ID publication;
+- committed auth + non-secret config-settlement receipt as one logical session commit;
+- recoverable local Client-ID settlement with worker-start reconciliation;
+- stale receipt retirement and no retarget across newer generations;
+- imported Client-ID ordering in the same auth/settings turn while preserving the committed OAuth session;
+- account-enrichment and neighboring auth-validity paths consume the same generation rather than creating a second counter.
+
+P1-165 remains separately **ACTIVE** because the fixed Yandex screen-code transport still does not provide WebClip with returned OAuth `state` for comparison. P1-178 closure does not claim that state verification, real Yandex OAuth qualification, physical release regression, or release authorization.
+
+Exact implementation-head identities from canonical authority are:
+
+```text
+34-file RPF       = sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200
+33-file control   = sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad
+Chrome QCF        = sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c
+Yandex QCF        = sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1
+full RCF          = sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c
+BCF               = sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff
+```
+
+The Registry status transition itself changes a full-RCF root, so the pre-transition full RCF above is not asserted as current after this edit. Package bytes do not change in the closure commit, therefore RPF/33-file/QCF/BCF are expected to remain stable while exact-head authority must derive the new full RCF.
+
+Under the Registry status model, P1-178 now leaves the ACTIVE table and returns to the default **IMPLEMENTED / RELEASE-REGRESSION** state. This is not `DONE`; applicable real release regression remains separate. A new complete exact-head Repository Integrity SUCCESS is required before merge because this status transition changes the PR head.

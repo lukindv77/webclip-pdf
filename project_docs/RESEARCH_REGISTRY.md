@@ -115,7 +115,6 @@ This compact rule replaces hundreds of old `REGRESSION` rows without declaring t
 | P1-175 | ACTIVE | Journal Apply/page command must fresh-read source tab/site and exact document generation immediately before injection/send; stale context cannot retarget. |
 | P1-176 | ACTIVE | Extension-page inputs need pre-IPC/maxLength validation matching worker limits; do not silently truncate secrets. |
 | P1-177 | IMPLEMENTED / RELEASE-REGRESSION | Backup scheduler no-auth/user pause, proven-auth resume generation, exact alarm `(generation,dueAt)` receipts, callback/startup admission, per-remote-child generation/auth recheck and started-effect preservation are implemented; applicable real Chrome/Yandex release regression remains separate. |
-| P1-178 | ACTIVE | OAuth pending/token exchange/config commit is one auth-attempt + settings-generation state machine; stale finish/cleanup cannot delete/overwrite newer attempt/settings. |
 | P1-179 | ACTIVE | Backup scheduler state and pending backup checkpoint are immutable account/root namespaces; old success/retry state cannot migrate into a new Yandex context. |
 | P1-180 | ACTIVE | Bulk local destructive operations must disclose loss of control over existing public Yandex links; no hidden mass unpublish. |
 | P1-182 | ACTIVE | Durable SelectionSnapshot locator context must not persist surrounding plaintext/sensitive raw href/src; preserve restore quality with privacy-preserving fingerprints. |

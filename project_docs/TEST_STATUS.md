@@ -778,3 +778,14 @@ Exact current identities derived by canonical authority:
 - BCF: unchanged `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
 
 #1125 is discovery evidence only; a later complete exact-head SUCCESS is required.
+
+
+### P1-178 exact-head closure review #1126 — 2026-09-24
+
+Repository Integrity #1126 / run `35964884390` completed **SUCCESS** on exact implementation head `7235174919dfbc6897c8851734725c0f675fbf61` for all three required jobs. The complete deterministic suite proves the registered P1-178 source/runtime contract: exact pending attempt/generation cleanup, post-exchange CAS, one shared auth/settings generation, exact Client-ID writer, recoverable cross-storage auth/config settlement, worker-start reconciliation, and generation-fenced settings import.
+
+P1-178 therefore transitions from **ACTIVE** to the Registry default **IMPLEMENTED / RELEASE-REGRESSION** state. P1-165 remains **ACTIVE** and continues to own returned OAuth-state verification. This closure does not claim real Yandex OAuth, physical release regression or release authorization.
+
+Implementation-head identities are RPF `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`, 33-file control `sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad`, Chrome QCF `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, pre-transition full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`, and BCF `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+Because the Registry edit changes a full-RCF root, a new exact-head full RCF and complete Repository Integrity SUCCESS are required before merge. Package bytes are unchanged by the closure-only edit; manifest remains `0.9.8` and release readiness remains **NOT READY**.
