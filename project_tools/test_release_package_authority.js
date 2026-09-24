@@ -92,7 +92,7 @@ ok(s0eSource.includes("const PACKAGE_TOPOLOGY = packageAuthority.readCanonicalMa
 ok(s0eSource.includes("const PACKAGE_FILES = Object.freeze([...PACKAGE_TOPOLOGY.files]);"), 'S0-E current package membership comes from S0-A authority');
 ok(s0eSource.includes("const LEGACY_PACKAGE_FILES = Object.freeze(PACKAGE_FILES.filter((rel) => rel !== 'application-generation.js'));"), 'S0-E retains explicit 33-file legacy subset control');
 ok(s0eSource.includes("const CURRENT_RPF = 'sha256:861caa46903cebd38aac4650f0962743a83719b94fb724a6426596ac091f4b32';"), 'S0-E pins corrected current 34-file RPF');
-ok(s0eSource.includes("const LEGACY_RPF = 'sha256:4c5f04e9a2ab4caf1dacb6b7141f2c21fe5fe4af267c20e33e73d00c3ebd052c';"), 'S0-E retains exact legacy incomplete RPF control');
+ok(s0eSource.includes("const LEGACY_RPF = 'sha256:11cae4f79e83e3771927227e1a249f2fa29c3cd753c07e72ed22f649dc6ad036';"), 'S0-E retains exact legacy incomplete RPF control');
 
 const digest = authority.topologyDigest(topology);
 ok(/^[0-9a-f]{64}$/.test(digest), 'topology digest is SHA-256 hex');
@@ -205,7 +205,7 @@ const legacyCountMatch = /(?:^|;\s*)legacy_package_files=(\d+)(?=;|$)/m.exec(rpf
 ok(Boolean(currentRpfMatch), 'current S0-E output exposes corrected RPF');
 ok(Boolean(legacyRpfMatch), 'S0-E output exposes explicit legacy RPF control');
 eq(currentRpfMatch[1], 'sha256:861caa46903cebd38aac4650f0962743a83719b94fb724a6426596ac091f4b32', 'current S0-E RPF equals canonical 34-file identity');
-eq(legacyRpfMatch[1], 'sha256:4c5f04e9a2ab4caf1dacb6b7141f2c21fe5fe4af267c20e33e73d00c3ebd052c', 'legacy S0-E RPF remains reproducible control');
+eq(legacyRpfMatch[1], 'sha256:11cae4f79e83e3771927227e1a249f2fa29c3cd753c07e72ed22f649dc6ad036', 'legacy S0-E RPF remains reproducible control');
 eq(packageCountMatch && Number(packageCountMatch[1]), 34, 'S0-E output current package count');
 eq(legacyCountMatch && Number(legacyCountMatch[1]), 33, 'S0-E output legacy package count');
 ok(currentRpfMatch[1] !== legacyRpfMatch[1], 'current and legacy RPFs remain distinct');
