@@ -186,7 +186,7 @@ function durableProjection(cp) {
   check(registry.includes('| P0-074 | ACTIVE |'), 'P0-074 remains active existing owner');
   check(registry.includes('| P1-090 | ACTIVE |'), 'P1-090 remains active existing owner');
   check(registry.includes('| P1-165 | ACTIVE |'), 'P1-165 remains active/unresolved');
-  check(registry.includes('| P1-178 | ACTIVE |'), 'P1-178 remains active existing owner');
+  check(!registry.includes('| P1-178 | ACTIVE |'), 'P1-178 leaves ACTIVE after auth/settings implementation closure');
   check(registry.includes('| P1-184 | ACTIVE |'), 'P1-184 remains active existing owner');
   check(registry.includes('| P1-195 | ACTIVE |'), 'P1-195 remains active existing owner');
   check(registry.includes('| P1-196 | IMPLEMENTED / RELEASE-REGRESSION |'), 'P1-196 remains explicit implemented late owner');

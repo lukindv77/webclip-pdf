@@ -88,6 +88,7 @@ function commitContext({ generation = 5, auth = null } = {}) {
     YANDEX_AUTH_KEY: 'yandexAuth',
     YANDEX_OAUTH_PENDING_KEY: 'yandexOAuthPending',
     YANDEX_AUTH_GENERATION_KEY: 'yandexAuthGeneration',
+    YANDEX_AUTH_CONFIG_COMMIT_KEY: 'yandexAuthConfigCommit',
     YANDEX_AUTH_STORAGE_SESSION: 'session',
     normalizeYandexAuthGeneration(value) {
       const n = Math.floor(Number(value) || 0);

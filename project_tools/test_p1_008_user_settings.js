@@ -27,7 +27,12 @@ function section(source, startMarker, endMarker) {
 }
 
 const code = section(sw, 'function assertUserSettingsPlainObject', 'function openIndexedDbBounded');
-assert(!/storage\.session/.test(code), 'P1-008 export/import implementation must not touch chrome.storage.session');
+assert.match(code, /clientIdChanged/);
+assert.match(code, /acquireYandexAuthStorageTurn/);
+assert.match(code, /YANDEX_AUTH_GENERATION_KEY/);
+assert.match(code, /YANDEX_OAUTH_PENDING_KEY/);
+assert.match(code, /YANDEX_AUTH_CONFIG_COMMIT_KEY/);
+assert(!/\[YANDEX_AUTH_KEY\]/.test(code), 'P1-008 import must not read/write committed OAuth secret record');
 assert.match(sw, /USER_SETTINGS_SCHEMA\s*=\s*'webclip-user-settings'/);
 assert.match(code, /WEBCLIP_USER_SETTINGS_SECRET_FIELD/);
 assert.match(code, /неизвестное поле/i);
@@ -85,13 +90,20 @@ function createHarness({ deferredBundle = null, rejectBundle = false } = {}) {
     webclipJournalGroupByUrl: false,
     yandexAuth: { accessToken: 'PERSISTENT-SHOULD-NOT-BE-READ' }
   };
-  const session = { yandexAuth: { accessToken: 'SESSION-SECRET' }, yandexOAuthPending: { codeVerifier: 'SECRET' } };
+  const session = {
+    yandexAuth: { accessToken: 'SESSION-SECRET', authRecordId: 'auth-A', authGeneration: 7 },
+    yandexAuthGeneration: 7,
+    yandexOAuthPending: { authAttemptId: 'pending-A', authGeneration: 7, codeVerifier: 'SECRET' },
+    yandexAuthConfigCommit: { version: 1, authRecordId: 'auth-A', authGeneration: 7, clientId: 'old-client' }
+  };
   const getCalls = [];
   const setCalls = [];
   const removeCalls = [];
   const sessionCalls = [];
   const schedulerReasons = [];
   let bundleSetCalls = 0;
+  let authTurnAcquires = 0;
+  let authTurnReleases = 0;
 
   const context = vm.createContext({
     Promise, Error, String, Number, Math, Array, Object, Set, Map, Date, JSON, RegExp,
@@ -109,10 +121,28 @@ function createHarness({ deferredBundle = null, rejectBundle = false } = {}) {
     DEFAULT_JOURNAL_BACKUP_RETRY_MINUTES: 60,
     CHROME_STORAGE_OPERATION_TIMEOUT_MS: 5,
     YANDEX_CONFIG_STORAGE_TIMEOUT_MS: 5,
+    YANDEX_AUTH_KEY: 'yandexAuth',
+    YANDEX_AUTH_GENERATION_KEY: 'yandexAuthGeneration',
+    YANDEX_OAUTH_PENDING_KEY: 'yandexOAuthPending',
+    YANDEX_AUTH_CONFIG_COMMIT_KEY: 'yandexAuthConfigCommit',
     normalizeDiskPath,
     normalizeIntervalMinutes,
     normalizeOperationLogRetentionHours,
     normalizeError(error) { return error?.message || String(error); },
+    nextYandexAuthGeneration(value) {
+      const current = Math.max(0, Math.floor(Number(value) || 0));
+      return current + 1;
+    },
+    async acquireYandexAuthStorageTurn() {
+      authTurnAcquires += 1;
+      let released = false;
+      return () => {
+        if (!released) {
+          released = true;
+          authTurnReleases += 1;
+        }
+      };
+    },
     userSettingsImportStorageSettlement: Promise.resolve(),
     yandexConfigStorageSettlementChain: Promise.resolve(),
     chromeStorageMutationSettlementChains: new Map(),
@@ -165,15 +195,34 @@ function createHarness({ deferredBundle = null, rejectBundle = false } = {}) {
           }
         },
         session: {
-          async get() { sessionCalls.push('get'); return { ...session }; },
-          async set() { sessionCalls.push('set'); },
-          async remove() { sessionCalls.push('remove'); }
+          async get(keys) {
+            const list = Array.isArray(keys) ? [...keys] : [keys];
+            sessionCalls.push({ op: 'get', keys: list });
+            const out = {};
+            for (const key of list) if (Object.prototype.hasOwnProperty.call(session, key)) out[key] = structuredClone(session[key]);
+            return out;
+          },
+          async set(values) {
+            const keys = Object.keys(values || {});
+            sessionCalls.push({ op: 'set', keys });
+            Object.assign(session, structuredClone(values || {}));
+          },
+          async remove(keys) {
+            const list = Array.isArray(keys) ? [...keys] : [keys];
+            sessionCalls.push({ op: 'remove', keys: list });
+            for (const key of list) delete session[key];
+          }
         }
       }
     }
   });
   vm.runInContext(`${code}\nthis.exportForTest = exportUserSettings; this.importForTest = importUserSettings;`, context);
-  return { context, local, session, getCalls, setCalls, removeCalls, sessionCalls, schedulerReasons, getBundleSetCalls: () => bundleSetCalls };
+  return {
+    context, local, session, getCalls, setCalls, removeCalls, sessionCalls, schedulerReasons,
+    getBundleSetCalls: () => bundleSetCalls,
+    getAuthTurnAcquires: () => authTurnAcquires,
+    getAuthTurnReleases: () => authTurnReleases
+  };
 }
 
 function validDocument() {
@@ -241,8 +290,13 @@ function validDocument() {
     assert.strictEqual(h.local.operationLogSettings.retentionHours, 48);
     assert.strictEqual(h.local.webclipJournalGroupByUrl, true);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(h.local, 'webclipUserSettingsImportPending'), false, 'marker must be cleared after scheduler reconciliation');
-    assert.strictEqual(h.session.yandexAuth.accessToken, 'SESSION-SECRET');
-    assert.deepStrictEqual(h.sessionCalls, [], 'valid import must not touch storage.session');
+    assert.strictEqual(h.session.yandexAuth.accessToken, 'SESSION-SECRET', 'settings import preserves committed OAuth secret');
+    assert.strictEqual(h.session.yandexAuthGeneration, 8, 'changed Client ID advances shared auth/settings generation');
+    assert.strictEqual(h.session.yandexOAuthPending, null, 'changed Client ID invalidates older pending OAuth attempt');
+    assert.strictEqual(h.session.yandexAuthConfigCommit, null, 'changed Client ID invalidates older config-settlement receipt');
+    assert(!h.sessionCalls.some((call) => call.keys.includes('yandexAuth')), 'settings import never reads/writes committed OAuth auth key');
+    assert.strictEqual(h.getAuthTurnAcquires(), 1, 'changed Client ID reserves one shared auth/settings turn');
+    assert.strictEqual(h.getAuthTurnReleases(), 1, 'shared auth/settings turn releases after bundled settlement');
     assert(h.schedulerReasons.includes('settings-import'));
   }
 
@@ -253,7 +307,10 @@ function validDocument() {
     assert.strictEqual(h.local.operationLogSettings.retentionHours, 24);
     assert.strictEqual(h.local.webclipJournalGroupByUrl, false);
     assert.strictEqual(h.getBundleSetCalls(), 1);
-    assert.deepStrictEqual(h.sessionCalls, []);
+    assert.strictEqual(h.session.yandexAuth.accessToken, 'SESSION-SECRET', 'failed settings bundle preserves committed OAuth auth');
+    assert.strictEqual(h.session.yandexAuthGeneration, 8, 'failed changed-Client-ID intent remains a monotonic generation fence');
+    assert(!h.sessionCalls.some((call) => call.keys.includes('yandexAuth')), 'failed import has no committed-auth mutation authority');
+    assert.strictEqual(h.getAuthTurnReleases(), 1, 'failed bundled write releases shared auth/settings turn');
   }
 
   {
@@ -272,7 +329,20 @@ function validDocument() {
     assert.strictEqual(h.local.webclipJournalGroupByUrl, true);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(h.local, 'webclipUserSettingsImportPending'), false, 'late success must reconcile and clear marker when worker remains alive');
     assert(h.schedulerReasons.includes('settings-import-late'));
-    assert.deepStrictEqual(h.sessionCalls, []);
+    assert.strictEqual(h.session.yandexAuth.accessToken, 'SESSION-SECRET', 'late settings settlement preserves committed OAuth auth');
+    assert(!h.sessionCalls.some((call) => call.keys.includes('yandexAuth')), 'late import settlement never reads/writes committed auth key');
+    assert.strictEqual(h.getAuthTurnReleases(), 1, 'shared auth/settings turn releases only after actual late settlement');
+  }
+
+  {
+    const h = createHarness();
+    const unchangedClient = validDocument();
+    unchangedClient.settings.yandex.clientId = 'old-client';
+    const result = await h.context.importForTest(unchangedClient);
+    assert.strictEqual(result.ok, true);
+    assert.deepStrictEqual(h.sessionCalls, [], 'unchanged Client ID needs no auth/settings generation mutation');
+    assert.strictEqual(h.getAuthTurnAcquires(), 0);
+    assert.strictEqual(h.session.yandexAuth.accessToken, 'SESSION-SECRET');
   }
 
   console.log('PASS P1-008 user settings allowlist, secret exclusion, bundled commit and late-settlement reconciliation');

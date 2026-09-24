@@ -14,7 +14,7 @@ const S0G_RESULT_SCHEMA = 'webclip-evidence-settlement-result/v1';
 const NAMESPACE_SCHEMA = 'webclip-evidence-namespace-validation/v1';
 const REQUIRED_SLOTS = Object.freeze(['unpacked-chrome', 'yandex-e2e', 'blocker-review', 'release-decision']);
 const CURRENT = Object.freeze({
-  rpf: 'sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071',
+  rpf: 'sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200',
   chromeQcf: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandexQcf: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
   rcf: 'sha256:cb34076d37c8dbe99392fac120fb21b03d192e4b53bc7a40650b5cd277311ffb',

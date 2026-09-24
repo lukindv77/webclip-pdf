@@ -30,8 +30,8 @@ const MAX_U64 = (1n << 64n) - 1n;
 const PACKAGE_TOPOLOGY = packageAuthority.readCanonicalManifest();
 const PACKAGE_FILES = Object.freeze([...PACKAGE_TOPOLOGY.files]);
 const LEGACY_PACKAGE_FILES = Object.freeze(PACKAGE_FILES.filter((rel) => rel !== 'application-generation.js'));
-const LEGACY_RPF = 'sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2';
-const CURRENT_RPF = 'sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071';
+const LEGACY_RPF = 'sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad';
+const CURRENT_RPF = 'sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200';
 
 const FULL_RCF_ROOTS = Object.freeze([
   '.github/workflows/release-gate.yml',

@@ -15,11 +15,11 @@ const builderAuthority = require('./release_builder_contract_authority.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const CURRENT = Object.freeze({
-  rpf: 'sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071',
-  legacyRpf: 'sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2',
+  rpf: 'sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200',
+  legacyRpf: 'sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad',
   chrome: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandex: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
-  rcf: 'sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c',
+  rcf: 'sha256:9c0fc13d98bfa613f59d7ed68ecd414a0bd12172bee489c8fba4674284243d35',
   bcf: 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'
 });
 let checks = 0;

@@ -42,6 +42,7 @@ function makeContext({
     MAX_YANDEX_CLIENT_ID_CHARS: 512,
     YANDEX_AUTH_KEY: 'yandexAuth',
     YANDEX_AUTH_GENERATION_KEY: 'yandexAuthGeneration',
+    YANDEX_AUTH_CONFIG_COMMIT_KEY: 'yandexAuthConfigCommit',
     YANDEX_OAUTH_PENDING_KEY: 'yandexOAuthPending',
     chrome: {
       storage: {

@@ -727,3 +727,72 @@ This status edit changes a full-RCF root, so the closure PR must obtain a new ex
 Repository Integrity #1121 / run `35949893255` on exact head `60dd01aa2d808971eb289dc67b7721706bfe6794` passed both dedicated release-control jobs and executed the complete deterministic suite. The P1-177 scheduler runtime/model tests passed. Direct failures were limited to stale owner-status witnesses and old full-RCF pins created by the Registry transition.
 
 Exact authority derived current full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`. RPF remains `sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071`; 33-file control remains `sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2`; Chrome/Yandex QCF and BCF remain unchanged. Current witnesses are synchronized on the next exact head. #1121 is discovery evidence only; merge requires a later complete SUCCESS.
+
+
+### P1-178 auth/settings commit-receipt tranche — 2026-09-24
+
+Canonical starting point is protected `main=66a5049c5cfe7a4f06f0b4e6c2b769650b8ecfa0`. Post-merge Repository Integrity **#1123 / run 35950619707** completed **SUCCESS** on that exact main for all three required jobs.
+
+Fresh P1-178 closure review found one remaining source/runtime gap after the earlier auth-attempt CAS work: exact OAuth auth generation was session-bound, but the matching `yandexConfig.clientId` lived in `storage.local` behind a separate config serializer. A stale OAuth settings writer could therefore outlive a newer auth/settings intent, and auth + matching Client ID had no explicit recoverable cross-storage commit receipt.
+
+This tranche keeps one shared `yandexAuthGeneration` rather than adding a second settings counter. OAuth-start Client-ID persistence is exact pending-attempt/generation fenced. Successful OAuth token CAS publishes a secret-free `yandexAuthConfigCommit` receipt in the same session mutation as committed auth; matching local Client-ID settlement then compare-checks exact auth record/generation and retires the receipt. Failed/unknown local settlement preserves the committed auth plus receipt for worker-start reconciliation. Newer OAuth/manual/Disconnect/validity/settings intents retire stale receipts.
+
+A changed Client ID imported through the existing user-settings feature reserves the same auth/settings turn, advances the shared generation, invalidates older pending/config-settlement authority, preserves the current committed OAuth session, and holds the turn through actual bundled local-storage settlement. This preserves the product requirement that settings import does not disable or replace the current OAuth session while placing Client-ID intent in the same logical generation ordering.
+
+Deterministic coverage:
+- `project_tools/test_p1_178_auth_attempt_generation_runtime.js` (extended)
+- `project_tools/test_p1_178_auth_settings_commit_runtime.js` (new)
+- `project_tools/test_p1_178_auth_attempt_settings_generation_refinement_model.js` (reconciled)
+
+Evidence:
+- `project_docs/RESEARCH_P1_178_AUTH_SETTINGS_COMMIT_RECEIPT_2026-09-24_EVIDENCE.md`
+
+Pre-tranche identities:
+- 34-file RPF: `sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071`
+- 33-file control: `sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2`
+- Chrome QCF: `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`
+- Yandex QCF: `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`
+- full RCF: `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`
+- BCF: `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
+
+Because `service-worker.js` changes, replacement current RPF/33-file identities must come from exact-head P1-231 authority and are not guessed here. P1-178 remains **ACTIVE** pending complete exact-head CI and a fresh closure review. P1-165 remains **ACTIVE** because fixed screen-code OAuth still does not expose returned-state comparison. Manifest remains `0.9.8`; release readiness remains **NOT READY**. No real Chrome/Yandex L5, provider mutation, physical release receipt, ZIP/build, version bump, S2 activation, tag, deployment, GitHub Release or release decision is performed.
+
+
+### P1-178 identity discovery #1124
+
+Repository Integrity #1124 / run `35963862602` on exact initial head `904f25215028e623350bc8daa0b62a5b2e99abf8` is **not merge evidence** because the generic job stopped at PR change-contract metadata before syntax/deterministic tests. Both dedicated release-control lanes succeeded and derived current 34-file RPF `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`; Chrome/Yandex QCF, full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`, and BCF remain unchanged. The current 33-file control is deliberately deferred to the later complete deterministic identity witness rather than guessed outside the canonical verifier.
+
+
+### P1-178 deterministic discovery #1125
+
+Repository Integrity #1125 / run `35964225677` on exact head `d809d159cf52bfcd352bbb0591ea3e969102a279` passed PR accounting and JavaScript syntax and ran the complete deterministic suite. The new P1-178 runtime tests passed (62 cases + 41 checks), and the reconciled P1-178 refinement model passed 85 cases.
+
+Remaining direct non-identity failures were stale neighboring harness assumptions: P1-008 still prohibited every `storage.session` control touch during settings import, and three P1-191/P1-196 VM fixtures lacked the new non-secret `YANDEX_AUTH_CONFIG_COMMIT_KEY`. Those fixtures are synchronized while preserving the stronger invariant that settings import never reads/writes the committed OAuth auth key.
+
+Exact current identities derived by canonical authority:
+- 34-file RPF: `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`
+- 33-file control: `sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad`
+- Chrome QCF: unchanged `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`
+- Yandex QCF: unchanged `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`
+- full RCF: unchanged `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`
+- BCF: unchanged `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
+
+#1125 is discovery evidence only; a later complete exact-head SUCCESS is required.
+
+
+### P1-178 exact-head closure review #1126 — 2026-09-24
+
+Repository Integrity #1126 / run `35964884390` completed **SUCCESS** on exact implementation head `7235174919dfbc6897c8851734725c0f675fbf61` for all three required jobs. The complete deterministic suite proves the registered P1-178 source/runtime contract: exact pending attempt/generation cleanup, post-exchange CAS, one shared auth/settings generation, exact Client-ID writer, recoverable cross-storage auth/config settlement, worker-start reconciliation, and generation-fenced settings import.
+
+P1-178 therefore transitions from **ACTIVE** to the Registry default **IMPLEMENTED / RELEASE-REGRESSION** state. P1-165 remains **ACTIVE** and continues to own returned OAuth-state verification. This closure does not claim real Yandex OAuth, physical release regression or release authorization.
+
+Implementation-head identities are RPF `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`, 33-file control `sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad`, Chrome QCF `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, pre-transition full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`, and BCF `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+Because the Registry edit changes a full-RCF root, a new exact-head full RCF and complete Repository Integrity SUCCESS are required before merge. Package bytes are unchanged by the closure-only edit; manifest remains `0.9.8` and release readiness remains **NOT READY**.
+
+
+### P1-178 Registry-transition discovery #1127
+
+Repository Integrity #1127 / run `36012167714` on exact closure head `fb04b2f312740230056cb80dd9653019ef516e4e` confirmed stable package identity (RPF `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`, 33-file control `sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad`) and derived current full RCF `sha256:9c0fc13d98bfa613f59d7ed68ecd414a0bd12172bee489c8fba4674284243d35`. Chrome/Yandex QCF and BCF remain unchanged.
+
+The generic suite failures were closure-only stale witnesses: three cross-owner tests still required P1-178 in ACTIVE Registry and seven current release-control pins still expected pre-transition full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`; downstream S0-H/S0-I/S1-B/S1-C/S1-D failures were transitive. P1-178 implementation tests themselves passed. These witnesses are reconciled on the following exact head. #1127 is not merge evidence. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
