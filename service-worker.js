@@ -12959,6 +12959,51 @@ async function proveJournalBackupSchedulerAdmission(expectedGeneration = 0) {
   return Object.freeze({ admitted: true, reason: 'current', generation: control.generation });
 }
 
+function makeJournalBackupSchedulerAdmissionError(expectedGeneration, admission, remoteChild = 'remote-child') {
+  const error = new Error('Поколение фонового backup scheduler изменилось до запуска следующего удалённого шага. Новый remote child не запущен.');
+  error.code = 'JOURNAL_BACKUP_SCHEDULER_STALE';
+  error.schedulerReason = String(admission?.reason || 'stale-or-paused').slice(0, 80);
+  error.schedulerGeneration = normalizeJournalBackupSchedulerGeneration(admission?.generation);
+  error.expectedSchedulerGeneration = normalizeJournalBackupSchedulerGeneration(expectedGeneration);
+  error.remoteChild = String(remoteChild || 'remote-child').slice(0, 80);
+  return error;
+}
+
+async function assertJournalBackupRemoteChildAdmission(expectedGeneration, operationContext = null, remoteChild = 'remote-child') {
+  const expected = normalizeJournalBackupSchedulerGeneration(expectedGeneration);
+  if (!expected) {
+    throw makeJournalBackupSchedulerAdmissionError(expectedGeneration, { reason: 'missing-generation', generation: 0 }, remoteChild);
+  }
+  const admission = await proveJournalBackupSchedulerAdmission(expected);
+  if (!admission.admitted || admission.generation !== expected) {
+    throw makeJournalBackupSchedulerAdmissionError(expected, admission, remoteChild);
+  }
+  if (operationContext && !(await isCurrentYandexOperationAuthUsable(operationContext))) {
+    throw makeJournalBackupSchedulerAdmissionError(expected, {
+      reason: 'operation-auth-superseded',
+      generation: admission.generation
+    }, remoteChild);
+  }
+  return admission;
+}
+
+async function captureJournalBackupSchedulerOperationContext(expectedGeneration) {
+  const expected = normalizeJournalBackupSchedulerGeneration(expectedGeneration);
+  await assertJournalBackupRemoteChildAdmission(expected, null, 'operation-context-capture');
+  let operationContext;
+  try {
+    operationContext = await captureCurrentYandexOperationContext();
+  } catch (error) {
+    const admission = await proveJournalBackupSchedulerAdmission(expected);
+    if (!admission.admitted || admission.generation !== expected) {
+      throw makeJournalBackupSchedulerAdmissionError(expected, admission, 'operation-context-capture');
+    }
+    throw error;
+  }
+  await assertJournalBackupRemoteChildAdmission(expected, operationContext, 'operation-context-bind');
+  return operationContext;
+}
+
 function scheduledJournalBackupGeneration(control, kind) {
   const normalized = normalizeJournalBackupSchedulerControl(control);
   return kind === 'retry' ? normalized.retryGeneration : normalized.periodicGeneration;
@@ -13104,6 +13149,9 @@ async function getJournalBackupStatus() {
 
 async function ensureYandexServiceFolders({ includeUpload = false, includeReadLater = false, includeBackup = false, operationId = '' } = {}) {
   const operationContext = arguments[0]?.operationContext || null;
+  const beforeRemoteChild = typeof arguments[0]?.beforeRemoteChild === 'function'
+    ? arguments[0].beforeRemoteChild
+    : null;
   const provenContext = operationContext
     ? WebClipYandexOperationContext.validateOperationContext(operationContext)
     : null;
@@ -13113,19 +13161,19 @@ async function ensureYandexServiceFolders({ includeUpload = false, includeReadLa
   if (!provenContext) await getValidYandexAccessToken();
   const result = { rootPath: config.rootPath, uploadPath: '', readLaterPath: '', backupPath: '', journalPath: '' };
   try {
-    await ensureYandexFolderTree(config.rootPath, operationId, provenContext);
+    await ensureYandexFolderTree(config.rootPath, operationId, provenContext, beforeRemoteChild);
     if (includeUpload) {
       result.uploadPath = joinDiskPath(config.rootPath, YANDEX_UPLOAD_DIR);
-      await ensureYandexFolderTree(result.uploadPath, operationId, provenContext);
+      await ensureYandexFolderTree(result.uploadPath, operationId, provenContext, beforeRemoteChild);
     }
     if (includeReadLater) {
       result.readLaterPath = joinDiskPath(config.rootPath, YANDEX_READ_LATER_DIR);
-      await ensureYandexFolderTree(result.readLaterPath, operationId, provenContext);
+      await ensureYandexFolderTree(result.readLaterPath, operationId, provenContext, beforeRemoteChild);
     }
     if (includeBackup) {
       result.backupPath = joinDiskPath(config.rootPath, YANDEX_BACKUP_DIR);
       result.journalPath = joinDiskPath(result.backupPath, YANDEX_JOURNAL_DIR);
-      await ensureYandexFolderTree(result.journalPath, operationId, provenContext);
+      await ensureYandexFolderTree(result.journalPath, operationId, provenContext, beforeRemoteChild);
     }
   } catch (error) {
     const parts = [];
@@ -13238,23 +13286,36 @@ async function releaseJournalBackupLease(lease) {
   } finally { db.close(); }
 }
 
-async function uploadJournalExportStagedToYandex(staged, { backupDate = new Date(), operationId = '', reason = 'manual' } = {}) {
+async function uploadJournalExportStagedToYandex(staged, {
+  backupDate = new Date(),
+  operationId = '',
+  reason = 'manual',
+  schedulerGeneration = 0,
+  operationContext = null,
+  beforeRemoteChild = null
+} = {}) {
   if (!staged?.stagingKey) throw new Error('Не подготовлены временные данные резервной копии журнала.');
+  const admitRemoteChild = async (remoteChild) => {
+    if (typeof beforeRemoteChild === 'function') await beforeRemoteChild(remoteChild);
+  };
   emitJournalBackupProgress(operationId, 'yandex-access', 'Проверяем доступ к Яндекс Диску и корневую папку…', 38);
-  const structure = await ensureYandexServiceFolders({ includeBackup: true, operationId });
+  const structure = await ensureYandexServiceFolders({
+    includeBackup: true, operationId, operationContext, beforeRemoteChild
+  });
   const journalRoot = structure.journalPath;
   if (!journalRoot) throw new Error('Не удалось определить папку резервной копии журнала.');
 
   const monthName = journalBackupMonthFolderName(backupDate);
   const monthFolder = joinDiskPath(journalRoot, monthName);
   emitJournalBackupProgress(operationId, 'month-folder', `Проверяем папку Journal/${monthName}…`, 50, 'running', { monthFolder });
-  await ensureYandexFolderTree(monthFolder, operationId);
+  await ensureYandexFolderTree(monthFolder, operationId, operationContext, beforeRemoteChild);
 
   const filename = journalBackupVersionFilename(backupDate);
   const remotePath = joinDiskPath(monthFolder, filename);
   emitJournalBackupProgress(operationId, 'upload-url', 'Получаем адрес для загрузки новой версии резервной копии…', 62, 'running', { remotePath });
+  await admitRemoteChild('upload-url');
   const uploadLink = await yandexApi('/resources/upload', {
-    method: 'GET', query: { path: remotePath, overwrite: 'false' }, operationId
+    method: 'GET', query: { path: remotePath, overwrite: 'false' }, operationId, operationContext
   });
   if (!uploadLink?.href) throw new Error('Яндекс Диск не вернул адрес для загрузки резервной копии журнала.');
 
@@ -13267,9 +13328,21 @@ async function uploadJournalExportStagedToYandex(staged, { backupDate = new Date
     expectedBytes: requirePositiveByteSize(staged.totalBytes, 'Размер подготовленной резервной копии журнала'),
     entryCount: Math.max(0, Number(staged.entryCount) || 0),
     exportedAt: String(staged.exportedAt || '').slice(0, 120),
-    reason: String(reason || '').slice(0, 80)
+    reason: String(reason || '').slice(0, 80),
+    schedulerGeneration: normalizeJournalBackupSchedulerGeneration(schedulerGeneration)
   };
   await mutateJournalBackupPending(() => chrome.storage.local.set({ [JOURNAL_BACKUP_PENDING_KEY]: pending }), 'Сохранение prepared backup checkpoint');
+  try {
+    await admitRemoteChild('signed-upload');
+  } catch (error) {
+    // The signed transfer has not started, so this just-created prepared
+    // checkpoint is not historical effect authority and may be retired.
+    await mutateJournalBackupPending(
+      () => chrome.storage.local.remove(JOURNAL_BACKUP_PENDING_KEY),
+      'Очистка prepared backup checkpoint до не допущенного signed upload'
+    ).catch(() => {});
+    throw error;
+  }
   let response;
   try {
     response = await runOffscreenSignedTransfer({
@@ -13287,8 +13360,9 @@ async function uploadJournalExportStagedToYandex(staged, { backupDate = new Date
   if (!response.ok) throw new Error(`Ошибка загрузки резервной копии журнала: HTTP ${response.status}${response.details ? ` — ${response.details}` : ''}`);
 
   emitJournalBackupProgress(operationId, 'verify', 'Проверяем, что новая версия файла появилась на Яндекс Диске…', 90, 'running', { remotePath });
+  await admitRemoteChild('post-upload-verify');
   const metadata = await yandexApi('/resources', {
-    method: 'GET', query: { path: remotePath, fields: 'name,path,type,size,modified,resource_id' }, operationId
+    method: 'GET', query: { path: remotePath, fields: 'name,path,type,size,modified,resource_id' }, operationId, operationContext
   });
   if (metadata?.type !== 'file') throw new Error('Яндекс Диск не подтвердил создание файла резервной копии журнала.');
   const verifiedBackupBytes = assertExactYandexRemoteByteSize(pending.expectedBytes, metadata?.size, 'Резервная копия журнала на Яндекс Диске');
@@ -13306,10 +13380,15 @@ async function uploadJournalExportStagedToYandex(staged, { backupDate = new Date
   return { ok: true, remotePath, filename, monthFolder, entryCount: pending.entryCount, exportedAt: pending.exportedAt, size: verifiedBackupBytes };
 }
 
-async function recoverPendingJournalBackup(status, operationId = '') {
+async function recoverPendingJournalBackup(status, operationId = '', { operationContext = null, beforeRemoteChild = null } = {}) {
+  const admitRemoteChild = async (remoteChild) => {
+    if (typeof beforeRemoteChild === 'function') await beforeRemoteChild(remoteChild);
+  };
   const pending = (await readJournalBackupStorage(JOURNAL_BACKUP_PENDING_KEY, 'Чтение backup checkpoint'))?.[JOURNAL_BACKUP_PENDING_KEY];
   if (!pending?.remotePath) return null;
-  const structure = await ensureYandexServiceFolders({ includeBackup: true, operationId });
+  const structure = await ensureYandexServiceFolders({
+    includeBackup: true, operationId, operationContext, beforeRemoteChild
+  });
   const remotePath = normalizeDiskPath(pending.remotePath);
   if (!remotePath || !isAllowedJournalBackupPath(remotePath, structure.journalPath)) {
     await mutateJournalBackupPending(() => chrome.storage.local.remove(JOURNAL_BACKUP_PENDING_KEY), 'Удаление некорректного backup checkpoint');
@@ -13322,8 +13401,9 @@ async function recoverPendingJournalBackup(status, operationId = '') {
     data: { remotePath, previousOperationId: String(pending.operationId || '').slice(0, MAX_OPERATION_ID_CHARS), createdAt: Number(pending.createdAt || 0) }
   });
   try {
+    await admitRemoteChild('recovery-verify');
     const metadata = await yandexApi('/resources', {
-      method: 'GET', query: { path: remotePath, fields: 'name,path,type,size,modified' }, operationId
+      method: 'GET', query: { path: remotePath, fields: 'name,path,type,size,modified' }, operationId, operationContext
     });
     if (metadata?.type !== 'file') throw new Error('Checkpoint указывает не на файл.');
     const expectedBytes = requirePositiveByteSize(pending.expectedBytes, 'Размер резервной копии в recovery-checkpoint');
@@ -13403,9 +13483,12 @@ async function finalizeJournalBackupSuccessHousekeeping({ successAt, status, pen
   return warnings.join(' | ');
 }
 
-async function exportJournalBackupToYandex({ reason = 'manual', operationId = '' } = {}) {
+async function exportJournalBackupToYandex({ reason = 'manual', operationId = '', schedulerGeneration = 0 } = {}) {
   operationId = normalizeOperationIdInput(operationId) || makeOperationLogId('journal-backup');
   const isBackground = reason !== 'manual';
+  const backgroundSchedulerGeneration = isBackground
+    ? normalizeJournalBackupSchedulerGeneration(schedulerGeneration)
+    : 0;
   const attemptAt = Date.now();
   const backupDate = new Date(attemptAt);
   await startOperationLog(operationId, 'journal-backup', isBackground ? 'Фоновая резервная копия журнала на Яндекс Диск' : 'Резервная копия журнала на Яндекс Диск', {
@@ -13426,7 +13509,21 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
     if (!status.rootPath) throw new Error('В настройках не выбрана корневая папка Яндекс Диска.');
     appendOperationLogEvent(operationId, { category: 'context', message: 'Определена корневая папка Яндекс Диска.', data: { rootPath: status.rootPath } });
 
-    const recoveredUpload = await recoverPendingJournalBackup(status, operationId);
+    let operationContext = null;
+    let beforeRemoteChild = null;
+    if (isBackground) {
+      if (!backgroundSchedulerGeneration) {
+        throw makeJournalBackupSchedulerAdmissionError(0, { reason: 'missing-generation', generation: 0 }, 'backup-pipeline');
+      }
+      operationContext = await captureJournalBackupSchedulerOperationContext(backgroundSchedulerGeneration);
+      beforeRemoteChild = (remoteChild) => assertJournalBackupRemoteChildAdmission(
+        backgroundSchedulerGeneration,
+        operationContext,
+        remoteChild
+      );
+    }
+
+    const recoveredUpload = await recoverPendingJournalBackup(status, operationId, { operationContext, beforeRemoteChild });
     if (recoveredUpload) {
       const successAt = Date.now();
       // Durable success commit point: fresh read + write are inside one
@@ -13454,7 +13551,14 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
     emitJournalBackupProgress(operationId, 'serialize', `Chunked JSON резервной копии сформирован. Записей: ${staged.entryCount}.`, 25, 'running', { entryCount: staged.entryCount, totalBytes: staged.totalBytes, chunkCount: staged.chunkCount });
     await renewJournalBackupLease(lease);
     appendOperationLogEvent(operationId, { category: 'checkpoint', level: 'info', stage: 'backup-lease', message: 'Lease резервного копирования продлён перед сетевой передачей.', data: { expiresAt: lease.expiresAt } });
-    const uploaded = await uploadJournalExportStagedToYandex(staged, { backupDate, operationId, reason });
+    const uploaded = await uploadJournalExportStagedToYandex(staged, {
+      backupDate,
+      operationId,
+      reason,
+      schedulerGeneration: backgroundSchedulerGeneration,
+      operationContext,
+      beforeRemoteChild
+    });
     const successAt = Date.now();
     // Durable success commit point. The actual Chrome Storage settlement, not
     // the local timeout, releases this queue turn. Everything after this
@@ -13493,6 +13597,34 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
       housekeepingWarning
     };
   } catch (error) {
+    if (isBackground && error?.code === 'JOURNAL_BACKUP_SCHEDULER_STALE') {
+      appendOperationLogEvent(operationId, {
+        category: 'background-decision', level: 'info', stage: 'scheduler-stale',
+        message: 'Фоновый backup остановлен до запуска следующего remote child: scheduler generation изменилось.',
+        data: {
+          skipped: true,
+          remoteChild: String(error.remoteChild || ''),
+          schedulerReason: String(error.schedulerReason || ''),
+          schedulerGeneration: Number(error.schedulerGeneration || 0),
+          expectedSchedulerGeneration: Number(error.expectedSchedulerGeneration || backgroundSchedulerGeneration || 0)
+        }
+      });
+      emitJournalBackupProgress(operationId, 'complete', 'Фоновый backup остановлен после смены scheduler generation; новый удалённый шаг не запускался.', 100, 'success', {
+        skipped: true,
+        remoteChild: String(error.remoteChild || ''),
+        schedulerReason: String(error.schedulerReason || ''),
+        schedulerGeneration: Number(error.schedulerGeneration || 0)
+      });
+      return {
+        ok: true,
+        skipped: true,
+        schedulerReason: String(error.schedulerReason || 'stale-or-paused'),
+        schedulerGeneration: Number(error.schedulerGeneration || 0),
+        expectedSchedulerGeneration: Number(error.expectedSchedulerGeneration || backgroundSchedulerGeneration || 0),
+        remoteChild: String(error.remoteChild || ''),
+        operationId
+      };
+    }
     const failureAt = Date.now();
     await mutateJournalBackupState((previous) => {
       const state = {
@@ -13893,7 +14025,7 @@ async function runDueJournalBackup(reason = 'scheduled', forceRetry = false, sch
       message: 'Фоновый экспорт требуется. Переходим к формированию и отправке журнала.',
       data: { reason, forceRetry: Boolean(forceRetry), due: true, schedulerGeneration: scheduledGeneration }
     });
-    return await exportJournalBackupToYandex({ reason, operationId });
+    return await exportJournalBackupToYandex({ reason, operationId, schedulerGeneration: scheduledGeneration });
   } catch (error) {
     recordOperationStage(operationId, 'error', `Ошибка фоновой операции: ${normalizeError(error)}`, 100, 'error', { reason });
     console.warn('WebClip journal backup:', error);
@@ -16376,6 +16508,9 @@ async function runOffscreenSignedTransfer(spec = {}, { operationId = '', label =
 
 async function ensureYandexFolderTree(path, operationId = '') {
   const operationContext = arguments.length > 2 ? arguments[2] : null;
+  const beforeRemoteChild = arguments.length > 3 && typeof arguments[3] === 'function'
+    ? arguments[3]
+    : null;
   const normalized = normalizeDiskPath(path);
   if (!normalized || normalized === '/') return;
   if (normalized.length > 2048) throw new Error('Путь Яндекс Диска превышает безопасный предел длины.');
@@ -16397,6 +16532,7 @@ async function ensureYandexFolderTree(path, operationId = '') {
   for (const segment of segments) {
     current = joinDiskPath(current || '/', segment);
     try {
+      if (beforeRemoteChild) await beforeRemoteChild('folder-provision');
       await yandexApi('/resources', {
         method: 'PUT',
         query: { path: current },
@@ -16409,6 +16545,7 @@ async function ensureYandexFolderTree(path, operationId = '') {
       // структуры WebClip недостаточно факта существования: это обязан
       // быть именно каталог, иначе дальнейшая запись внутрь него невозможна.
       if (Number(error?.status) !== 409) throw error;
+      if (beforeRemoteChild) await beforeRemoteChild('folder-verify');
       const existing = await yandexApi('/resources', {
         method: 'GET',
         query: { path: current, fields: 'name,path,type' },

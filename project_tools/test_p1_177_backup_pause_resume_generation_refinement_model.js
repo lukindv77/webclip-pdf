@@ -110,6 +110,7 @@ check('O06 P0-074 operation context owner', () => has(REGISTRY, 'Long Yandex ope
 check('O07 P1-138 hidden mutation owner', () => has(REGISTRY, 'Read-like Yandex list/fetch/status flows must not hide provisioning/mutation authority'));
 check('O08 P1-178 auth generation owner', () => has(REGISTRY, 'OAuth pending/token exchange/config commit is one auth-attempt + settings-generation state machine'));
 check('O09 P1-184 exact receipt owner', () => has(REGISTRY, 'path+size cannot authorize adoption or publication'));
+check('O09b P1-210 unknown external-effect settlement owner', () => has(REGISTRY, 'Lost/rejected outer user-operation transport response means unknown'));
 check('O10 baseline exact', () => has(EVIDENCE, '0e58f326a19f22611f3ddcb65e13bcf2cbd48670'));
 check('O11 no new P code', () => has(EVIDENCE, 'New P-code: **NO**'));
 check('O12 runtime none', () => has(EVIDENCE, 'Production/runtime modification: **NONE**'));
@@ -146,7 +147,7 @@ check('S14 due revalidates same scheduler generation before backup pipeline', ()
 check('S15 current stale-retry guard preserved', () => has(due, 'staleRetryAlarm: true'));
 check('S16 stale-retry guard tied to newer success', () => has(due, 'if (forceRetry && !unresolvedFailure)'));
 
-const backup = asyncSection("async function exportJournalBackupToYandex({ reason = 'manual', operationId = '' } = {})");
+const backup = asyncSection("async function exportJournalBackupToYandex({ reason = 'manual', operationId = '', schedulerGeneration = 0 } = {})");
 check('S17 background failure writes lastFailureAt for real execution failures', () => has(backup, 'state.lastFailureAt = failureAt;'));
 check('S18 background failure writes lastBackgroundFailureAt for real execution failures', () => has(backup, 'state.lastBackgroundFailureAt = failureAt;'));
 check('S19 background failure records error', () => has(backup, 'state.lastBackgroundError = normalizeError(error);'));
@@ -180,7 +181,14 @@ check('S33 direct fixed-name alarm -> runDue dispatch removed', () => {
 const upload = asyncSection('async function uploadJournalExportStagedToYandex(');
 check('S34 physical upload path persists prepared checkpoint', () => has(upload, '[JOURNAL_BACKUP_PENDING_KEY]: pending'));
 check('S35 physical upload uses offscreen signed transfer', () => has(upload, 'runOffscreenSignedTransfer'));
-check('S36 per-child scheduler recheck remains next bounded gap', () => lacks(upload, 'proveJournalBackupSchedulerAdmission'));
+check('S36 signed-upload child receives fresh scheduler admission hook', () => has(upload, "await admitRemoteChild('signed-upload')"));
+check('S37 upload-url child receives fresh scheduler admission hook', () => has(upload, "await admitRemoteChild('upload-url')"));
+check('S38 post-upload verification child receives fresh scheduler admission hook', () => has(upload, "await admitRemoteChild('post-upload-verify')"));
+check('S39 background export maps stale child veto to skipped outcome before failure bookkeeping', () => {
+  has(backup, "error?.code === 'JOURNAL_BACKUP_SCHEDULER_STALE'");
+  assert.ok(backup.indexOf("error?.code === 'JOURNAL_BACKUP_SCHEDULER_STALE'") < backup.indexOf('const failureAt = Date.now();'));
+});
+check('S40 due passes the exact admitted generation into the backup pipeline', () => has(due, 'schedulerGeneration: scheduledGeneration'));
 
 // Deterministic target/race matrix.
 const ar1 = ns('A', '/R1');
@@ -292,4 +300,4 @@ check('N33 no runtime/L5/S2/release action', () => {
   'V1 readiness and release authority are untouched.'
 ].forEach((needle, i) => check(`E${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
 
-console.log(`P1-177 backup pause/resume generation refinement model: PASS; cases=${cases}; schema=webclip-backup-scheduler-generation/v1; baseline=0e58f326a19f22611f3ddcb65e13bcf2cbd48670; disconnect_pause=implemented; due_auth_generation_gate=implemented; fixed_alarm_generation_receipt=implemented; explicit_auth_resume=implemented; stale_retry_success_guard=preserved; callback_entry_recheck=implemented; backup_entry_recheck=implemented; child_mutation_recheck=current-gap; started_effect=persist-reconcile; namespace_owner=P1-179; auth_generation_owner=P1-178; scheduler_owner=P1-177; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-177 backup pause/resume generation refinement model: PASS; cases=${cases}; schema=webclip-backup-scheduler-generation/v1; baseline=0e58f326a19f22611f3ddcb65e13bcf2cbd48670; disconnect_pause=implemented; due_auth_generation_gate=implemented; fixed_alarm_generation_receipt=implemented; explicit_auth_resume=implemented; stale_retry_success_guard=preserved; callback_entry_recheck=implemented; backup_entry_recheck=implemented; child_mutation_recheck=implemented; started_effect=persist-reconcile; namespace_owner=P1-179; auth_generation_owner=P1-178; scheduler_owner=P1-177; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);

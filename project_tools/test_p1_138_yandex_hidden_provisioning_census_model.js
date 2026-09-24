@@ -102,14 +102,14 @@ check('C01 test connection observes account through exact-auth receipt read', ()
 check('C02 test connection hides ensure today', () => has(testConnection, 'ensureYandexServiceFolders({ includeUpload: true, includeReadLater: true, includeBackup: true })'));
 const listBackups = asyncSection("async function listJournalBackupsOnYandex(requestedMonth = '')");
 check('C03 list backups hides ensure today', () => has(listBackups, 'ensureYandexServiceFolders({ includeBackup: true })'));
-const recoverPending = asyncSection("async function recoverPendingJournalBackup(status, operationId = '')");
+const recoverPending = asyncSection("async function recoverPendingJournalBackup(status, operationId = '', { operationContext = null, beforeRemoteChild = null } = {})");
 check('C04 recovery reads pending path', () => has(recoverPending, 'pending?.remotePath'));
-check('C05 recovery provisions before reconcile today', () => has(recoverPending, 'ensureYandexServiceFolders({ includeBackup: true, operationId })'));
+check('C05 recovery provisions before reconcile today', () => has(recoverPending, 'includeBackup: true, operationId, operationContext, beforeRemoteChild'));
 const fetchBackup = asyncSection("async function fetchJournalBackupFromYandex(requestedPath, operationId = '', ownerSessionId = '')");
 check('C06 selected import validates path', () => has(fetchBackup, "if (!remotePath) throw new Error('Выберите конкретный файл резервной копии для импорта.')"));
 check('C07 selected import hides ensure today', () => has(fetchBackup, 'ensureYandexServiceFolders({ includeBackup: true, operationId })'));
 const backupUpload = asyncSection('async function uploadJournalExportStagedToYandex(');
-check('C08 backup upload legitimately provisions', () => has(backupUpload, 'ensureYandexServiceFolders({ includeBackup: true, operationId })'));
+check('C08 backup upload legitimately provisions', () => has(backupUpload, 'includeBackup: true, operationId, operationContext, beforeRemoteChild'));
 
 // Remaining three semantic consumers are bound by ordered source sequences.
 check('C09 root-setting ancillary provisioning', () => matches(/config\.rootPath\s*=\s*normalized[\s\S]{0,2200}ensureYandexServiceFolders\(\{\s*includeUpload:\s*true,\s*includeReadLater:\s*true,\s*includeBackup:\s*true\s*\}\)/, 'root config commit -> ancillary ensure'));

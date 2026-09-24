@@ -122,10 +122,10 @@ check('S12 pending remotePath present', () => has(pendingObject, 'remotePath'));
 check('S13 pending expectedBytes present', () => has(pendingObject, 'expectedBytes'));
 check('S14 pending accountUid absent', () => lacks(pendingObject, 'accountUid'));
 check('S15 pending rootPath absent', () => lacks(pendingObject, 'rootPath'));
-const recovery = section("async function recoverPendingJournalBackup(status, operationId = '')");
+const recovery = section("async function recoverPendingJournalBackup(status, operationId = '', { operationContext = null, beforeRemoteChild = null } = {})");
 check('S16 recovery loads pending checkpoint', () => has(recovery, 'JOURNAL_BACKUP_PENDING_KEY'));
 check('S17 current ensure precedes historical path handling', () => {
-  const ensureAt = recovery.indexOf('ensureYandexServiceFolders({ includeBackup: true, operationId })');
+  const ensureAt = recovery.indexOf('ensureYandexServiceFolders({');
   const pathAt = recovery.indexOf('normalizeDiskPath(pending.remotePath)');
   assert.ok(ensureAt >= 0 && pathAt >= 0 && ensureAt < pathAt);
 });
