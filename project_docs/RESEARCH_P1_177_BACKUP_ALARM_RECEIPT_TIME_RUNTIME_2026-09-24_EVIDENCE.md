@@ -188,3 +188,21 @@ No QA-contract or builder-contract input is intentionally changed, so no QCF/BCF
 P1-177 remains **ACTIVE** through this tranche. Exact-head CI and another current-source closure review are required before any owner-status transition is considered.
 
 No real Chrome qualification, live Yandex provider request, provider mutation, physical release receipt, product ZIP/build, manifest version bump, S2 activation, tag, deploy, GitHub Release, or release decision is performed.
+
+
+## 10. Exact-head discovery run #1107
+
+Repository Integrity **#1107 / run 35942836375** on exact initial PR head `0c0e8f5e13e41c97676485baa1734dc62f3a4288` passed both dedicated P1-231 release-control jobs and reached the complete deterministic suite.
+
+Exact source-generation authority derived:
+
+- current 34-file RPF: `sha256:3ae12e58cb9bd58c05763cb320f01b2dbdac92b5090faf04e1c5c4c723ec1071`
+- current 33-file negative/control projection: `sha256:5ff081f59c8bd46cf1b97eda4c183ce8573a5d42eb0c475f835847abb62383c2`
+- Chrome QCF unchanged: `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`
+- Yandex QCF unchanged: `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`
+- full RCF unchanged: `sha256:a099e052fdd75038f40a8895d2f91a8e63cefc545387d9ddebef8b783eb90b07`
+- BCF unchanged: `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
+
+The 15 deterministic failures were identity-witness/predecessor drift from the old current RPF/control values. No new alarm-runtime failure appeared before the predecessor cascade. Current identity assertions were synchronized; historical dated evidence remains unchanged.
+
+#1107 is discovery evidence only, not merge evidence.
