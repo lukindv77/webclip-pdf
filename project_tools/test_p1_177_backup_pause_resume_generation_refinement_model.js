@@ -221,6 +221,12 @@ check('S43 dispatch binds delivered scheduledTime to durable due time', () => {
   has(SOURCE, 'normalizeJournalBackupSchedulerDueAt(alarm?.scheduledTime) === receipt.dueAt');
 });
 check('S44 mismatched delivered time is explicit stale delivery', () => has(SOURCE, "stale-delivery-receipt"));
+check('S45 stale callback uses compare-before-clear instead of unconditional fixed-name clear', () => {
+  has(SOURCE, 'clearDeliveredJournalBackupAlarmIfStillStale(alarm, kind)');
+  has(SOURCE, 'normalizeJournalBackupSchedulerDueAt(currentAlarm.scheduledTime) !== deliveredDueAt');
+  has(SOURCE, 'journalBackupAlarmMatchesReceipt(currentAlarm, currentReceipt)');
+  has(SOURCE, 'chrome.alarms.clear(name)');
+});
 
 // Deterministic target/race matrix.
 const ar1 = ns('A', '/R1');
@@ -338,8 +344,14 @@ check('N36 same-generation exact latest due time may create', () => {
   const current = scheduledReceipt(c, 'periodic', 12500);
   assert.equal(alarmCreateAdmission(c, current, current), true);
 });
-check('N37 manifest remains 0.9.8', () => assert.equal(MANIFEST.version, '0.9.8'));
-check('N38 no runtime/L5/S2/release action', () => {
+check('N37 stale callback must not clear newer same-name delivery', () => {
+  const delivered = scheduledReceipt(makeControl({ generation: 20 }), 'periodic', 20000);
+  const current = scheduledReceipt(makeControl({ generation: 21 }), 'periodic', 21000);
+  assert.notEqual(delivered.dueAt, current.dueAt);
+  assert.equal(delivered.dueAt === current.dueAt, false);
+});
+check('N38 manifest remains 0.9.8', () => assert.equal(MANIFEST.version, '0.9.8'));
+check('N39 no runtime/L5/S2/release action', () => {
   has(EVIDENCE, 'runtime remains unchanged'); has(EVIDENCE, 'no real Chrome/Yandex L5'); has(EVIDENCE, 'P1-231 S2 activation');
 });
 
@@ -358,4 +370,4 @@ check('N38 no runtime/L5/S2/release action', () => {
   'V1 readiness and release authority are untouched.'
 ].forEach((needle, i) => check(`E${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
 
-console.log(`P1-177 backup pause/resume generation refinement model: PASS; cases=${cases}; schema=webclip-backup-scheduler-generation/v1; baseline=0e58f326a19f22611f3ddcb65e13bcf2cbd48670; disconnect_pause=implemented; due_auth_generation_gate=implemented; fixed_alarm_generation_receipt=implemented; exact_alarm_due_time=implemented; late_stale_alarm_create=blocked; explicit_auth_resume=implemented; stale_retry_success_guard=preserved; callback_entry_recheck=implemented; backup_entry_recheck=implemented; child_mutation_recheck=implemented; started_effect=persist-reconcile; namespace_owner=P1-179; auth_generation_owner=P1-178; scheduler_owner=P1-177; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-177 backup pause/resume generation refinement model: PASS; cases=${cases}; schema=webclip-backup-scheduler-generation/v1; baseline=0e58f326a19f22611f3ddcb65e13bcf2cbd48670; disconnect_pause=implemented; due_auth_generation_gate=implemented; fixed_alarm_generation_receipt=implemented; exact_alarm_due_time=implemented; late_stale_alarm_create=blocked; stale_delivery_preserves_newer_alarm=true; explicit_auth_resume=implemented; stale_retry_success_guard=preserved; callback_entry_recheck=implemented; backup_entry_recheck=implemented; child_mutation_recheck=implemented; started_effect=persist-reconcile; namespace_owner=P1-179; auth_generation_owner=P1-178; scheduler_owner=P1-177; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);
