@@ -44,6 +44,7 @@ function makeRuntime({ auth, controlGeneration = 7, fetchImpl } = {}) {
     YANDEX_API_BASE: 'https://cloud-api.yandex.net/v1/disk',
     YANDEX_AUTH_KEY: 'yandexAuth',
     YANDEX_AUTH_GENERATION_KEY: 'yandexAuthGeneration',
+    YANDEX_AUTH_CONFIG_COMMIT_KEY: 'yandexAuthConfigCommit',
     YANDEX_OAUTH_PENDING_KEY: 'yandexOAuthPending',
     MAX_YANDEX_EXTERNAL_ERROR_CHARS: 2000,
     MAX_YANDEX_CLIENT_ID_CHARS: 512,

@@ -328,3 +328,31 @@ Both dedicated release-control lanes completed successfully. Exact source-genera
 Chrome QCF remains `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`; Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`; full RCF remains `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`; BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
 
 The dedicated lane does not emit the current 33-file negative/control fingerprint. That value is intentionally left unsynchronized until the complete deterministic identity witness runs on a later exact head; it is not computed or guessed outside the canonical verifier.
+
+
+## 17. Deterministic discovery #1125
+
+Repository Integrity #1125 / run `35964225677` on exact head `d809d159cf52bfcd352bbb0591ea3e969102a279` passed PR change-contract validation and JavaScript syntax, then executed the full deterministic suite.
+
+The P1-178 implementation evidence itself passed:
+
+- `test_p1_178_auth_attempt_generation_runtime.js`: PASS, 62 cases;
+- `test_p1_178_auth_settings_commit_runtime.js`: PASS, 41 checks;
+- `test_p1_178_auth_attempt_settings_generation_refinement_model.js`: PASS, 85 cases.
+
+Direct non-identity failures were compatibility witnesses around the newly introduced non-secret session control key:
+
+- P1-008 still forbade **any** `storage.session` access during settings import, even though the product requirement forbids OAuth-session replacement rather than non-secret generation fencing;
+- P1-191/P1-196 VM fixtures extracted code that now references `YANDEX_AUTH_CONFIG_COMMIT_KEY` but did not define that key in their synthetic context.
+
+Those harnesses are reconciled without granting settings import access to the committed OAuth auth key or changing P1-191/P1-196 semantics.
+
+The canonical deterministic identity witness also derived current 33-file negative/control RPF:
+
+`sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad`
+
+Current 34-file RPF remains the #1124 value:
+
+`sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`
+
+Chrome/Yandex QCF, full RCF and BCF remain unchanged. #1125 is discovery evidence only, not merge evidence.

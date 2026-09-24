@@ -761,3 +761,20 @@ Because `service-worker.js` changes, replacement current RPF/33-file identities 
 ### P1-178 identity discovery #1124
 
 Repository Integrity #1124 / run `35963862602` on exact initial head `904f25215028e623350bc8daa0b62a5b2e99abf8` is **not merge evidence** because the generic job stopped at PR change-contract metadata before syntax/deterministic tests. Both dedicated release-control lanes succeeded and derived current 34-file RPF `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`; Chrome/Yandex QCF, full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`, and BCF remain unchanged. The current 33-file control is deliberately deferred to the later complete deterministic identity witness rather than guessed outside the canonical verifier.
+
+
+### P1-178 deterministic discovery #1125
+
+Repository Integrity #1125 / run `35964225677` on exact head `d809d159cf52bfcd352bbb0591ea3e969102a279` passed PR accounting and JavaScript syntax and ran the complete deterministic suite. The new P1-178 runtime tests passed (62 cases + 41 checks), and the reconciled P1-178 refinement model passed 85 cases.
+
+Remaining direct non-identity failures were stale neighboring harness assumptions: P1-008 still prohibited every `storage.session` control touch during settings import, and three P1-191/P1-196 VM fixtures lacked the new non-secret `YANDEX_AUTH_CONFIG_COMMIT_KEY`. Those fixtures are synchronized while preserving the stronger invariant that settings import never reads/writes the committed OAuth auth key.
+
+Exact current identities derived by canonical authority:
+- 34-file RPF: `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`
+- 33-file control: `sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad`
+- Chrome QCF: unchanged `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`
+- Yandex QCF: unchanged `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`
+- full RCF: unchanged `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`
+- BCF: unchanged `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
+
+#1125 is discovery evidence only; a later complete exact-head SUCCESS is required.
