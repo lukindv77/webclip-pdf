@@ -168,7 +168,7 @@ const backup = asyncSection("async function exportJournalBackupToYandex({ reason
 check('S17 background failure writes lastFailureAt for real execution failures', () => has(backup, 'state.lastFailureAt = failureAt;'));
 check('S18 background failure writes lastBackgroundFailureAt for real execution failures', () => has(backup, 'state.lastBackgroundFailureAt = failureAt;'));
 check('S19 background failure records error', () => has(backup, 'state.lastBackgroundError = normalizeError(error);'));
-check('S20 enabled background failure scheduling remains for admitted execution failures', () => has(backup, "if (status?.enabled && isBackground && error?.code !== 'JOURNAL_BACKUP_BUSY')"));
+check('S20 enabled background failure scheduling remains for admitted execution failures', () => has(backup, "if (backupNamespace && status?.enabled && isBackground && error?.code !== 'JOURNAL_BACKUP_BUSY')"));
 check('S21 retry scheduling uses generation-bound alarm helper transitively', () => has(backup, 'await scheduleBackupRetry(failureAt, status.retryMinutes);'));
 
 const init = asyncSection("async function initializeJournalBackupScheduler(reason = 'init')");
