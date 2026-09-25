@@ -156,3 +156,33 @@ commit intentionally creates a fresh pull-request `synchronize` event so the
 change contract evaluates current PR metadata. No production runtime, provider
 behavior, release policy, manifest version, live qualification, artifact build,
 tag, deploy or release decision is changed by this commit.
+
+
+## Exact-head deterministic discovery #1152
+
+Repository Integrity #1152 / run `36176459890` on exact head
+`6895dd52b4f6a9117467739870ee079b4e596539` consumed the corrected PR metadata,
+passed JavaScript syntax, and completed both dedicated P1-231 authority lanes
+**SUCCESS**.
+
+The P1-179 runtime/model tests were not in the deterministic failure set. The
+remaining direct failures were bounded witnesses:
+
+- recovered P0 source test still expected all backup-state commits to use the
+  current namespace variable, while historical success now correctly uses the
+  recovered checkpoint namespace;
+- current package identity assertions still pinned the pre-tranche RPF/control.
+
+Exact-head authority derived:
+
+- 34-file RPF: `sha256:fc3ee54664713db3cd5ec63ef933b9637de7939119966d754e75426c02ac5f25`
+- 33-file control: `sha256:958ce7c8f59c0c0f43c79a50483e91460e26a0ae4022d95f3a33c8afda6baf6e`
+- Chrome QCF: `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`
+- Yandex QCF: `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`
+- full RCF: `sha256:f37176fa7d2eeeb046091cf1aa7e13dbf2faf0e5e450e2eef33dcb477f8d8232`
+- BCF: `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
+
+#1152 is not merge evidence because the generic deterministic suite failed.
+The follow-up changes only deterministic/source witnesses and current identity
+pins. Production runtime remains unchanged from the old-root reconciliation
+implementation.
