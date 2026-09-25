@@ -884,3 +884,21 @@ P0 coverage pinned pre-namespace-local state log labels. P1-179 runtime/refineme
 
 #1146 is not merge evidence. The next exact head changes only those two source witnesses plus
 this evidence record; runtime remains unchanged.
+
+
+### P1-179 same-account old-root read-only recovery — 2026-09-26
+
+Canonical baseline is `main=e49743fd3c3e4eea64cdf776685d270540b28191`; post-merge Repository Integrity #1150 / run `36091034772` is **SUCCESS**.
+
+This bounded tranche implements the remaining P1-179 source/runtime gap. A checkpoint from semantic account A/root R1 observed under current account A/root R2 is no longer treated as a foreign namespace. Recovery validates the durable historical namespace/path, proves the current credential still represents account A, skips current-root provisioning, and performs only a read-only GET of the exact historical R1 path. A foreign semantic account still fails closed with zero remote request.
+
+If the historical R1 object is verified, success is committed to namespace-local R1 state, not R2. The historical checkpoint is then consumed and the current R2 operation continues through the ordinary fresh current-root upload path, so old-root success cannot suppress a due backup in the new root.
+
+Updated deterministic coverage:
+- `project_tools/test_p1_179_backup_namespace_runtime.js`
+- `project_tools/test_p1_179_backup_namespace_binding_refinement_model.js`
+
+Evidence:
+- `project_docs/RESEARCH_P1_179_OLD_ROOT_READONLY_RECOVERY_2026-09-26_EVIDENCE.md`
+
+P1-179 remains **ACTIVE** pending exact-head CI and a separate source/runtime closure review. No live provider/browser qualification or release action is performed; manifest remains `0.9.8`, release readiness remains **NOT READY**.

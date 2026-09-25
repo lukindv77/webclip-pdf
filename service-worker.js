@@ -13667,26 +13667,38 @@ async function recoverPendingJournalBackup(status, operationId = '', { operation
     error.code = 'JOURNAL_BACKUP_NAMESPACE_PATH_CONFLICT';
     throw error;
   }
-  if (!sameJournalBackupNamespace(pendingNamespace, currentNamespace)) {
-    const error = new Error('Незавершённый backup принадлежит другому account/root namespace. Checkpoint сохранён; удалённые запросы и новый backup в текущем namespace не запускаются.');
-    error.code = 'JOURNAL_BACKUP_NAMESPACE_MISMATCH';
+  if (pendingNamespace.accountUid !== currentNamespace.accountUid) {
+    const error = new Error('Незавершённый backup принадлежит другому semantic account. Checkpoint сохранён; удалённые запросы и новый backup в текущем namespace не запускаются.');
+    error.code = 'JOURNAL_BACKUP_NAMESPACE_ACCOUNT_MISMATCH';
     error.checkpointAccountUid = pendingNamespace.accountUid;
     error.checkpointRootPath = pendingNamespace.rootPath;
     throw error;
   }
 
-  const structure = await ensureYandexServiceFolders({
-    includeBackup: true, operationId, operationContext, beforeRemoteChild
-  });
-  if (normalizeDiskPath(structure.journalPath) !== pendingNamespace.journalRootPath) {
-    const error = new Error('Текущая папка Journal не совпадает с namespace recovery-checkpoint.');
-    error.code = 'JOURNAL_BACKUP_NAMESPACE_PROVISION_CONFLICT';
-    throw error;
+  const historicalRoot = !sameJournalBackupNamespace(pendingNamespace, currentNamespace);
+  if (!historicalRoot) {
+    const structure = await ensureYandexServiceFolders({
+      includeBackup: true, operationId, operationContext, beforeRemoteChild
+    });
+    if (normalizeDiskPath(structure.journalPath) !== pendingNamespace.journalRootPath) {
+      const error = new Error('Текущая папка Journal не совпадает с namespace recovery-checkpoint.');
+      error.code = 'JOURNAL_BACKUP_NAMESPACE_PROVISION_CONFLICT';
+      throw error;
+    }
   }
   appendOperationLogEvent(operationId, {
     category: 'recovery', level: 'info', stage: 'backup-recovery',
-    message: 'Проверяем незавершённую предыдущую передачу резервной копии перед созданием нового файла.',
-    data: { remotePath, previousOperationId: String(pending.operationId || '').slice(0, MAX_OPERATION_ID_CHARS), createdAt: Number(pending.createdAt || 0) }
+    message: historicalRoot
+      ? 'Проверяем exact historical backup в прежнем root read-only перед новой записью в текущий root.'
+      : 'Проверяем незавершённую предыдущую передачу резервной копии перед созданием нового файла.',
+    data: {
+      remotePath,
+      previousOperationId: String(pending.operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
+      createdAt: Number(pending.createdAt || 0),
+      historicalRoot,
+      checkpointRootPath: pendingNamespace.rootPath,
+      currentRootPath: currentNamespace.rootPath
+    }
   });
   try {
     await admitRemoteChild('recovery-verify');
@@ -13718,7 +13730,8 @@ async function recoverPendingJournalBackup(status, operationId = '', { operation
       entryCount: Math.max(0, Number(pending.entryCount) || 0),
       exportedAt: String(pending.exportedAt || '').slice(0, 120),
       backupNamespace: pendingNamespace,
-      recovered: true
+      recovered: true,
+      historicalRoot
     };
   } catch (error) {
     if (Number(error?.status) === 404) {
@@ -13839,10 +13852,15 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
     });
     if (recoveredUpload) {
       const successAt = Date.now();
-      // Durable success commit point: fresh read + write are inside one
-      // late-settlement queue turn, so an older timed-out set cannot land
-      // after this newer verified success and resurrect stale state.
-      await mutateJournalBackupStateForNamespace(backupNamespace, (previous) => {
+      const recoveredNamespace = normalizeJournalBackupNamespace(recoveredUpload.backupNamespace);
+      if (!recoveredNamespace) {
+        const error = new Error('Recovered backup потерял доказанный historical namespace.');
+        error.code = 'JOURNAL_BACKUP_RECOVERY_NAMESPACE_INVALID';
+        throw error;
+      }
+      // Durable recovery success belongs to the checkpoint namespace, not to
+      // whatever account/root is current now.
+      await mutateJournalBackupStateForNamespace(recoveredNamespace, (previous) => {
         const state = {
           ...previous, lastSuccessAt: successAt, lastAttemptAt: attemptAt, lastError: '',
           lastReason: reason, lastRemotePath: recoveredUpload.remotePath,
@@ -13850,16 +13868,38 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
         };
         if (isBackground) { state.lastBackgroundSuccessAt = successAt; state.lastBackgroundError = ''; }
         return state;
-      }, 'Фиксация восстановленного namespace-local успешного backup-state');
-      const housekeepingWarning = await finalizeJournalBackupSuccessHousekeeping({ successAt, status, operationId });
-      emitJournalBackupProgress(operationId, 'complete', housekeepingWarning
-        ? 'Резервная копия подтверждена и success-state сохранён; часть фоновой уборки будет повторена позже.'
-        : 'Восстановлен результат предыдущей прерванной передачи: резервная копия уже существует и проверена.',
-        100, housekeepingWarning ? 'partial' : 'success', { remotePath: recoveredUpload.remotePath, recovered: true, housekeepingWarning });
-      return { ok: true, ...recoveredUpload, successAt, background: isBackground, operationId, housekeepingWarning };
+      }, 'Фиксация recovered success в exact checkpoint namespace');
+
+      if (!sameJournalBackupNamespace(recoveredNamespace, backupNamespace)) {
+        // Historical R1 settlement must not suppress a due backup in current R2.
+        // Clear only the now-consumed checkpoint; current-root provisioning is
+        // admitted later by the ordinary fresh upload path.
+        await mutateJournalBackupPending(
+          () => chrome.storage.local.remove(JOURNAL_BACKUP_PENDING_KEY),
+          'Очистка reconciled historical backup checkpoint'
+        );
+        appendOperationLogEvent(operationId, {
+          category: 'recovery', level: 'info', stage: 'backup-recovery',
+          message: 'Historical backup подтверждён в прежнем root и записан в его namespace-state; текущий root остаётся due и будет backed up отдельно.',
+          data: {
+            historicalRemotePath: recoveredUpload.remotePath,
+            historicalRootPath: recoveredNamespace.rootPath,
+            currentRootPath: backupNamespace.rootPath
+          }
+        });
+      } else {
+        const housekeepingWarning = await finalizeJournalBackupSuccessHousekeeping({ successAt, status, operationId });
+        emitJournalBackupProgress(operationId, 'complete', housekeepingWarning
+          ? 'Резервная копия подтверждена и success-state сохранён; часть фоновой уборки будет повторена позже.'
+          : 'Восстановлен результат предыдущей прерванной передачи: резервная копия уже существует и проверена.',
+          100, housekeepingWarning ? 'partial' : 'success', { remotePath: recoveredUpload.remotePath, recovered: true, housekeepingWarning });
+        return { ok: true, ...recoveredUpload, successAt, background: isBackground, operationId, housekeepingWarning };
+      }
     }
 
-    emitJournalBackupProgress(operationId, 'read-journal', 'Читаем локальный журнал пакетами и формируем согласованный chunked snapshot…', 10);
+    emitJournalBackupProgress(operationId, 'read-journal', recoveredUpload
+      ? 'Historical backup reconciled; формируем новый snapshot для текущего root…'
+      : 'Читаем локальный журнал пакетами и формируем согласованный chunked snapshot…', 10);
     const staged = await stageFullJournalExport();
     emitJournalBackupProgress(operationId, 'serialize', `Chunked JSON резервной копии сформирован. Записей: ${staged.entryCount}.`, 25, 'running', { entryCount: staged.entryCount, totalBytes: staged.totalBytes, chunkCount: staged.chunkCount });
     await renewJournalBackupLease(lease);
