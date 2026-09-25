@@ -403,6 +403,8 @@ const JOURNAL_BACKUP_RETRY_ALARM = `${JOURNAL_BACKUP_ALARM}-retry`;
 const JOURNAL_BACKUP_SCHEDULER_CONTROL_KEY = 'webclipJournalBackupSchedulerControl';
 const JOURNAL_BACKUP_SCHEDULER_CONTROL_VERSION = 1;
 const JOURNAL_BACKUP_NAMESPACE_VERSION = 1;
+const JOURNAL_BACKUP_STATE_VERSION = 2;
+const MAX_JOURNAL_BACKUP_NAMESPACE_STATES = 128;
 const JOURNAL_BACKUP_LEASE_KEY = 'webclipJournalBackupLease';
 const JOURNAL_BACKUP_PENDING_KEY = 'webclipJournalBackupPendingUpload';
 const JOURNAL_BACKUP_LEASE_TTL_MS = 10 * 60 * 1000;
@@ -12831,7 +12833,66 @@ function mutateJournalBackupPending(start, label) {
   );
 }
 
-function mutateJournalBackupState(mutator, label) {
+function journalBackupNamespaceStateKey(namespaceValue) {
+  const namespace = normalizeJournalBackupNamespace(namespaceValue);
+  if (!namespace) return '';
+  return `ns:${encodeURIComponent(namespace.accountUid)}:${encodeURIComponent(namespace.rootPath)}`;
+}
+
+function normalizeJournalBackupStateStore(value = {}) {
+  const raw = value && typeof value === 'object' ? value : {};
+  const namespaceStates = {};
+  const sourceStates = Number(raw.version || 0) === JOURNAL_BACKUP_STATE_VERSION
+    && raw.namespaceStates && typeof raw.namespaceStates === 'object'
+    ? raw.namespaceStates
+    : {};
+  for (const [key, entry] of Object.entries(sourceStates)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const namespace = normalizeJournalBackupNamespace(entry.backupNamespace);
+    if (!namespace || key !== journalBackupNamespaceStateKey(namespace)) continue;
+    namespaceStates[key] = { ...entry, backupNamespace: namespace };
+  }
+
+  let legacyUnboundState = raw.legacyUnboundState && typeof raw.legacyUnboundState === 'object'
+    ? { ...raw.legacyUnboundState }
+    : null;
+  if (!legacyUnboundState && Number(raw.version || 0) !== JOURNAL_BACKUP_STATE_VERSION) {
+    const legacyKeys = [
+      'lastSuccessAt', 'lastFailureAt', 'lastAttemptAt',
+      'lastBackgroundSuccessAt', 'lastBackgroundFailureAt', 'lastBackgroundError',
+      'lastError', 'lastEntryCount', 'lastReason', 'lastRemotePath'
+    ];
+    const legacy = {};
+    for (const key of legacyKeys) {
+      if (Object.prototype.hasOwnProperty.call(raw, key)) legacy[key] = raw[key];
+    }
+    if (Object.keys(legacy).length) legacyUnboundState = legacy;
+  }
+
+  return {
+    version: JOURNAL_BACKUP_STATE_VERSION,
+    namespaceStates,
+    legacyUnboundState
+  };
+}
+
+function getJournalBackupStateForNamespace(storeValue, namespaceValue) {
+  const namespace = normalizeJournalBackupNamespace(namespaceValue);
+  if (!namespace) return {};
+  const store = normalizeJournalBackupStateStore(storeValue);
+  const key = journalBackupNamespaceStateKey(namespace);
+  const entry = key ? store.namespaceStates[key] : null;
+  if (!entry || !sameJournalBackupNamespace(entry.backupNamespace, namespace)) return {};
+  return entry;
+}
+
+function mutateJournalBackupStateForNamespace(namespaceValue, mutator, label) {
+  const namespace = normalizeJournalBackupNamespace(namespaceValue);
+  if (!namespace) {
+    const error = new Error('Нельзя изменить backup-state без доказанного account/root namespace.');
+    error.code = 'JOURNAL_BACKUP_STATE_NAMESPACE_REQUIRED';
+    throw error;
+  }
   return runSerializedLateSettlementOperation(
     chromeStorageMutationSettlementChains,
     'storage.local:journalBackupState',
@@ -12839,15 +12900,30 @@ function mutateJournalBackupState(mutator, label) {
       // Fresh read is deliberately inside the serialized turn: a queued state
       // update must observe the real settlement of every older storage write.
       const stored = await chrome.storage.local.get('journalBackupState');
-      const previous = stored?.journalBackupState && typeof stored.journalBackupState === 'object'
-        ? stored.journalBackupState
-        : {};
-      const next = mutator({ ...previous });
-      if (!next || typeof next !== 'object') {
-        throw new Error('Некорректное состояние резервного копирования журнала.');
+      const store = normalizeJournalBackupStateStore(stored?.journalBackupState || {});
+      const key = journalBackupNamespaceStateKey(namespace);
+      const previous = store.namespaceStates[key] || { backupNamespace: namespace };
+      const nextState = mutator({ ...previous, backupNamespace: namespace });
+      if (!nextState || typeof nextState !== 'object') {
+        throw new Error('Некорректное namespace-local состояние резервного копирования журнала.');
       }
-      await chrome.storage.local.set({ journalBackupState: next });
-      return next;
+      store.namespaceStates[key] = {
+        ...nextState,
+        backupNamespace: namespace,
+        updatedAt: Date.now()
+      };
+
+      const entries = Object.entries(store.namespaceStates);
+      if (entries.length > MAX_JOURNAL_BACKUP_NAMESPACE_STATES) {
+        entries
+          .filter(([entryKey]) => entryKey !== key)
+          .sort((a, b) => Number(a[1]?.updatedAt || 0) - Number(b[1]?.updatedAt || 0))
+          .slice(0, entries.length - MAX_JOURNAL_BACKUP_NAMESPACE_STATES)
+          .forEach(([entryKey]) => { delete store.namespaceStates[entryKey]; });
+      }
+
+      await chrome.storage.local.set({ journalBackupState: store });
+      return store.namespaceStates[key];
     },
     label,
     CHROME_STORAGE_OPERATION_TIMEOUT_MS
@@ -13249,12 +13325,17 @@ async function saveJournalBackupSettings(settings) {
 }
 
 async function getJournalBackupStatus() {
-  const [{ yandexConfig = {} }, { journalBackupState = {} }] = await Promise.all([
-    readJournalBackupStorage('yandexConfig', 'Чтение настроек Яндекс Диска для backup scheduler'),
+  const [authState, { journalBackupState = {} }] = await Promise.all([
+    readYandexAuthState(),
     readJournalBackupStorage('journalBackupState', 'Чтение состояния резервного копирования журнала')
   ]);
-
+  const yandexConfig = authState?.yandexConfig || {};
   const rootPath = normalizeDiskPath(yandexConfig.rootPath || '');
+  const accountUid = boundedYandexExternalText(authState?.auth?.account?.uid || '', MAX_YANDEX_ACCOUNT_FIELD_CHARS).trim();
+  const backupNamespace = accountUid && rootPath
+    ? makeJournalBackupNamespace(accountUid, rootPath)
+    : null;
+  const namespaceState = getJournalBackupStateForNamespace(journalBackupState, backupNamespace);
   const intervalMinutes = normalizeIntervalMinutes(
     yandexConfig.journalBackupIntervalMinutes,
     DEFAULT_JOURNAL_BACKUP_INTERVAL_MINUTES
@@ -13264,21 +13345,21 @@ async function getJournalBackupStatus() {
     DEFAULT_JOURNAL_BACKUP_RETRY_MINUTES
   );
   const folderPath = getJournalBackupFolderFromRoot(rootPath);
-  const lastSuccessAt = Number(journalBackupState.lastSuccessAt || 0);
-  const lastFailureAt = Number(journalBackupState.lastFailureAt || 0);
-  const lastAttemptAt = Number(journalBackupState.lastAttemptAt || 0);
+  const lastSuccessAt = Number(namespaceState.lastSuccessAt || 0);
+  const lastFailureAt = Number(namespaceState.lastFailureAt || 0);
+  const lastAttemptAt = Number(namespaceState.lastAttemptAt || 0);
   const lastBackgroundSuccessAt = Number(
-    journalBackupState.lastBackgroundSuccessAt ||
-    (journalBackupState.lastReason && journalBackupState.lastReason !== 'manual' ? journalBackupState.lastSuccessAt : 0) ||
+    namespaceState.lastBackgroundSuccessAt ||
+    (namespaceState.lastReason && namespaceState.lastReason !== 'manual' ? namespaceState.lastSuccessAt : 0) ||
     0
   );
   const lastBackgroundFailureAt = Number(
-    journalBackupState.lastBackgroundFailureAt ||
-    (journalBackupState.lastReason && journalBackupState.lastReason !== 'manual' ? journalBackupState.lastFailureAt : 0) ||
+    namespaceState.lastBackgroundFailureAt ||
+    (namespaceState.lastReason && namespaceState.lastReason !== 'manual' ? namespaceState.lastFailureAt : 0) ||
     0
   );
-  const lastBackgroundError = String(journalBackupState.lastBackgroundError || '');
-  const lastRemotePath = String(journalBackupState.lastRemotePath || '');
+  const lastBackgroundError = String(namespaceState.lastBackgroundError || '');
+  const lastRemotePath = String(namespaceState.lastRemotePath || '');
   const now = Date.now();
   const nextDueAt = lastSuccessAt ? lastSuccessAt + intervalMinutes * 60000 : 0;
   const nextRetryAt = lastFailureAt ? lastFailureAt + retryMinutes * 60000 : 0;
@@ -13288,6 +13369,7 @@ async function getJournalBackupStatus() {
     enabled: Boolean(yandexConfig.journalBackupEnabled),
     rootPath,
     folderPath,
+    backupNamespace,
     backupFilenamePattern: 'WebClip_Journal_YYYY-MM-DD_HH-MM-SS-SSS.json',
     remotePath: lastRemotePath || folderPath,
     intervalMinutes,
@@ -13298,9 +13380,9 @@ async function getJournalBackupStatus() {
     lastBackgroundSuccessAt,
     lastBackgroundFailureAt,
     lastBackgroundError,
-    lastError: String(journalBackupState.lastError || ''),
-    lastEntryCount: Number(journalBackupState.lastEntryCount || 0),
-    lastReason: String(journalBackupState.lastReason || ''),
+    lastError: String(namespaceState.lastError || ''),
+    lastEntryCount: Number(namespaceState.lastEntryCount || 0),
+    lastReason: String(namespaceState.lastReason || ''),
     lastRemotePath,
     nextDueAt,
     nextRetryAt,
@@ -13704,6 +13786,7 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
 
   let lease = null;
   let status = null;
+  let backupNamespace = null;
   try {
     status = await getJournalBackupStatus();
     if (!status.rootPath) throw new Error('В настройках не выбрана корневая папка Яндекс Диска.');
@@ -13724,8 +13807,9 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
       operationContext = await captureCurrentYandexOperationContext();
     }
 
-    const backupNamespace = makeJournalBackupNamespace(operationContext.accountUid, operationContext.rootPath);
-    if (normalizeDiskPath(status.rootPath) !== backupNamespace.rootPath) {
+    backupNamespace = makeJournalBackupNamespace(operationContext.accountUid, operationContext.rootPath);
+    if ((status.backupNamespace && !sameJournalBackupNamespace(status.backupNamespace, backupNamespace))
+      || normalizeDiskPath(status.rootPath) !== backupNamespace.rootPath) {
       const error = new Error('Корневая папка backup изменилась между чтением статуса и фиксацией operation context. Операция остановлена до remote admission.');
       error.code = 'JOURNAL_BACKUP_NAMESPACE_STATUS_STALE';
       throw error;
@@ -13758,7 +13842,7 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
       // Durable success commit point: fresh read + write are inside one
       // late-settlement queue turn, so an older timed-out set cannot land
       // after this newer verified success and resurrect stale state.
-      await mutateJournalBackupState((previous) => {
+      await mutateJournalBackupStateForNamespace(backupNamespace, (previous) => {
         const state = {
           ...previous, lastSuccessAt: successAt, lastAttemptAt: attemptAt, lastError: '',
           lastReason: reason, lastRemotePath: recoveredUpload.remotePath,
@@ -13766,7 +13850,7 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
         };
         if (isBackground) { state.lastBackgroundSuccessAt = successAt; state.lastBackgroundError = ''; }
         return state;
-      }, 'Фиксация восстановленного успешного backup-state');
+      }, 'Фиксация восстановленного namespace-local успешного backup-state');
       const housekeepingWarning = await finalizeJournalBackupSuccessHousekeeping({ successAt, status, operationId });
       emitJournalBackupProgress(operationId, 'complete', housekeepingWarning
         ? 'Резервная копия подтверждена и success-state сохранён; часть фоновой уборки будет повторена позже.'
@@ -13793,7 +13877,7 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
     // Durable success commit point. The actual Chrome Storage settlement, not
     // the local timeout, releases this queue turn. Everything after this
     // serialized fresh read-modify-write is secondary housekeeping.
-    await mutateJournalBackupState((previous) => {
+    await mutateJournalBackupStateForNamespace(backupNamespace, (previous) => {
       const state = {
         ...previous,
         lastSuccessAt: successAt,
@@ -13808,7 +13892,7 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
         state.lastBackgroundError = '';
       }
       return state;
-    }, 'Фиксация успешного backup-state');
+    }, 'Фиксация namespace-local успешного backup-state');
     const housekeepingWarning = await finalizeJournalBackupSuccessHousekeeping({ successAt, status, operationId });
     emitJournalBackupProgress(operationId, 'complete', housekeepingWarning
       ? 'Резервная копия создана и success-state сохранён; часть фоновой уборки будет повторена позже.'
@@ -13856,21 +13940,23 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
       };
     }
     const failureAt = Date.now();
-    await mutateJournalBackupState((previous) => {
-      const state = {
-        ...previous,
-        lastAttemptAt: attemptAt,
-        lastError: normalizeError(error),
-        lastReason: reason
-      };
-      if (isBackground) {
-        state.lastFailureAt = failureAt;
-        state.lastBackgroundFailureAt = failureAt;
-        state.lastBackgroundError = normalizeError(error);
-      }
-      return state;
-    }, 'Фиксация ошибки backup-state');
-    if (status?.enabled && isBackground && error?.code !== 'JOURNAL_BACKUP_BUSY') {
+    if (backupNamespace) {
+      await mutateJournalBackupStateForNamespace(backupNamespace, (previous) => {
+        const state = {
+          ...previous,
+          lastAttemptAt: attemptAt,
+          lastError: normalizeError(error),
+          lastReason: reason
+        };
+        if (isBackground) {
+          state.lastFailureAt = failureAt;
+          state.lastBackgroundFailureAt = failureAt;
+          state.lastBackgroundError = normalizeError(error);
+        }
+        return state;
+      }, 'Фиксация namespace-local ошибки backup-state');
+    }
+    if (backupNamespace && status?.enabled && isBackground && error?.code !== 'JOURNAL_BACKUP_BUSY') {
       await scheduleBackupRetry(failureAt, status.retryMinutes);
     }
     emitJournalBackupProgress(operationId, 'error', `Ошибка: ${normalizeError(error)}`, 100, 'error');
