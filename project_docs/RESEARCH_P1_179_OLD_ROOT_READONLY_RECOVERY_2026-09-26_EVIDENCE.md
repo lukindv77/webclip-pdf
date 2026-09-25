@@ -132,3 +132,27 @@ P1-179 remains **ACTIVE** until:
 No real Yandex OAuth/API mutation, real Chrome qualification, physical release receipt, product ZIP/build, manifest bump, S2/release-policy activation, tag, deploy, GitHub Release or release decision is performed.
 
 Manifest remains `0.9.8`; target remains `0.9.9`; release readiness remains **NOT READY**.
+
+
+## CI event-payload discovery #1151
+
+Repository Integrity #1151 / run `36176319146` attempt 1 ran on exact head
+`f3be9af3aa13190b1109c3d3cef090fe5ee08c24`.
+
+Both dedicated P1-231 authority lanes completed **SUCCESS**. The generic
+`repository-integrity` job failed only at **PR change contract** because the
+original pull-request event payload treated adjacent owner-code names in the PR
+body as declared affected owners.
+
+The PR body was corrected without changing source/head so that the only explicit
+affected owner code is `P1-179`.
+
+Attempt 2 re-ran failed jobs on the same exact head and failed on the identical
+PR change-contract message. Job logs showed the original pre-correction PR body,
+confirming that GitHub Actions re-used the stale pull-request event payload.
+
+Therefore #1151 attempt 1/2 are **not merge evidence**. This documentation-only
+commit intentionally creates a fresh pull-request `synchronize` event so the
+change contract evaluates current PR metadata. No production runtime, provider
+behavior, release policy, manifest version, live qualification, artifact build,
+tag, deploy or release decision is changed by this commit.
