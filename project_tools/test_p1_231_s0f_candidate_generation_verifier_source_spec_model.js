@@ -19,7 +19,7 @@ const RESULT_SCHEMA = 'webclip-candidate-generation-result/v1';
 
 const PACKAGE_TOPOLOGY = packageAuthority.readCanonicalManifest();
 const PACKAGE_FILES = Object.freeze([...PACKAGE_TOPOLOGY.files]);
-const LEGACY_RPF = 'sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad';
+const LEGACY_RPF = 'sha256:a0d4d88362234a1b4c269ee7ef6e2b72108fd54efe39d658efbe2b97266c9b6e';
 
 const CURRENT_RELATION = Object.freeze({
   id: 'public-suffix-js',

@@ -375,3 +375,11 @@ Repository Integrity #1131 is still not merge evidence because the generic deter
 
 This follow-up synchronizes only deterministic/source-census witnesses to the exact production source and exact-head identity authority. It does not change production runtime or reinterpret historical identity evidence.
 
+## 20. Cascaded source-spec witness discovery
+
+Repository Integrity #1132 on exact head `bfcc49db8e8f817afc69396bfbffe04c8868012d` confirmed the first witness synchronization: the direct hidden-provisioning census, current release identity, candidate generation, evidence settlement and package authority tests all passed with current RPF and 33-file control.
+
+Eight remaining failures shared one predecessor root: `project_tools/test_p1_231_s0f_candidate_generation_verifier_source_spec_model.js` still pinned the previous current 33-file control `sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad` while exact-head S0-E authority now returns `sha256:a0d4d88362234a1b4c269ee7ef6e2b72108fd54efe39d658efbe2b97266c9b6e`. The seven other failing P1-231 source-spec models invoked that predecessor and failed transitively.
+
+This follow-up changes only that current-identity source-spec witness plus durable evidence. Historical pre-tranche identity records remain unchanged. Production runtime remains identical to the P1-179 namespace implementation.
+
