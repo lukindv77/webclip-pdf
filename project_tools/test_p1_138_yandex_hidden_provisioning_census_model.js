@@ -102,7 +102,7 @@ check('C01 test connection observes account through exact-auth receipt read', ()
 check('C02 test connection hides ensure today', () => has(testConnection, 'ensureYandexServiceFolders({ includeUpload: true, includeReadLater: true, includeBackup: true })'));
 const listBackups = asyncSection("async function listJournalBackupsOnYandex(requestedMonth = '')");
 check('C03 list backups hides ensure today', () => has(listBackups, 'ensureYandexServiceFolders({ includeBackup: true })'));
-const recoverPending = asyncSection("async function recoverPendingJournalBackup(status, operationId = '', { operationContext = null, beforeRemoteChild = null } = {})");
+const recoverPending = asyncSection("async function recoverPendingJournalBackup(status, operationId = '', { operationContext = null, beforeRemoteChild = null, backupNamespace = null } = {})");
 check('C04 recovery reads pending path', () => has(recoverPending, 'pending?.remotePath'));
 check('C05 recovery provisions before reconcile today', () => has(recoverPending, 'includeBackup: true, operationId, operationContext, beforeRemoteChild'));
 const fetchBackup = asyncSection("async function fetchJournalBackupFromYandex(requestedPath, operationId = '', ownerSessionId = '')");

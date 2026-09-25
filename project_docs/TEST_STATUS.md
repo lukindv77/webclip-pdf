@@ -796,3 +796,40 @@ Because the Registry edit changes a full-RCF root, a new exact-head full RCF and
 Repository Integrity #1127 / run `36012167714` on exact closure head `fb04b2f312740230056cb80dd9653019ef516e4e` confirmed stable package identity (RPF `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`, 33-file control `sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad`) and derived current full RCF `sha256:9c0fc13d98bfa613f59d7ed68ecd414a0bd12172bee489c8fba4674284243d35`. Chrome/Yandex QCF and BCF remain unchanged.
 
 The generic suite failures were closure-only stale witnesses: three cross-owner tests still required P1-178 in ACTIVE Registry and seven current release-control pins still expected pre-transition full RCF `sha256:8e7fc4af3d14a07580008e64a9e9ca61744c39384db46a3b922bfdc92c8f707c`; downstream S0-H/S0-I/S1-B/S1-C/S1-D failures were transitive. P1-178 implementation tests themselves passed. These witnesses are reconciled on the following exact head. #1127 is not merge evidence. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+
+### P1-179 backup namespace recovery authority — 2026-09-24
+
+Canonical starting point is protected `main=5888c41428e15e0a9ada6e85ab10fae103fb7b72`. Post-merge Repository Integrity **#1129 / run 36013332163** completed **SUCCESS** on that exact main for all three required jobs.
+
+Fresh P1-179 source review confirmed the historical namespace defect remained present: backup lease and pending checkpoint were not account/root namespace-bound, and recovery reached current `ensureYandexServiceFolders()` before proving the stored checkpoint belonged to the current semantic account/root. The flat `journalBackupState` also remains unqualified by namespace.
+
+This bounded tranche implements a non-secret `BackupNamespaceIdentity` derived from the immutable Yandex operation context and binds it to:
+- backup lease acquisition/renew/release;
+- prepared and remote-verified backup checkpoints;
+- exact-current-namespace recovery.
+
+Recovery now validates checkpoint namespace and path before current provisioning or provider observation. Legacy/unbound or namespace-mismatched checkpoints are preserved and fail closed with zero remote request, zero current-root provisioning and zero 404 aging. Manual backup now captures an immutable Yandex operation context before lease/remote admission.
+
+New deterministic test:
+- `project_tools/test_p1_179_backup_namespace_runtime.js`
+
+Updated deterministic model:
+- `project_tools/test_p1_179_backup_namespace_binding_refinement_model.js`
+
+Evidence:
+- `project_docs/RESEARCH_P1_179_BACKUP_NAMESPACE_RECOVERY_2026-09-24_EVIDENCE.md`
+
+P1-179 remains **ACTIVE** because two acceptance areas remain intentionally outside this tranche:
+1. namespace-local `journalBackupState` success/failure/last-path truth;
+2. same-account old-root read-only historical reconciliation across a later root change.
+
+Pre-tranche identities are RPF `sha256:41c44d37c0b3d8d1b4e50ab315b6bdff1a570196bbee173fcfa83086357cf200`, 33-file control `sha256:b940eecb005244826840c0bbfa17f013ff2b81ce23cc4a0f478ddf78966a2aad`, Chrome QCF `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`, Yandex QCF `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`, full RCF `sha256:9c0fc13d98bfa613f59d7ed68ecd414a0bd12172bee489c8fba4674284243d35`, and BCF `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+Repository Integrity #1131 on exact head `cb4e77048ba646ad51a13e8b94a35976a97404cc` passed the corrected PR change contract and both dedicated release-control lanes. Exact-head authority derived current RPF `sha256:f66fa9ac7ee0a5a83927c5d30bd0bca16a7d0173edd50e760095d0703aa53d63` and current 33-file control `sha256:a0d4d88362234a1b4c269ee7ef6e2b72108fd54efe39d658efbe2b97266c9b6e`; Chrome/Yandex QCF, full RCF and BCF remain unchanged from the pre-tranche values above. #1131 is not merge evidence because the generic deterministic suite then exposed stale source-census/current-identity witnesses; those witnesses are synchronized in the next exact head while the P1-179 runtime tests themselves passed.
+
+Repository Integrity #1132 on exact head `bfcc49db8e8f817afc69396bfbffe04c8868012d` proved those direct witnesses now pass. Its eight remaining deterministic failures reduce to one stale S0-F source-spec expectation of the previous current 33-file control; seven later P1-231 source-spec models fail only because they execute that predecessor. #1132 is not merge evidence. The next exact head synchronizes that single current-identity witness; production runtime remains unchanged.
+
+Repository Integrity #1133 on exact head `a18426a9803133890ca52af6fe461c1b384026ed` proved S0-F now passes. Five residual failures reduce to two direct stale 33-file-control assertions in S0-G and S0-H; S1-B/S1-C/S1-D fail transitively through those predecessors. #1133 is not merge evidence. The next exact head updates only those two current-control witnesses; runtime remains unchanged.
+
+Manifest remains `0.9.8`; release readiness remains **NOT READY**. No live Yandex request, real Chrome qualification, physical release receipt, ZIP/build, S2 activation, tag, deployment, GitHub Release or release decision is performed.

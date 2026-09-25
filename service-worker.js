@@ -402,6 +402,7 @@ const JOURNAL_BACKUP_ALARM = 'webclip-journal-backup';
 const JOURNAL_BACKUP_RETRY_ALARM = `${JOURNAL_BACKUP_ALARM}-retry`;
 const JOURNAL_BACKUP_SCHEDULER_CONTROL_KEY = 'webclipJournalBackupSchedulerControl';
 const JOURNAL_BACKUP_SCHEDULER_CONTROL_VERSION = 1;
+const JOURNAL_BACKUP_NAMESPACE_VERSION = 1;
 const JOURNAL_BACKUP_LEASE_KEY = 'webclipJournalBackupLease';
 const JOURNAL_BACKUP_PENDING_KEY = 'webclipJournalBackupPendingUpload';
 const JOURNAL_BACKUP_LEASE_TTL_MS = 10 * 60 * 1000;
@@ -12759,6 +12760,65 @@ function isAllowedJournalBackupPath(path, journalRoot) {
   return normalized.startsWith(`${root}/`) && /\.json$/i.test(normalized);
 }
 
+function normalizeJournalBackupNamespace(value = {}) {
+  if (Number(value?.version || 0) !== JOURNAL_BACKUP_NAMESPACE_VERSION) return null;
+  const accountUid = boundedYandexExternalText(value?.accountUid || '', MAX_YANDEX_ACCOUNT_FIELD_CHARS).trim();
+  const rootPath = normalizeDiskPath(value?.rootPath || '');
+  if (!accountUid || !rootPath) return null;
+  const expectedJournalRootPath = getJournalBackupFolderFromRoot(rootPath);
+  const journalRootPath = normalizeDiskPath(value?.journalRootPath || '');
+  if (!expectedJournalRootPath || journalRootPath !== expectedJournalRootPath) return null;
+  return Object.freeze({
+    version: JOURNAL_BACKUP_NAMESPACE_VERSION,
+    accountUid,
+    rootPath,
+    journalRootPath
+  });
+}
+
+function makeJournalBackupNamespace(accountUid, rootPath) {
+  const normalizedRoot = normalizeDiskPath(rootPath || '');
+  const namespace = normalizeJournalBackupNamespace({
+    version: JOURNAL_BACKUP_NAMESPACE_VERSION,
+    accountUid,
+    rootPath: normalizedRoot,
+    journalRootPath: getJournalBackupFolderFromRoot(normalizedRoot)
+  });
+  if (!namespace) {
+    const error = new Error('Не удалось зафиксировать account/root namespace резервной копии журнала.');
+    error.code = 'JOURNAL_BACKUP_NAMESPACE_UNAVAILABLE';
+    throw error;
+  }
+  return namespace;
+}
+
+function sameJournalBackupNamespace(a, b) {
+  const left = normalizeJournalBackupNamespace(a);
+  const right = normalizeJournalBackupNamespace(b);
+  return Boolean(
+    left && right
+    && left.accountUid === right.accountUid
+    && left.rootPath === right.rootPath
+    && left.journalRootPath === right.journalRootPath
+  );
+}
+
+function assertJournalBackupNamespaceForOperation(namespaceValue, operationContext) {
+  const namespace = normalizeJournalBackupNamespace(namespaceValue);
+  if (!namespace) {
+    const error = new Error('Backup namespace отсутствует или повреждён.');
+    error.code = 'JOURNAL_BACKUP_NAMESPACE_INVALID';
+    throw error;
+  }
+  const context = WebClipYandexOperationContext.validateOperationContext(operationContext);
+  if (context.accountUid !== namespace.accountUid || context.rootPath !== namespace.rootPath) {
+    const error = new Error('Backup namespace больше не совпадает с immutable account/root контекстом операции.');
+    error.code = 'JOURNAL_BACKUP_NAMESPACE_CONTEXT_MISMATCH';
+    throw error;
+  }
+  return namespace;
+}
+
 function readJournalBackupStorage(keys, label) {
   return readChromeStorageBounded(() => chrome.storage.local.get(keys), label);
 }
@@ -13287,13 +13347,20 @@ async function ensureYandexServiceFolders({ includeUpload = false, includeReadLa
   return result;
 }
 
-async function acquireJournalBackupLease(operationId, reason) {
+async function acquireJournalBackupLease(operationId, reason, backupNamespace) {
+  const namespace = normalizeJournalBackupNamespace(backupNamespace);
+  if (!namespace) {
+    const error = new Error('Нельзя получить backup lease без доказанного account/root namespace.');
+    error.code = 'JOURNAL_BACKUP_NAMESPACE_REQUIRED';
+    throw error;
+  }
   const now = Date.now();
   const token = crypto.randomUUID ? crypto.randomUUID() : `${now}-${Math.random().toString(16).slice(2)}`;
   const lease = {
     token,
     operationId: String(operationId || '').slice(0, MAX_OPERATION_ID_CHARS),
     reason: String(reason || '').slice(0, 80),
+    backupNamespace: namespace,
     acquiredAt: now,
     expiresAt: now + JOURNAL_BACKUP_LEASE_TTL_MS
   };
@@ -13333,6 +13400,12 @@ async function acquireJournalBackupLease(operationId, reason) {
 
 async function renewJournalBackupLease(lease) {
   if (!lease?.token) throw new Error('Не найден lease резервного копирования журнала.');
+  const leaseNamespace = normalizeJournalBackupNamespace(lease?.backupNamespace);
+  if (!leaseNamespace) {
+    const error = new Error('Lease резервного копирования потерял account/root namespace.');
+    error.code = 'JOURNAL_BACKUP_LEASE_NAMESPACE_INVALID';
+    throw error;
+  }
   const db = await openJournalDb();
   let renewed = null;
   try {
@@ -13346,8 +13419,8 @@ async function renewJournalBackupLease(lease) {
         const req = meta.get(JOURNAL_BACKUP_LEASE_KEY);
         req.onsuccess = () => {
           const current = req.result?.value || null;
-          if (current?.token !== lease.token) {
-            const error = new Error('Эксклюзивный lease резервного копирования был потерян. Операция остановлена, чтобы не создавать параллельные backup.');
+          if (current?.token !== lease.token || !sameJournalBackupNamespace(current?.backupNamespace, leaseNamespace)) {
+            const error = new Error('Эксклюзивный lease резервного копирования или его namespace был потерян. Операция остановлена, чтобы не создавать параллельные backup.');
             error.code = 'JOURNAL_BACKUP_LEASE_LOST';
             fail(error);
             return;
@@ -13367,6 +13440,8 @@ async function renewJournalBackupLease(lease) {
 
 async function releaseJournalBackupLease(lease) {
   if (!lease?.token) return;
+  const leaseNamespace = normalizeJournalBackupNamespace(lease?.backupNamespace);
+  if (!leaseNamespace) return;
   const db = await openJournalDb();
   try {
     await runIndexedDbTransactionBounded(
@@ -13379,7 +13454,7 @@ async function releaseJournalBackupLease(lease) {
         const req = meta.get(JOURNAL_BACKUP_LEASE_KEY);
         req.onsuccess = () => {
           const current = req.result?.value || null;
-          if (current?.token === lease.token) meta.delete(JOURNAL_BACKUP_LEASE_KEY);
+          if (current?.token === lease.token && sameJournalBackupNamespace(current?.backupNamespace, leaseNamespace)) meta.delete(JOURNAL_BACKUP_LEASE_KEY);
         };
         req.onerror = () => fail(req.error || new Error('Не удалось прочитать lease перед освобождением.'));
       },
@@ -13394,9 +13469,11 @@ async function uploadJournalExportStagedToYandex(staged, {
   reason = 'manual',
   schedulerGeneration = 0,
   operationContext = null,
-  beforeRemoteChild = null
+  beforeRemoteChild = null,
+  backupNamespace = null
 } = {}) {
   if (!staged?.stagingKey) throw new Error('Не подготовлены временные данные резервной копии журнала.');
+  const namespace = assertJournalBackupNamespaceForOperation(backupNamespace, operationContext);
   const admitRemoteChild = async (remoteChild) => {
     if (typeof beforeRemoteChild === 'function') await beforeRemoteChild(remoteChild);
   };
@@ -13406,6 +13483,11 @@ async function uploadJournalExportStagedToYandex(staged, {
   });
   const journalRoot = structure.journalPath;
   if (!journalRoot) throw new Error('Не удалось определить папку резервной копии журнала.');
+  if (normalizeDiskPath(journalRoot) !== namespace.journalRootPath) {
+    const error = new Error('Подготовленная папка Journal не совпадает с зафиксированным backup namespace.');
+    error.code = 'JOURNAL_BACKUP_NAMESPACE_PROVISION_CONFLICT';
+    throw error;
+  }
 
   const monthName = journalBackupMonthFolderName(backupDate);
   const monthFolder = joinDiskPath(journalRoot, monthName);
@@ -13431,7 +13513,8 @@ async function uploadJournalExportStagedToYandex(staged, {
     entryCount: Math.max(0, Number(staged.entryCount) || 0),
     exportedAt: String(staged.exportedAt || '').slice(0, 120),
     reason: String(reason || '').slice(0, 80),
-    schedulerGeneration: normalizeJournalBackupSchedulerGeneration(schedulerGeneration)
+    schedulerGeneration: normalizeJournalBackupSchedulerGeneration(schedulerGeneration),
+    backupNamespace: namespace
   };
   await mutateJournalBackupPending(() => chrome.storage.local.set({ [JOURNAL_BACKUP_PENDING_KEY]: pending }), 'Сохранение prepared backup checkpoint');
   try {
@@ -13479,23 +13562,44 @@ async function uploadJournalExportStagedToYandex(staged, {
   // If MV3 stops in this window, the next run accepts the already-uploaded
   // file instead of creating a duplicate backup with a new timestamp.
   await mutateJournalBackupPending(() => chrome.storage.local.set({ [JOURNAL_BACKUP_PENDING_KEY]: verifiedPending }), 'Сохранение verified backup checkpoint');
-  return { ok: true, remotePath, filename, monthFolder, entryCount: pending.entryCount, exportedAt: pending.exportedAt, size: verifiedBackupBytes };
+  return { ok: true, remotePath, filename, monthFolder, entryCount: pending.entryCount, exportedAt: pending.exportedAt, size: verifiedBackupBytes, backupNamespace: namespace };
 }
 
-async function recoverPendingJournalBackup(status, operationId = '', { operationContext = null, beforeRemoteChild = null } = {}) {
+async function recoverPendingJournalBackup(status, operationId = '', { operationContext = null, beforeRemoteChild = null, backupNamespace = null } = {}) {
   const admitRemoteChild = async (remoteChild) => {
     if (typeof beforeRemoteChild === 'function') await beforeRemoteChild(remoteChild);
   };
+  const currentNamespace = assertJournalBackupNamespaceForOperation(backupNamespace, operationContext);
   const pending = (await readJournalBackupStorage(JOURNAL_BACKUP_PENDING_KEY, 'Чтение backup checkpoint'))?.[JOURNAL_BACKUP_PENDING_KEY];
   if (!pending?.remotePath) return null;
+
+  const pendingNamespace = normalizeJournalBackupNamespace(pending?.backupNamespace);
+  if (!pendingNamespace) {
+    const error = new Error('Незавершённый backup checkpoint создан старой версией без доказанного account/root namespace. Checkpoint сохранён; автоматическая удалённая проверка и новый backup заблокированы до явного разрешения.');
+    error.code = 'JOURNAL_BACKUP_NAMESPACE_UNBOUND_CHECKPOINT';
+    throw error;
+  }
+  const remotePath = normalizeDiskPath(pending.remotePath);
+  if (!remotePath || !isAllowedJournalBackupPath(remotePath, pendingNamespace.journalRootPath)) {
+    const error = new Error('Backup checkpoint содержит путь вне своего зафиксированного namespace. Checkpoint сохранён без удалённой проверки.');
+    error.code = 'JOURNAL_BACKUP_NAMESPACE_PATH_CONFLICT';
+    throw error;
+  }
+  if (!sameJournalBackupNamespace(pendingNamespace, currentNamespace)) {
+    const error = new Error('Незавершённый backup принадлежит другому account/root namespace. Checkpoint сохранён; удалённые запросы и новый backup в текущем namespace не запускаются.');
+    error.code = 'JOURNAL_BACKUP_NAMESPACE_MISMATCH';
+    error.checkpointAccountUid = pendingNamespace.accountUid;
+    error.checkpointRootPath = pendingNamespace.rootPath;
+    throw error;
+  }
+
   const structure = await ensureYandexServiceFolders({
     includeBackup: true, operationId, operationContext, beforeRemoteChild
   });
-  const remotePath = normalizeDiskPath(pending.remotePath);
-  if (!remotePath || !isAllowedJournalBackupPath(remotePath, structure.journalPath)) {
-    await mutateJournalBackupPending(() => chrome.storage.local.remove(JOURNAL_BACKUP_PENDING_KEY), 'Удаление некорректного backup checkpoint');
-    appendOperationLogEvent(operationId, { category: 'recovery', level: 'warning', message: 'Отброшен некорректный checkpoint незавершённой резервной копии.' });
-    return null;
+  if (normalizeDiskPath(structure.journalPath) !== pendingNamespace.journalRootPath) {
+    const error = new Error('Текущая папка Journal не совпадает с namespace recovery-checkpoint.');
+    error.code = 'JOURNAL_BACKUP_NAMESPACE_PROVISION_CONFLICT';
+    throw error;
   }
   appendOperationLogEvent(operationId, {
     category: 'recovery', level: 'info', stage: 'backup-recovery',
@@ -13531,6 +13635,7 @@ async function recoverPendingJournalBackup(status, operationId = '', { operation
       size: actualBytes, modified: boundedYandexExternalText(metadata?.modified, MAX_YANDEX_ITEM_MODIFIED_CHARS, { rejectOverflow: true, label: 'Дата backup Яндекс Диска' }),
       entryCount: Math.max(0, Number(pending.entryCount) || 0),
       exportedAt: String(pending.exportedAt || '').slice(0, 120),
+      backupNamespace: pendingNamespace,
       recovered: true
     };
   } catch (error) {
@@ -13600,16 +13705,8 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
   let lease = null;
   let status = null;
   try {
-    lease = await acquireJournalBackupLease(operationId, reason);
-    appendOperationLogEvent(operationId, {
-      category: 'checkpoint', level: 'info', stage: 'backup-lease',
-      message: 'Получен эксклюзивный lease резервного копирования журнала.',
-      data: { expiresAt: lease.expiresAt, reason }
-    });
-
     status = await getJournalBackupStatus();
     if (!status.rootPath) throw new Error('В настройках не выбрана корневая папка Яндекс Диска.');
-    appendOperationLogEvent(operationId, { category: 'context', message: 'Определена корневая папка Яндекс Диска.', data: { rootPath: status.rootPath } });
 
     let operationContext = null;
     let beforeRemoteChild = null;
@@ -13623,9 +13720,39 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
         operationContext,
         remoteChild
       );
+    } else {
+      operationContext = await captureCurrentYandexOperationContext();
     }
 
-    const recoveredUpload = await recoverPendingJournalBackup(status, operationId, { operationContext, beforeRemoteChild });
+    const backupNamespace = makeJournalBackupNamespace(operationContext.accountUid, operationContext.rootPath);
+    if (normalizeDiskPath(status.rootPath) !== backupNamespace.rootPath) {
+      const error = new Error('Корневая папка backup изменилась между чтением статуса и фиксацией operation context. Операция остановлена до remote admission.');
+      error.code = 'JOURNAL_BACKUP_NAMESPACE_STATUS_STALE';
+      throw error;
+    }
+
+    lease = await acquireJournalBackupLease(operationId, reason, backupNamespace);
+    appendOperationLogEvent(operationId, {
+      category: 'checkpoint', level: 'info', stage: 'backup-lease',
+      message: 'Получен эксклюзивный namespace-bound lease резервного копирования журнала.',
+      data: {
+        expiresAt: lease.expiresAt,
+        reason,
+        accountUid: backupNamespace.accountUid,
+        rootPath: backupNamespace.rootPath
+      }
+    });
+    appendOperationLogEvent(operationId, {
+      category: 'context',
+      message: 'Зафиксирован account/root namespace резервного копирования Яндекс Диска.',
+      data: { accountUid: backupNamespace.accountUid, rootPath: backupNamespace.rootPath }
+    });
+
+    const recoveredUpload = await recoverPendingJournalBackup(status, operationId, {
+      operationContext,
+      beforeRemoteChild,
+      backupNamespace
+    });
     if (recoveredUpload) {
       const successAt = Date.now();
       // Durable success commit point: fresh read + write are inside one
@@ -13659,7 +13786,8 @@ async function exportJournalBackupToYandex({ reason = 'manual', operationId = ''
       reason,
       schedulerGeneration: backgroundSchedulerGeneration,
       operationContext,
-      beforeRemoteChild
+      beforeRemoteChild,
+      backupNamespace
     });
     const successAt = Date.now();
     // Durable success commit point. The actual Chrome Storage settlement, not
