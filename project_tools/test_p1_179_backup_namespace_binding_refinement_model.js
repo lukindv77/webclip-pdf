@@ -141,11 +141,16 @@ check('S17b legacy/mismatch checkpoints fail closed before remote calls', () => 
 });
 const status = section('async function getJournalBackupStatus()');
 check('S18 status reads yandexConfig', () => has(status, 'yandexConfig'));
-check('S19 status reads global backup state', () => has(status, 'journalBackupState'));
+check('S19 status reads versioned backup state store', () => has(status, 'journalBackupState'));
 check('S20 status root from current config', () => has(status, "const rootPath = normalizeDiskPath(yandexConfig.rootPath || '')"));
-check('S21 global success timestamp', () => has(status, 'journalBackupState.lastSuccessAt'));
-check('S22 global failure timestamp', () => has(status, 'journalBackupState.lastFailureAt'));
-check('S23 global remote path', () => has(status, 'journalBackupState.lastRemotePath'));
+check('S21 status derives current semantic account/root namespace', () => has(status, 'makeJournalBackupNamespace(accountUid, rootPath)'));
+check('S22 status selects namespace-local state', () => has(status, 'getJournalBackupStateForNamespace(journalBackupState, backupNamespace)'));
+check('S23 namespace-local success/failure/path', () => { has(status, 'namespaceState.lastSuccessAt'); has(status, 'namespaceState.lastFailureAt'); has(status, 'namespaceState.lastRemotePath'); });
+const stateStore = section('function journalBackupNamespaceStateKey(');
+check('S24 state store versioned', () => has(stateStore, 'JOURNAL_BACKUP_STATE_VERSION'));
+check('S25 state store preserves legacy flat state only as unbound', () => has(stateStore, 'legacyUnboundState'));
+check('S26 state mutation requires namespace', () => { has(stateStore, 'mutateJournalBackupStateForNamespace'); has(stateStore, 'JOURNAL_BACKUP_STATE_NAMESPACE_REQUIRED'); });
+check('S27 pipeline outcome writes are namespace-bound', () => { has(SOURCE, 'mutateJournalBackupStateForNamespace(backupNamespace'); lacks(SOURCE, 'await mutateJournalBackupState((previous)'); });
 
 // Namespace identity semantics.
 const ar1 = makeNs('A', '/R1');
@@ -208,4 +213,4 @@ check('N28 release boundary intact', () => { has(IMPLEMENTATION, 'No live Yandex
   'V1 readiness and release authority are untouched.'
 ].forEach((needle, i) => check(`E${String(i + 1).padStart(2, '0')}`, () => has(EVIDENCE, needle)));
 
-console.log(`P1-179 backup namespace binding refinement model: PASS; cases=${cases}; schema=webclip-backup-namespace-binding/v1; baseline=9ab02ceaa70057dc57bcdd0eb5bb937097496869; current_namespace_absent=false; lease_token_cas=preserved; lease_namespace_cas=implemented; checkpoint_namespace=implemented; exact_current_namespace_recovery=implemented; legacy_mismatch=fail-closed-zero-remote; scheduler_state_namespace_local=remaining; same_account_root_rotation_readonly=remaining; exact_content_owner=P1-184; hidden_provision_owner=P1-138; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);
+console.log(`P1-179 backup namespace binding refinement model: PASS; cases=${cases}; schema=webclip-backup-namespace-binding/v1; baseline=9ab02ceaa70057dc57bcdd0eb5bb937097496869; current_namespace_absent=false; lease_token_cas=preserved; lease_namespace_cas=implemented; checkpoint_namespace=implemented; exact_current_namespace_recovery=implemented; legacy_mismatch=fail-closed-zero-remote; scheduler_state_namespace_local=implemented; legacy_flat_state_authority=false; same_account_root_rotation_readonly=remaining; exact_content_owner=P1-184; hidden_provision_owner=P1-138; runtime_modified=true; new_p_code=false; s2_authorized=false; release_authorized=false`);
