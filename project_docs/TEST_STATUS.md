@@ -902,3 +902,31 @@ Evidence:
 - `project_docs/RESEARCH_P1_179_OLD_ROOT_READONLY_RECOVERY_2026-09-26_EVIDENCE.md`
 
 P1-179 remains **ACTIVE** pending exact-head CI and a separate source/runtime closure review. No live provider/browser qualification or release action is performed; manifest remains `0.9.8`, release readiness remains **NOT READY**.
+
+
+### P1-179 source/runtime closure review — 2026-09-26
+
+Canonical implementation baseline: `main=c92872d4133fb33cbf8bb1667fed0779a064dbb0`.
+
+Final source tranche post-merge Repository Integrity #1164 / run `36177104180` completed **SUCCESS**.
+
+Closure review confirms the registered P1-179 source/runtime acceptance areas are absorbed across PRs #350, #351 and #352:
+
+- durable non-secret account/root backup namespace;
+- lease token + namespace CAS;
+- prepared/verified checkpoint namespace persistence;
+- legacy/unbound and foreign-account fail-closed ordering before provider observation;
+- exact-current recovery after namespace proof;
+- namespace-local scheduler success/failure/last-path state;
+- same-account old-root read-only exact-path reconciliation;
+- historical success committed to historical namespace state;
+- fresh current-root backup remains separate after historical settlement;
+- wrong-account/legacy checkpoint cannot age from 404;
+- operation/status namespace race fencing.
+
+P1-179 therefore transitions to **IMPLEMENTED / RELEASE-REGRESSION**. Applicable real Chrome/Yandex regression remains a release task and is not claimed here.
+
+Closure evidence:
+- `project_docs/RESEARCH_P1_179_CLOSURE_2026-09-26_EVIDENCE.md`
+
+This closure-only transition changes Registry/test witnesses and evidence only. No production runtime, live provider/browser qualification, artifact build, manifest bump, tag, deploy or release decision is performed. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
