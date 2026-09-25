@@ -872,3 +872,15 @@ Chrome/Yandex QCF and BCF remain unchanged.
 #1136 is not merge evidence. The follow-up synchronizes only deterministic/source witnesses and
 current identity pins; historical identity evidence remains unchanged and no production runtime
 change is made to treat this CI discovery.
+
+
+#### P1-179 scheduler-state CI discovery #1146
+
+Repository Integrity #1146 / run `36090489635` on exact head
+`342596aadeeeb6788902b51c2fea0f40ca552ce0` passed both P1-231 authority lanes and all
+current identity synchronization. The generic suite had exactly two remaining stale source
+assertions: the P1-177 retry condition omitted the new namespace-proof conjunct, and recovered
+P0 coverage pinned pre-namespace-local state log labels. P1-179 runtime/refinement tests passed.
+
+#1146 is not merge evidence. The next exact head changes only those two source witnesses plus
+this evidence record; runtime remains unchanged.
