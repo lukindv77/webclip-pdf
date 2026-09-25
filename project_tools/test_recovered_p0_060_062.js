@@ -96,7 +96,7 @@ async function testBackupHousekeepingDoesNotThrowAfterSuccessCommit() {
   assert.strictEqual(warnings.length, 3);
 
   const backup = section(swSource, 'async function exportJournalBackupToYandex', 'function parseJournalMonthFolder');
-  const commits = [...backup.matchAll(/await mutateJournalBackupState\(/g)];
+  const commits = [...backup.matchAll(/await mutateJournalBackupStateForNamespace\(backupNamespace,/g)];
   assert(commits.length >= 3, 'recovered success, fresh success and failure paths must all use serialized durable backup-state mutation');
   assert(backup.includes("'Фиксация восстановленного успешного backup-state'"));
   assert(backup.includes("'Фиксация успешного backup-state'"));
