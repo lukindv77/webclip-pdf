@@ -195,10 +195,10 @@ function testStaticCoverage() {
 
   // P1-117: backup checkpoint/state must use serialized storage helpers.
   assert(sw.includes('function mutateJournalBackupPending(start, label)'));
-  assert(sw.includes('function mutateJournalBackupState(mutator, label)'));
+  assert(sw.includes('function mutateJournalBackupStateForNamespace(namespaceValue, mutator, label)'));
   assert(sw.includes("'storage.local:journalBackupState'"));
   const directState = [...sw.matchAll(/chrome\.storage\.local\.(?:get|set|remove)\([^\n]*journalBackupState/g)];
-  assert.strictEqual(directState.length, 2, 'journalBackupState direct storage calls are allowed only inside mutateJournalBackupState fresh-read/write helper');
+  assert.strictEqual(directState.length, 2, 'journalBackupState direct storage calls are allowed only inside namespace-bound fresh-read/write helper');
   const pendingSection = section('async function uploadJournalExportStagedToYandex', 'async function listYandexDirectoryItems');
   assert(!/await\s+chrome\.storage\.local\.(?:set|remove)\(\{?\s*\[?JOURNAL_BACKUP_PENDING_KEY/.test(pendingSection), 'backup checkpoint mutations must not bypass the serialized helper');
   assert(pendingSection.includes('mutateJournalBackupPending'));
