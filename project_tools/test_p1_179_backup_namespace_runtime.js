@@ -105,20 +105,24 @@ const recovery = section('async function recoverPendingJournalBackup(', 'async f
 const pendingNsAt = recovery.indexOf('const pendingNamespace = normalizeJournalBackupNamespace(pending?.backupNamespace)');
 const unboundAt = recovery.indexOf("error.code = 'JOURNAL_BACKUP_NAMESPACE_UNBOUND_CHECKPOINT'");
 const pathAt = recovery.indexOf('isAllowedJournalBackupPath(remotePath, pendingNamespace.journalRootPath)');
-const mismatchAt = recovery.indexOf('!sameJournalBackupNamespace(pendingNamespace, currentNamespace)');
+const accountMismatchAt = recovery.indexOf('pendingNamespace.accountUid !== currentNamespace.accountUid');
+const historicalAt = recovery.indexOf('const historicalRoot = !sameJournalBackupNamespace(pendingNamespace, currentNamespace)');
 const ensureAt = recovery.indexOf('const structure = await ensureYandexServiceFolders');
 const firstRemoteAt = recovery.indexOf("await yandexApi('/resources'");
 ok(pendingNsAt >= 0, 'recovery reads durable namespace');
-ok(unboundAt > pendingNsAt && unboundAt < ensureAt, 'legacy unbound checkpoint fails before provisioning');
-ok(pathAt > pendingNsAt && pathAt < ensureAt, 'checkpoint path is validated against historical namespace before provisioning');
-ok(mismatchAt > pathAt && mismatchAt < ensureAt, 'namespace mismatch fails before provisioning');
-ok(ensureAt >= 0 && firstRemoteAt > ensureAt, 'remote verification occurs only after namespace gate');
-ok(recovery.includes("error.code = 'JOURNAL_BACKUP_NAMESPACE_MISMATCH'"), 'mismatch has explicit fail-closed code');
-ok(recovery.includes('backupNamespace: pendingNamespace'), 'recovered result preserves namespace');
-const preEnsure = recovery.slice(0, ensureAt);
-ok(!preEnsure.includes("chrome.storage.local.remove(JOURNAL_BACKUP_PENDING_KEY)"), 'legacy/mismatched checkpoint is preserved before remote authority');
+ok(unboundAt > pendingNsAt && unboundAt < accountMismatchAt, 'legacy unbound checkpoint fails before account admission');
+ok(pathAt > pendingNsAt && pathAt < accountMismatchAt, 'checkpoint path is validated against historical namespace before account admission');
+ok(accountMismatchAt > pathAt && accountMismatchAt < historicalAt, 'foreign semantic account fails before any historical remote read');
+ok(recovery.includes("error.code = 'JOURNAL_BACKUP_NAMESPACE_ACCOUNT_MISMATCH'"), 'foreign account has explicit fail-closed code');
+ok(historicalAt > accountMismatchAt && historicalAt < ensureAt, 'same-account root rotation is classified before current provisioning');
+ok(recovery.includes('if (!historicalRoot) {'), 'current-root provisioning is skipped for historical-root reconciliation');
+ok(firstRemoteAt > ensureAt, 'exact remote verification remains after namespace/account classification');
+ok(recovery.includes('historicalRoot'), 'recovered result marks historical-root reconciliation');
+ok(recovery.includes('backupNamespace: pendingNamespace'), 'recovered result preserves historical namespace');
+const preAccount = recovery.slice(0, historicalAt);
+ok(!preAccount.includes("chrome.storage.local.remove(JOURNAL_BACKUP_PENDING_KEY)"), 'legacy/foreign-account checkpoint is preserved before remote authority');
 const agingAt = recovery.indexOf('const attemptCount = Math.max(0, Number(pending.attemptCount || 0)) + 1');
-ok(agingAt > mismatchAt, '404 aging is reachable only after exact namespace match');
+ok(agingAt > firstRemoteAt, '404 aging is reachable only after admitted exact historical/current path GET');
 
 const pipeline = section('async function exportJournalBackupToYandex(', 'function parseJournalMonthFolder(');
 const statusAt = pipeline.indexOf('status = await getJournalBackupStatus()');
@@ -133,8 +137,12 @@ ok(manualContextAt > statusAt, 'manual backup captures immutable operation conte
 ok(namespaceAt > manualContextAt, 'namespace derives from operation context');
 ok(staleStatusAt > namespaceAt && staleStatusAt < leaseAt, 'root race fails before lease/remote work');
 ok(leaseAt > namespaceAt, 'lease is namespace-bound before staging/upload');
-ok(recoverAt > leaseAt && pipeline.slice(recoverAt, uploadAt).includes('backupNamespace'), 'recovery receives namespace');
-ok(uploadAt > recoverAt && pipeline.slice(uploadAt, uploadAt + 800).includes('backupNamespace'), 'new upload receives namespace');
+ok(recoverAt > leaseAt && pipeline.slice(recoverAt, uploadAt).includes('backupNamespace'), 'recovery receives current namespace');
+ok(pipeline.includes('const recoveredNamespace = normalizeJournalBackupNamespace(recoveredUpload.backupNamespace)'), 'recovered checkpoint namespace is revalidated before state commit');
+ok(pipeline.includes('mutateJournalBackupStateForNamespace(recoveredNamespace'), 'historical success commits to checkpoint namespace');
+ok(pipeline.includes('if (!sameJournalBackupNamespace(recoveredNamespace, backupNamespace))'), 'historical root settlement is distinguished from current root success');
+ok(pipeline.includes("'Очистка reconciled historical backup checkpoint'"), 'historical checkpoint is consumed only after durable historical success state');
+ok(uploadAt > recoverAt && pipeline.slice(uploadAt, uploadAt + 800).includes('backupNamespace'), 'fresh current-root upload remains after historical settlement');
 
 const stateStore = section('function journalBackupNamespaceStateKey(', 'function normalizeJournalBackupSchedulerGeneration(');
 ok(stateStore.includes('JOURNAL_BACKUP_STATE_VERSION'), 'backup state has explicit versioned namespace store');
@@ -159,4 +167,4 @@ ok(pipeline.includes('if (backupNamespace) {'), 'failure state is not attributed
 ok(pipeline.includes('status.backupNamespace && !sameJournalBackupNamespace(status.backupNamespace, backupNamespace)'), 'status/account race is fenced before lease');
 ok(!SOURCE.includes('await mutateJournalBackupState((previous)'), 'no backup outcome writes remain on flat global state');
 
-console.log(`P1-179 backup namespace recovery runtime: PASS; checks=${checks}; checkpoint_namespace=true; lease_namespace=true; mismatch_remote_calls=0-by-source-order; legacy_checkpoint_preserved=true; scheduler_state_namespace_local=true; legacy_state_authority=false; same_account_root_rotation=fail-closed-pending-later-readonly-reconcile; live_provider_calls=0`);
+console.log(`P1-179 backup namespace recovery runtime: PASS; checks=${checks}; checkpoint_namespace=true; lease_namespace=true; mismatch_remote_calls=0-by-source-order; legacy_checkpoint_preserved=true; scheduler_state_namespace_local=true; legacy_state_authority=false; same_account_root_rotation=readonly-exact-path-then-fresh-current-backup; live_provider_calls=0`);
