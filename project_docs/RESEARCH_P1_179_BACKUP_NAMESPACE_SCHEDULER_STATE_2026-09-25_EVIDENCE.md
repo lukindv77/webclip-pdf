@@ -117,3 +117,22 @@ Exact-head P1-231 source-generation authority derived:
 The two dedicated authority jobs were SUCCESS. #1136 is **not merge evidence** because
 `repository-integrity` failed at deterministic JavaScript tests. Follow-up commits synchronize
 only current source/identity witnesses; production runtime is not changed in response to this CI failure.
+
+
+## CI discovery #1146
+
+Repository Integrity #1146 / run `36090489635` on exact head
+`342596aadeeeb6788902b51c2fea0f40ca552ce0` again passed both P1-231 authority lanes.
+The exact-head identities remained unchanged from #1136, and all synchronized release-control
+identity tests passed.
+
+The generic deterministic suite reduced to exactly two stale source assertions:
+
+- P1-177 refinement expected retry scheduling without the new `backupNamespace` proof conjunct;
+- recovered P0 housekeeping coverage expected the pre-namespace-local backup-state log labels.
+
+The P1-179 refinement/runtime tests themselves passed on #1146:
+`scheduler_state_namespace_local=implemented/true`,
+`legacy_flat_state_authority=false`, and provider calls remained zero.
+
+#1146 is **not merge evidence**. The follow-up changes only those two deterministic witnesses.
