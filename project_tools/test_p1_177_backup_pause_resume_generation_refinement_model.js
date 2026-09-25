@@ -115,7 +115,7 @@ function currentNoAuthPause() {
 // Canonical owner/scope checks.
 check('O01 P1-177 implemented/release-regression status', () => has(REGISTRY, '| P1-177 | IMPLEMENTED / RELEASE-REGRESSION |'));
 check('O02 P1-177 implemented owner summary', () => has(REGISTRY, 'Backup scheduler no-auth/user pause, proven-auth resume generation, exact alarm `(generation,dueAt)` receipts'));
-check('O03 P1-179 namespace owner', () => has(REGISTRY, 'Backup scheduler state and pending backup checkpoint are immutable account/root namespaces'));
+check('O03 P1-179 namespace owner', () => has(REGISTRY, 'Backup lease, pending checkpoint and scheduler success/failure/last-path state are immutable account/root namespaces'));
 check('O04 P1-076 lease owner', () => has(REGISTRY, 'Backup lease ownership is atomic but must remain valid for every stage'));
 check('O05 P0-073 account/root owner', () => has(REGISTRY, 'Remote-save completion/recovery is immutable account/root scoped'));
 check('O06 P0-074 operation context owner', () => has(REGISTRY, 'Long Yandex operation uses one immutable auth/account/root/config/publication operation context and generation'));
