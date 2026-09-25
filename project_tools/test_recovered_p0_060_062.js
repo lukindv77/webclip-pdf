@@ -96,9 +96,11 @@ async function testBackupHousekeepingDoesNotThrowAfterSuccessCommit() {
   assert.strictEqual(warnings.length, 3);
 
   const backup = section(swSource, 'async function exportJournalBackupToYandex', 'function parseJournalMonthFolder');
-  const commits = [...backup.matchAll(/await mutateJournalBackupStateForNamespace\(backupNamespace,/g)];
-  assert(commits.length >= 3, 'recovered success, fresh success and failure paths must all use serialized durable backup-state mutation');
-  assert(backup.includes("'Фиксация восстановленного namespace-local успешного backup-state'"));
+  const currentNamespaceCommits = [...backup.matchAll(/await mutateJournalBackupStateForNamespace\(backupNamespace,/g)];
+  const recoveredNamespaceCommits = [...backup.matchAll(/await mutateJournalBackupStateForNamespace\(recoveredNamespace,/g)];
+  assert(currentNamespaceCommits.length >= 2, 'fresh success and failure paths must use current namespace durable backup-state mutation');
+  assert(recoveredNamespaceCommits.length >= 1, 'recovered success must use exact checkpoint namespace durable backup-state mutation');
+  assert(backup.includes("'Фиксация recovered success в exact checkpoint namespace'"));
   assert(backup.includes("'Фиксация namespace-local успешного backup-state'"));
   assert(backup.includes('await finalizeJournalBackupSuccessHousekeeping({ successAt, status, operationId })'),
     'post-success cleanup must use non-throwing housekeeping helper');
