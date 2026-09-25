@@ -123,7 +123,7 @@ ok(agingAt > mismatchAt, '404 aging is reachable only after exact namespace matc
 const pipeline = section('async function exportJournalBackupToYandex(', 'function parseJournalMonthFolder(');
 const statusAt = pipeline.indexOf('status = await getJournalBackupStatus()');
 const manualContextAt = pipeline.indexOf('operationContext = await captureCurrentYandexOperationContext()');
-const namespaceAt = pipeline.indexOf('const backupNamespace = makeJournalBackupNamespace(operationContext.accountUid, operationContext.rootPath)');
+const namespaceAt = pipeline.indexOf('backupNamespace = makeJournalBackupNamespace(operationContext.accountUid, operationContext.rootPath)');
 const staleStatusAt = pipeline.indexOf("error.code = 'JOURNAL_BACKUP_NAMESPACE_STATUS_STALE'");
 const leaseAt = pipeline.indexOf('lease = await acquireJournalBackupLease(operationId, reason, backupNamespace)');
 const recoverAt = pipeline.indexOf('recoverPendingJournalBackup(status, operationId');
@@ -136,8 +136,27 @@ ok(leaseAt > namespaceAt, 'lease is namespace-bound before staging/upload');
 ok(recoverAt > leaseAt && pipeline.slice(recoverAt, uploadAt).includes('backupNamespace'), 'recovery receives namespace');
 ok(uploadAt > recoverAt && pipeline.slice(uploadAt, uploadAt + 800).includes('backupNamespace'), 'new upload receives namespace');
 
-const status = section('async function getJournalBackupStatus()', 'async function ensureYandexServiceFolders(');
-ok(status.includes('journalBackupState.lastSuccessAt'), 'remaining scheduler state is still global');
-ok(!SOURCE.includes('journalBackupStateByNamespace'), 'namespace-local scheduler state remains future P1-179 work');
+const stateStore = section('function journalBackupNamespaceStateKey(', 'function normalizeJournalBackupSchedulerGeneration(');
+ok(stateStore.includes('JOURNAL_BACKUP_STATE_VERSION'), 'backup state has explicit versioned namespace store');
+ok(stateStore.includes('namespaceStates'), 'backup state stores namespace-local entries');
+ok(stateStore.includes('legacyUnboundState'), 'legacy flat state is preserved only as unbound evidence');
+ok(stateStore.includes('getJournalBackupStateForNamespace'), 'namespace-local state lookup exists');
+ok(stateStore.includes('mutateJournalBackupStateForNamespace'), 'namespace-local state mutation exists');
+ok(stateStore.includes("error.code = 'JOURNAL_BACKUP_STATE_NAMESPACE_REQUIRED'"), 'state mutation fails closed without namespace');
+ok(stateStore.includes('sameJournalBackupNamespace(entry.backupNamespace, namespace)'), 'state lookup validates stored namespace identity');
 
-console.log(`P1-179 backup namespace recovery runtime: PASS; checks=${checks}; checkpoint_namespace=true; lease_namespace=true; mismatch_remote_calls=0-by-source-order; legacy_checkpoint_preserved=true; scheduler_state_namespace_local=false; same_account_root_rotation=fail-closed-pending-later-readonly-reconcile; live_provider_calls=0`);
+const status = section('async function getJournalBackupStatus()', 'async function ensureYandexServiceFolders(');
+ok(status.includes('readYandexAuthState()'), 'status resolves semantic current account from local auth state');
+ok(status.includes('makeJournalBackupNamespace(accountUid, rootPath)'), 'status derives current account/root namespace');
+ok(status.includes('getJournalBackupStateForNamespace(journalBackupState, backupNamespace)'), 'status reads only current namespace state');
+ok(status.includes('namespaceState.lastSuccessAt'), 'success timestamp is namespace-local');
+ok(status.includes('namespaceState.lastFailureAt'), 'failure timestamp is namespace-local');
+ok(status.includes('namespaceState.lastRemotePath'), 'last remote path is namespace-local');
+ok(!status.includes('journalBackupState.lastSuccessAt'), 'legacy flat success cannot suppress current namespace due decision');
+
+ok(pipeline.includes('mutateJournalBackupStateForNamespace(backupNamespace'), 'success/failure state writes are namespace-bound');
+ok(pipeline.includes('if (backupNamespace) {'), 'failure state is not attributed before namespace proof');
+ok(pipeline.includes('status.backupNamespace && !sameJournalBackupNamespace(status.backupNamespace, backupNamespace)'), 'status/account race is fenced before lease');
+ok(!SOURCE.includes('await mutateJournalBackupState((previous)'), 'no backup outcome writes remain on flat global state');
+
+console.log(`P1-179 backup namespace recovery runtime: PASS; checks=${checks}; checkpoint_namespace=true; lease_namespace=true; mismatch_remote_calls=0-by-source-order; legacy_checkpoint_preserved=true; scheduler_state_namespace_local=true; legacy_state_authority=false; same_account_root_rotation=fail-closed-pending-later-readonly-reconcile; live_provider_calls=0`);
