@@ -853,3 +853,22 @@ Evidence:
 P1-179 remains **ACTIVE**. The remaining source-level acceptance area is same-account old-root read-only historical checkpoint reconciliation. The existing mismatch behavior remains fail-closed/preserve/zero-remote until that bounded tranche is implemented.
 
 No live provider request, real browser qualification, artifact build, manifest bump, tag, deployment or release decision is performed. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+
+#### P1-179 scheduler-state CI discovery #1136
+
+Repository Integrity #1136 / run `36090119907` on exact head
+`e6203a11a34193c1bd54ca26a514768d9f2c0ec8` passed
+`p1-231-source-generation-authority` and `p1-231-shadow-identity`, while
+`repository-integrity` failed only at deterministic JavaScript tests.
+
+Direct failures were stale source/current-identity witnesses after the intentional namespace-state
+and Registry changes; production JavaScript syntax and earlier repository gates passed. Exact-head
+authority produced RPF `sha256:077eef2c462ecacb8cb2030fbb9ca6260e8d4216aba699f33b606f28fa2951e6`,
+33-file control `sha256:43e6b7fe80e66bfb2e3a8f0cd5a50ac946cf935edb610f428a03f508a298848a`,
+full RCF `sha256:f37176fa7d2eeeb046091cf1aa7e13dbf2faf0e5e450e2eef33dcb477f8d8232`;
+Chrome/Yandex QCF and BCF remain unchanged.
+
+#1136 is not merge evidence. The follow-up synchronizes only deterministic/source witnesses and
+current identity pins; historical identity evidence remains unchanged and no production runtime
+change is made to treat this CI discovery.
