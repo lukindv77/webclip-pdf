@@ -383,3 +383,13 @@ Eight remaining failures shared one predecessor root: `project_tools/test_p1_231
 
 This follow-up changes only that current-identity source-spec witness plus durable evidence. Historical pre-tranche identity records remain unchanged. Production runtime remains identical to the P1-179 namespace implementation.
 
+## 21. Downstream exact-control discovery
+
+Repository Integrity #1133 on exact head `a18426a9803133890ca52af6fe461c1b384026ed` proved S0-E and S0-F source-spec witnesses now pass with current 33-file control `sha256:a0d4d88362234a1b4c269ee7ef6e2b72108fd54efe39d658efbe2b97266c9b6e`.
+
+Five remaining failures reduced to two direct stale exact-control assertions:
+- S0-G evidence-settlement source-spec still expected the pre-tranche 33-file control;
+- S0-H passive-builder source-spec still expected the pre-tranche 33-file control.
+
+The S1-B, S1-C and S1-D failures were transitive through those predecessors. This follow-up updates only the two exact current-control assertions. Production runtime and historical identity evidence remain unchanged.
+

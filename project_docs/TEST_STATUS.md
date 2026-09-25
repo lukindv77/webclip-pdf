@@ -830,4 +830,6 @@ Repository Integrity #1131 on exact head `cb4e77048ba646ad51a13e8b94a35976a97404
 
 Repository Integrity #1132 on exact head `bfcc49db8e8f817afc69396bfbffe04c8868012d` proved those direct witnesses now pass. Its eight remaining deterministic failures reduce to one stale S0-F source-spec expectation of the previous current 33-file control; seven later P1-231 source-spec models fail only because they execute that predecessor. #1132 is not merge evidence. The next exact head synchronizes that single current-identity witness; production runtime remains unchanged.
 
+Repository Integrity #1133 on exact head `a18426a9803133890ca52af6fe461c1b384026ed` proved S0-F now passes. Five residual failures reduce to two direct stale 33-file-control assertions in S0-G and S0-H; S1-B/S1-C/S1-D fail transitively through those predecessors. #1133 is not merge evidence. The next exact head updates only those two current-control witnesses; runtime remains unchanged.
+
 Manifest remains `0.9.8`; release readiness remains **NOT READY**. No live Yandex request, real Chrome qualification, physical release receipt, ZIP/build, S2 activation, tag, deployment, GitHub Release or release decision is performed.
