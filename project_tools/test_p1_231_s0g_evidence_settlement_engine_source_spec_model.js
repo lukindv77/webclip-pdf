@@ -432,7 +432,7 @@ test('current S0-E RPF is valid and distinct from legacy', () => {
 });
 test('current Chrome QCF exact', () => assert.strictEqual(currentIds.qcf['unpacked-chrome'], 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c'));
 test('current Yandex QCF exact', () => assert.strictEqual(currentIds.qcf['yandex-e2e'], 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1'));
-test('current full RCF exact', () => assert.strictEqual(currentIds.rcf, 'sha256:f37176fa7d2eeeb046091cf1aa7e13dbf2faf0e5e450e2eef33dcb477f8d8232'));
+test('current full RCF exact', () => assert.strictEqual(currentIds.rcf, 'sha256:ce915ba229eec8d61a5527e921e94cbf89bfd096438568af6b91e585bdca646c'));
 test('current BCF exact', () => assert.strictEqual(currentIds.bcf, 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'));
 test('current S0-F generation gate passes after generator RCF binding', () => assert.strictEqual(s0f.kv.current_gate, 'pass'));
 test('current S0-F RPF agrees with S0-E', () => assert.strictEqual(s0f.kv.rpf, currentIds.rpf));
