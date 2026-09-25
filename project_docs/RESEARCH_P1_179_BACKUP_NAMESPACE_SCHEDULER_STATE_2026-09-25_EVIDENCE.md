@@ -91,3 +91,29 @@ Coverage asserts:
 No live Yandex request, real Chrome qualification, physical release receipt, product ZIP/build, manifest bump, S2/release-policy activation, tag, deployment, GitHub Release or release decision is performed.
 
 Manifest remains `0.9.8`; target remains `0.9.9`; release readiness remains **NOT READY**.
+
+
+## CI discovery #1136
+
+Repository Integrity #1136 / run `36090119907` on exact implementation head
+`e6203a11a34193c1bd54ca26a514768d9f2c0ec8` passed both dedicated P1-231
+authority lanes and reached the generic deterministic suite.
+
+The generic suite failure was bounded to source/current-identity witnesses:
+
+- old flat backup-state helper/source assertions still named `mutateJournalBackupState`;
+- cross-owner models still pinned the pre-tranche P1-179 Registry sentence;
+- current release-control witnesses still pinned the pre-tranche package/control identities.
+
+Exact-head P1-231 source-generation authority derived:
+
+- 34-file RPF: `sha256:077eef2c462ecacb8cb2030fbb9ca6260e8d4216aba699f33b606f28fa2951e6`
+- 33-file control: `sha256:43e6b7fe80e66bfb2e3a8f0cd5a50ac946cf935edb610f428a03f508a298848a`
+- Chrome QCF: `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`
+- Yandex QCF: `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`
+- full RCF: `sha256:f37176fa7d2eeeb046091cf1aa7e13dbf2faf0e5e450e2eef33dcb477f8d8232`
+- BCF: `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
+
+The two dedicated authority jobs were SUCCESS. #1136 is **not merge evidence** because
+`repository-integrity` failed at deterministic JavaScript tests. Follow-up commits synchronize
+only current source/identity witnesses; production runtime is not changed in response to this CI failure.
