@@ -358,3 +358,20 @@ Repository Integrity #1130 attempt 2 re-ran failed jobs on the same exact head, 
 
 Therefore attempt 2 is not merge evidence. This documentation-only evidence commit intentionally creates a fresh pull-request `synchronize` event so Repository Integrity evaluates the current PR metadata on a new exact head. No production runtime, provider behavior, release policy, manifest version, live qualification, artifact build, tag, deployment, or release decision is changed by this commit.
 
+## 19. Exact-head identity and deterministic discovery
+
+Fresh Repository Integrity #1131 on exact docs-synchronized head `cb4e77048ba646ad51a13e8b94a35976a97404cc` successfully passed the PR change contract, proving the fresh pull-request event consumed the corrected metadata.
+
+The dedicated exact-head release-generation authority derived the current identities after the `service-worker.js` change:
+
+- 34-file RPF: `sha256:f66fa9ac7ee0a5a83927c5d30bd0bca16a7d0173edd50e760095d0703aa53d63`
+- 33-file control: `sha256:a0d4d88362234a1b4c269ee7ef6e2b72108fd54efe39d658efbe2b97266c9b6e`
+- Chrome QCF: `sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c`
+- Yandex QCF: `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`
+- full RCF: `sha256:9c0fc13d98bfa613f59d7ed68ecd414a0bd12172bee489c8fba4674284243d35`
+- BCF: `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`
+
+Repository Integrity #1131 is still not merge evidence because the generic deterministic suite then exposed two bounded witness drifts: the hidden-provisioning source census still matched the pre-namespace recovery signature, and current identity witness tests still pinned the pre-tranche RPF/33-file control. The P1-179 runtime tests themselves passed.
+
+This follow-up synchronizes only deterministic/source-census witnesses to the exact production source and exact-head identity authority. It does not change production runtime or reinterpret historical identity evidence.
+
