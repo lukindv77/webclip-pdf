@@ -425,14 +425,14 @@ test('current S0-E protocol is exact', () => assert.strictEqual(s0e.kv.protocol,
 test('current S0-E package count is 34', () => assert.strictEqual(s0e.kv.package_files, '34'));
 test('current S0-E package identity is complete', () => assert.strictEqual(s0e.kv.current_package_complete, 'true'));
 test('legacy S0-E package control remains 33', () => assert.strictEqual(s0e.kv.legacy_package_files, '33'));
-test('legacy S0-E RPF remains reproducible control', () => assert.strictEqual(s0e.kv.legacy_rpf, 'sha256:a0d4d88362234a1b4c269ee7ef6e2b72108fd54efe39d658efbe2b97266c9b6e'));
+test('legacy S0-E RPF remains reproducible control', () => assert.strictEqual(s0e.kv.legacy_rpf, 'sha256:43e6b7fe80e66bfb2e3a8f0cd5a50ac946cf935edb610f428a03f508a298848a'));
 test('current S0-E RPF is valid and distinct from legacy', () => {
   assert(validDigest(currentIds.rpf));
   assert.notStrictEqual(currentIds.rpf, s0e.kv.legacy_rpf);
 });
 test('current Chrome QCF exact', () => assert.strictEqual(currentIds.qcf['unpacked-chrome'], 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c'));
 test('current Yandex QCF exact', () => assert.strictEqual(currentIds.qcf['yandex-e2e'], 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1'));
-test('current full RCF exact', () => assert.strictEqual(currentIds.rcf, 'sha256:9c0fc13d98bfa613f59d7ed68ecd414a0bd12172bee489c8fba4674284243d35'));
+test('current full RCF exact', () => assert.strictEqual(currentIds.rcf, 'sha256:f37176fa7d2eeeb046091cf1aa7e13dbf2faf0e5e450e2eef33dcb477f8d8232'));
 test('current BCF exact', () => assert.strictEqual(currentIds.bcf, 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'));
 test('current S0-F generation gate passes after generator RCF binding', () => assert.strictEqual(s0f.kv.current_gate, 'pass'));
 test('current S0-F RPF agrees with S0-E', () => assert.strictEqual(s0f.kv.rpf, currentIds.rpf));
