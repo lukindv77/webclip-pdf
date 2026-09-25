@@ -347,3 +347,14 @@ live provider qualification               = NOT PERFORMED
 manifest                                   = 0.9.8
 release readiness                          = NOT READY
 ```
+
+## 18. CI event-payload discovery
+
+Repository Integrity #1130 attempt 1 failed only at the PR change-contract gate because the original pull-request event payload contained adjacent owner-code references in PR metadata.
+
+The PR body was then corrected without changing source or the PR head so that its explicit owner code is only `P1-179`.
+
+Repository Integrity #1130 attempt 2 re-ran failed jobs on the same exact head, but GitHub Actions re-used the original pull-request event payload. Evidence from the job environment showed the stale pre-correction PR body, and the same metadata-derived change-contract error repeated.
+
+Therefore attempt 2 is not merge evidence. This documentation-only evidence commit intentionally creates a fresh pull-request `synchronize` event so Repository Integrity evaluates the current PR metadata on a new exact head. No production runtime, provider behavior, release policy, manifest version, live qualification, artifact build, tag, deployment, or release decision is changed by this commit.
+
