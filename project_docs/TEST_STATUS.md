@@ -833,3 +833,23 @@ Repository Integrity #1132 on exact head `bfcc49db8e8f817afc69396bfbffe04c886801
 Repository Integrity #1133 on exact head `a18426a9803133890ca52af6fe461c1b384026ed` proved S0-F now passes. Five residual failures reduce to two direct stale 33-file-control assertions in S0-G and S0-H; S1-B/S1-C/S1-D fail transitively through those predecessors. #1133 is not merge evidence. The next exact head updates only those two current-control witnesses; runtime remains unchanged.
 
 Manifest remains `0.9.8`; release readiness remains **NOT READY**. No live Yandex request, real Chrome qualification, physical release receipt, ZIP/build, S2 activation, tag, deployment, GitHub Release or release decision is performed.
+
+
+### P1-179 namespace-local backup scheduler state — 2026-09-25
+
+Canonical baseline: `main=c029a92e2228a75084cffa365b4c38a9680fa929` after PR #350 and post-merge Repository Integrity #1135 SUCCESS.
+
+This bounded continuation removes the remaining flat scheduler/status outcome-state authority from P1-179. `journalBackupState` is now a versioned namespace-local store. Current status selects state only for the semantic account UID from local OAuth state plus the current root path. Legacy flat success/failure/path fields are preserved only as unbound evidence and never synthesized into current account/root authority.
+
+Success, recovered-success and failure commits require the exact proven `BackupNamespaceIdentity`. A failure before namespace proof cannot create retry authority. The status/operation namespace is rechecked before lease admission so an account/root race cannot consume or write another namespace's state.
+
+Updated deterministic coverage:
+- `project_tools/test_p1_179_backup_namespace_runtime.js`
+- `project_tools/test_p1_179_backup_namespace_binding_refinement_model.js`
+
+Evidence:
+- `project_docs/RESEARCH_P1_179_BACKUP_NAMESPACE_SCHEDULER_STATE_2026-09-25_EVIDENCE.md`
+
+P1-179 remains **ACTIVE**. The remaining source-level acceptance area is same-account old-root read-only historical checkpoint reconciliation. The existing mismatch behavior remains fail-closed/preserve/zero-remote until that bounded tranche is implemented.
+
+No live provider request, real browser qualification, artifact build, manifest bump, tag, deployment or release decision is performed. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
