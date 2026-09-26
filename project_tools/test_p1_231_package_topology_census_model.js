@@ -51,7 +51,9 @@ const PACKAGE_ROOT_FILES = Object.freeze([
 ]);
 
 const NON_PACKAGE_ROOT_FILES = new Set([
+  '.gitattributes',
   '.gitignore',
+  'CLAUDE.md',
   'GITHUB_REPOSITORY_STATE.md',
   'README.md',
   'public_suffix_list.dat',
