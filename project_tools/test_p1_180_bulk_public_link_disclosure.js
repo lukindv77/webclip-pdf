@@ -61,11 +61,11 @@ ok(journal.includes("type: 'WEBCLIP_JOURNAL_DESTRUCTIVE_DISCLOSURE'"), 'UI obtai
 
 const clearDomain = section(journal, 'async function clearDomainJournal()', 'async function clearEntireJournal()');
 ok(clearDomain.indexOf('requestJournalDestructiveDisclosure') < clearDomain.indexOf('requestDangerousConfirmation'), 'site clear obtains disclosure before user confirmation');
-ok(clearDomain.includes('disclosureReceipt }),'), 'site clear submits confirmed receipt');
+ok(clearDomain.includes('disclosureReceipt });'), 'site clear submits confirmed receipt');
 
 const clearAll = section(journal, 'async function clearEntireJournal()', 'function requestDangerousConfirmation');
 ok(clearAll.indexOf('requestJournalDestructiveDisclosure') < clearAll.indexOf('requestDangerousConfirmation'), 'all clear obtains disclosure before user confirmation');
-ok(clearAll.includes('disclosureReceipt }),'), 'all clear submits confirmed receipt');
+ok(clearAll.includes('disclosureReceipt });'), 'all clear submits confirmed receipt');
 
 const replaceCalls = [...journal.matchAll(/type: 'WEBCLIP_JOURNAL_IMPORT_REPLACE_STAGED'/g)];
 eq(replaceCalls.length, 3, 'file, Yandex and resumed imports have explicit replace calls');
