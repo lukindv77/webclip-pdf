@@ -159,8 +159,8 @@ function releaseAuthority({ runtimeComplete = false, shadowComplete = false, exp
   const implementationRuntimeDelta = implementationDelta.filter((path) => !isResearchControlPath(path));
   deepEq(
     implementationRuntimeDelta,
-    ['application-generation.js', 'content-injection-guard.js', 'frame-agent.js', 'journal.css', 'journal.html', 'journal.js', 'local-download-identity.js', 'offscreen.js', 'options.js', 'service-worker.js'],
-    'current production entry contains the prior bounded runtime paths plus P1-178 Options/worker auth-attempt generation binding'
+    ['application-generation.js', 'content-injection-guard.js', 'content.js', 'frame-agent.js', 'journal.css', 'journal.html', 'journal.js', 'local-download-identity.js', 'offscreen.js', 'options.js', 'service-worker.js'],
+    'current production entry contains the prior bounded runtime paths plus P1-178 Options/worker auth-attempt generation binding and P0-066 content PDF-header URL policy'
   );
   check(implementationDelta.includes('project_tools/test_p0_080_application_generation_primitive.js'), 'primitive deterministic proof accompanies runtime path');
   check(implementationDelta.includes('project_tools/test_p0_080_generation_bootstrap.js'), 'generation bootstrap ordering proof accompanies production wiring');

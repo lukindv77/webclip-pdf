@@ -61,7 +61,7 @@ Added `project_tools/test_p0_066_durable_url_policy.js` (87 checks): identical p
 redaction vectors, benign no-op serialization, idempotence, fail-closed schemes, every boundary
 above, public-capability accept/reject vectors, portable legacy-row projection without mutation.
 
-Synchronized source witnesses: `test_p0_070_journal_source_receipt_finalization.js` expects the wrapped receipt normalization; `test_p1_086_087_readonly_download_identity.js` sandbox gains the
+Synchronized source witnesses: `test_p0_070_journal_source_receipt_finalization.js` expects the wrapped receipt normalization; `test_runtime_production_entry_selective_adoption_reconciliation_model.js` admits `content.js` in the bounded runtime delta; `test_p1_086_087_readonly_download_identity.js` sandbox gains the
 portable URL projection dependency. Current RPF / legacy-subset RPF pins move with the runtime blobs
 (values from local authority output on the exact commit, confirmed by exact-head CI).
 
