@@ -2329,6 +2329,8 @@
       clearModalExtra();
       if (entries.length) {
         state.modalExtra.classList.add('visible');
+        // P0-066: stored entry URLs are sanitized, so compare like with like.
+        const currentDurableUrl = webclipSanitizeDurableHttpUrl(location.href);
         for (const entry of entries) {
           const card = document.createElement('div');
           card.className = 'journal-card';
@@ -2339,10 +2341,10 @@
           meta.className = 'journal-meta';
           const destination = entry.destination === 'yandex' ? 'Яндекс Диск' : 'Скачивание';
           const reading = entry.destination === 'yandex' && entry.readingMode === 'later' ? 'Прочитать позже' : 'Прочитано';
-          const sourceUrl = entry.url && entry.url !== location.href ? ` · Источник: ${entry.url}` : '';
+          const sourceUrl = entry.url && entry.url !== currentDurableUrl ? ` · Источник: ${entry.url}` : '';
           meta.textContent = `${formatJournalEntryDate(entry)} · ${reading} · ${destination} · Включены: ${entry.includeCount || 0} · Исключены: ${entry.excludeCount || 0}${sourceUrl}`;
           const apply = createUiButton('Применить выделение', true, async () => {
-            const crossUrl = Boolean(entry.url && entry.url !== location.href);
+            const crossUrl = Boolean(entry.url && entry.url !== currentDurableUrl);
             const restored = await applySelectionSnapshot(entry.selectionSnapshot || {});
             hideModal();
             state.phase = 'selecting';
@@ -2486,12 +2488,47 @@
     return button;
   }
 
+  // >>> P0-066 durable URL policy v1
+  // Durable/display source URLs never keep userinfo, fragments or values of
+  // credential-like query parameters. Benign query meaning is preserved, and a
+  // URL with nothing to redact keeps its exact previous serialization so
+  // existing urlKey identities stay stable. Keep this block identical in
+  // service-worker.js and content.js (enforced by test_p0_066_durable_url_policy.js).
+  function webclipIsSensitiveUrlParamName(name) {
+    const spaced = String(name || '').replace(/([a-z0-9])([A-Z])/g, '$1_$2');
+    return /(?:^|[_-])(token|auth|authorization|key|api[_-]?key|secret|signature|sig|session|sid|jwt|code|credential|password|passwd|pass|access[_-]?token|refresh[_-]?token)(?:$|[_-])/i.test(spaced);
+  }
+
+  function webclipSanitizeDurableHttpUrl(value) {
+    const marker = '[REDACTED]';
+    let url;
+    try {
+      url = new URL(String(value || '').trim());
+    } catch (_) {
+      return '';
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    url.username = '';
+    url.password = '';
+    url.hash = '';
+    const params = [...url.searchParams.entries()];
+    if (params.some(([name, paramValue]) => webclipIsSensitiveUrlParamName(name) && paramValue !== marker)) {
+      url.search = '';
+      for (const [name, paramValue] of params) {
+        url.searchParams.append(name, webclipIsSensitiveUrlParamName(name) ? marker : paramValue);
+      }
+    }
+    return url.toString();
+  }
+  // <<< P0-066 durable URL policy v1
+
   function buildSaveMeta({ readingMode = 'read', fileComment = '' } = {}) {
     const now = new Date();
     return {
       hostname: location.hostname || 'site',
       siteAddress: location.origin,
-      url: location.href,
+      // P0-066: this URL is printed into the PDF header; never embed secrets.
+      url: webclipSanitizeDurableHttpUrl(location.href) || location.origin,
       title: document.title || 'Без названия',
       localDateTime: formatLocalDateTime(now),
       filenameTimestamp: formatFilenameTimestamp(now),

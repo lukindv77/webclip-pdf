@@ -40,6 +40,8 @@ async function testP1086BatchWaitsForTransactionComplete() {
     JOURNAL_STORE: 'entries',
     openJournalDb: async () => db,
     normalizeJournalComments: () => [],
+    // P0-066 URL projection is covered by test_p0_066_durable_url_policy.js.
+    sanitizePortableJournalEntryUrls: (entry) => ({ ...entry }),
     IDBKeyRange: { lowerBound: () => ({}) }
   });
   vm.runInContext(`${code}\nthis.readForTest = readJournalEntryBatch;`, context);

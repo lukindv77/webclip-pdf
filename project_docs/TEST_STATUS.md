@@ -968,3 +968,18 @@ Registry transition in this closure-only tranche:
 Closure CI discovery: head `403ed85fa5d636b70601cc080dac6e8bccdd7d53` Repository Integrity #1184 / run `36213031260` failed only in deterministic JavaScript tests while both P1-231 lanes were **SUCCESS**. Causes were stale witnesses: the P1-180 test still required the implementation-phase ACTIVE row, and the Registry transition moved the current full RCF to `sha256:8a1e77fdd342393afaf9067952b9ea52b7860a4ffa5caae3fec2fc1a9f4f2f3a` (from exact-head authority output). Only the P1-180 status witness and current full-RCF pins were updated; historical identities and RPF/QCF/BCF are unchanged.
 
 No production runtime is changed by the closure tranche. Applicable real Chrome/Yandex release regression remains separate. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+
+### P0-066 durable URL policy implementation tranche — 2026-09-26
+
+Canonical baseline: `main=f9eaf36a07248e6fe27c2bba444725d5715d18a0`. Post-merge Repository Integrity #1187 / run `36252938810` is **SUCCESS**.
+
+One versioned URL confidentiality policy (identical in `service-worker.js` and `content.js`) now removes URL userinfo and fragments and replaces values of credential-like query parameters with `[REDACTED]` while keeping benign query meaning. It is applied at content save admission (Journal, pending checkpoints, PDF retry cache, OperationLog), `urlKey` derivation, Journal import, full Journal export and Yandex Journal backup, the Journal copy of the PDF source receipt href, and the PDF header URL. Imported/stored `publicUrl` uses an explicit Yandex public-capability policy, and public/open URLs with userinfo are rejected. Local legacy rows are not migrated; export/backup/import carry only the sanitized representation.
+
+Added deterministic coverage:
+- `project_tools/test_p0_066_durable_url_policy.js`
+
+Evidence:
+- `project_docs/RESEARCH_P0_066_DURABLE_URL_POLICY_IMPLEMENTATION_2026-09-26_EVIDENCE.md`
+
+P0-066 remains **ACTIVE**: SelectionSnapshot locator URL features (with P1-182) and real unpacked Chrome regression remain. No live provider/browser qualification or release action is performed; manifest remains `0.9.8`, release readiness remains **NOT READY**.

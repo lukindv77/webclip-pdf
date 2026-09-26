@@ -50,7 +50,8 @@ eq(normalized.selectedCount, 4, 'selection count retained');
 
 const appendSection = section('async function appendJournalEntry(', 'async function listJournalEntries');
 ok(appendSection.includes("sourceReceipt = null"), 'Journal append accepts optional source receipt');
-ok(appendSection.includes("const journalSourceReceipt = sanitizePdfSourceReceipt(sourceReceipt"), 'Journal append normalizes source receipt');
+// P0-066 wraps the normalized receipt so its provenance href follows the durable URL policy.
+ok(appendSection.includes("const journalSourceReceipt = withDurableSourceReceiptHref(sanitizePdfSourceReceipt(sourceReceipt"), 'Journal append normalizes source receipt');
 ok(appendSection.includes("operationId: String(operationId || '').slice(0, MAX_OPERATION_ID_CHARS)"), 'Journal source receipt is bound to final operation id');
 ok(appendSection.includes("...(journalSourceReceipt ? { sourceReceipt: journalSourceReceipt } : {})"), 'Journal entry stores source receipt only when valid');
 ok(!appendSection.includes("sourceReceipt: null"), 'legacy Journal entries are not polluted with null receipt fields');
