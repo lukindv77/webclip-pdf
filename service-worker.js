@@ -393,6 +393,7 @@ const JOURNAL_IMPORT_PARSE_TIMEOUT_MS = 5 * 60 * 1000;
 const JOURNAL_IMPORT_STAGING_TTL_MS = 2 * 60 * 60 * 1000;
 const JOURNAL_IMPORT_STAGE_BATCH_ENTRIES = 100;
 const JOURNAL_IMPORT_PREVIEW_RECEIPT_VERSION = 1;
+const JOURNAL_DESTRUCTIVE_DISCLOSURE_VERSION = 1;
 const JOURNAL_IMPORT_LEASE_VERSION = 1;
 const JOURNAL_IMPORT_LEASE_KEY = 'journalImportLease';
 const JOURNAL_IMPORT_LEASE_TTL_MS = 2 * 60 * 1000;
@@ -3298,8 +3299,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case 'WEBCLIP_JOURNAL_MARK_READ':
         return moveReadLaterEntryToRead(String(message.id || ''), String(message.operationId || ''));
 
+      case 'WEBCLIP_JOURNAL_DESTRUCTIVE_DISCLOSURE':
+        if (senderKind !== 'extension') throw new Error('Destructive disclosure доступен только странице журнала WebClip.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return prepareJournalDestructiveDisclosure({
+          url: message.url || '',
+          siteUrl: message.siteUrl || '',
+          expectedJournalRevision: String(message.expectedJournalRevision || '')
+        });
+
       case 'WEBCLIP_JOURNAL_CLEAR':
-        return runExclusiveJournalDestructiveMutation('очистка журнала', () => clearJournalEntries({ url: message.url || '', siteUrl: message.siteUrl || '', operationId: String(message.operationId || '') }));
+        if (senderKind !== 'extension') throw new Error('Очистка журнала доступна только странице журнала WebClip.');
+        assertSaveAsOwnerPage(sender, 'journal.html');
+        return runExclusiveJournalDestructiveMutation('очистка журнала', () => clearJournalEntries({
+          url: message.url || '',
+          siteUrl: message.siteUrl || '',
+          operationId: String(message.operationId || ''),
+          disclosureReceipt: message.disclosureReceipt
+        }));
 
       case 'WEBCLIP_JOURNAL_EXPORT_PREPARE':
         if (senderKind !== 'extension') throw new Error('Экспорт журнала доступен только странице журнала WebClip.');
@@ -3350,7 +3367,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           String(message.source || 'file'),
           message.previewReceipt,
           String(message.leaseToken || ''),
-          String(message.ownerSessionId || '')
+          String(message.ownerSessionId || ''),
+          message.disclosureReceipt
         ));
 
       case 'WEBCLIP_JOURNAL_IMPORT_DISCARD_STAGED':
@@ -10974,11 +10992,12 @@ function hostnameFromUrl(url) {
   try { return new URL(String(url || '')).hostname; } catch (_) { return ''; }
 }
 
-async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } = {}) {
+async function clearJournalEntries({ url = '', siteUrl = '', operationId = '', disclosureReceipt = null } = {}) {
   operationId = String(operationId || '') || makeOperationLogId('journal-clear');
   const urlKey = url ? normalizeJournalUrl(url) : '';
   const siteKey = siteUrl ? getJournalSiteKey(siteUrl) : '';
   const scope = urlKey ? 'url' : siteKey ? 'site' : 'all';
+  const disclosure = normalizeJournalDestructiveDisclosureReceipt(disclosureReceipt, { scope, urlKey, siteKey });
   await startOperationLog(operationId, 'journal-clear', scope === 'all' ? 'Очистка всего локального журнала' : scope === 'site' ? 'Очистка журнала сайта' : 'Очистка журнала URL', {
     scope, urlKey, siteKey
   });
@@ -10999,9 +11018,10 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
         const pendingDownloadStore = tx.objectStore(JOURNAL_PENDING_DOWNLOAD_STORE);
         const pendingRemoteStore = tx.objectStore(JOURNAL_PENDING_REMOTE_STORE);
         const destructiveStore = tx.objectStore(JOURNAL_PENDING_DESTRUCTIVE_STORE);
-        touchJournalDbRevision(tx, `clear-${scope}`);
-        advanceJournalResetGeneration(tx, `clear-${scope}`, fail);
-        if (!urlKey && !siteKey) {
+        const beginClear = () => {
+          touchJournalDbRevision(tx, `clear-${scope}`);
+          advanceJournalResetGeneration(tx, `clear-${scope}`, fail);
+          if (!urlKey && !siteKey) {
           store.clear();
           pendingStore.clear();
           reconcilePendingLocalDownloadStoreForJournalReset(pendingDownloadStore, {
@@ -11081,6 +11101,20 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
           resetAt: Date.now(),
           fail
         });
+        };
+        const revisionRequest = tx.objectStore(JOURNAL_META_STORE).get(JOURNAL_META_REVISION_KEY);
+        revisionRequest.onsuccess = () => {
+          const currentRevision = String(revisionRequest.result?.value || '');
+          if (currentRevision !== disclosure.expectedJournalRevision) {
+            fail(journalDestructiveDisclosureError(
+              'JOURNAL_DESTRUCTIVE_DISCLOSURE_STALE',
+              'Журнал изменился после подтверждения. Повторите destructive операцию и заново подтвердите судьбу публичных ссылок.'
+            ));
+            return;
+          }
+          beginClear();
+        };
+        revisionRequest.onerror = () => fail(revisionRequest.error || new Error('Не удалось сверить destructive disclosure с текущей ревизией журнала.'));
       },
       JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
     );
@@ -11103,6 +11137,137 @@ async function clearJournalEntries({ url = '', siteUrl = '', operationId = '' } 
     if (db) db.close();
     recordOperationStage(operationId, 'error', `Ошибка очистки журнала: ${normalizeError(error)}`, 100, 'error', { scope });
     throw error;
+  }
+}
+
+function journalDestructiveDisclosureError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function normalizeJournalDestructiveDisclosureReceipt(value, expected = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw journalDestructiveDisclosureError('JOURNAL_DESTRUCTIVE_DISCLOSURE_REQUIRED', 'Перед destructive операцией требуется актуальное подтверждение судьбы публичных ссылок.');
+  }
+  const fields = ['version', 'scope', 'urlKey', 'siteKey', 'expectedJournalRevision', 'knownPublicLinkCount', 'createdAt'];
+  const actualKeys = Object.keys(value).sort();
+  const expectedKeys = [...fields].sort();
+  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])) {
+    throw journalDestructiveDisclosureError('JOURNAL_DESTRUCTIVE_DISCLOSURE_INVALID', 'Состав destructive disclosure receipt не совпадает с контрактом.');
+  }
+  if (value.version !== JOURNAL_DESTRUCTIVE_DISCLOSURE_VERSION) {
+    throw journalDestructiveDisclosureError('JOURNAL_DESTRUCTIVE_DISCLOSURE_INVALID', 'Версия destructive disclosure receipt не поддерживается.');
+  }
+  const scope = value.scope === 'url' ? 'url' : value.scope === 'site' ? 'site' : value.scope === 'all' ? 'all' : '';
+  const urlKey = String(value.urlKey || '');
+  const siteKey = String(value.siteKey || '');
+  const expectedJournalRevision = String(value.expectedJournalRevision || '');
+  const knownPublicLinkCount = Number(value.knownPublicLinkCount);
+  const createdAt = Number(value.createdAt);
+  if (!scope || urlKey.length > MAX_IMPORTED_URL_CHARS || siteKey.length > 1024 || expectedJournalRevision.length > 240) {
+    throw journalDestructiveDisclosureError('JOURNAL_DESTRUCTIVE_DISCLOSURE_INVALID', 'Destructive disclosure receipt содержит некорректный scope/revision.');
+  }
+  if ((scope === 'url') !== Boolean(urlKey) || (scope === 'site') !== Boolean(siteKey) || (scope === 'all' && (urlKey || siteKey))) {
+    throw journalDestructiveDisclosureError('JOURNAL_DESTRUCTIVE_DISCLOSURE_INVALID', 'Destructive disclosure scope не согласован с ключами области.');
+  }
+  if (!Number.isSafeInteger(knownPublicLinkCount) || knownPublicLinkCount < 0 || knownPublicLinkCount > 100000) {
+    throw journalDestructiveDisclosureError('JOURNAL_DESTRUCTIVE_DISCLOSURE_INVALID', 'Некорректное число известных публичных ссылок.');
+  }
+  if (!Number.isSafeInteger(createdAt) || createdAt <= 0) {
+    throw journalDestructiveDisclosureError('JOURNAL_DESTRUCTIVE_DISCLOSURE_INVALID', 'Некорректное время destructive disclosure.');
+  }
+  const receipt = Object.freeze({
+    version: JOURNAL_DESTRUCTIVE_DISCLOSURE_VERSION,
+    scope,
+    urlKey,
+    siteKey,
+    expectedJournalRevision,
+    knownPublicLinkCount,
+    createdAt
+  });
+  for (const [key, expectedValue] of Object.entries(expected || {})) {
+    if (!Object.prototype.hasOwnProperty.call(receipt, key) || receipt[key] !== expectedValue) {
+      throw journalDestructiveDisclosureError('JOURNAL_DESTRUCTIVE_DISCLOSURE_MISMATCH', `Destructive disclosure поле ${key} больше не совпадает с операцией.`);
+    }
+  }
+  return receipt;
+}
+
+async function prepareJournalDestructiveDisclosure({ url = '', siteUrl = '', expectedJournalRevision = '' } = {}) {
+  const urlKey = url ? normalizeJournalUrl(url) : '';
+  const siteKey = siteUrl ? getJournalSiteKey(siteUrl) : '';
+  const scope = urlKey ? 'url' : siteKey ? 'site' : 'all';
+  const expectedRevision = String(expectedJournalRevision || '');
+  const db = await openJournalDb(JOURNAL_CRUD_IDB_TX_TIMEOUT_MS);
+  try {
+    const receipt = await runIndexedDbTransactionBounded(
+      db,
+      [JOURNAL_STORE, JOURNAL_META_STORE],
+      'readonly',
+      `Подготовка destructive disclosure (${scope})`,
+      ({ tx, setResult, fail }) => {
+        const meta = tx.objectStore(JOURNAL_META_STORE);
+        const entries = tx.objectStore(JOURNAL_STORE);
+        let revision = '';
+        let count = 0;
+        let scanDone = false;
+        let revisionDone = false;
+        const maybeFinish = () => {
+          if (!scanDone || !revisionDone) return;
+          if (expectedRevision && revision !== expectedRevision) {
+            fail(journalDestructiveDisclosureError(
+              'JOURNAL_DESTRUCTIVE_DISCLOSURE_STALE',
+              'Журнал изменился после preview. Перед заменой требуется повторно показать судьбу публичных ссылок.'
+            ));
+            return;
+          }
+          setResult(Object.freeze({
+            version: JOURNAL_DESTRUCTIVE_DISCLOSURE_VERSION,
+            scope,
+            urlKey,
+            siteKey,
+            expectedJournalRevision: revision,
+            knownPublicLinkCount: count,
+            createdAt: Date.now()
+          }));
+        };
+        const revisionRequest = meta.get(JOURNAL_META_REVISION_KEY);
+        revisionRequest.onsuccess = () => {
+          revision = String(revisionRequest.result?.value || '');
+          revisionDone = true;
+          maybeFinish();
+        };
+        revisionRequest.onerror = () => fail(revisionRequest.error || new Error('Не удалось прочитать ревизию журнала для destructive disclosure.'));
+
+        const request = urlKey
+          ? entries.index('urlKey').openCursor(IDBKeyRange.only(urlKey))
+          : entries.openCursor();
+        request.onsuccess = () => {
+          try {
+            const cursor = request.result;
+            if (!cursor) {
+              scanDone = true;
+              maybeFinish();
+              return;
+            }
+            const entry = cursor.value || {};
+            const inScope = urlKey
+              ? true
+              : siteKey
+                ? getJournalSiteKey(entry.url || entry.hostname || '') === siteKey
+                : true;
+            if (inScope && entry.destination === 'yandex' && String(entry.publicUrl || '').trim()) count += 1;
+            cursor.continue();
+          } catch (error) { fail(error); }
+        };
+        request.onerror = () => fail(request.error || new Error('Не удалось проверить публичные ссылки перед destructive операцией.'));
+      },
+      JOURNAL_CRUD_IDB_TX_TIMEOUT_MS
+    );
+    return { ok: true, disclosureReceipt: normalizeJournalDestructiveDisclosureReceipt(receipt) };
+  } finally {
+    db.close();
   }
 }
 
@@ -12439,11 +12604,12 @@ async function normalizeStagedJournalImportStream(stagingKey) {
   }
 }
 
-async function commitStagedJournalImport(prepared, operationId, expectedJournalRevision, leaseAuthority = null) {
+async function commitStagedJournalImport(prepared, operationId, expectedJournalRevision, leaseAuthority = null, disclosureReceiptValue = null) {
   const importId = String(prepared?.importId || '');
   const expectedCount = Math.max(0, Number(prepared?.entryCount) || 0);
   const expectedRevision = String(expectedJournalRevision || '');
   const authorityReceipt = normalizeJournalImportPreviewReceipt(leaseAuthority?.previewReceipt);
+  const disclosure = normalizeJournalDestructiveDisclosureReceipt(disclosureReceiptValue, { scope: 'all', urlKey: '', siteKey: '', expectedJournalRevision: expectedRevision });
   if (authorityReceipt.expectedJournalRevision !== expectedRevision) throw journalImportPreviewMismatch('ожидаемая ревизия lease не совпадает');
   if (!importId) throw new Error('Не подготовлены нормализованные записи импорта.');
   await migrateLegacyPendingJournalAppends();
@@ -12550,7 +12716,7 @@ async function commitStagedJournalImport(prepared, operationId, expectedJournalR
         revisionRequest.onerror = () => abort(revisionRequest.error || new Error('Не удалось сверить ревизию журнала перед импортом.'));
         revisionRequest.onsuccess = () => {
           const currentRevision = String(revisionRequest.result?.value || '');
-          if (currentRevision !== expectedRevision) {
+          if (currentRevision !== expectedRevision || currentRevision !== disclosure.expectedJournalRevision) {
             abort(journalImportStaleRevision());
             return;
           }
@@ -12629,7 +12795,7 @@ async function previewStagedJournalImport(stagingKey, operationId = '', source =
   };
 }
 
-async function importJournalReplaceStaged(stagingKey, operationId = '', source = 'file', previewReceiptValue = null, leaseToken = '', ownerSessionId = '') {
+async function importJournalReplaceStaged(stagingKey, operationId = '', source = 'file', previewReceiptValue = null, leaseToken = '', ownerSessionId = '', disclosureReceiptValue = null) {
   const key = String(stagingKey || '').trim();
   if (!key || key.length > 240) throw new Error('Некорректный идентификатор подготовленного импорта журнала.');
   operationId = String(operationId || '') || makeOperationLogId('journal-import');
@@ -12655,7 +12821,7 @@ async function importJournalReplaceStaged(stagingKey, operationId = '', source =
       previewReceipt,
       leaseToken,
       ownerSessionId
-    });
+    }, disclosureReceiptValue);
     await deleteTransferPayloadGroup(key).catch(() => {});
     recordOperationStage(operationId, 'complete', `Импорт завершён. Записей: ${committed.importedCount}.`, 100, 'success', { entryCount: committed.importedCount });
     return {
