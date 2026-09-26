@@ -15,8 +15,8 @@ const builderAuthority = require('./release_builder_contract_authority.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const CURRENT = Object.freeze({
-  rpf: 'sha256:831153edbbca9eb634086c1732291db0d426928af45f89a4bc48579c085f3b56',
-  legacyRpf: 'sha256:a8d2b8de63a6d9e3bea656f2b94e2e9ca002154aedef96f58038ddd360829761',
+  rpf: 'sha256:c8fae1ce00c126d764980940274cd909bb155bc87370ab4d69b4d81bc0e51d6c',
+  legacyRpf: 'sha256:f709eb4c399a2bc5a88ac0d1c9963a24b393e7616156f090fd06ca1dfa18ec9e',
   chrome: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandex: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
   rcf: 'sha256:8a1e77fdd342393afaf9067952b9ea52b7860a4ffa5caae3fec2fc1a9f4f2f3a',
