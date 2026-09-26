@@ -105,7 +105,7 @@ assert(journal.includes("type: 'WEBCLIP_JOURNAL_IMPORT_CANCEL_PENDING'"));
 assert(journal.includes('ownerSessionId: journalImportOwnerSessionId'));
 assert(journal.includes('.then(() => checkForPendingJournalImport())'));
 assert(journal.includes('Кнопка «Отмена» удалит только временный staged import; текущий журнал не изменится.'));
-assert(journal.includes('journalImportReplaceConfirmationText(preview, sourceLabel)'));
+assert(journal.includes('journalImportReplaceConfirmationText(preview, sourceLabel, disclosureReceipt)'));
 
 const sandbox = {
   console,
