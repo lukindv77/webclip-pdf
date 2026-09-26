@@ -124,3 +124,29 @@ P1-180 remains **ACTIVE** until exact-head CI succeeds and a source/runtime clos
 No live Yandex OAuth/API mutation, real Chrome qualification, physical release receipt, product ZIP/build, manifest bump, release-policy activation, tag, deployment, GitHub Release or release decision is performed.
 
 Manifest remains `0.9.8`; target remains `0.9.9`; release readiness remains **NOT READY**.
+
+
+## Exact-head CI discovery #1173
+
+Repository Integrity #1173 / run `36212530803` on exact implementation head
+`028235ff2b4f08a685dbc913f324ea1b1b7147a8` passed PR metadata,
+JavaScript syntax, and both dedicated P1-231 authority lanes.
+
+The new P1-180 deterministic test was not in the failure set. Direct generic-suite
+failures were bounded to:
+
+- a C44 import-restart source witness that still expected the pre-disclosure
+  `journalImportReplaceConfirmationText(preview, sourceLabel)` call;
+- current package/release identity witnesses pinned to the pre-P1-180 runtime bytes.
+
+Exact-head source-generation authority derived:
+
+- 34-file RPF: `sha256:31126569c4b1a80d7c93c15d5c99581bf7d4e22e5b39d7a09e195b6c977ccaab`
+- 33-file control: `sha256:cfce0548cc066dac586b1a9325d7ad8185fe84ed3c8a70ceb5cc571248dc6625`
+- full RCF: `sha256:ce915ba229eec8d61a5527e921e94cbf89bfd096438568af6b91e585bdca646c`
+- Yandex QCF remains `sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1`
+- BCF remains `sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff`.
+
+#1173 is not merge evidence because the generic deterministic suite failed.
+Follow-up commits synchronize only source/current-identity witnesses. Production
+runtime remains unchanged from the P1-180 disclosure implementation.
