@@ -52,10 +52,11 @@ Boundaries now consuming the policy:
 | fresh Yandex API public URL / content open (`isAllowedContentOpenUrl`) | explicit userinfo rejection (URL.hostname ignores userinfo) |
 | full Journal export and Yandex Journal backup (`readJournalEntryBatch`) | `sanitizePortableJournalEntryUrls` on the portable copy; stored rows are not mutated |
 | PDF header "Полный URL страницы" (`content.js buildSaveMeta`) | sanitized at the source |
+| content Journal template same-page detection | compares sanitized entry URL with the sanitized current URL (also fixes fragment-only false "Источник" labels) |
 
 ## Deterministic coverage
 
-Added `project_tools/test_p0_066_durable_url_policy.js` (80 checks): identical policy blocks,
+Added `project_tools/test_p0_066_durable_url_policy.js` (82 checks): identical policy blocks,
 redaction vectors, benign no-op serialization, idempotence, fail-closed schemes, every boundary
 above, public-capability accept/reject vectors, portable legacy-row projection without mutation.
 

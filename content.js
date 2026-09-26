@@ -2329,6 +2329,8 @@
       clearModalExtra();
       if (entries.length) {
         state.modalExtra.classList.add('visible');
+        // P0-066: stored entry URLs are sanitized, so compare like with like.
+        const currentDurableUrl = webclipSanitizeDurableHttpUrl(location.href);
         for (const entry of entries) {
           const card = document.createElement('div');
           card.className = 'journal-card';
@@ -2339,10 +2341,10 @@
           meta.className = 'journal-meta';
           const destination = entry.destination === 'yandex' ? 'Яндекс Диск' : 'Скачивание';
           const reading = entry.destination === 'yandex' && entry.readingMode === 'later' ? 'Прочитать позже' : 'Прочитано';
-          const sourceUrl = entry.url && entry.url !== location.href ? ` · Источник: ${entry.url}` : '';
+          const sourceUrl = entry.url && entry.url !== currentDurableUrl ? ` · Источник: ${entry.url}` : '';
           meta.textContent = `${formatJournalEntryDate(entry)} · ${reading} · ${destination} · Включены: ${entry.includeCount || 0} · Исключены: ${entry.excludeCount || 0}${sourceUrl}`;
           const apply = createUiButton('Применить выделение', true, async () => {
-            const crossUrl = Boolean(entry.url && entry.url !== location.href);
+            const crossUrl = Boolean(entry.url && entry.url !== currentDurableUrl);
             const restored = await applySelectionSnapshot(entry.selectionSnapshot || {});
             hideModal();
             state.phase = 'selecting';

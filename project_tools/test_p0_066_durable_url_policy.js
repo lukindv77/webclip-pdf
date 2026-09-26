@@ -120,5 +120,8 @@ eq(legacy.url.includes('SESSIONSECRET'), true, 'local legacy row is not mutated 
 const buildMeta = section(content, 'function buildSaveMeta(', 'selectionSnapshot: serializeSelectionSnapshot()');
 ok(buildMeta.includes('url: webclipSanitizeDurableHttpUrl(location.href) || location.origin'), 'PDF header URL is sanitized at the source');
 ok(!buildMeta.includes('url: location.href'), 'raw location.href no longer enters save meta');
+// Journal template "same page" detection compares sanitized with sanitized.
+ok(content.includes('const currentDurableUrl = webclipSanitizeDurableHttpUrl(location.href);'), 'template compares against sanitized current URL');
+ok(!content.includes('entry.url !== location.href'), 'no raw location.href comparison against sanitized entry URLs');
 
 console.log(`P0-066 durable URL policy: PASS (${checks} checks)`);
