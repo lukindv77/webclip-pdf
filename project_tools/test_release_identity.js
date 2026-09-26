@@ -19,7 +19,7 @@ const CURRENT = Object.freeze({
   legacyRpf: 'sha256:cfce0548cc066dac586b1a9325d7ad8185fe84ed3c8a70ceb5cc571248dc6625',
   chrome: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandex: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
-  rcf: 'sha256:ce915ba229eec8d61a5527e921e94cbf89bfd096438568af6b91e585bdca646c',
+  rcf: 'sha256:8a1e77fdd342393afaf9067952b9ea52b7860a4ffa5caae3fec2fc1a9f4f2f3a',
   bcf: 'sha256:9eebcc834fa32bd8fe5f03ef14564f0fc1c169d0308dcc2813941b4f913363ff'
 });
 let checks = 0;

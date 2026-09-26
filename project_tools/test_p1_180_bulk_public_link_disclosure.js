@@ -22,7 +22,13 @@ function section(source, start, end) {
 }
 
 // Canonical owner boundary.
-ok(registry.includes('| P1-180 | ACTIVE | Bulk local destructive operations must disclose loss of control over existing public Yandex links; no hidden mass unpublish.'), 'P1-180 remains active during implementation tranche');
+ok(registry.includes('| P1-180 | IMPLEMENTED / RELEASE-REGRESSION |'), 'P1-180 is implemented/release-regression after closure review');
+ok(!registry.includes('| P1-180 | ACTIVE |'), 'P1-180 no longer ACTIVE in current Registry');
+// Historical implementation-phase truth is retained in evidence, not rewritten.
+const testStatus = fs.readFileSync(path.join(root, 'project_docs', 'TEST_STATUS.md'), 'utf8');
+const closure = fs.readFileSync(path.join(root, 'project_docs', 'RESEARCH_P1_180_CLOSURE_2026-09-26_EVIDENCE.md'), 'utf8');
+ok(testStatus.includes('P1-180 remains **ACTIVE** pending exact-head CI and source/runtime closure review.'), 'implementation tranche ACTIVE status retained historically');
+ok(closure.includes('`ACTIVE -> IMPLEMENTED / RELEASE-REGRESSION`'), 'closure evidence records the Registry transition');
 
 const disclosure = section(sw, 'function journalDestructiveDisclosureError(', 'async function journalRevisionSnapshot(');
 ok(disclosure.includes('JOURNAL_DESTRUCTIVE_DISCLOSURE_VERSION'), 'versioned destructive disclosure receipt');

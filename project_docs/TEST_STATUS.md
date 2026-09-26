@@ -965,4 +965,6 @@ Closure evidence:
 Registry transition in this closure-only tranche:
 - `P1-180: ACTIVE -> IMPLEMENTED / RELEASE-REGRESSION`
 
+Closure CI discovery: head `403ed85fa5d636b70601cc080dac6e8bccdd7d53` Repository Integrity #1184 / run `36213031260` failed only in deterministic JavaScript tests while both P1-231 lanes were **SUCCESS**. Causes were stale witnesses: the P1-180 test still required the implementation-phase ACTIVE row, and the Registry transition moved the current full RCF to `sha256:8a1e77fdd342393afaf9067952b9ea52b7860a4ffa5caae3fec2fc1a9f4f2f3a` (from exact-head authority output). Only the P1-180 status witness and current full-RCF pins were updated; historical identities and RPF/QCF/BCF are unchanged.
+
 No production runtime is changed by the closure tranche. Applicable real Chrome/Yandex release regression remains separate. Manifest remains `0.9.8`; release readiness remains **NOT READY**.

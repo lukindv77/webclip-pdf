@@ -119,6 +119,29 @@ Registry transition:
 
 This means the source/runtime owner is closed. It does not mean release readiness is complete.
 
+## Closure CI discovery
+
+Closure head `403ed85fa5d636b70601cc080dac6e8bccdd7d53` Repository Integrity #1184 /
+run `36213031260` was **FAILURE** in `repository-integrity` → "Deterministic JavaScript tests" only.
+Both dedicated P1-231 lanes (`p1-231-source-generation-authority`, `p1-231-shadow-identity`) were **SUCCESS**.
+
+Classification: stale deterministic witnesses, not a production/runtime defect.
+
+1. `test_p1_180_bulk_public_link_disclosure.js` still required the implementation-phase
+   `| P1-180 | ACTIVE |` row. It now requires `IMPLEMENTED / RELEASE-REGRESSION`, while the
+   implementation-phase ACTIVE statement in `TEST_STATUS.md` and this transition record are
+   checked as retained history.
+2. The Registry transition is a full-RCF blob input, so the current full RCF moved from
+   `sha256:ce915ba229eec8d61a5527e921e94cbf89bfd096438568af6b91e585bdca646c` to
+   `sha256:8a1e77fdd342393afaf9067952b9ea52b7860a4ffa5caae3fec2fc1a9f4f2f3a`
+   (value taken from the #1184 exact-head `p1-231-source-generation-authority` output).
+   Only current full-RCF witness pins were synchronized: S0-F, S0-G, release candidate generation,
+   release contract authority, release evidence settlement and release identity tests.
+   The S0-H/S0-I/S1-A..S1-D failures were transitive. Historical identities, RPF, QCF and BCF
+   are unchanged.
+
+No production runtime file changes in this closure tranche.
+
 ## Release boundary
 
 No real Yandex OAuth/API mutation, real Chrome qualification, physical release receipt,
