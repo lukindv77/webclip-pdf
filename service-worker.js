@@ -2616,6 +2616,8 @@ function isAllowedContentOpenUrl(value) {
   try {
     const url = new URL(String(value || ''));
     if (url.protocol !== 'https:') return false;
+    // P0-066: URL.hostname ignores userinfo, so reject it explicitly.
+    if (url.username || url.password) return false;
     const host = url.hostname.toLowerCase();
     return host === 'disk.yandex.ru' || host.endsWith('.disk.yandex.ru') || host === 'yadi.sk';
   } catch (_) {
@@ -3016,7 +3018,9 @@ function sanitizeContentSaveMeta(rawMeta, sender) {
   return {
     hostname: parsed.hostname.toLowerCase().slice(0, 255),
     siteAddress: parsed.origin.slice(0, 2048),
-    url: parsed.toString().slice(0, MAX_IMPORTED_URL_CHARS),
+    // P0-066: the tab URL is the trusted identity source, but it is not safe
+    // to persist verbatim (userinfo / token query values).
+    url: webclipSanitizeDurableHttpUrl(parsed.toString()).slice(0, MAX_IMPORTED_URL_CHARS),
     title: boundedContentString(raw.title || 'Без названия', MAX_CONTENT_TITLE_CHARS),
     localDateTime: boundedContentString(raw.localDateTime, 128),
     filenameTimestamp: boundedContentString(raw.filenameTimestamp, 128),
@@ -4697,14 +4701,67 @@ async function downloadCachedPdf(tabId, operationId = '', currentSourceReceipt =
   }
 }
 
-function normalizeJournalUrl(url) {
+// >>> P0-066 durable URL policy v1
+// Durable/display source URLs never keep userinfo, fragments or values of
+// credential-like query parameters. Benign query meaning is preserved, and a
+// URL with nothing to redact keeps its exact previous serialization so
+// existing urlKey identities stay stable. Keep this block identical in
+// service-worker.js and content.js (enforced by test_p0_066_durable_url_policy.js).
+function webclipIsSensitiveUrlParamName(name) {
+  const spaced = String(name || '').replace(/([a-z0-9])([A-Z])/g, '$1_$2');
+  return /(?:^|[_-])(token|auth|authorization|key|api[_-]?key|secret|signature|sig|session|sid|jwt|code|credential|password|passwd|pass|access[_-]?token|refresh[_-]?token)(?:$|[_-])/i.test(spaced);
+}
+
+function webclipSanitizeDurableHttpUrl(value) {
+  const marker = '[REDACTED]';
+  let url;
   try {
-    const parsed = new URL(String(url || ''));
-    parsed.hash = '';
-    return parsed.toString();
+    url = new URL(String(value || '').trim());
   } catch (_) {
-    return String(url || '').split('#')[0];
+    return '';
   }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+  url.username = '';
+  url.password = '';
+  url.hash = '';
+  const params = [...url.searchParams.entries()];
+  if (params.some(([name, paramValue]) => webclipIsSensitiveUrlParamName(name) && paramValue !== marker)) {
+    url.search = '';
+    for (const [name, paramValue] of params) {
+      url.searchParams.append(name, webclipIsSensitiveUrlParamName(name) ? marker : paramValue);
+    }
+  }
+  return url.toString();
+}
+// <<< P0-066 durable URL policy v1
+
+// P0-066: a public link is an intentional share capability, so its query is
+// kept, but it must be an HTTPS Yandex Disk public host without userinfo.
+function normalizeYandexPublicCapabilityUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value || '').trim());
+  } catch (_) {
+    return '';
+  }
+  if (!isAllowedContentOpenUrl(url.toString())) return '';
+  url.hash = '';
+  return url.toString();
+}
+
+function normalizeJournalUrl(url) {
+  // Parse failures fail closed: a raw unparsable string is never a durable key.
+  return webclipSanitizeDurableHttpUrl(url);
+}
+
+// Export and Yandex backup serialize only the sanitized representation, so
+// legacy rows written before P0-066 do not leave the device with secrets.
+function sanitizePortableJournalEntryUrls(entry) {
+  const portable = { ...entry };
+  if (typeof portable.url === 'string' && portable.url) portable.url = webclipSanitizeDurableHttpUrl(portable.url);
+  if (typeof portable.urlKey === 'string' && portable.urlKey) portable.urlKey = normalizeJournalUrl(portable.urlKey);
+  if (typeof portable.publicUrl === 'string' && portable.publicUrl) portable.publicUrl = normalizeYandexPublicCapabilityUrl(portable.publicUrl);
+  return portable;
 }
 
 function getJournalSiteKey(urlOrHostname) {
@@ -11368,6 +11425,8 @@ async function readJournalEntryBatch(afterId = '', limit = 250, deadline = 0) {
         try {
           const entry = cursor.value || {};
           const { entryRevision: _localEntryRevision, ...portableEntry } = entry;
+          // portableEntry is a fresh rest copy; the stored row is never mutated.
+          Object.assign(portableEntry, sanitizePortableJournalEntryUrls(portableEntry));
           json = JSON.stringify({ ...portableEntry, journalComments: normalizeJournalComments(entry) });
         } catch (error) {
           abortWith(error);
@@ -11553,25 +11612,15 @@ function boundedImportString(value, maxChars) {
 function normalizeImportedHttpUrl(value) {
   const raw = boundedImportString(value, MAX_IMPORTED_URL_CHARS).trim();
   if (!raw) return '';
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
-    url.hash = '';
-    return url.toString();
-  } catch (_) {
-    return '';
-  }
+  return webclipSanitizeDurableHttpUrl(raw);
 }
 
+// Imported/stored publicUrl gets the same public-capability policy as a fresh
+// Yandex API response instead of generic "any HTTPS URL" acceptance.
 function normalizeImportedHttpsUrl(value) {
   const raw = boundedImportString(value, MAX_IMPORTED_URL_CHARS).trim();
   if (!raw) return '';
-  try {
-    const url = new URL(raw);
-    return url.protocol === 'https:' ? url.toString() : '';
-  } catch (_) {
-    return '';
-  }
+  return normalizeYandexPublicCapabilityUrl(raw);
 }
 
 function assertJournalCommentBudget(comments, legacyComment = '') {
