@@ -51,16 +51,17 @@ Boundaries now consuming the policy:
 | imported/stored `publicUrl` (`normalizeImportedHttpsUrl`) | public-capability policy (HTTPS, `disk.yandex.ru`/`*.disk.yandex.ru`/`yadi.sk`, no userinfo, no fragment, share query kept) instead of any HTTPS URL |
 | fresh Yandex API public URL / content open (`isAllowedContentOpenUrl`) | explicit userinfo rejection (URL.hostname ignores userinfo) |
 | full Journal export and Yandex Journal backup (`readJournalEntryBatch`) | `sanitizePortableJournalEntryUrls` on the portable copy; stored rows are not mutated |
+| Journal copy of the PDF source receipt (`sourceReceipt.applicationGeneration.href`) | sanitized on Journal append, import and export (`withDurableSourceReceiptHref`); the PDF retry-cache copy used for live matching is unchanged |
 | PDF header "Полный URL страницы" (`content.js buildSaveMeta`) | sanitized at the source |
 | content Journal template same-page detection | compares sanitized entry URL with the sanitized current URL (also fixes fragment-only false "Источник" labels) |
 
 ## Deterministic coverage
 
-Added `project_tools/test_p0_066_durable_url_policy.js` (82 checks): identical policy blocks,
+Added `project_tools/test_p0_066_durable_url_policy.js` (87 checks): identical policy blocks,
 redaction vectors, benign no-op serialization, idempotence, fail-closed schemes, every boundary
 above, public-capability accept/reject vectors, portable legacy-row projection without mutation.
 
-Synchronized source witnesses: `test_p1_086_087_readonly_download_identity.js` sandbox gains the
+Synchronized source witnesses: `test_p0_070_journal_source_receipt_finalization.js` expects the wrapped receipt normalization; `test_p1_086_087_readonly_download_identity.js` sandbox gains the
 portable URL projection dependency. Current RPF / legacy-subset RPF pins move with the runtime blobs
 (values from local authority output on the exact commit, confirmed by exact-head CI).
 

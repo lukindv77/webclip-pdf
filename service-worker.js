@@ -4754,10 +4754,19 @@ function normalizeJournalUrl(url) {
   return webclipSanitizeDurableHttpUrl(url);
 }
 
+// The Journal copy of a PDF source receipt is provenance only (live retry
+// matching uses the PDF cache copy), so its page href follows the durable policy.
+function withDurableSourceReceiptHref(receipt) {
+  const href = receipt?.applicationGeneration?.href;
+  if (!href) return receipt;
+  return { ...receipt, applicationGeneration: { ...receipt.applicationGeneration, href: webclipSanitizeDurableHttpUrl(href) } };
+}
+
 // Export and Yandex backup serialize only the sanitized representation, so
 // legacy rows written before P0-066 do not leave the device with secrets.
 function sanitizePortableJournalEntryUrls(entry) {
   const portable = { ...entry };
+  if (portable.sourceReceipt && typeof portable.sourceReceipt === 'object') portable.sourceReceipt = withDurableSourceReceiptHref(portable.sourceReceipt);
   if (typeof portable.url === 'string' && portable.url) portable.url = webclipSanitizeDurableHttpUrl(portable.url);
   if (typeof portable.urlKey === 'string' && portable.urlKey) portable.urlKey = normalizeJournalUrl(portable.urlKey);
   if (typeof portable.publicUrl === 'string' && portable.publicUrl) portable.publicUrl = normalizeYandexPublicCapabilityUrl(portable.publicUrl);
@@ -6669,9 +6678,9 @@ async function appendJournalEntry({ destination, filename, remotePath = '', fold
   const id = String(journalEntryId || '').trim()
     || (crypto.randomUUID ? crypto.randomUUID() : `${createdAt}-${Math.random().toString(16).slice(2)}`);
   const readingMode = meta.readingMode === 'later' && destination === 'yandex' ? 'later' : 'read';
-  const journalSourceReceipt = sanitizePdfSourceReceipt(sourceReceipt, {
+  const journalSourceReceipt = withDurableSourceReceiptHref(sanitizePdfSourceReceipt(sourceReceipt, {
     operationId: String(operationId || '').slice(0, MAX_OPERATION_ID_CHARS)
-  });
+  }));
   const entry = {
     id,
     entryRevision: JOURNAL_INITIAL_ENTRY_REVISION,
@@ -11687,7 +11696,7 @@ function normalizeImportedJournalEntry(raw, index, seenIds = null, forcedId = ''
   const importedOperationIdRaw = String(raw.operationId || '').trim();
   const importedOperationId = importedOperationIdRaw.length <= MAX_OPERATION_ID_CHARS && /^[A-Za-z0-9._:-]+$/.test(importedOperationIdRaw) ? importedOperationIdRaw : '';
   const importedSourceReceipt = importedOperationId
-    ? sanitizePdfSourceReceipt(raw.sourceReceipt, { operationId: importedOperationId })
+    ? withDurableSourceReceiptHref(sanitizePdfSourceReceipt(raw.sourceReceipt, { operationId: importedOperationId }))
     : null;
   return {
     id,

@@ -974,7 +974,7 @@ No production runtime is changed by the closure tranche. Applicable real Chrome/
 
 Canonical baseline: `main=f9eaf36a07248e6fe27c2bba444725d5715d18a0`. Post-merge Repository Integrity #1187 / run `36252938810` is **SUCCESS**.
 
-One versioned URL confidentiality policy (identical in `service-worker.js` and `content.js`) now removes URL userinfo and fragments and replaces values of credential-like query parameters with `[REDACTED]` while keeping benign query meaning. It is applied at content save admission (Journal, pending checkpoints, PDF retry cache, OperationLog), `urlKey` derivation, Journal import, full Journal export and Yandex Journal backup, and the PDF header URL. Imported/stored `publicUrl` uses an explicit Yandex public-capability policy, and public/open URLs with userinfo are rejected. Local legacy rows are not migrated; export/backup/import carry only the sanitized representation.
+One versioned URL confidentiality policy (identical in `service-worker.js` and `content.js`) now removes URL userinfo and fragments and replaces values of credential-like query parameters with `[REDACTED]` while keeping benign query meaning. It is applied at content save admission (Journal, pending checkpoints, PDF retry cache, OperationLog), `urlKey` derivation, Journal import, full Journal export and Yandex Journal backup, the Journal copy of the PDF source receipt href, and the PDF header URL. Imported/stored `publicUrl` uses an explicit Yandex public-capability policy, and public/open URLs with userinfo are rejected. Local legacy rows are not migrated; export/backup/import carry only the sanitized representation.
 
 Added deterministic coverage:
 - `project_tools/test_p0_066_durable_url_policy.js`

@@ -92,7 +92,8 @@ ok(openUrl.includes('if (url.username || url.password) return false;'), 'public/
 // Public capability + portable entry behaviour.
 const capability = vm.runInNewContext(
   `${swPolicy}\n${openUrl}\n${section(sw, 'function normalizeYandexPublicCapabilityUrl(', '\n}')}\n`
-  + `${journalUrl}\n${section(sw, 'function sanitizePortableJournalEntryUrls(', '\n}')}\n`
+  + `${journalUrl}\n${section(sw, 'function withDurableSourceReceiptHref(', '\n}')}\n`
+  + `${section(sw, 'function sanitizePortableJournalEntryUrls(', '\n}')}\n`
   + '({ normalizeYandexPublicCapabilityUrl, sanitizePortableJournalEntryUrls })',
   { URL }
 );
@@ -107,6 +108,7 @@ const legacy = {
   url: 'https://bob:pw@example.com/doc?session=SESSIONSECRET&page=2#p',
   urlKey: 'https://bob:pw@example.com/doc?session=SESSIONSECRET&page=2',
   publicUrl: 'https://disk.yandex.ru/d/pub',
+  sourceReceipt: { schema: 'r', applicationGeneration: { generation: 'g1', href: 'https://example.com/doc?token=RECEIPTSECRET&page=2' } },
   title: 'T'
 };
 const portable = capability.sanitizePortableJournalEntryUrls(legacy);
@@ -114,7 +116,12 @@ ok(!JSON.stringify(portable).includes('SESSIONSECRET'), 'portable legacy row car
 ok(!JSON.stringify(portable).includes('bob:pw'), 'portable legacy row carries no credentials');
 ok(portable.url.includes('page=2') && portable.urlKey === portable.url, 'portable url and urlKey agree and keep benign query');
 eq(portable.publicUrl, 'https://disk.yandex.ru/d/pub', 'valid public link survives export');
+ok(!JSON.stringify(portable).includes('RECEIPTSECRET'), 'portable source receipt href carries no token');
+eq(portable.sourceReceipt.applicationGeneration.generation, 'g1', 'source receipt generation kept');
 eq(legacy.url.includes('SESSIONSECRET'), true, 'local legacy row is not mutated by export serialization');
+eq(legacy.sourceReceipt.applicationGeneration.href.includes('RECEIPTSECRET'), true, 'local legacy receipt is not mutated by export serialization');
+ok(sw.includes('const journalSourceReceipt = withDurableSourceReceiptHref(sanitizePdfSourceReceipt(sourceReceipt, {'), 'new Journal rows store a sanitized receipt href');
+ok(sw.includes('? withDurableSourceReceiptHref(sanitizePdfSourceReceipt(raw.sourceReceipt, { operationId: importedOperationId }))'), 'imported receipt href is sanitized');
 
 // PDF header gets the sanitized URL from content-side save meta.
 const buildMeta = section(content, 'function buildSaveMeta(', 'selectionSnapshot: serializeSelectionSnapshot()');
