@@ -15,7 +15,7 @@ const identity = require('./release_identity.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const CURRENT = Object.freeze({
-  rpf: 'sha256:31126569c4b1a80d7c93c15d5c99581bf7d4e22e5b39d7a09e195b6c977ccaab',
+  rpf: 'sha256:831153edbbca9eb634086c1732291db0d426928af45f89a4bc48579c085f3b56',
   chrome: 'sha256:3715a3453333d3d679a1c1c00a0bab6a02b77c0153f1a4e8d138aa1e8f5a984c',
   yandex: 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1',
   rcf: 'sha256:8a1e77fdd342393afaf9067952b9ea52b7860a4ffa5caae3fec2fc1a9f4f2f3a',
