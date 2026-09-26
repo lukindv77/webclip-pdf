@@ -985,11 +985,51 @@ function assertJournalImportLeaseUsable(importLease) {
   }
 }
 
-function journalImportReplaceConfirmationText(preview, sourceLabel) {
+function requireJournalDestructiveDisclosure(response, expectedJournalRevision = '') {
+  const receipt = response?.disclosureReceipt;
+  if (
+    !response?.ok
+    || !receipt
+    || typeof receipt !== 'object'
+    || receipt.version !== 1
+    || !['all', 'site', 'url'].includes(receipt.scope)
+    || !Number.isSafeInteger(Number(receipt.knownPublicLinkCount))
+    || Number(receipt.knownPublicLinkCount) < 0
+    || (expectedJournalRevision && receipt.expectedJournalRevision !== expectedJournalRevision)
+  ) {
+    throw new Error('Service worker не вернул актуальное подтверждение судьбы публичных ссылок. Destructive операция остановлена.');
+  }
+  return receipt;
+}
+
+async function requestJournalDestructiveDisclosure({ url = '', siteUrl = '', expectedJournalRevision = '' } = {}) {
+  const response = await chrome.runtime.sendMessage({
+    type: 'WEBCLIP_JOURNAL_DESTRUCTIVE_DISCLOSURE',
+    url,
+    siteUrl,
+    expectedJournalRevision
+  });
+  requireOk(response);
+  return requireJournalDestructiveDisclosure(response, expectedJournalRevision);
+}
+
+function journalPublicLinkDisclosureText(disclosure) {
+  const count = Math.max(0, Number(disclosure?.knownPublicLinkCount) || 0);
+  const known = count
+    ? `В удаляемой локальной области есть известные публичные ссылки Яндекс Диска: ${count}.`
+    : 'В удаляемой локальной области известных публичных ссылок Яндекс Диска сейчас не найдено.';
+  return `${known}
+Эта операция изменяет только локальный журнал и НЕ выполняет массовый unpublish на Яндекс Диске.
+Если публичные ссылки существуют, они могут продолжить работать после удаления локальных записей; WebClip потеряет эти локальные записи как точку управления последующим отзывом доступа.`;
+}
+
+function journalImportReplaceConfirmationText(preview, sourceLabel, disclosure) {
   return `Текущий локальный журнал будет полностью заменён данными из ${sourceLabel}.
 Записей: ${preview.entryCount}.
 Дата экспорта: ${preview.exportedAt || 'не указана'}.
 SHA-256 проверенной копии: ${preview.contentSha256}.
+
+${journalPublicLinkDisclosureText(disclosure)}
 Действие нельзя отменить.`;
 }
 
@@ -3226,12 +3266,17 @@ async function importJournalFromSelectedFile() {
     const previewReceipt = requireJournalImportPreviewReceipt(preview);
     importLease = requireJournalImportLease(preview);
     startJournalImportLeaseHeartbeat(importLease);
+    const disclosureReceipt = await requestJournalDestructiveDisclosure({
+      expectedJournalRevision: previewReceipt.expectedJournalRevision
+    });
     const confirmed = await requestDangerousConfirmation({
       title: 'Импорт полного журнала',
       text: `Импорт полностью заменит текущий локальный журнал данными из файла «${file.name}».
 Записей в файле: ${preview.entryCount}.
 Дата экспорта: ${preview.exportedAt || 'не указана'}.
 SHA-256 проверенной копии: ${preview.contentSha256}.
+
+${journalPublicLinkDisclosureText(disclosureReceipt)}
 Действие нельзя отменить.`
     });
     if (!confirmed) {
@@ -3252,7 +3297,8 @@ SHA-256 проверенной копии: ${preview.contentSha256}.
       source: 'file',
       previewReceipt,
       leaseToken: importLease.leaseToken,
-      ownerSessionId: journalImportOwnerSessionId
+      ownerSessionId: journalImportOwnerSessionId,
+      disclosureReceipt
     });
     requireOk(result);
     stagingKey = '';
@@ -3454,10 +3500,13 @@ async function importSelectedYandexBackup() {
     importLease = requireJournalImportLease(fetched);
     startJournalImportLeaseHeartbeat(importLease);
     yandexStagingKey = String(fetched.stagingKey || '');
+    const disclosureReceipt = await requestJournalDestructiveDisclosure({
+      expectedJournalRevision: previewReceipt.expectedJournalRevision
+    });
     closeYandexBackupPicker();
     const confirmed = await requestDangerousConfirmation({
       title: 'Восстановление журнала с Яндекс Диска',
-      text: `Текущий локальный журнал будет полностью заменён выбранной резервной копией:\n${fetched.remotePath}\nЗаписей: ${fetched.entryCount}.\nДата экспорта: ${fetched.exportedAt || 'не указана'}.\nSHA-256 проверенной копии: ${fetched.contentSha256}.\nДействие нельзя отменить.`
+      text: `Текущий локальный журнал будет полностью заменён выбранной резервной копией:\n${fetched.remotePath}\nЗаписей: ${fetched.entryCount}.\nДата экспорта: ${fetched.exportedAt || 'не указана'}.\nSHA-256 проверенной копии: ${fetched.contentSha256}.\n\n${journalPublicLinkDisclosureText(disclosureReceipt)}\nДействие нельзя отменить.`
     });
     if (!confirmed) {
       await discardStagedJournalImport(fetched.stagingKey, importLease);
@@ -3479,7 +3528,8 @@ async function importSelectedYandexBackup() {
       source: 'yandex',
       previewReceipt,
       leaseToken: importLease.leaseToken,
-      ownerSessionId: journalImportOwnerSessionId
+      ownerSessionId: journalImportOwnerSessionId,
+      disclosureReceipt
     });
     requireOk(imported);
     yandexStagingKey = '';
@@ -3692,14 +3742,18 @@ async function clearDomainJournal() {
   }
   if (!beginJournalDestructiveOperation('Очистка журнала домена')) return;
   try {
+    const disclosureReceipt = await requestJournalDestructiveDisclosure({ siteUrl: sourceUrl });
     const confirmed = await requestDangerousConfirmation({
     title: 'Очистить журнал домена',
-    text: `Будут удалены ВСЕ записи журнала для сайта «${siteKey}» независимо от URL внутри этого сайта.\nДействие нельзя отменить.`
+    text: `Будут удалены ВСЕ записи журнала для сайта «${siteKey}» независимо от URL внутри этого сайта.
+
+${journalPublicLinkDisclosureText(disclosureReceipt)}
+Действие нельзя отменить.`
     });
     if (!confirmed) return;
     const operationId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     showLastOperationId(operationId);
-    const result = await chrome.runtime.sendMessage({ type: 'WEBCLIP_JOURNAL_CLEAR', siteUrl: sourceUrl, operationId });
+    const result = await chrome.runtime.sendMessage({ type: 'WEBCLIP_JOURNAL_CLEAR', siteUrl: sourceUrl, operationId, disclosureReceipt });
     requireOk(result);
     setStatus(`Журнал домена ${siteKey} очищен. · operationId: ${result.operationId || operationId}`, 'ok');
     await loadJournal();
@@ -3713,14 +3767,18 @@ async function clearDomainJournal() {
 async function clearEntireJournal() {
   if (!beginJournalDestructiveOperation('Очистка всего журнала')) return;
   try {
+    const disclosureReceipt = await requestJournalDestructiveDisclosure();
     const confirmed = await requestDangerousConfirmation({
     title: 'Очистить весь журнал WebClip',
-    text: 'Будут удалены ВСЕ локальные записи журнала для всех сайтов и URL. Действие нельзя отменить.'
+    text: `Будут удалены ВСЕ локальные записи журнала для всех сайтов и URL.
+
+${journalPublicLinkDisclosureText(disclosureReceipt)}
+Действие нельзя отменить.`
     });
     if (!confirmed) return;
     const operationId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     showLastOperationId(operationId);
-    const result = await chrome.runtime.sendMessage({ type: 'WEBCLIP_JOURNAL_CLEAR', operationId });
+    const result = await chrome.runtime.sendMessage({ type: 'WEBCLIP_JOURNAL_CLEAR', operationId, disclosureReceipt });
     requireOk(result);
     setStatus(`Весь локальный журнал очищен. · operationId: ${result.operationId || operationId}`, 'ok');
     await loadJournal();
@@ -3865,10 +3923,13 @@ SHA-256 прежней проверки: ${pending.contentSha256}.
     startJournalImportLeaseHeartbeat(importLease);
     stagingKey = String(preview.stagingKey || stagingKey);
     showLastOperationId(preview.operationId);
+    const disclosureReceipt = await requestJournalDestructiveDisclosure({
+      expectedJournalRevision: previewReceipt.expectedJournalRevision
+    });
 
     const confirmed = await requestDangerousConfirmation({
       title: 'Подтвердите восстановление журнала',
-      text: journalImportReplaceConfirmationText(preview, sourceLabel)
+      text: journalImportReplaceConfirmationText(preview, sourceLabel, disclosureReceipt)
     });
     if (!confirmed) {
       await discardStagedJournalImport(stagingKey, importLease);
@@ -3885,7 +3946,8 @@ SHA-256 прежней проверки: ${pending.contentSha256}.
       source: preview.source,
       previewReceipt,
       leaseToken: importLease.leaseToken,
-      ownerSessionId: journalImportOwnerSessionId
+      ownerSessionId: journalImportOwnerSessionId,
+      disclosureReceipt
     });
     requireOk(imported);
     stagingKey = '';

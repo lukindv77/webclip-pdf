@@ -930,3 +930,22 @@ Closure evidence:
 - `project_docs/RESEARCH_P1_179_CLOSURE_2026-09-26_EVIDENCE.md`
 
 This closure-only transition changes Registry/test witnesses and evidence only. No production runtime, live provider/browser qualification, artifact build, manifest bump, tag, deploy or release decision is performed. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
+
+
+### P1-180 bulk public-link loss-of-control disclosure — 2026-09-26
+
+Canonical baseline: `main=70137820eda381163bf10a485e7e8dc80e580f53`. Post-merge Repository Integrity #1172 / run `36212083150` is **SUCCESS**.
+
+This bounded tranche makes bulk local Journal clear/replace disclosure revision-bound. The worker counts known `publicUrl` Yandex entries for the exact destructive scope in the same readonly IndexedDB snapshot as the Journal revision and returns a versioned disclosure receipt. Site/all clear and file/Yandex/resumed replace-import show the receipt-derived warning before the existing 9-digit confirmation.
+
+The warning explicitly states that local clear/import does not perform mass unpublish, known public links can continue to work, and deleting/replacing the local rows removes those rows as WebClip's local control point for later revoke.
+
+Clear revalidates the receipt's exact Journal revision inside its destructive readwrite transaction before mutation. Replace-import requires current revision == preview revision == disclosure revision before replacement. A Journal change after confirmation therefore fails closed instead of silently sweeping a newly added public-link row into the destructive operation.
+
+Added deterministic coverage:
+- `project_tools/test_p1_180_bulk_public_link_disclosure.js`
+
+Evidence:
+- `project_docs/RESEARCH_P1_180_BULK_PUBLIC_LINK_DISCLOSURE_2026-09-26_EVIDENCE.md`
+
+P1-180 remains **ACTIVE** pending exact-head CI and source/runtime closure review. No live provider/browser qualification or release action is performed; manifest remains `0.9.8`, release readiness remains **NOT READY**.
