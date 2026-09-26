@@ -1,0 +1,14 @@
+# Release identities (RPF/RCF/...) fingerprint exact Git blob bytes and the
+# local CI mirror checks the working tree, so every checkout must stay LF.
+* text=auto eol=lf
+
+# Binary formats must never be EOL-normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.zip binary
+*.crx binary

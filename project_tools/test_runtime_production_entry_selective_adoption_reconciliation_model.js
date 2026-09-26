@@ -23,6 +23,8 @@ function changedPaths(base, head = 'HEAD') {
 }
 function isResearchControlPath(path) {
   return path === 'GITHUB_REPOSITORY_STATE.md'
+    || path === 'CLAUDE.md'
+    || path === '.gitattributes'
     || path.startsWith('project_docs/')
     || path.startsWith('project_tools/')
     || path.startsWith('.github/workflows/')
