@@ -949,3 +949,20 @@ Evidence:
 - `project_docs/RESEARCH_P1_180_BULK_PUBLIC_LINK_DISCLOSURE_2026-09-26_EVIDENCE.md`
 
 P1-180 remains **ACTIVE** pending exact-head CI and source/runtime closure review. No live provider/browser qualification or release action is performed; manifest remains `0.9.8`, release readiness remains **NOT READY**.
+
+
+### P1-180 closure review — 2026-09-26
+
+Canonical implementation baseline: `main=42ef8010c0ed4a407d6a331c079b4ad77749d1cb`.
+
+Implementation PR #354 exact head `b83ee42de13caea0f055dabc054f0317818a5041` had Repository Integrity #1182 / run `36212664240` **SUCCESS**; post-merge Repository Integrity #1183 / run `36212838526` on exact canonical main was also **SUCCESS**.
+
+Source/runtime closure census confirms all current bulk local destructive entry points are covered: two clear paths (site/all) and three replace-import paths (file/Yandex/resumed). Each displays a worker-issued exact-revision disclosure before dangerous confirmation, and the worker revalidates revision before mutation. The disclosure explicitly states that local reset does not perform mass unpublish and known public links may remain live while their local management rows are removed.
+
+Closure evidence:
+- `project_docs/RESEARCH_P1_180_CLOSURE_2026-09-26_EVIDENCE.md`
+
+Registry transition in this closure-only tranche:
+- `P1-180: ACTIVE -> IMPLEMENTED / RELEASE-REGRESSION`
+
+No production runtime is changed by the closure tranche. Applicable real Chrome/Yandex release regression remains separate. Manifest remains `0.9.8`; release readiness remains **NOT READY**.
