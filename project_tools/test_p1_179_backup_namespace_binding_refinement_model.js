@@ -86,7 +86,7 @@ function secretFree(namespace) {
 }
 
 // Canonical owner and scope contract.
-check('O01 P1-179 active', () => has(REGISTRY, '| P1-179 | ACTIVE |'));
+check('O01 P1-179 implemented/release-regression', () => has(REGISTRY, '| P1-179 | IMPLEMENTED / RELEASE-REGRESSION |'));
 check('O02 P1-179 namespace wording', () => has(REGISTRY, 'Backup lease, pending checkpoint and scheduler success/failure/last-path state are immutable account/root namespaces'));
 check('O03 P0-073 immutable account/root', () => has(REGISTRY, 'Remote-save completion/recovery is immutable account/root scoped'));
 check('O04 P0-074 immutable operation context', () => has(REGISTRY, 'Long Yandex operation uses one immutable auth/account/root/config/publication operation context and generation'));

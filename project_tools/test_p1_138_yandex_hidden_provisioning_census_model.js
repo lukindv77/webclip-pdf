@@ -70,7 +70,7 @@ function recover(checkpoint, live) {
 // Canonical owner/scope checks.
 check('O01 P1-138 active', () => has(REGISTRY, '| P1-138 | ACTIVE |'));
 check('O02 P1-138 hidden provisioning owner', () => has(REGISTRY, 'Read-like Yandex list/fetch/status flows must not hide provisioning/mutation authority'));
-check('O03 P1-179 active', () => has(REGISTRY, '| P1-179 | ACTIVE |'));
+check('O03 P1-179 implemented/release-regression', () => has(REGISTRY, '| P1-179 | IMPLEMENTED / RELEASE-REGRESSION |'));
 check('O04 P1-179 namespace owner', () => has(REGISTRY, 'Backup lease, pending checkpoint and scheduler success/failure/last-path state are immutable account/root namespaces'));
 check('O05 evidence includes P1-179', () => has(EVIDENCE, 'P1-179  backup scheduler/pending checkpoint immutable account/root namespace'));
 check('O06 no new P code', () => has(EVIDENCE, 'New P-code: **NO**'));
