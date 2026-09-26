@@ -44,7 +44,7 @@ function failed(requestId) {
 const head = git('rev-parse', 'HEAD');
 const contract = runtime.expectedRuntimeContract(head);
 eq(contract.testedSourceSha, head, 'exact current source');
-eq(contract.subject.rpf, 'sha256:fc3ee54664713db3cd5ec63ef933b9637de7939119966d754e75426c02ac5f25', 'current RPF');
+eq(contract.subject.rpf, 'sha256:31126569c4b1a80d7c93c15d5c99581bf7d4e22e5b39d7a09e195b6c977ccaab', 'current RPF');
 eq(contract.subject.yandexQcf, 'sha256:8d6c9711b4f71b8485b49a6ab68f90bcf62bc74155ae0959dbdc4718648879a1', 'current Yandex QCF');
 eq(contract.packageMembers.length, 34, 'current package size');
 eq(contract.loadedWorkerScripts.length, 10, 'current worker graph');
